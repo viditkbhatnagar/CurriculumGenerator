@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curriculum Generator API Tester</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success {
+            border-left: 4px solid #28a745;
+        }
+        .error {
+            border-left: 4px solid #dc3545;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status.healthy {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.unhealthy {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎓 Curriculum Generator API Tester</h1>
+    <p>Backend running at: <strong>http://localhost:4000</strong></p>
+
+    <!-- Health Check -->
+    <div class="test-section">
+        <h2>1. Health Check</h2>
+        <button onclick="testHealth()">Check Server Health</button>
+        <div id="health-result" class="result" style="display:none;"></div>
+    </div>
+
+    <!-- API Info -->
+    <div class="test-section">
+        <h2>2. API Information</h2>
+        <button onclick="testApiInfo()">Get API Info</button>
+        <div id="api-result" class="result" style="display:none;"></div>
+    </div>
+
+    <!-- Create User -->
+    <div class="test-section">
+        <h2>3. Create Test User</h2>
+        <label>Email:</label>
+        <input type="email" id="user-email" value="test@example.com" />
+        
+        <label>Role:</label>
+        <select id="user-role">
+            <option value="administrator">Administrator</option>
+            <option value="sme">SME</option>
+            <option value="student">Student</option>
+        </select>
+        
+        <br><br>
+        <button onclick="createUser()">Create User</button>
+        <div id="create-user-result" class="result" style="display:none;"></div>
+    </div>
+
+    <!-- List Users -->
+    <div class="test-section">
+        <h2>4. List Users</h2>
+        <button onclick="listUsers()">Get All Users</button>
+        <div id="list-users-result" class="result" style="display:none;"></div>
+    </div>
+
+    <!-- MongoDB Connection Test -->
+    <div class="test-section">
+        <h2>5. Database Status</h2>
+        <button onclick="testDatabase()">Check MongoDB Connection</button>
+        <div id="db-result" class="result" style="display:none;"></div>
+    </div>
+
+    <!-- Create Audit Log -->
+    <div class="test-section">
+        <h2>6. Create Audit Log</h2>
+        <label>User ID (from created user):</label>
+        <input type="text" id="audit-user-id" placeholder="Enter user ID" />
+        
+        <label>Action:</label>
+        <input type="text" id="audit-action" value="test_action" />
+        
+        <br><br>
+        <button onclick="createAuditLog()">Create Audit Log</button>
+        <div id="audit-result" class="result" style="display:none;"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:4000';
+
+        function showResult(elementId, data, isError = false) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.className = 'result ' + (isError ? 'error' : 'success');
+            element.textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function testHealth() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                showResult('health-result', data);
+            } catch (error) {
+                showResult('health-result', { error: error.message }, true);
+            }
+        }
+
+        async function testApiInfo() {
+            try {
+                const response = await fetch(`${API_BASE}/api`);
+                const data = await response.json();
+                showResult('api-result', data);
+            } catch (error) {
+                showResult('api-result', { error: error.message }, true);
+            }
+        }
+
+        async function createUser() {
+            try {
+                const email = document.getElementById('user-email').value;
+                const role = document.getElementById('user-role').value;
+                
+                const response = await fetch(`${API_BASE}/api/users`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        role: role,
+                        authProviderId: 'test-auth-' + Date.now()
+                    })
+                });
+                
+                const data = await response.json();
+                showResult('create-user-result', data, !response.ok);
+                
+                // Auto-fill user ID for audit log
+                if (response.ok && data.id) {
+                    document.getElementById('audit-user-id').value = data.id;
+                }
+            } catch (error) {
+                showResult('create-user-result', { error: error.message }, true);
+            }
+        }
+
+        async function listUsers() {
+            try {
+                const response = await fetch(`${API_BASE}/api/users`);
+                const data = await response.json();
+                showResult('list-users-result', data);
+            } catch (error) {
+                showResult('list-users-result', { error: error.message }, true);
+            }
+        }
+
+        async function testDatabase() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                const dbStatus = {
+                    status: data.services.database.status,
+                    responseTime: data.services.database.responseTime + 'ms',
+                    message: data.services.database.status === 'healthy' 
+                        ? '✅ MongoDB is connected and working!' 
+                        : '❌ MongoDB connection issue',
+                    details: data.services.database
+                };
+                showResult('db-result', dbStatus);
+            } catch (error) {
+                showResult('db-result', { error: error.message }, true);
+            }
+        }
+
+        async function createAuditLog() {
+            try {
+                const userId = document.getElementById('audit-user-id').value;
+                const action = document.getElementById('audit-action').value;
+                
+                if (!userId) {
+                    alert('Please create a user first or enter a user ID');
+                    return;
+                }
+                
+                const response = await fetch(`${API_BASE}/api/audit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        userId: userId,
+                        action: action,
+                        resourceType: 'test',
+                        details: {
+                            test: true,
+                            timestamp: new Date().toISOString()
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                showResult('audit-result', data, !response.ok);
+            } catch (error) {
+                showResult('audit-result', { error: error.message }, true);
+            }
+        }
+
+        // Auto-test health on page load
+        window.addEventListener('load', () => {
+            testHealth();
+        });
+    </script>
+</body>
+</html>

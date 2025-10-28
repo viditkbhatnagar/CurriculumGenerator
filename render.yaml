@@ -1,0 +1,141 @@
+# Render Blueprint for Curriculum Generator App
+# This file defines all services, databases, and configuration for deployment on Render
+
+services:
+  # Frontend Web Service - Next.js Application
+  - type: web
+    name: curriculum-frontend
+    runtime: node
+    region: oregon
+    plan: starter
+    branch: main
+    rootDir: packages/frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: curriculum-api
+          property: host
+      - key: NEXT_PUBLIC_AUTH0_DOMAIN
+        sync: false
+      - key: NEXT_PUBLIC_AUTH0_CLIENT_ID
+        sync: false
+    healthCheckPath: /
+    autoDeploy: true
+
+  # Backend API Web Service - Express/Node.js Application
+  - type: web
+    name: curriculum-api
+    runtime: node
+    region: oregon
+    plan: standard
+    branch: main
+    rootDir: packages/backend
+    buildCommand: npm install && npm run build && npm run migrate:up
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: curriculum-redis
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_CHAT_MODEL
+        value: gpt-4-turbo
+      - key: AUTH0_DOMAIN
+        sync: false
+      - key: AUTH0_AUDIENCE
+        sync: false
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: API_SIGNING_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        fromService:
+          type: web
+          name: curriculum-frontend
+          property: host
+      - key: UPLOAD_DIR
+        value: /app/uploads
+      - key: MAX_FILE_SIZE
+        value: 52428800
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 60000
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 100
+      - key: SESSION_TIMEOUT_SECONDS
+        value: 1800
+      - key: LOG_LEVEL
+        value: info
+      - key: SENTRY_DSN
+        sync: false
+    disk:
+      name: curriculum-uploads
+      mountPath: /app/uploads
+      sizeGB: 10
+    healthCheckPath: /health
+    autoDeploy: true
+
+  # Background Worker Service - Curriculum Generation Worker
+  - type: worker
+    name: curriculum-worker
+    runtime: node
+    region: oregon
+    plan: standard
+    branch: main
+    rootDir: packages/backend
+    buildCommand: npm install && npm run build
+    startCommand: npm run worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: curriculum-redis
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_CHAT_MODEL
+        value: gpt-4-turbo
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: SENTRY_DSN
+        sync: false
+    autoDeploy: true
+
+# Redis Add-on for caching and job queue
+databases:
+  - name: curriculum-redis
+    region: oregon
+    plan: starter
+    ipAllowList: []
+
+# Environment Variable Groups (optional - for shared configuration)
+# Note: Environment variable groups must be created manually in Render dashboard
+# and then referenced in services using envVarGroups field
+
+# Example usage (uncomment and configure in Render dashboard):
+# envVarGroups:
+#   - name: shared-secrets
+#     envVars:
+#       - MONGODB_URI
+#       - OPENAI_API_KEY
+#       - AUTH0_DOMAIN
+#       - AUTH0_AUDIENCE
+#       - SENTRY_DSN

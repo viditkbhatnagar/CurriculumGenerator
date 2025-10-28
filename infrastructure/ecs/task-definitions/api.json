@@ -1,0 +1,84 @@
+{
+  "family": "curriculum-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "${EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${TASK_ROLE_ARN}",
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "${ECR_REGISTRY}/curriculum-backend:${IMAGE_TAG}",
+      "portMappings": [
+        {
+          "containerPort": 4000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "PORT",
+          "value": "4000"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "${SECRETS_ARN}:DATABASE_URL::"
+        },
+        {
+          "name": "REDIS_URL",
+          "valueFrom": "${SECRETS_ARN}:REDIS_URL::"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "valueFrom": "${SECRETS_ARN}:OPENAI_API_KEY::"
+        },
+        {
+          "name": "PINECONE_API_KEY",
+          "valueFrom": "${SECRETS_ARN}:PINECONE_API_KEY::"
+        },
+        {
+          "name": "AUTH0_DOMAIN",
+          "valueFrom": "${SECRETS_ARN}:AUTH0_DOMAIN::"
+        },
+        {
+          "name": "AUTH0_AUDIENCE",
+          "valueFrom": "${SECRETS_ARN}:AUTH0_AUDIENCE::"
+        },
+        {
+          "name": "JWT_SECRET",
+          "valueFrom": "${SECRETS_ARN}:JWT_SECRET::"
+        },
+        {
+          "name": "AWS_ACCESS_KEY_ID",
+          "valueFrom": "${SECRETS_ARN}:AWS_ACCESS_KEY_ID::"
+        },
+        {
+          "name": "AWS_SECRET_ACCESS_KEY",
+          "valueFrom": "${SECRETS_ARN}:AWS_SECRET_ACCESS_KEY::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/${ENVIRONMENT}/curriculum-api",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:4000/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}

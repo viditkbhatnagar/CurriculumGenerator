@@ -1,0 +1,56 @@
+{
+  "family": "curriculum-frontend",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "${EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${TASK_ROLE_ARN}",
+  "containerDefinitions": [
+    {
+      "name": "frontend",
+      "image": "${ECR_REGISTRY}/curriculum-frontend:${IMAGE_TAG}",
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "NEXT_PUBLIC_API_URL",
+          "value": "${API_URL}"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "NEXT_PUBLIC_AUTH0_DOMAIN",
+          "valueFrom": "${SECRETS_ARN}:AUTH0_DOMAIN::"
+        },
+        {
+          "name": "NEXT_PUBLIC_AUTH0_CLIENT_ID",
+          "valueFrom": "${SECRETS_ARN}:AUTH0_CLIENT_ID::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/${ENVIRONMENT}/curriculum-frontend",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:3000/ || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}
