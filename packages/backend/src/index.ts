@@ -34,6 +34,7 @@ import { createKnowledgeBaseRouter } from './routes/knowledgeBase';
 import { createRAGRouter } from './routes/rag';
 import { createTutorBotRouter } from './routes/tutorBot';
 import { createSimulationsRouter } from './routes/simulations';
+import newWorkflowRoutes from './routes/newWorkflowRoutes';
 
 dotenv.config();
 
@@ -51,7 +52,9 @@ if (config.security.enableHttps) {
     httpServer = https.createServer(httpsOptions, app);
     loggingService.info('HTTPS enabled');
   } catch (error) {
-    loggingService.warn('HTTPS certificates not found, falling back to HTTP', { error: String(error) });
+    loggingService.warn('HTTPS certificates not found, falling back to HTTP', {
+      error: String(error),
+    });
     httpServer = createServer(app);
   }
 } else {
@@ -81,43 +84,53 @@ const limiter = rateLimit({
 });
 
 // Security middleware
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", 'data:', 'https:'],
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+      },
     },
-  },
-  hsts: {
-    maxAge: 31536000,
-    includeSubDomains: true,
-    preload: true,
-  },
-}));
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+  })
+);
 
 // CORS configuration with specific origins
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin) {
-      return callback(null, true);
-    }
-    
-    if (config.security.corsOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      loggingService.warn('CORS blocked request from unauthorized origin', { origin });
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-API-Signature', 'X-API-Timestamp'],
-  exposedHeaders: ['X-Request-ID'],
-  maxAge: 86400, // 24 hours
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (config.security.corsOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        loggingService.warn('CORS blocked request from unauthorized origin', { origin });
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Request-ID',
+      'X-API-Signature',
+      'X-API-Timestamp',
+    ],
+    exposedHeaders: ['X-Request-ID'],
+    maxAge: 86400, // 24 hours
+  })
+);
 
 // Body parser with size limits
 app.use(express.json({ limit: '10mb' }));
@@ -132,7 +145,8 @@ app.use(errorTrackingService.getTracingHandler());
 
 // Request ID middleware
 app.use((req, res, next) => {
-  req.headers['x-request-id'] = req.headers['x-request-id'] || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  req.headers['x-request-id'] =
+    req.headers['x-request-id'] || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   next();
 });
 
@@ -198,6 +212,9 @@ app.use('/api/tutor', tutorBotRouter);
 const simulationsRouter = createSimulationsRouter();
 app.use('/api/simulations', simulationsRouter);
 
+// New 5-stage workflow routes (v2 API)
+app.use('/api/v2', newWorkflowRoutes);
+
 // Sentry error handler (must be before other error handlers)
 app.use(errorTrackingService.getErrorHandler());
 
@@ -212,7 +229,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     url: req.url,
     userId: req.user?.id,
   });
-  
+
   res.status(err.status || 500).json({
     error: {
       code: err.code || 'INTERNAL_ERROR',
@@ -236,7 +253,7 @@ async function startServer() {
     let mongoConnected = false;
     let mongoRetries = 0;
     const maxMongoRetries = 5;
-    
+
     while (!mongoConnected && mongoRetries < maxMongoRetries) {
       try {
         await db.connect();
@@ -251,7 +268,7 @@ async function startServer() {
           retries: mongoRetries,
           maxRetries: maxMongoRetries,
         });
-        
+
         if (mongoRetries >= maxMongoRetries) {
           loggingService.error('MongoDB connection failed after maximum retries', error);
           errorTrackingService.captureException(error as Error, {
@@ -266,11 +283,11 @@ async function startServer() {
           );
           throw new Error('Failed to connect to MongoDB - server cannot start');
         }
-        
+
         // Wait before retrying (exponential backoff)
         const waitTime = Math.min(1000 * Math.pow(2, mongoRetries - 1), 10000);
         loggingService.info(`Waiting ${waitTime}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
     }
 
@@ -294,7 +311,9 @@ async function startServer() {
       await initRedisClient();
       loggingService.info('Redis client initialized for session management');
     } catch (error) {
-      loggingService.warn('Redis not available, continuing without session management', { error: String(error) });
+      loggingService.warn('Redis not available, continuing without session management', {
+        error: String(error),
+      });
     }
 
     // Initialize cache service (optional)
@@ -302,7 +321,9 @@ async function startServer() {
       await cacheService.connect();
       loggingService.info('Cache service initialized');
     } catch (error) {
-      loggingService.warn('Cache service not available, continuing without caching', { error: String(error) });
+      loggingService.warn('Cache service not available, continuing without caching', {
+        error: String(error),
+      });
     }
 
     // Initialize WebSocket server
@@ -351,7 +372,6 @@ async function startServer() {
       });
       process.exit(1);
     });
-
   } catch (error) {
     loggingService.error('Failed to start server', error);
     errorTrackingService.captureException(error as Error, {
@@ -370,9 +390,9 @@ async function startServer() {
 // Graceful shutdown handler
 async function gracefulShutdown(signal: string) {
   loggingService.info(`${signal} received, shutting down gracefully...`);
-  
+
   let exitCode = 0;
-  
+
   try {
     // Stop accepting new connections
     httpServer.close(() => {
@@ -426,12 +446,11 @@ async function gracefulShutdown(signal: string) {
     }
 
     loggingService.info('Graceful shutdown completed', { exitCode });
-    
+
     // Give time for final logs to flush
     setTimeout(() => {
       process.exit(exitCode);
     }, 1000);
-    
   } catch (error) {
     loggingService.error('Error during graceful shutdown', error);
     errorTrackingService.captureException(error as Error, {
@@ -453,12 +472,9 @@ process.on('uncaughtException', (error: Error) => {
   errorTrackingService.captureException(error, {
     component: 'uncaught-exception',
   });
-  alertingService.triggerAlert(
-    'critical',
-    'Uncaught Exception',
-    error.message,
-    { stack: error.stack }
-  );
+  alertingService.triggerAlert('critical', 'Uncaught Exception', error.message, {
+    stack: error.stack,
+  });
   process.exit(1);
 });
 
@@ -471,12 +487,9 @@ process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
       component: 'unhandled-rejection',
     }
   );
-  alertingService.triggerAlert(
-    'critical',
-    'Unhandled Promise Rejection',
-    String(reason),
-    { promise: String(promise) }
-  );
+  alertingService.triggerAlert('critical', 'Unhandled Promise Rejection', String(reason), {
+    promise: String(promise),
+  });
 });
 
 startServer();

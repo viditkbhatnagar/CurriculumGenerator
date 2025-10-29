@@ -26,7 +26,10 @@
     "test:redis": "tsx scripts/test-redis-connection.ts",
     "test:vector-search": "tsx scripts/test-vector-search.ts",
     "test:connections": "npm run test:mongodb && npm run test:redis",
-    "create:indexes": "tsx scripts/create-indexes.ts"
+    "create:indexes": "tsx scripts/create-indexes.ts",
+    "migrate:new-workflow": "tsx src/scripts/migrateToNewWorkflow.ts",
+    "migrate:clean": "tsx src/scripts/cleanMigration.ts",
+    "seed:prompts": "tsx src/scripts/seedPrompts.ts"
   },
   "dependencies": {
     "@curriculum-app/shared-types": "*",
