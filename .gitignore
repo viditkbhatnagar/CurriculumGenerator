@@ -16,6 +16,11 @@ dist/
 # Environment variables
 .env
 .env*.local
+.env*.backup
+.env*.bak
+.env.atlas_backup
+.env.backup
+.env.bak
 
 # Python
 __pycache__/

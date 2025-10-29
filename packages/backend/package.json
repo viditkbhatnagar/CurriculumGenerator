@@ -32,6 +32,7 @@
     "seed:prompts": "tsx src/scripts/seedPrompts.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.919.0",
     "@curriculum-app/shared-types": "*",
     "@langchain/community": "^1.0.0",
     "@langchain/core": "^1.0.2",

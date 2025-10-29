@@ -199,7 +199,13 @@ class AIResearchService {
         submissionDate: new Date(),
       };
       prelimPackage.outcomeWritingGuide = {
-        examples: [testContent],
+        introduction: testContent,
+        examples: [
+          {
+            verb: 'Apply',
+            example: testContent,
+          },
+        ],
       };
       prelimPackage.comparativeBenchmarking = {
         certifications: [],

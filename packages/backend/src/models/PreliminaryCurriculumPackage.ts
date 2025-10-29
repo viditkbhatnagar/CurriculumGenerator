@@ -212,9 +212,11 @@ export interface IPreliminaryCurriculumPackage extends Document {
 
   // Tab 13: Outcome Writing Guide (optional)
   outcomeWritingGuide?: {
-    templates: string[];
-    exampleOutcomes: string[];
-    approvedVerbs: string[];
+    introduction: string;
+    examples: Array<{
+      verb: string;
+      example: string;
+    }>;
   };
 
   // Tab 14: Comparative Benchmarking (optional)
@@ -471,9 +473,13 @@ const PreliminaryCurriculumPackageSchema = new Schema<IPreliminaryCurriculumPack
     },
 
     outcomeWritingGuide: {
-      templates: [String],
-      exampleOutcomes: [String],
-      approvedVerbs: [String],
+      introduction: String,
+      examples: [
+        {
+          verb: String,
+          example: String,
+        },
+      ],
     },
 
     comparativeBenchmarking: [
