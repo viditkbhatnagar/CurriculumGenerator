@@ -13,20 +13,20 @@ This document describes the complete workflows and processes in the Curriculum G
 
 ## Overview
 
-The Curriculum Generator App follows a multi-stage pipeline approach:
+The Curriculum Generator App follows a streamlined 5-stage AI-integrated workflow:
 
-1. **Input Stage:** SME uploads Excel template with course data
-2. **Validation Stage:** System validates structure and content
-3. **Knowledge Retrieval Stage:** RAG engine retrieves relevant educational content
-4. **Generation Stage:** AI generates curriculum documents
-5. **Quality Assurance Stage:** Automated validation against standards
-6. **Benchmarking Stage:** Comparison with competitor programs
-7. **Review Stage:** Human review and adjustments
-8. **Export Stage:** Generate final documents in multiple formats
+1. **Stage 1: SME Login & Prompt Selection** - SME selects course prompt from internal library (5 min)
+2. **Stage 2: AI Research & SME Review** - AI generates preliminary curriculum package with real-time SME collaboration (30-60 min)
+3. **Stage 3: Resource Cost Evaluation** - Calculate costs, get approvals, or substitute alternatives (15-30 min)
+4. **Stage 4: Curriculum Generation** - Generate complete teaching materials from approved preliminary package (20-40 min)
+5. **Stage 5: Final Review & Launch** - SME final approval and course publication (30-60 min)
+
+**Key Innovation:** Replaces Excel uploads with prompt-based initiation and chat-based AI research collaboration for faster, higher-quality curriculum development with built-in AGI compliance.
 
 ## User Roles
 
 ### Administrator
+
 - Manages system configuration
 - Reviews and approves curricula
 - Manages knowledge base
@@ -34,68 +34,226 @@ The Curriculum Generator App follows a multi-stage pipeline approach:
 - Manages users and permissions
 
 ### Subject Matter Expert (SME)
-- Uploads course content via Excel
-- Reviews generated curricula
-- Provides feedback and adjustments
-- Approves final curriculum
+
+- Selects course prompts from library
+- Collaborates with AI during research phase via chat
+- Reviews preliminary curriculum package
+- Provides real-time refinements and feedback
+- Approves resource selections
+- Reviews and approves final curriculum
+- Provides digital sign-off for publication
+
+### Management/Admin
+
+- Approves or rejects paid resource requests
+- Reviews cost justifications
+- Makes final publication approvals
+- Manages prompt library
+- Views analytics and reports
+- Manages users and permissions
 
 ### Student
+
 - Interacts with tutor bot
 - Completes simulations
 - Accesses learning materials
 
 ## Main Workflows
 
-### 1. Curriculum Generation Workflow
+### 1. New 5-Stage Curriculum Generation Workflow
 
 ```mermaid
 sequenceDiagram
     participant SME
     participant Frontend
     participant API
+    participant AIResearch
+    participant CostService
     participant Worker
+    participant Management
     participant MongoDB
+    participant Perplexity
     participant OpenAI
-    participant Redis
+    participant Gemini
+    participant LMS
 
-    SME->>Frontend: Upload Excel file
-    Frontend->>API: POST /api/programs/:id/upload-sme-data
-    API->>API: Validate file structure
-    API->>MongoDB: Store program data
-    API->>Redis: Cache program data
-    API-->>Frontend: Return validation results
-    
-    SME->>Frontend: Trigger generation
-    Frontend->>API: POST /api/programs/:id/generate-curriculum
-    API->>Redis: Queue generation job
-    API-->>Frontend: Return job ID
-    
-    Worker->>Redis: Poll for jobs
-    Redis-->>Worker: Return job data
-    
-    Worker->>MongoDB: Fetch program data
-    Worker->>OpenAI: Generate embeddings for queries
-    Worker->>MongoDB: Vector search for context
-    Worker->>OpenAI: Generate curriculum content
-    Worker->>MongoDB: Store generated curriculum
-    Worker->>Redis: Update job progress
-    
-    Frontend->>API: GET /api/programs/:id/generation-status
-    API->>Redis: Get job status
-    API-->>Frontend: Return progress (0-100%)
-    
-    Worker->>Worker: Run quality checks
-    Worker->>Worker: Run benchmarking
-    Worker->>MongoDB: Store final curriculum
-    Worker->>Redis: Mark job complete
-    
-    Frontend->>API: GET /api/programs/:id/curriculum
-    API->>MongoDB: Fetch curriculum
-    API-->>Frontend: Return curriculum data
-    Frontend->>SME: Display curriculum
+    Note over SME,LMS: Stage 1: Prompt Selection (5 min)
+    SME->>Frontend: Login & Browse Prompt Library
+    Frontend->>API: GET /api/prompts/library
+    API->>MongoDB: Fetch available prompts
+    API-->>Frontend: Return prompts
+    SME->>Frontend: Select prompt
+    Frontend->>API: POST /api/curriculum/initialize
+    API->>MongoDB: Create CurriculumProject
+    API-->>Frontend: Return project ID
+
+    Note over SME,LMS: Stage 2: AI Research & SME Review (30-60 min)
+    Frontend->>API: Start AI research
+    API->>AIResearch: Generate preliminary package
+
+    loop For each component (13 total)
+        AIResearch->>Perplexity: Research current trends
+        AIResearch->>OpenAI: Generate content
+        AIResearch->>Gemini: Validate & alternatives
+        AIResearch->>Frontend: Present component via chat
+        Frontend->>SME: Display component
+        SME->>Frontend: Provide feedback
+        Frontend->>AIResearch: Apply refinements
+    end
+
+    AIResearch->>MongoDB: Store PreliminaryCurriculumPackage
+    SME->>Frontend: Submit for approval
+    Frontend->>API: POST /api/preliminary-package/:id/submit
+
+    Note over SME,LMS: Stage 3: Resource Cost Evaluation (15-30 min)
+    API->>CostService: Scan for paid resources
+    CostService->>CostService: Calculate costs
+
+    alt Paid resources found
+        CostService->>Management: Notify for approval
+        Management->>API: Approve/Reject decision
+
+        alt Rejected
+            CostService->>OpenAI: Find alternatives
+            CostService->>MongoDB: Update package
+            CostService->>SME: Request re-approval
+            SME->>API: Re-approve
+        end
+    end
+
+    Note over SME,LMS: Stage 4: Curriculum Generation (20-40 min)
+    API->>Worker: Queue full generation job
+    Worker->>MongoDB: Fetch preliminary package
+    Worker->>Worker: Generate module plans
+    Worker->>Worker: Generate case studies
+    Worker->>Worker: Generate assessments
+    Worker->>Worker: Generate slide decks
+    Worker->>Worker: Cross-reference with package
+    Worker->>MongoDB: Store FullCurriculumPackage
+    Worker->>Frontend: Notify completion
+
+    Note over SME,LMS: Stage 5: Final Review & Launch (30-60 min)
+    Frontend->>SME: Display complete curriculum
+    SME->>SME: Review all materials
+
+    opt Refinements needed
+        SME->>API: Request changes
+        API->>Worker: Regenerate sections
+        Worker->>Frontend: Return updated materials
+    end
+
+    SME->>API: Digital sign-off
+    API->>Management: Request publication approval
+    Management->>API: Approve publication
+    API->>LMS: Deploy course
+    LMS-->>API: Deployment successful
+    API->>MongoDB: Update status to 'published'
+    API->>Frontend: Course live notification
 ```
 
-### 2. Knowledge Base Ingestion Workflow
+### 2. AI Research & Chat Interaction Workflow (NEW)
+
+```mermaid
+sequenceDiagram
+    participant SME
+    participant ChatUI
+    participant API
+    participant AIResearch
+    participant Perplexity
+    participant OpenAI
+    participant Gemini
+    participant MongoDB
+
+    SME->>ChatUI: Project initialized
+    ChatUI->>API: Start research phase
+    API->>AIResearch: Generate first component
+
+    AIResearch->>Perplexity: Research: "Business Intelligence trends"
+    Perplexity-->>AIResearch: Return sources + content
+    AIResearch->>OpenAI: Generate Program Overview
+    OpenAI-->>AIResearch: Return formatted overview
+    AIResearch->>Gemini: Validate quality
+    Gemini-->>AIResearch: Return validation score
+
+    AIResearch->>ChatUI: Present: "Program Overview"
+    ChatUI->>SME: Display component
+
+    SME->>ChatUI: "Add emphasis on retail sector"
+    ChatUI->>API: POST feedback
+    API->>AIResearch: Apply refinement
+
+    AIResearch->>OpenAI: Update with retail focus
+    OpenAI-->>AIResearch: Return updated content
+    AIResearch->>ChatUI: Present updated version
+    ChatUI->>SME: Display refined component
+
+    SME->>ChatUI: Approve component
+    ChatUI->>API: Mark component approved
+    API->>MongoDB: Save approved component
+
+    loop Repeat for all 13 components
+        Note over AIResearch,MongoDB: Same process for each component
+    end
+
+    API->>MongoDB: Store complete preliminary package
+    API->>ChatUI: All components approved
+    ChatUI->>SME: Ready for next stage
+```
+
+### 3. Resource Cost Evaluation Workflow (NEW)
+
+```mermaid
+sequenceDiagram
+    participant System
+    participant CostService
+    participant OpenAI
+    participant Management
+    participant SME
+    participant MongoDB
+
+    System->>CostService: Preliminary package submitted
+    CostService->>CostService: Scan for paid resources
+
+    alt No paid resources
+        CostService->>System: Proceed to Stage 4
+    else Paid resources found
+        CostService->>CostService: Calculate costs
+        CostService->>MongoDB: Create ResourceCostEvaluation
+        CostService->>Management: Notify with cost breakdown
+
+        Management->>Management: Review justification
+
+        alt Approved
+            Management->>CostService: Approve
+            CostService->>System: Purchasing approved
+            System->>System: Proceed to Stage 4
+        else Rejected
+            Management->>CostService: Reject
+            CostService->>OpenAI: Find open-source alternatives
+            OpenAI-->>CostService: Return alternatives list
+            CostService->>CostService: Evaluate alternatives
+            CostService->>CostService: Check if plan changes
+
+            alt Plan changes needed
+                CostService->>MongoDB: Update preliminary package
+                CostService->>SME: Request re-approval
+                SME->>SME: Review changes
+
+                alt SME approves
+                    SME->>CostService: Approve revised package
+                    CostService->>System: Proceed to Stage 4
+                else SME rejects
+                    SME->>CostService: Request different alternatives
+                    Note over CostService: Loop back to find alternatives
+                end
+            else No plan changes
+                CostService->>System: Proceed to Stage 4
+            end
+        end
+    end
+```
+
+### 4. Knowledge Base Ingestion Workflow
 
 ```mermaid
 sequenceDiagram
@@ -111,20 +269,20 @@ sequenceDiagram
     API->>API: Validate source
     API->>Redis: Queue ingestion job
     API-->>Frontend: Return job ID
-    
+
     Worker->>Redis: Poll for jobs
     Worker->>Worker: Extract text from document
     Worker->>Worker: Clean and preprocess text
     Worker->>Worker: Chunk text (512 tokens, 50 overlap)
-    
+
     loop For each chunk
         Worker->>OpenAI: Generate embedding (1536-dim)
         Worker->>MongoDB: Store chunk with embedding
     end
-    
+
     Worker->>MongoDB: Update source metadata
     Worker->>Redis: Mark job complete
-    
+
     Frontend->>API: GET /api/knowledge-base/sources
     API->>MongoDB: Fetch sources
     API-->>Frontend: Return source list
@@ -144,17 +302,17 @@ sequenceDiagram
     Frontend->>API: POST /api/tutor/chat
     API->>MongoDB: Fetch conversation history
     API->>MongoDB: Fetch course content
-    
+
     API->>OpenAI: Generate query embedding
     API->>MongoDB: Vector search for relevant content
-    
+
     API->>OpenAI: Generate response with context
     OpenAI-->>API: Return AI response
-    
+
     API->>MongoDB: Store message in history
     API->>MongoDB: Update student progress
     API-->>Frontend: Return response + resources
-    
+
     Frontend->>Student: Display response
     Frontend->>Student: Show suggested resources
     Frontend->>Student: Show follow-up questions
@@ -172,38 +330,38 @@ sequenceDiagram
 
     Student->>Frontend: Select topic and difficulty
     Frontend->>API: POST /api/simulations/create
-    
+
     API->>OpenAI: Generate scenario
     OpenAI-->>API: Return scenario context
-    
+
     API->>MongoDB: Store scenario
     API-->>Frontend: Return scenario data
-    
+
     Frontend->>Student: Display scenario
-    
+
     loop Simulation Steps
         Student->>Frontend: Choose action
         Frontend->>API: POST /api/simulations/:id/action
-        
+
         API->>MongoDB: Update scenario state
         API->>OpenAI: Evaluate action
         OpenAI-->>API: Return feedback
-        
+
         API->>MongoDB: Store action and feedback
         API-->>Frontend: Return new state + feedback
-        
+
         Frontend->>Student: Display feedback
         Frontend->>Student: Show next options
     end
-    
+
     Student->>Frontend: Complete simulation
     Frontend->>API: GET /api/simulations/:id/evaluate
-    
+
     API->>MongoDB: Fetch all actions
     API->>OpenAI: Generate performance report
     API->>MongoDB: Store report
     API-->>Frontend: Return performance report
-    
+
     Frontend->>Student: Display report with score
 ```
 
@@ -212,6 +370,7 @@ sequenceDiagram
 ### Excel Upload and Validation Process
 
 **Step 1: File Upload**
+
 ```
 1. User selects Excel file (.xlsx, max 50MB)
 2. Frontend validates file type and size
@@ -221,6 +380,7 @@ sequenceDiagram
 ```
 
 **Step 2: Structure Validation**
+
 ```
 1. Parse Excel file using exceljs library
 2. Check for 15 required sheets:
@@ -240,6 +400,7 @@ sequenceDiagram
 ```
 
 **Step 3: Data Extraction**
+
 ```
 1. Extract data from each sheet
 2. Transform to internal data models
@@ -254,6 +415,7 @@ sequenceDiagram
 ### Curriculum Generation Pipeline
 
 **Stage 1: Initialization (0-10%)**
+
 ```
 1. Fetch program data from MongoDB
 2. Fetch related modules and outcomes
@@ -263,6 +425,7 @@ sequenceDiagram
 ```
 
 **Stage 2: Context Retrieval (10-30%)**
+
 ```
 For each module:
   1. Extract key topics from module title and aim
@@ -276,6 +439,7 @@ For each module:
 ```
 
 **Stage 3: Content Generation (30-70%)**
+
 ```
 1. Generate Program Specification:
    - Introduction
@@ -305,6 +469,7 @@ For each module:
 ```
 
 **Stage 4: Skill Book Generation (70-80%)**
+
 ```
 1. Extract competency domains from program
 2. For each competency:
@@ -317,6 +482,7 @@ For each module:
 ```
 
 **Stage 5: Quality Assurance (80-90%)**
+
 ```
 1. Validate source recency
 2. Check learning outcome structure:
@@ -333,6 +499,7 @@ For each module:
 ```
 
 **Stage 6: Benchmarking (90-100%)**
+
 ```
 1. Fetch competitor programs from MongoDB
 2. For each competitor:
@@ -346,6 +513,7 @@ For each module:
 ```
 
 **Stage 7: Finalization (100%)**
+
 ```
 1. Store complete curriculum in MongoDB
 2. Update GenerationJob status to 'completed'
@@ -357,6 +525,7 @@ For each module:
 ### RAG Engine Process
 
 **Query Processing**
+
 ```
 1. Receive query text (e.g., "business intelligence fundamentals")
 2. Generate 3 query variations:
@@ -367,6 +536,7 @@ For each module:
 ```
 
 **Vector Search**
+
 ```
 For each query embedding:
   1. Execute MongoDB $vectorSearch aggregation
@@ -380,6 +550,7 @@ For each query embedding:
 ```
 
 **Result Processing**
+
 ```
 1. Merge results from all queries
 2. Deduplicate by content hash
@@ -390,6 +561,7 @@ For each query embedding:
 ```
 
 **Content Generation**
+
 ```
 1. Build prompt with:
    - System instructions
@@ -406,6 +578,7 @@ For each query embedding:
 ### Quality Assurance Checks
 
 **Source Validation**
+
 ```
 For each source:
   ✓ Publication date within 5 years (or marked exception)
@@ -415,6 +588,7 @@ For each source:
 ```
 
 **Learning Outcome Validation**
+
 ```
 For each outcome:
   ✓ Starts with Bloom's taxonomy verb
@@ -425,12 +599,13 @@ For each outcome:
 ```
 
 **Structure Validation**
+
 ```
 Program level:
   ✓ Has 5-8 learning outcomes
   ✓ Has 5-8 modules
   ✓ Total hours = 120
-  
+
 Module level:
   ✓ Has 6-8 units
   ✓ Hours are balanced
@@ -438,6 +613,7 @@ Module level:
 ```
 
 **Citation Validation**
+
 ```
 For each citation:
   ✓ Follows APA 7 format
@@ -449,6 +625,7 @@ For each citation:
 ### Document Export Process
 
 **DOCX Generation**
+
 ```
 1. Load DOCX template
 2. Replace placeholders with data:
@@ -466,6 +643,7 @@ For each citation:
 ```
 
 **PDF Generation**
+
 ```
 1. Render HTML template with data
 2. Apply CSS styling
@@ -479,6 +657,7 @@ For each citation:
 ```
 
 **SCORM Package Generation**
+
 ```
 1. Create SCORM manifest (imsmanifest.xml)
 2. Package curriculum content as SCOs
@@ -574,15 +753,17 @@ Document (PDF/DOCX/URL)
 ### External Services
 
 **OpenAI API**
+
 - **Endpoint:** https://api.openai.com/v1/
 - **Authentication:** Bearer token (API key)
-- **Rate Limits:** 
+- **Rate Limits:**
   - GPT-4: 10,000 TPM (tokens per minute)
   - Embeddings: 1,000,000 TPM
 - **Retry Strategy:** Exponential backoff (3 attempts)
 - **Timeout:** 30 seconds
 
 **Auth0**
+
 - **Endpoint:** https://YOUR_DOMAIN.auth0.com/
 - **Authentication:** OAuth 2.0 / JWT
 - **Token Validation:** RS256 signature verification
@@ -590,6 +771,7 @@ Document (PDF/DOCX/URL)
 - **Session Duration:** 30 minutes
 
 **MongoDB Atlas**
+
 - **Connection:** MongoDB URI with connection pooling
 - **Authentication:** SCRAM-SHA-256
 - **Connection Pool:** 5-20 connections
@@ -597,6 +779,7 @@ Document (PDF/DOCX/URL)
 - **Retry Writes:** Enabled
 
 **Render Redis**
+
 - **Connection:** Redis URL
 - **Authentication:** Password-based
 - **Connection Pool:** 10 connections
@@ -606,18 +789,21 @@ Document (PDF/DOCX/URL)
 ### Internal Service Communication
 
 **Frontend ↔ API**
+
 - **Protocol:** HTTPS/REST
 - **Format:** JSON
 - **Authentication:** JWT in Authorization header
 - **Error Handling:** Standard HTTP status codes
 
 **API ↔ Worker**
+
 - **Protocol:** Redis pub/sub + Bull queue
 - **Format:** JSON job data
 - **Reliability:** Job persistence in Redis
 - **Retry:** Automatic with exponential backoff
 
 **API ↔ MongoDB**
+
 - **Protocol:** MongoDB wire protocol
 - **Driver:** Mongoose ODM
 - **Connection:** Persistent connection pool
@@ -628,22 +814,26 @@ Document (PDF/DOCX/URL)
 ### Optimization Strategies
 
 **Caching**
+
 - API responses: 5 minutes
 - Knowledge base queries: 1 hour
 - Generated content: 24 hours
 - User sessions: 30 minutes
 
 **Batch Processing**
+
 - Embeddings: 100 texts per batch
 - Database inserts: Bulk operations
 - Vector searches: Parallel queries
 
 **Async Processing**
+
 - Curriculum generation: Background jobs
 - Document ingestion: Background jobs
 - Email notifications: Background jobs
 
 **Database Optimization**
+
 - Indexes on frequently queried fields
 - Projection to limit returned fields
 - Pagination for large result sets
@@ -652,11 +842,13 @@ Document (PDF/DOCX/URL)
 ### Scalability
 
 **Horizontal Scaling**
+
 - API servers: Multiple instances behind load balancer
 - Workers: Scale based on queue depth
 - MongoDB: Replica set with read replicas
 
 **Vertical Scaling**
+
 - Increase API server resources for higher throughput
 - Increase worker resources for faster job processing
 - Upgrade MongoDB cluster tier for better performance

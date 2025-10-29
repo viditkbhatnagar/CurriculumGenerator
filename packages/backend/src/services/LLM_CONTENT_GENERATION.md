@@ -254,7 +254,7 @@ const factCheck = await contentGen.factCheck(generatedContent, contexts);
 console.log(`Accuracy: ${factCheck.overallScore}%`);
 console.log(`Issues: ${factCheck.issues.length}`);
 
-factCheck.issues.forEach(issue => {
+factCheck.issues.forEach((issue) => {
   console.log(`[${issue.severity}] ${issue.claim}`);
   console.log(`  ${issue.issue}`);
 });
@@ -297,6 +297,7 @@ Content is cached in Redis with a 24-hour TTL:
 ### Circuit Breaker
 
 After 5 consecutive failures:
+
 - Circuit opens (blocks requests)
 - Waits 60 seconds
 - Enters half-open state
@@ -337,6 +338,7 @@ After 5 consecutive failures:
 ### Logging
 
 All operations are logged with:
+
 - Request parameters
 - Response metadata
 - Error details
@@ -347,7 +349,7 @@ All operations are logged with:
 ### Environment Variables
 
 ```bash
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=your_openai_api_key_here
 REDIS_URL=redis://localhost:6379
 DATABASE_URL=postgresql://...
 ```
@@ -379,6 +381,7 @@ private readonly cacheTTL = 86400; // 24 hours
 See `examples/contentGeneration.example.ts` for comprehensive examples.
 
 Run examples:
+
 ```bash
 tsx src/examples/contentGeneration.example.ts
 ```
@@ -397,4 +400,3 @@ tsx src/examples/contentGeneration.example.ts
 - [RAG Engine](./RAG_ENGINE.md)
 - [Prompt Engineering Guide](./PROMPT_ENGINEERING.md)
 - [API Endpoints](../../API_ENDPOINTS.md)
-
