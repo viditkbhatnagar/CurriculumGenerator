@@ -172,6 +172,34 @@ router.post('/projects', validateJWT, loadUser, async (req: Request, res: Respon
 });
 
 /**
+ * GET /api/v2/projects/published
+ * Get all published projects (public endpoint for dashboard)
+ */
+router.get('/projects/published', async (req: Request, res: Response) => {
+  try {
+    const { limit = 10 } = req.query;
+
+    const projects = await CurriculumProject.find({ status: 'published' })
+      .populate('promptId', 'promptTitle domain level')
+      .populate('smeId', 'name email')
+      .sort({ 'stageProgress.stage5.publishedAt': -1 })
+      .limit(parseInt(limit as string));
+
+    res.json({
+      success: true,
+      data: projects,
+      count: projects.length,
+    });
+  } catch (error) {
+    loggingService.error('Error getting published projects', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve published projects',
+    });
+  }
+});
+
+/**
  * GET /api/v2/projects
  * Get all projects for the authenticated user
  */
@@ -318,6 +346,68 @@ router.get('/projects/:id/research/package', async (req: Request, res: Response)
 });
 
 /**
+ * POST /api/v2/projects/:id/research/regenerate/:componentKey
+ * Regenerate a specific component in the preliminary package
+ * Requires authentication
+ */
+router.post(
+  '/projects/:id/research/regenerate/:componentKey',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id: projectId, componentKey } = req.params;
+
+      // Validate component key
+      const validComponents = [
+        'programOverview',
+        'competencyFramework',
+        'learningOutcomes',
+        'courseFramework',
+        'topicSources',
+        'readingList',
+        'assessments',
+        'glossary',
+        'caseStudies',
+        'deliveryTools',
+        'references',
+        'submissionMetadata',
+        'outcomeWritingGuide',
+        'comparativeBenchmarking',
+      ];
+
+      if (!validComponents.includes(componentKey)) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid component key. Must be one of: ${validComponents.join(', ')}`,
+        });
+      }
+
+      loggingService.info(`Regenerating component: ${componentKey}`, { projectId });
+
+      // Regenerate the component
+      await aiResearchService.regenerateComponent(projectId, componentKey);
+
+      res.json({
+        success: true,
+        message: `Component ${componentKey} regenerated successfully`,
+      });
+    } catch (error) {
+      loggingService.error('Error regenerating component', {
+        error,
+        projectId: req.params.id,
+        componentKey: req.params.componentKey,
+      });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to regenerate component',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
+/**
  * POST /api/v2/research/:packageId/feedback
  * Submit SME feedback for refinement
  */
@@ -386,6 +476,512 @@ router.post(
     }
   }
 );
+
+// ==================================================================================
+// STAGE 3: RESOURCE COST EVALUATION ROUTES
+// ==================================================================================
+
+/**
+ * POST /api/v2/projects/:id/cost/evaluate
+ * Start cost evaluation (scan components for paid resources)
+ */
+router.post(
+  '/projects/:id/cost/evaluate',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { resourceCostService } = await import('../services/resourceCostService');
+      const costEval = await resourceCostService.startEvaluation(req.params.id);
+
+      res.json({
+        success: true,
+        data: costEval,
+        message: 'Cost evaluation started successfully',
+      });
+    } catch (error) {
+      loggingService.error('Error starting cost evaluation', { error, projectId: req.params.id });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to start cost evaluation',
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/v2/projects/:id/cost
+ * Get cost evaluation results
+ */
+router.get('/projects/:id/cost', async (req: Request, res: Response) => {
+  try {
+    const { resourceCostService } = await import('../services/resourceCostService');
+    const costEval = await resourceCostService.getCostEvaluation(req.params.id);
+
+    if (!costEval) {
+      return res.status(404).json({
+        success: false,
+        error: 'Cost evaluation not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: costEval,
+    });
+  } catch (error) {
+    loggingService.error('Error getting cost evaluation', { error, projectId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve cost evaluation',
+    });
+  }
+});
+
+/**
+ * POST /api/v2/projects/:id/cost/approve
+ * Management approves cost evaluation
+ */
+router.post(
+  '/projects/:id/cost/approve',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { resourceCostService } = await import('../services/resourceCostService');
+      const { selectedAlternatives } = req.body;
+      const userId = (req as any).user?.userId || 'dev-user';
+
+      const costEval = await resourceCostService.approveCostEvaluation(
+        req.params.id,
+        userId,
+        selectedAlternatives
+      );
+
+      res.json({
+        success: true,
+        data: costEval,
+        message: 'Cost evaluation approved. Moving to Stage 4.',
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      loggingService.error('Error approving cost evaluation', {
+        error: errorMessage,
+        stack: errorStack,
+        projectId: req.params.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: errorMessage || 'Failed to approve cost evaluation',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/v2/projects/:id/cost/reject
+ * Management rejects cost evaluation
+ */
+router.post(
+  '/projects/:id/cost/reject',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { resourceCostService } = await import('../services/resourceCostService');
+      const { reason } = req.body;
+      const userId = (req as any).user?.userId || 'dev-user';
+
+      if (!reason) {
+        return res.status(400).json({
+          success: false,
+          error: 'Rejection reason is required',
+        });
+      }
+
+      const costEval = await resourceCostService.rejectCostEvaluation(
+        req.params.id,
+        userId,
+        reason
+      );
+
+      res.json({
+        success: true,
+        data: costEval,
+        message: 'Cost evaluation rejected. SME will need to revise resources.',
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      loggingService.error('Error rejecting cost evaluation', {
+        error: errorMessage,
+        stack: errorStack,
+        projectId: req.params.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: errorMessage || 'Failed to reject cost evaluation',
+      });
+    }
+  }
+);
+
+// ==========================================
+// STAGE 4: FULL CURRICULUM PACKAGE GENERATION
+// ==========================================
+
+/**
+ * POST /api/v2/projects/:id/curriculum/generate
+ * Start full curriculum package generation
+ */
+router.post(
+  '/projects/:id/curriculum/generate',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { curriculumGenerationServiceV2 } = await import(
+        '../services/curriculumGenerationServiceV2'
+      );
+
+      const fullPackageId = await curriculumGenerationServiceV2.startGeneration(req.params.id);
+
+      res.json({
+        success: true,
+        data: { fullPackageId },
+        message: 'Full curriculum generation started',
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      loggingService.error('Error starting curriculum generation', {
+        error: errorMessage,
+        stack: errorStack,
+        projectId: req.params.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: errorMessage || 'Failed to start curriculum generation',
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/v2/projects/:id/curriculum/package
+ * Get full curriculum package
+ */
+router.get('/projects/:id/curriculum/package', async (req: Request, res: Response) => {
+  try {
+    const { FullCurriculumPackage } = await import('../models/FullCurriculumPackage');
+
+    const fullPackage = await FullCurriculumPackage.findOne({ projectId: req.params.id });
+
+    if (!fullPackage) {
+      return res.status(404).json({
+        success: false,
+        error: 'Full curriculum package not found',
+      });
+    }
+
+    // Transform response to match frontend expectations
+    const packageData = fullPackage.toObject();
+
+    // Extract rubrics from case studies
+    const rubrics = [];
+    for (const caseStudy of packageData.caseStudies || []) {
+      if (caseStudy.rubric) {
+        rubrics.push({
+          id: caseStudy.id || caseStudy._id,
+          title: `Rubric for: ${caseStudy.title}`,
+          assessmentType: 'Case Study',
+          levels: caseStudy.rubric.levels || [],
+          criteria: caseStudy.rubric.criteria || [],
+        });
+      }
+    }
+
+    const responseData = {
+      ...packageData,
+      assessmentBank: packageData.mcqExams || [], // Frontend expects assessmentBank
+      rubrics: rubrics, // Extract rubrics from case studies
+    };
+
+    res.json({
+      success: true,
+      data: responseData,
+    });
+  } catch (error) {
+    loggingService.error('Error getting full curriculum package', {
+      error,
+      projectId: req.params.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get full curriculum package',
+    });
+  }
+});
+
+/**
+ * GET /api/v2/projects/:id/curriculum/download
+ * Download full curriculum package as Word document
+ */
+router.get('/projects/:id/curriculum/download', async (req: Request, res: Response) => {
+  try {
+    const { FullCurriculumPackage } = await import('../models/FullCurriculumPackage');
+    const { docxGenerationService } = await import('../services/docxGenerationService');
+
+    const fullPackage = await FullCurriculumPackage.findOne({ projectId: req.params.id });
+
+    if (!fullPackage) {
+      return res.status(404).json({
+        success: false,
+        error: 'Full curriculum package not found',
+      });
+    }
+
+    // Generate DOCX buffer
+    const buffer = await docxGenerationService.generateCurriculumDocument(fullPackage.toObject());
+
+    // Set headers for file download
+    const filename = `curriculum-package-${req.params.id}-${new Date().toISOString().split('T')[0]}.docx`;
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+
+    // Send buffer
+    res.send(buffer);
+  } catch (error) {
+    loggingService.error('Error downloading curriculum package', {
+      error,
+      projectId: req.params.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to download curriculum package',
+    });
+  }
+});
+
+// ==========================================
+// STAGE 5: FINAL REVIEW & PUBLICATION
+// ==========================================
+
+/**
+ * POST /api/v2/projects/:id/review/start
+ * Start final SME review
+ */
+router.post(
+  '/projects/:id/review/start',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { publicationService } = await import('../services/publicationService');
+      const userId = (req as any).user?.userId || 'dev-user';
+
+      const reviewId = await publicationService.startReview(req.params.id, userId);
+
+      res.json({
+        success: true,
+        data: { reviewId },
+        message: 'Final review started',
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      loggingService.error('Error starting review', {
+        error: errorMessage,
+        stack: errorStack,
+        projectId: req.params.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: errorMessage || 'Failed to start review',
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/v2/projects/:id/review
+ * Get review status
+ */
+router.get('/projects/:id/review', async (req: Request, res: Response) => {
+  try {
+    const { CurriculumReview } = await import('../models/CurriculumReview');
+
+    const review = await CurriculumReview.findOne({ projectId: req.params.id });
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        error: 'Review not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: review,
+    });
+  } catch (error) {
+    loggingService.error('Error getting review', { error, projectId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get review',
+    });
+  }
+});
+
+/**
+ * POST /api/v2/projects/:id/review/approve
+ * SME approves curriculum for publication
+ */
+router.post(
+  '/projects/:id/review/approve',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { publicationService } = await import('../services/publicationService');
+      const userId = (req as any).user?.userId || 'dev-user';
+      const ipAddress = req.ip || 'unknown';
+      const { digitalSignature } = req.body;
+
+      const { CurriculumReview } = await import('../models/CurriculumReview');
+      const review = await CurriculumReview.findOne({ projectId: req.params.id });
+
+      if (!review) {
+        return res.status(404).json({
+          success: false,
+          error: 'Review not found',
+        });
+      }
+
+      await publicationService.smeApprove(
+        review._id.toString(),
+        userId,
+        ipAddress,
+        digitalSignature
+      );
+
+      res.json({
+        success: true,
+        message: 'Curriculum approved by SME',
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      loggingService.error('Error approving curriculum', {
+        error: errorMessage,
+        stack: errorStack,
+        projectId: req.params.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: errorMessage || 'Failed to approve curriculum',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/v2/projects/:id/review/reject
+ * Reject curriculum with reason
+ */
+router.post(
+  '/projects/:id/review/reject',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { publicationService } = await import('../services/publicationService');
+      const userId = (req as any).user?.userId || 'dev-user';
+      const { reason } = req.body;
+
+      if (!reason) {
+        return res.status(400).json({
+          success: false,
+          error: 'Rejection reason is required',
+        });
+      }
+
+      const { CurriculumReview } = await import('../models/CurriculumReview');
+      const review = await CurriculumReview.findOne({ projectId: req.params.id });
+
+      if (!review) {
+        return res.status(404).json({
+          success: false,
+          error: 'Review not found',
+        });
+      }
+
+      await publicationService.rejectCurriculum(review._id.toString(), userId, reason);
+
+      res.json({
+        success: true,
+        message: 'Curriculum rejected',
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      loggingService.error('Error rejecting curriculum', {
+        error: errorMessage,
+        stack: errorStack,
+        projectId: req.params.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: errorMessage || 'Failed to reject curriculum',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/v2/projects/:id/publish
+ * Publish curriculum to LMS
+ */
+router.post('/projects/:id/publish', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { publicationService } = await import('../services/publicationService');
+    const { lmsConfig } = req.body;
+
+    const { CurriculumReview } = await import('../models/CurriculumReview');
+    const review = await CurriculumReview.findOne({ projectId: req.params.id });
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        error: 'Review not found',
+      });
+    }
+
+    await publicationService.publishToLMS(review._id.toString(), lmsConfig);
+
+    res.json({
+      success: true,
+      message: 'Curriculum published to LMS successfully',
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    loggingService.error('Error publishing curriculum', {
+      error: errorMessage,
+      stack: errorStack,
+      projectId: req.params.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: errorMessage || 'Failed to publish curriculum',
+    });
+  }
+});
 
 /**
  * GET /api/v2/research/:packageId/chat
@@ -580,254 +1176,5 @@ router.get('/curriculum/:packageId', validateJWT, loadUser, async (req: Request,
     });
   }
 });
-
-// ===== PUBLICATION & REVIEW ROUTES (STAGE 5) =====
-
-/**
- * POST /api/v2/projects/:id/review/start
- * Start final review (Stage 5)
- */
-router.post(
-  '/projects/:id/review/start',
-  validateJWT,
-  loadUser,
-  async (req: Request, res: Response) => {
-    try {
-      const userId = (req as any).user.userId;
-      const reviewId = await publicationService.startReview(req.params.id, userId);
-
-      res.json({
-        success: true,
-        data: { reviewId },
-        message: 'Final review started',
-      });
-    } catch (error) {
-      loggingService.error('Error starting review', { error, projectId: req.params.id });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to start review',
-      });
-    }
-  }
-);
-
-/**
- * POST /api/v2/review/:reviewId/refine
- * Request refinement for specific material
- */
-router.post(
-  '/review/:reviewId/refine',
-  validateJWT,
-  loadUser,
-  async (req: Request, res: Response) => {
-    try {
-      const { materialType, materialId, requestedChange } = req.body;
-      const userId = (req as any).user.userId;
-
-      if (!materialType || !requestedChange) {
-        return res.status(400).json({
-          success: false,
-          error: 'materialType and requestedChange are required',
-        });
-      }
-
-      await publicationService.requestRefinement(
-        req.params.reviewId,
-        materialType,
-        materialId,
-        requestedChange,
-        userId
-      );
-
-      res.json({
-        success: true,
-        message: 'Refinement requested and being processed',
-      });
-    } catch (error) {
-      loggingService.error('Error requesting refinement', { error, reviewId: req.params.reviewId });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to request refinement',
-      });
-    }
-  }
-);
-
-/**
- * POST /api/v2/review/:reviewId/approve
- * SME approves curriculum
- */
-router.post(
-  '/review/:reviewId/approve',
-  validateJWT,
-  loadUser,
-  async (req: Request, res: Response) => {
-    try {
-      const userId = (req as any).user.userId;
-      const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
-      const { digitalSignature } = req.body;
-
-      await publicationService.smeApprove(req.params.reviewId, userId, ipAddress, digitalSignature);
-
-      res.json({
-        success: true,
-        message: 'Curriculum approved by SME',
-      });
-    } catch (error) {
-      loggingService.error('Error approving curriculum', { error, reviewId: req.params.reviewId });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to approve curriculum',
-      });
-    }
-  }
-);
-
-/**
- * POST /api/v2/review/:reviewId/reject
- * Reject curriculum
- */
-router.post(
-  '/review/:reviewId/reject',
-  validateJWT,
-  loadUser,
-  async (req: Request, res: Response) => {
-    try {
-      const userId = (req as any).user.userId;
-      const { reason } = req.body;
-
-      if (!reason) {
-        return res.status(400).json({
-          success: false,
-          error: 'Rejection reason is required',
-        });
-      }
-
-      await publicationService.rejectCurriculum(req.params.reviewId, userId, reason);
-
-      res.json({
-        success: true,
-        message: 'Curriculum rejected',
-      });
-    } catch (error) {
-      loggingService.error('Error rejecting curriculum', { error, reviewId: req.params.reviewId });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to reject curriculum',
-      });
-    }
-  }
-);
-
-/**
- * POST /api/v2/review/:reviewId/publication/approve
- * Admin approves publication (Admin only)
- */
-router.post(
-  '/review/:reviewId/publication/approve',
-  validateJWT,
-  loadUser,
-  async (req: Request, res: Response) => {
-    try {
-      const adminId = (req as any).user.userId;
-      const { notes } = req.body;
-
-      await publicationService.adminApprovePublication(req.params.reviewId, adminId, notes);
-
-      res.json({
-        success: true,
-        message: 'Publication approved',
-      });
-    } catch (error) {
-      loggingService.error('Error approving publication', { error, reviewId: req.params.reviewId });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to approve publication',
-      });
-    }
-  }
-);
-
-/**
- * POST /api/v2/review/:reviewId/publish
- * Publish to LMS (Admin only)
- */
-router.post(
-  '/review/:reviewId/publish',
-  validateJWT,
-  loadUser,
-  async (req: Request, res: Response) => {
-    try {
-      const { lmsConfig } = req.body;
-
-      await publicationService.publishToLMS(req.params.reviewId, lmsConfig);
-
-      res.json({
-        success: true,
-        message: 'Curriculum published to LMS successfully',
-      });
-    } catch (error) {
-      loggingService.error('Error publishing to LMS', { error, reviewId: req.params.reviewId });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to publish to LMS',
-      });
-    }
-  }
-);
-
-/**
- * GET /api/v2/review/:reviewId
- * Get review details
- */
-router.get('/review/:reviewId', validateJWT, loadUser, async (req: Request, res: Response) => {
-  try {
-    const review = await publicationService.getReview(req.params.reviewId);
-
-    if (!review) {
-      return res.status(404).json({
-        success: false,
-        error: 'Review not found',
-      });
-    }
-
-    res.json({
-      success: true,
-      data: review,
-    });
-  } catch (error) {
-    loggingService.error('Error getting review', { error, reviewId: req.params.reviewId });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to retrieve review',
-    });
-  }
-});
-
-/**
- * GET /api/v2/review/:reviewId/refinements
- * Get refinements for a review
- */
-router.get(
-  '/review/:reviewId/refinements',
-  validateJWT,
-  loadUser,
-  async (req: Request, res: Response) => {
-    try {
-      const refinements = await publicationService.getRefinements(req.params.reviewId);
-
-      res.json({
-        success: true,
-        data: refinements,
-      });
-    } catch (error) {
-      loggingService.error('Error getting refinements', { error, reviewId: req.params.reviewId });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to retrieve refinements',
-      });
-    }
-  }
-);
 
 export default router;

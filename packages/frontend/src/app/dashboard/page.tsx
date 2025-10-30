@@ -46,7 +46,7 @@ export default function AdminDashboard() {
       setLoading(true);
       setError(null);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/analytics/dashboard`
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/analytics/dashboard`
       );
 
       if (!response.ok) {
@@ -287,7 +287,7 @@ function RecentCurricula() {
     const fetchProjects = async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v2/projects/published?limit=10`
+          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/v2/projects/published?limit=10`
         );
 
         if (response.ok) {

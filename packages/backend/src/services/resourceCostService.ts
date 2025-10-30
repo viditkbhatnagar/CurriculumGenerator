@@ -1,597 +1,533 @@
-/**
- * Resource Cost Service
- * Stage 3: Evaluates paid resources, calculates costs, suggests alternatives
- * Routes to management for approval
- */
-
 import { ResourceCostEvaluation, IResourceCostEvaluation } from '../models/ResourceCostEvaluation';
 import { PreliminaryCurriculumPackage } from '../models/PreliminaryCurriculumPackage';
 import { CurriculumProject } from '../models/CurriculumProject';
-import { openaiService } from './openaiService';
 import { loggingService } from './loggingService';
-import { websocketService } from './websocketService';
+import { openaiService } from './openaiService';
 
-interface ExtractedResource {
-  resourceName: string;
-  resourceType: 'textbook' | 'software' | 'database' | 'tool' | 'license' | 'other';
-  vendor?: string;
-  justification: string;
-  foundIn: string; // which component mentioned it
+interface PaidResource {
+  name: string;
+  type: 'journal' | 'database' | 'tool' | 'software' | 'book' | 'other';
+  cost: number;
+  currency: string;
+  subscriptionType: 'one-time' | 'annual' | 'monthly' | 'per-student';
+  source: string; // Which component this came from
+  url?: string;
+  description?: string;
 }
 
-interface Alternative {
-  name: string;
+interface AlternativeResource {
+  originalResource: string;
+  alternativeName: string;
   cost: number;
-  qualityMatch: number;
-  limitations?: string;
-  source: string;
+  currency: string;
+  reasoning: string;
+  quality: 'better' | 'similar' | 'acceptable';
+  url?: string;
 }
 
 class ResourceCostService {
   /**
-   * Start resource cost evaluation for a project
-   * This is Stage 3 of the workflow
+   * Start cost evaluation for a project
    */
-  async startEvaluation(projectId: string): Promise<string> {
+  async startEvaluation(projectId: string): Promise<IResourceCostEvaluation> {
     try {
-      const project = await CurriculumProject.findById(projectId);
+      loggingService.info('🔍 Starting cost evaluation', { projectId });
 
+      // Get project and preliminary package
+      const project = await CurriculumProject.findById(projectId);
       if (!project) {
         throw new Error('Project not found');
       }
 
-      // Get preliminary package
       const prelimPackage = await PreliminaryCurriculumPackage.findOne({ projectId });
-
       if (!prelimPackage) {
         throw new Error('Preliminary package not found');
       }
 
-      // Extract paid resources from preliminary package
-      const extractedResources = await this.extractPaidResources(prelimPackage);
+      // Check if evaluation already exists
+      let costEval = await ResourceCostEvaluation.findOne({ projectId });
+      if (costEval) {
+        loggingService.info('Cost evaluation already exists, returning existing', { projectId });
+        return costEval;
+      }
 
-      // Get cost estimates and alternatives for each resource
-      const resourcesWithCosts = await Promise.all(
-        extractedResources.map((resource) => this.evaluateResource(resource))
-      );
+      // Scan all components for paid resources
+      const paidResources = await this.scanComponentsForPaidResources(prelimPackage);
+      loggingService.info(`Found ${paidResources.length} paid resources`, { projectId });
 
       // Calculate total cost
-      const totalCost = resourcesWithCosts.reduce((sum, r) => sum + r.totalCost, 0);
+      const totalCost = this.calculateTotalCost(paidResources);
 
-      // Create evaluation document
-      const evaluation = new ResourceCostEvaluation({
-        projectId: project._id,
-        preliminaryPackageId: prelimPackage._id,
-        resources: resourcesWithCosts,
-        totalEstimatedCost: totalCost,
-        managementDecision: 'pending',
-        instructionalPlanChanged: false,
-        smeReApprovalStatus: 'not_required',
-      });
+      // Generate AI alternatives for expensive resources
+      const alternatives = await this.generateAlternatives(paidResources);
 
-      await evaluation.save();
+      // Create cost evaluation record (with duplicate key handling)
+      try {
+        costEval = await ResourceCostEvaluation.create({
+          projectId,
+          preliminaryPackageId: prelimPackage._id,
+          paidResources: paidResources.map((r) => ({
+            resourceName: r.name,
+            resourceType: r.type,
+            cost: r.cost,
+            currency: r.currency,
+            subscriptionType: r.subscriptionType,
+            identifiedIn: r.source,
+            url: r.url,
+            reasoning: r.description || 'Identified as paid resource',
+          })),
+          totalEstimatedCost: totalCost.total,
+          currency: 'USD',
+          costBreakdown: {
+            journals: totalCost.journals,
+            databases: totalCost.databases,
+            tools: totalCost.tools,
+            software: totalCost.software,
+            other: totalCost.other,
+          },
+          aiSuggestedAlternatives: alternatives.map((a) => ({
+            originalResource: a.originalResource,
+            alternativeName: a.alternativeName,
+            alternativeCost: a.cost,
+            costSaving:
+              paidResources.find((r) => r.name === a.originalResource)?.cost || 0 - a.cost,
+            reasoning: a.reasoning,
+            qualityComparison: a.quality,
+            url: a.url,
+          })),
+          managementDecision: 'pending',
+          evaluatedAt: new Date(),
+        });
+      } catch (createError: any) {
+        // Handle duplicate key error (race condition)
+        if (createError.code === 11000) {
+          loggingService.warn(
+            'Duplicate cost evaluation detected (race condition), fetching existing',
+            {
+              projectId,
+            }
+          );
+          costEval = await ResourceCostEvaluation.findOne({ projectId });
+          if (!costEval) {
+            throw new Error('Cost evaluation creation failed and could not fetch existing record');
+          }
+          return costEval;
+        }
+        throw createError;
+      }
 
-      // Update project status
-      await project.updateStageProgress({
-        resourceEvaluationId: evaluation._id,
-      });
+      // Update project stage
+      project.stageProgress.stage3_costEvaluation = 'in-progress';
+      await project.save();
 
-      // Emit WebSocket event
-      websocketService.emitToRoom(`project:${projectId}`, 'cost_evaluation_complete', {
-        evaluationId: evaluation._id.toString(),
-        totalCost,
-        resourceCount: resourcesWithCosts.length,
-        status: 'pending_management_approval',
-      });
-
-      loggingService.info('Resource cost evaluation created', {
+      loggingService.info('✅ Cost evaluation completed', {
         projectId,
-        evaluationId: evaluation._id,
-        totalCost,
+        totalCost: totalCost.total,
+        resourceCount: paidResources.length,
+        alternativesCount: alternatives.length,
       });
 
-      return evaluation._id.toString();
+      return costEval;
     } catch (error) {
-      loggingService.error('Error starting resource evaluation', { error, projectId });
+      loggingService.error('Error in cost evaluation', { error, projectId });
       throw error;
     }
   }
 
   /**
-   * Extract paid resources from preliminary curriculum package
+   * Scan all 14 components for paid resources
    */
-  private async extractPaidResources(prelimPackage: any): Promise<ExtractedResource[]> {
+  private async scanComponentsForPaidResources(prelimPackage: any): Promise<PaidResource[]> {
+    const paidResources: PaidResource[] = [];
+
     try {
-      const resources: ExtractedResource[] = [];
-
-      // Analyze reading list
-      if (prelimPackage.readingLists?.indicative) {
-        for (const reading of prelimPackage.readingLists.indicative) {
-          if (this.isPaidResource(reading.citation)) {
-            resources.push({
-              resourceName: this.extractResourceName(reading.citation),
-              resourceType: 'textbook',
-              justification: `Required reading: ${reading.synopsis}`,
-              foundIn: 'Indicative Reading List',
+      // 1. Scan Reading List for paid books/journals
+      if (prelimPackage.readingList) {
+        const { indicative = [], additional = [] } = prelimPackage.readingList;
+        [...indicative, ...additional].forEach((item: any) => {
+          if (this.isPaidResource(item.citation, item.type)) {
+            paidResources.push({
+              name: item.citation,
+              type: item.type === 'book' ? 'book' : 'journal',
+              cost: this.estimateCost(item.type),
+              currency: 'USD',
+              subscriptionType: 'one-time',
+              source: 'Reading List',
+              url: item.url,
+              description: item.synopsis,
             });
           }
-        }
+        });
       }
 
-      // Analyze delivery tools
-      if (prelimPackage.deliveryTools?.digitalTools) {
-        for (const tool of prelimPackage.deliveryTools.digitalTools) {
+      // 2. Scan Topic Sources for paid journals/databases
+      if (prelimPackage.topicSources && Array.isArray(prelimPackage.topicSources)) {
+        prelimPackage.topicSources.forEach((topic: any) => {
+          if (topic.sources && Array.isArray(topic.sources)) {
+            topic.sources.forEach((source: any) => {
+              if (this.isPaidResource(source.citation, 'academic')) {
+                paidResources.push({
+                  name: source.citation,
+                  type: 'journal',
+                  cost: this.estimateCost('academic'),
+                  currency: 'USD',
+                  subscriptionType: 'annual',
+                  source: 'Topic Sources',
+                  url: source.url,
+                  description: source.explanation,
+                });
+              }
+            });
+          }
+        });
+      }
+
+      // 3. Scan Delivery & Tools for paid software/tools
+      if (prelimPackage.deliveryTools) {
+        const { digitalTools = [], technicalRequirements = [] } = prelimPackage.deliveryTools;
+        [...digitalTools, ...technicalRequirements].forEach((tool: string) => {
           if (this.isPaidTool(tool)) {
-            resources.push({
-              resourceName: tool,
-              resourceType: 'software',
-              justification: 'Required for course delivery',
-              foundIn: 'Delivery & Digital Tools',
+            paidResources.push({
+              name: tool,
+              type: 'tool',
+              cost: this.estimateToolCost(tool),
+              currency: 'USD',
+              subscriptionType: 'per-student',
+              source: 'Delivery & Tools',
+              description: 'Digital tool or software license',
             });
           }
-        }
+        });
       }
 
-      // Analyze case studies for datasets/tools
-      if (prelimPackage.caseStudies) {
-        for (const caseStudy of prelimPackage.caseStudies) {
-          const paidResources = this.extractPaidFromText(
-            caseStudy.description || caseStudy.situationDescription
-          );
-          resources.push(...paidResources);
-        }
+      // 4. Scan Case Studies for proprietary databases
+      if (prelimPackage.caseStudies && Array.isArray(prelimPackage.caseStudies)) {
+        prelimPackage.caseStudies.forEach((caseStudy: any) => {
+          if (caseStudy.source && this.isPaidDatabase(caseStudy.source)) {
+            paidResources.push({
+              name: caseStudy.source,
+              type: 'database',
+              cost: this.estimateCost('database'),
+              currency: 'USD',
+              subscriptionType: 'annual',
+              source: 'Case Studies',
+              description: 'Case study database subscription',
+            });
+          }
+        });
       }
 
-      // Use AI to find any other paid resources mentioned
-      const aiExtracted = await this.aiExtractResources(prelimPackage);
-      resources.push(...aiExtracted);
-
-      // Deduplicate
-      return this.deduplicateResources(resources);
+      // Remove duplicates
+      return this.deduplicateResources(paidResources);
     } catch (error) {
-      loggingService.error('Error extracting paid resources', { error });
-      return [];
+      loggingService.error('Error scanning components', { error });
+      return paidResources;
     }
   }
 
   /**
-   * Check if a citation refers to a paid resource
+   * Check if a resource is paid (not open access)
    */
-  private isPaidResource(citation: string): boolean {
-    const paidIndicators = [
-      'published by',
-      'textbook',
-      'handbook',
-      'manual',
-      'guide to',
-      'edition',
-      'isbn',
-      'wiley',
-      'pearson',
-      'springer',
-      'elsevier',
-      'cambridge',
-      'oxford',
+  private isPaidResource(citation: string, type: string): boolean {
+    const lowerCitation = citation.toLowerCase();
+
+    // Known free resources
+    const freeKeywords = [
+      'open access',
+      'arxiv',
+      'plos',
+      'frontiers',
+      'mdpi',
+      'wikipedia',
+      'free',
+      'creative commons',
     ];
 
-    const lowerCitation = citation.toLowerCase();
-    return paidIndicators.some((indicator) => lowerCitation.includes(indicator));
+    if (freeKeywords.some((keyword) => lowerCitation.includes(keyword))) {
+      return false;
+    }
+
+    // Known paid publishers/journals
+    const paidKeywords = [
+      'elsevier',
+      'springer',
+      'wiley',
+      'sage',
+      'taylor & francis',
+      'oxford',
+      'cambridge',
+      'jstor',
+      'ieee',
+      'harvard business review',
+    ];
+
+    return paidKeywords.some((keyword) => lowerCitation.includes(keyword));
   }
 
   /**
    * Check if a tool is paid
    */
-  private isPaidTool(tool: string): boolean {
-    const freePlatforms = [
-      'open source',
-      'free',
-      'libre',
-      'foss',
-      'github',
-      'google sheets',
-      'google docs',
-    ];
-    const lowerTool = tool.toLowerCase();
-
-    // If explicitly marked as free, skip
-    if (freePlatforms.some((free) => lowerTool.includes(free))) {
-      return false;
-    }
+  private isPaidTool(toolName: string): boolean {
+    const lowerTool = toolName.toLowerCase();
 
     const paidTools = [
       'tableau',
       'power bi',
-      'spss',
-      'sas',
-      'matlab',
-      'workday',
+      'adobe',
+      'microsoft',
       'sap',
       'oracle',
       'salesforce',
-      'adobe',
-      'microsoft 365',
-      'zoom pro',
-      'miro',
-      'mural',
+      'atlassian',
+      'jira',
+      'slack premium',
     ];
 
-    return paidTools.some((paid) => lowerTool.includes(paid));
+    return paidTools.some((tool) => lowerTool.includes(tool));
   }
 
   /**
-   * Extract paid resources from text using pattern matching
+   * Check if a database is paid
    */
-  private extractPaidFromText(text: string): ExtractedResource[] {
-    const resources: ExtractedResource[] = [];
+  private isPaidDatabase(source: string): boolean {
+    const lowerSource = source.toLowerCase();
+    const paidDatabases = ['harvard business', 'kellogg', 'ivey', 'wharton', 'case centre'];
+    return paidDatabases.some((db) => lowerSource.includes(db));
+  }
 
-    // Pattern: "using [tool/software]"
-    const toolPattern = /using\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/g;
-    let match;
+  /**
+   * Estimate cost based on resource type
+   */
+  private estimateCost(type: string): number {
+    const costEstimates: Record<string, number> = {
+      book: 50,
+      journal: 500, // Annual subscription
+      academic: 500,
+      database: 2000,
+      tool: 100, // Per student
+      software: 500,
+      other: 100,
+    };
 
-    while ((match = toolPattern.exec(text)) !== null) {
-      const toolName = match[1];
-      if (this.isPaidTool(toolName)) {
-        resources.push({
-          resourceName: toolName,
-          resourceType: 'tool',
-          justification: 'Mentioned in case study/content',
-          foundIn: 'Case Study or Module Content',
-        });
+    return costEstimates[type] || 100;
+  }
+
+  /**
+   * Estimate tool cost based on name
+   */
+  private estimateToolCost(toolName: string): number {
+    const lowerTool = toolName.toLowerCase();
+
+    if (lowerTool.includes('tableau') || lowerTool.includes('power bi')) return 70;
+    if (lowerTool.includes('adobe')) return 50;
+    if (lowerTool.includes('microsoft')) return 30;
+    if (lowerTool.includes('sap') || lowerTool.includes('oracle')) return 200;
+
+    return 50; // Default per-student cost
+  }
+
+  /**
+   * Remove duplicate resources
+   */
+  private deduplicateResources(resources: PaidResource[]): PaidResource[] {
+    const seen = new Set<string>();
+    return resources.filter((resource) => {
+      const key = `${resource.name}-${resource.type}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  /**
+   * Calculate total cost breakdown
+   */
+  private calculateTotalCost(resources: PaidResource[]) {
+    const breakdown = {
+      journals: 0,
+      databases: 0,
+      tools: 0,
+      software: 0,
+      other: 0,
+      total: 0,
+    };
+
+    resources.forEach((resource) => {
+      switch (resource.type) {
+        case 'journal':
+          breakdown.journals += resource.cost;
+          break;
+        case 'database':
+          breakdown.databases += resource.cost;
+          break;
+        case 'tool':
+          breakdown.tools += resource.cost;
+          break;
+        case 'software':
+          breakdown.software += resource.cost;
+          break;
+        default:
+          breakdown.other += resource.cost;
       }
+    });
+
+    breakdown.total =
+      breakdown.journals +
+      breakdown.databases +
+      breakdown.tools +
+      breakdown.software +
+      breakdown.other;
+
+    return breakdown;
+  }
+
+  /**
+   * Generate AI-suggested alternatives for paid resources
+   */
+  private async generateAlternatives(
+    paidResources: PaidResource[]
+  ): Promise<AlternativeResource[]> {
+    if (paidResources.length === 0) {
+      return [];
     }
 
-    return resources;
-  }
-
-  /**
-   * Use AI to extract paid resources from package
-   */
-  private async aiExtractResources(prelimPackage: any): Promise<ExtractedResource[]> {
     try {
-      const systemPrompt = `You are a curriculum resource analyst. Extract all paid resources (textbooks, software, databases, tools, licenses) mentioned in the curriculum package. Return only commercial/paid resources, not free or open-source ones.`;
+      const resourceList = paidResources
+        .map((r, i) => `${i + 1}. ${r.name} (${r.type}) - $${r.cost}/${r.subscriptionType}`)
+        .join('\n');
 
-      const userPrompt = `Analyze this curriculum package and identify ALL paid resources:
+      const prompt = `You are an educational resource consultant. Analyze these paid resources and suggest free or cheaper alternatives that maintain educational quality.
 
-Reading Lists: ${JSON.stringify(prelimPackage.readingLists, null, 2)}
-Delivery Tools: ${JSON.stringify(prelimPackage.deliveryTools, null, 2)}
-Case Studies: ${JSON.stringify(prelimPackage.caseStudies?.slice(0, 3), null, 2)}
+Paid Resources:
+${resourceList}
 
-Return as JSON array: [{ resourceName: string, resourceType: "textbook"|"software"|"database"|"tool"|"license", vendor: string|null, justification: string }]`;
+For each resource, suggest a free or lower-cost alternative. Return as JSON array:
+[
+  {
+    "originalResource": "Resource name",
+    "alternativeName": "Free alternative name",
+    "cost": 0,
+    "currency": "USD",
+    "reasoning": "Why this alternative is suitable (1-2 sentences)",
+    "quality": "similar" | "better" | "acceptable",
+    "url": "Link to alternative (if applicable)"
+  }
+]
 
-      const response = await openaiService.generateContent({
-        systemPrompt,
-        userPrompt,
-        temperature: 0.3,
+Focus on:
+- Open access journals instead of paid journals
+- Free tools (Google Suite, Canva) instead of paid software
+- Open educational resources
+- Creative Commons content
+- University library resources`;
+
+      const systemPrompt = `You are an expert in educational technology and open educational resources. Provide practical, accessible alternatives that maintain quality.`;
+
+      const response = await openaiService.generateContent(prompt, systemPrompt, {
+        temperature: 0.7,
         maxTokens: 2000,
       });
 
-      const parsed = JSON.parse(response);
-      return (parsed as any[]).map((r) => ({
-        ...r,
-        foundIn: 'AI Extraction',
-      }));
-    } catch (error) {
-      loggingService.error('Error in AI resource extraction', { error });
-      return [];
-    }
-  }
-
-  /**
-   * Deduplicate resources
-   */
-  private deduplicateResources(resources: ExtractedResource[]): ExtractedResource[] {
-    const seen = new Set<string>();
-    const unique: ExtractedResource[] = [];
-
-    for (const resource of resources) {
-      const key = `${resource.resourceName.toLowerCase()}_${resource.resourceType}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        unique.push(resource);
-      }
-    }
-
-    return unique;
-  }
-
-  /**
-   * Extract resource name from citation
-   */
-  private extractResourceName(citation: string): string {
-    // Extract title from APA citation (title comes after first period, before next period)
-    const parts = citation.split('.');
-    if (parts.length >= 2) {
-      return parts[1].trim();
-    }
-    return citation.substring(0, 100);
-  }
-
-  /**
-   * Evaluate a single resource: get cost and alternatives
-   */
-  private async evaluateResource(resource: ExtractedResource): Promise<any> {
-    try {
-      // Get cost estimate using AI
-      const costData = await this.getCostEstimate(resource);
-
-      // Get alternatives using AI
-      const alternatives = await this.getAlternatives(resource);
-
-      return {
-        resourceName: resource.resourceName,
-        resourceType: resource.resourceType,
-        vendor: resource.vendor || costData.vendor,
-        costPerStudent: costData.costPerStudent,
-        estimatedStudents: 100, // Default estimate
-        totalCost: costData.costPerStudent * 100,
-        isRecurring: costData.isRecurring,
-        recurringPeriod: costData.recurringPeriod,
-        justification: resource.justification,
-        alternatives,
-      };
-    } catch (error) {
-      loggingService.error('Error evaluating resource', { error, resource });
-
-      // Return fallback data
-      return {
-        resourceName: resource.resourceName,
-        resourceType: resource.resourceType,
-        vendor: null,
-        costPerStudent: 0,
-        estimatedStudents: 100,
-        totalCost: 0,
-        isRecurring: false,
-        justification: resource.justification,
-        alternatives: [],
-      };
-    }
-  }
-
-  /**
-   * Get cost estimate for a resource using AI
-   */
-  private async getCostEstimate(resource: ExtractedResource): Promise<any> {
-    const systemPrompt = `You are a resource cost analyst. Provide realistic cost estimates for educational resources. Use 2024-2025 pricing data.`;
-
-    const userPrompt = `Estimate the cost for this resource:
-Resource: ${resource.resourceName}
-Type: ${resource.resourceType}
-
-Provide:
-- Vendor name
-- Cost per student (in USD)
-- Is it recurring? (boolean)
-- If recurring, period (monthly or annually)
-- Brief pricing notes
-
-Return as JSON: { vendor: string, costPerStudent: number, isRecurring: boolean, recurringPeriod?: "monthly"|"annually", pricingNotes: string }`;
-
-    const response = await openaiService.generateContent({
-      systemPrompt,
-      userPrompt,
-      temperature: 0.3,
-      maxTokens: 500,
-    });
-
-    try {
-      return JSON.parse(response);
-    } catch (e) {
-      // Fallback
-      return {
-        vendor: 'Unknown',
-        costPerStudent: 50,
-        isRecurring: false,
-        pricingNotes: 'Estimated cost',
-      };
-    }
-  }
-
-  /**
-   * Get alternative resources using AI
-   */
-  private async getAlternatives(resource: ExtractedResource): Promise<Alternative[]> {
-    const systemPrompt = `You are an educational resource advisor. Suggest free or lower-cost alternatives to commercial resources, including open-source options, open educational resources (OER), and free tools.`;
-
-    const userPrompt = `Suggest 2-3 alternatives to this paid resource:
-Resource: ${resource.resourceName}
-Type: ${resource.resourceType}
-
-For each alternative provide:
-- Name
-- Estimated cost per student (0 if free)
-- Quality match percentage (0-100, compared to original)
-- Limitations (if any)
-
-Return as JSON array: [{ name: string, cost: number, qualityMatch: number, limitations?: string }]`;
-
-    try {
-      const response = await openaiService.generateContent({
-        systemPrompt,
-        userPrompt,
-        temperature: 0.7,
-        maxTokens: 1000,
-      });
-
-      const alternatives = JSON.parse(response);
-      return (alternatives as any[]).map((alt) => ({
-        ...alt,
-        source: 'AI Suggestion',
-      }));
-    } catch (error) {
-      loggingService.error('Error getting alternatives', { error, resource });
-      return [];
-    }
-  }
-
-  /**
-   * Management approves/rejects the cost evaluation
-   * (Simplified - no management UI yet, auto-approve for now)
-   */
-  async processManagementDecision(
-    evaluationId: string,
-    decision: 'approved' | 'rejected',
-    decidedBy: string,
-    notes?: string,
-    selectedAlternatives?: { resourceName: string; alternativeName: string }[]
-  ): Promise<void> {
-    try {
-      const evaluation = await ResourceCostEvaluation.findById(evaluationId);
-
-      if (!evaluation) {
-        throw new Error('Evaluation not found');
-      }
-
-      evaluation.managementDecision = decision;
-      evaluation.decidedBy = decidedBy as any;
-      evaluation.decidedAt = new Date();
-      evaluation.decisionNotes = notes;
-
-      if (decision === 'approved') {
-        // Build final resources list
-        const finalResources = [];
-
-        for (const resource of evaluation.resources) {
-          // Check if this resource was substituted
-          const substitution = selectedAlternatives?.find(
-            (s) => s.resourceName === resource.resourceName
-          );
-
-          if (substitution) {
-            // Find the alternative
-            const alternative = resource.alternatives.find(
-              (a) => a.name === substitution.alternativeName
-            );
-
-            if (alternative) {
-              finalResources.push({
-                resourceName: alternative.name,
-                cost: alternative.cost * resource.estimatedStudents,
-                type: resource.resourceType,
-                isAlternative: true,
-              });
-
-              // Mark if instructional plan might be affected
-              if (alternative.qualityMatch < 90) {
-                evaluation.instructionalPlanChanged = true;
-                evaluation.smeReApprovalStatus = 'pending';
-              }
-            } else {
-              // Keep original
-              finalResources.push({
-                resourceName: resource.resourceName,
-                cost: resource.totalCost,
-                type: resource.resourceType,
-                isAlternative: false,
-              });
-            }
+      // Parse JSON response with robust error handling
+      let alternatives;
+      try {
+        // Try direct parse first
+        alternatives = JSON.parse(response);
+      } catch (e) {
+        // Extract from markdown if wrapped
+        const jsonMatch =
+          response.match(/```json\s*\n([\s\S]*?)\n```/) ||
+          response.match(/```\s*\n([\s\S]*?)\n```/);
+        if (jsonMatch) {
+          alternatives = JSON.parse(jsonMatch[1]);
+        } else {
+          // Try extracting content between first [ and last ]
+          const firstBracket = response.indexOf('[');
+          const lastBracket = response.lastIndexOf(']');
+          if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+            const extracted = response.substring(firstBracket, lastBracket + 1);
+            alternatives = JSON.parse(extracted);
           } else {
-            // Keep original
-            finalResources.push({
-              resourceName: resource.resourceName,
-              cost: resource.totalCost,
-              type: resource.resourceType,
-              isAlternative: false,
-            });
+            throw new Error('Could not extract JSON from response');
           }
         }
-
-        evaluation.finalResources = finalResources;
-
-        // Recalculate total
-        evaluation.totalEstimatedCost = finalResources.reduce((sum, r) => sum + r.cost, 0);
       }
 
-      await evaluation.save();
-
-      // Update project status
-      const project = await CurriculumProject.findById(evaluation.projectId);
-      if (project && decision === 'approved') {
-        // If SME re-approval is not needed, advance to stage 4
-        if (evaluation.smeReApprovalStatus === 'not_required') {
-          await project.advanceStage();
-        }
-      }
-
-      // Emit WebSocket event
-      websocketService.emitToRoom(`project:${evaluation.projectId}`, 'management_decision', {
-        evaluationId: evaluation._id.toString(),
-        decision,
-        finalCost: evaluation.totalEstimatedCost,
-        needsSmeReApproval: evaluation.smeReApprovalStatus === 'pending',
-      });
-
-      loggingService.info('Management decision processed', {
-        evaluationId,
-        decision,
-        finalCost: evaluation.totalEstimatedCost,
-      });
+      return Array.isArray(alternatives) ? alternatives : [];
     } catch (error) {
-      loggingService.error('Error processing management decision', { error, evaluationId });
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      loggingService.error('Error generating alternatives', {
+        error: errorMessage,
+        stack: errorStack,
+      });
+      return [];
     }
   }
 
   /**
-   * Auto-approve evaluation (for now, until management UI is built)
+   * Approve cost evaluation (management decision)
    */
-  async autoApprove(evaluationId: string): Promise<void> {
-    await this.processManagementDecision(
-      evaluationId,
-      'approved',
-      'system_auto_approve',
-      'Auto-approved: Management UI not yet implemented'
-    );
+  async approveCostEvaluation(
+    projectId: string,
+    approvedBy: string,
+    selectedAlternatives?: string[]
+  ): Promise<IResourceCostEvaluation> {
+    const costEval = await ResourceCostEvaluation.findOne({ projectId });
+    if (!costEval) {
+      throw new Error('Cost evaluation not found');
+    }
+
+    costEval.managementDecision = 'approved';
+    costEval.approvedBy = approvedBy as any;
+    costEval.approvedAt = new Date();
+    costEval.selectedAlternatives = selectedAlternatives || [];
+
+    await costEval.save();
+
+    // Update project stage
+    const project = await CurriculumProject.findById(projectId);
+    if (project) {
+      project.stageProgress.stage3_costEvaluation = 'completed';
+      project.currentStage = 4;
+      await project.save();
+    }
+
+    loggingService.info('✅ Cost evaluation approved', { projectId, approvedBy });
+
+    return costEval;
   }
 
   /**
-   * SME re-approves after resource substitution
+   * Reject cost evaluation (management decision)
    */
-  async smeReApproval(evaluationId: string, userId: string, approved: boolean): Promise<void> {
-    try {
-      const evaluation = await ResourceCostEvaluation.findById(evaluationId);
-
-      if (!evaluation) {
-        throw new Error('Evaluation not found');
-      }
-
-      evaluation.smeReApprovalStatus = approved ? 'approved' : 'rejected';
-      evaluation.smeReApprovedBy = userId as any;
-      evaluation.smeReApprovedAt = new Date();
-
-      await evaluation.save();
-
-      // If approved, advance project to stage 4
-      if (approved) {
-        const project = await CurriculumProject.findById(evaluation.projectId);
-        if (project) {
-          await project.advanceStage();
-        }
-      }
-
-      websocketService.emitToRoom(`project:${evaluation.projectId}`, 'sme_reapproval', {
-        evaluationId,
-        approved,
-      });
-
-      loggingService.info('SME re-approval processed', { evaluationId, approved, userId });
-    } catch (error) {
-      loggingService.error('Error processing SME re-approval', { error, evaluationId });
-      throw error;
+  async rejectCostEvaluation(
+    projectId: string,
+    rejectedBy: string,
+    reason: string
+  ): Promise<IResourceCostEvaluation> {
+    const costEval = await ResourceCostEvaluation.findOne({ projectId });
+    if (!costEval) {
+      throw new Error('Cost evaluation not found');
     }
+
+    costEval.managementDecision = 'rejected';
+    costEval.rejectionReason = reason;
+    costEval.rejectedBy = rejectedBy as any;
+    costEval.rejectedAt = new Date();
+
+    await costEval.save();
+
+    loggingService.info('❌ Cost evaluation rejected', { projectId, rejectedBy, reason });
+
+    return costEval;
   }
 
   /**
-   * Get evaluation details
+   * Get cost evaluation for a project
    */
-  async getEvaluation(evaluationId: string): Promise<IResourceCostEvaluation | null> {
-    try {
-      return await ResourceCostEvaluation.findById(evaluationId)
-        .populate('decidedBy', 'name email')
-        .populate('smeReApprovedBy', 'name email');
-    } catch (error) {
-      loggingService.error('Error getting evaluation', { error, evaluationId });
-      throw error;
-    }
+  async getCostEvaluation(projectId: string): Promise<IResourceCostEvaluation | null> {
+    return await ResourceCostEvaluation.findOne({ projectId });
   }
 }
 

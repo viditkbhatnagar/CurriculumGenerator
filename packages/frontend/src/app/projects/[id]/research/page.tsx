@@ -7,7 +7,13 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MessageSquare, CheckCircle, Clock, Sparkles } from 'lucide-react';
+import { MessageSquare, CheckCircle, Clock, Sparkles, Eye, X, Send } from 'lucide-react';
+
+interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: Date;
+}
 
 export default function AIResearchPage() {
   const params = useParams();
@@ -17,6 +23,12 @@ export default function AIResearchPage() {
   const [loading, setLoading] = useState(true);
   const [prelimPackage, setPrelimPackage] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Modal & Chat states
+  const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
 
   // Check if component has actual content (not just empty object/array)
   const hasContent = (component: any) => {
@@ -165,6 +177,62 @@ export default function AIResearchPage() {
     }
   };
 
+  const handleViewComponent = (componentKey: string) => {
+    setSelectedComponent(componentKey);
+    setChatMessages([
+      {
+        role: 'system',
+        content: `Viewing: ${componentKey.replace(/([A-Z])/g, ' $1').trim()}. You can review the content below and request changes via chat.`,
+        timestamp: new Date(),
+      },
+    ]);
+  };
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || !selectedComponent) return;
+
+    const userMessage: ChatMessage = {
+      role: 'user',
+      content: chatInput,
+      timestamp: new Date(),
+    };
+
+    setChatMessages((prev) => [...prev, userMessage]);
+    setChatInput('');
+    setIsSendingMessage(true);
+
+    try {
+      // TODO: Connect to backend API for AI chat refinement
+      // For now, simulate a response
+      setTimeout(() => {
+        const assistantMessage: ChatMessage = {
+          role: 'assistant',
+          content: `I understand you want to refine the ${selectedComponent} component. I'll update it based on your feedback. (Note: Full AI refinement will be enabled once backend chat endpoint is connected.)`,
+          timestamp: new Date(),
+        };
+        setChatMessages((prev) => [...prev, assistantMessage]);
+        setIsSendingMessage(false);
+      }, 1000);
+    } catch (error) {
+      console.error('❌ Error sending message:', error);
+      setIsSendingMessage(false);
+    }
+  };
+
+  const renderComponentContent = (componentKey: string) => {
+    const data = prelimPackage?.[componentKey];
+
+    if (!data) {
+      return <p className="text-gray-500 italic">No content available</p>;
+    }
+
+    return (
+      <pre className="bg-gray-50 p-4 rounded-lg overflow-auto max-h-96 text-sm">
+        {JSON.stringify(data, null, 2)}
+      </pre>
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -178,76 +246,93 @@ export default function AIResearchPage() {
 
   const components = [
     {
+      key: 'programOverview',
       name: 'Program Overview',
       icon: '📋',
       status: hasContent(prelimPackage?.programOverview) ? 'complete' : 'pending',
     },
     {
+      key: 'competencyFramework',
       name: 'Competency Framework',
       icon: '🎯',
       status: hasContent(prelimPackage?.competencyFramework) ? 'complete' : 'pending',
     },
     {
+      key: 'learningOutcomes',
       name: 'Learning Outcomes',
       icon: '📚',
       status: hasContent(prelimPackage?.learningOutcomes) ? 'complete' : 'pending',
     },
     {
+      key: 'courseFramework',
       name: 'Course Framework',
       icon: '🗂️',
       status: hasContent(prelimPackage?.courseFramework) ? 'complete' : 'pending',
     },
     {
+      key: 'topicSources',
       name: 'Topic Sources',
       icon: '📖',
       status: hasContent(prelimPackage?.topicSources) ? 'complete' : 'pending',
     },
     {
+      key: 'readingList',
       name: 'Reading List',
       icon: '📕',
       status: hasContent(prelimPackage?.readingList) ? 'complete' : 'pending',
     },
     {
+      key: 'assessments',
       name: 'Assessments',
       icon: '✅',
       status: hasContent(prelimPackage?.assessments) ? 'complete' : 'pending',
     },
     {
+      key: 'glossary',
       name: 'Glossary',
       icon: '📝',
       status: hasContent(prelimPackage?.glossary) ? 'complete' : 'pending',
     },
     {
+      key: 'caseStudies',
       name: 'Case Studies',
       icon: '💼',
       status: hasContent(prelimPackage?.caseStudies) ? 'complete' : 'pending',
     },
     {
+      key: 'deliveryTools',
       name: 'Delivery & Tools',
       icon: '🛠️',
       status: hasContent(prelimPackage?.deliveryTools) ? 'complete' : 'pending',
     },
     {
+      key: 'references',
       name: 'References',
       icon: '🔗',
       status: hasContent(prelimPackage?.references) ? 'complete' : 'pending',
     },
     {
+      key: 'submissionMetadata',
       name: 'Submission Metadata',
       icon: '📄',
       status: hasContent(prelimPackage?.submissionMetadata) ? 'complete' : 'pending',
     },
     {
+      key: 'outcomeWritingGuide',
       name: 'Outcome Writing Guide',
       icon: '✏️',
       status: hasContent(prelimPackage?.outcomeWritingGuide) ? 'complete' : 'pending',
     },
     {
+      key: 'comparativeBenchmarking',
       name: 'Comparative Benchmarking',
       icon: '📊',
       status: hasContent(prelimPackage?.comparativeBenchmarking) ? 'complete' : 'pending',
     },
   ];
+
+  const completedCount = components.filter((c) => c.status === 'complete').length;
+  const allComplete = completedCount === components.length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -259,6 +344,9 @@ export default function AIResearchPage() {
               <h1 className="text-3xl font-bold text-gray-900">AI Research & SME Review</h1>
               <p className="mt-2 text-sm text-gray-600">
                 Stage 2: Generate and refine 14 AGI-compliant components
+              </p>
+              <p className="mt-1 text-lg font-semibold text-blue-600">
+                {completedCount} / {components.length} Components Complete
               </p>
             </div>
             <button
@@ -275,10 +363,12 @@ export default function AIResearchPage() {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center mb-6">
             <Sparkles className="w-6 h-6 text-blue-600 mr-2" />
-            <h2 className="text-xl font-bold text-gray-900">AI is generating your curriculum...</h2>
+            <h2 className="text-xl font-bold text-gray-900">
+              {allComplete ? '✅ Curriculum Generated!' : 'AI is generating your curriculum...'}
+            </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
             {components.map((component, index) => (
               <div
                 key={index}
@@ -298,66 +388,165 @@ export default function AIResearchPage() {
                       <h3 className="font-medium text-gray-900">{component.name}</h3>
                     </div>
                   </div>
-                  {component.status === 'complete' ? (
-                    <CheckCircle className="w-5 h-5 text-green-600" />
-                  ) : (
-                    <Clock className="w-5 h-5 text-gray-400 animate-pulse" />
-                  )}
+                  <div className="flex items-center space-x-2">
+                    {component.status === 'complete' ? (
+                      <>
+                        <button
+                          onClick={() => handleViewComponent(component.key)}
+                          className="p-2 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"
+                          title="View content"
+                        >
+                          <Eye className="w-5 h-5" />
+                        </button>
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                      </>
+                    ) : (
+                      <Clock className="w-5 h-5 text-gray-400 animate-pulse" />
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <MessageSquare className="w-5 h-5 text-blue-600 mt-1 mr-3" />
-              <div>
-                <h4 className="font-medium text-blue-900 mb-1">AI Generation in Progress</h4>
-                <p className="text-sm text-blue-700">
-                  The AI is generating all 14 components of your AGI-compliant curriculum. This
-                  typically takes 15-30 minutes. You'll be able to review and refine each component
-                  via chat once generation is complete.
-                </p>
-                <div className="mt-3">
-                  <div className="inline-flex items-center space-x-2 text-sm text-blue-600">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                    <span>Generating components...</span>
+          {!allComplete && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="flex items-start">
+                <MessageSquare className="w-5 h-5 text-blue-600 mt-1 mr-3" />
+                <div>
+                  <h4 className="font-medium text-blue-900 mb-1">AI Generation in Progress</h4>
+                  <p className="text-sm text-blue-700">
+                    The AI is generating all 14 components of your AGI-compliant curriculum. Click
+                    the eye icon on any completed component to view its content and chat with AI for
+                    refinements.
+                  </p>
+                  <div className="mt-3">
+                    <div className="inline-flex items-center space-x-2 text-sm text-blue-600">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      <span>Generating components...</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="mt-6 flex justify-end space-x-3">
+          {allComplete && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <div className="flex items-start">
+                <CheckCircle className="w-5 h-5 text-green-600 mt-1 mr-3" />
+                <div>
+                  <h4 className="font-medium text-green-900 mb-1">✨ All Components Generated!</h4>
+                  <p className="text-sm text-green-700">
+                    Your preliminary curriculum package is complete. Click the eye icon on any
+                    component to review its content and request refinements via chat.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end space-x-3">
             <button
               onClick={fetchPreliminaryPackage}
               className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
             >
               Refresh Status
             </button>
-            <button
-              onClick={() => router.push(`/projects/${projectId}`)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Return to Dashboard
-            </button>
-          </div>
-        </div>
-
-        {/* Chat Interface Placeholder */}
-        <div className="mt-6 bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Chat with AI</h3>
-          <div className="bg-gray-50 rounded-lg p-8 text-center">
-            <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600">
-              Chat interface will be available once the initial generation is complete.
-            </p>
-            <p className="text-sm text-gray-500 mt-2">
-              You'll be able to review each component and request refinements in real-time.
-            </p>
+            {allComplete && (
+              <button
+                onClick={() => router.push(`/projects/${projectId}/cost`)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                Continue to Cost Evaluation →
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Content Viewer & Chat Modal */}
+      {selectedComponent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-2xl font-bold text-gray-900">
+                {components.find((c) => c.key === selectedComponent)?.name}
+              </h2>
+              <button
+                onClick={() => setSelectedComponent(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Modal Content - Split View */}
+            <div className="flex-1 overflow-hidden flex">
+              {/* Left: Content Viewer */}
+              <div className="w-1/2 p-6 overflow-auto border-r">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Generated Content</h3>
+                {renderComponentContent(selectedComponent)}
+              </div>
+
+              {/* Right: Chat Interface */}
+              <div className="w-1/2 p-6 flex flex-col">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Chat with AI</h3>
+
+                {/* Chat Messages */}
+                <div className="flex-1 overflow-auto bg-gray-50 rounded-lg p-4 mb-4 space-y-3">
+                  {chatMessages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-3 rounded-lg ${
+                        msg.role === 'user'
+                          ? 'bg-blue-100 ml-8'
+                          : msg.role === 'assistant'
+                            ? 'bg-white mr-8'
+                            : 'bg-yellow-50 text-center text-sm'
+                      }`}
+                    >
+                      <p className="text-sm text-gray-800">{msg.content}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {msg.timestamp.toLocaleTimeString()}
+                      </p>
+                    </div>
+                  ))}
+                  {isSendingMessage && (
+                    <div className="bg-white p-3 rounded-lg mr-8">
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        <span className="text-sm text-gray-600">AI is thinking...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Chat Input */}
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                    placeholder="Ask AI to refine this component..."
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isSendingMessage}
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={isSendingMessage || !chatInput.trim()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

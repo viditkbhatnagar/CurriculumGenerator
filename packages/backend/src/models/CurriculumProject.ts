@@ -87,6 +87,9 @@ export interface ICurriculumProject extends Document {
   updatedAt: Date;
   cancelledAt?: Date;
   cancelReason?: string;
+
+  // Methods
+  advanceStage(stageData?: any): Promise<void>;
 }
 
 const CurriculumProjectSchema = new Schema<ICurriculumProject>(

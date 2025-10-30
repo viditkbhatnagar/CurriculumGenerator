@@ -1,43 +1,65 @@
 'use client';
 
 /**
- * Resource Cost Evaluation Page (Stage 3)
- * Displays paid resources, costs, and AI-suggested alternatives
+ * Cost Evaluation Page (Stage 3)
+ * Display paid resources, cost breakdown, AI alternatives, and management approval
  */
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { DollarSign, TrendingDown, Check, X, ArrowLeft, Loader2 } from 'lucide-react';
+import {
+  DollarSign,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  TrendingDown,
+  Book,
+  Database,
+  Wrench,
+  Package,
+} from 'lucide-react';
 
-interface Alternative {
-  name: string;
-  cost: number;
-  qualityMatch: number;
-  limitations?: string;
-  source: string;
-}
-
-interface Resource {
+interface PaidResource {
   resourceName: string;
   resourceType: string;
-  vendor?: string;
-  costPerStudent: number;
-  estimatedStudents: number;
-  totalCost: number;
-  isRecurring: boolean;
-  recurringPeriod?: string;
-  justification: string;
-  alternatives: Alternative[];
+  cost: number;
+  currency: string;
+  subscriptionType: string;
+  identifiedIn: string;
+  url?: string;
+  reasoning: string;
+}
+
+interface Alternative {
+  originalResource: string;
+  alternativeName: string;
+  alternativeCost: number;
+  costSaving: number;
+  reasoning: string;
+  qualityComparison: string;
+  url?: string;
 }
 
 interface CostEvaluation {
   _id: string;
   projectId: string;
-  resources: Resource[];
+  paidResources: PaidResource[];
   totalEstimatedCost: number;
+  currency: string;
+  costBreakdown: {
+    journals: number;
+    databases: number;
+    tools: number;
+    software: number;
+    other: number;
+  };
+  aiSuggestedAlternatives: Alternative[];
   managementDecision: 'pending' | 'approved' | 'rejected';
-  decidedAt?: string;
-  decisionNotes?: string;
+  selectedAlternatives?: string[];
+  rejectionReason?: string;
+  evaluatedAt: Date;
+  approvedAt?: Date;
+  rejectedAt?: Date;
 }
 
 export default function CostEvaluationPage() {
@@ -45,44 +67,122 @@ export default function CostEvaluationPage() {
   const router = useRouter();
   const projectId = params.id as string;
 
-  const [evaluation, setEvaluation] = useState<CostEvaluation | null>(null);
   const [loading, setLoading] = useState(true);
+  const [evaluating, setEvaluating] = useState(false);
+  const [costEval, setCostEval] = useState<CostEvaluation | null>(null);
+  const [selectedAlternatives, setSelectedAlternatives] = useState<string[]>([]);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
-    fetchEvaluation();
+    fetchOrStartEvaluation();
   }, [projectId]);
 
-  const fetchEvaluation = async () => {
-    setLoading(true);
+  const fetchOrStartEvaluation = async () => {
     try {
-      // First get the project to get the evaluation ID
-      const projectResponse = await fetch(`/api/v2/projects/${projectId}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
+      setLoading(true);
 
-      if (projectResponse.ok) {
-        const projectData = await projectResponse.json();
-        const evaluationId = projectData.data.stageProgress.stage3?.costEvaluationId;
+      // Try to fetch existing evaluation
+      const fetchResponse = await fetch(`http://localhost:4000/api/v2/projects/${projectId}/cost`);
 
-        if (evaluationId) {
-          const evalResponse = await fetch(`/api/v2/cost/${evaluationId}`, {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          });
+      if (fetchResponse.ok) {
+        const data = await fetchResponse.json();
+        setCostEval(data.data);
+        setSelectedAlternatives(data.data.selectedAlternatives || []);
+        setLoading(false);
+        return;
+      }
 
-          if (evalResponse.ok) {
-            const evalData = await evalResponse.json();
-            setEvaluation(evalData.data);
-          }
+      // No evaluation exists, start one
+      setEvaluating(true);
+      const startResponse = await fetch(
+        `http://localhost:4000/api/v2/projects/${projectId}/cost/evaluate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
         }
+      );
+
+      if (startResponse.ok) {
+        const result = await startResponse.json();
+        setCostEval(result.data);
+        setSelectedAlternatives(result.data.selectedAlternatives || []);
       }
     } catch (error) {
-      console.error('Error fetching evaluation:', error);
+      console.error('Error with cost evaluation:', error);
     } finally {
       setLoading(false);
+      setEvaluating(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    try {
+      const response = await fetch(
+        `http://localhost:4000/api/v2/projects/${projectId}/cost/approve`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ selectedAlternatives }),
+        }
+      );
+
+      if (response.ok) {
+        alert('Cost evaluation approved! Moving to Stage 4.');
+        router.push(`/projects/${projectId}`);
+      }
+    } catch (error) {
+      console.error('Error approving:', error);
+      alert('Failed to approve cost evaluation');
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rejectionReason.trim()) {
+      alert('Please provide a rejection reason');
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `http://localhost:4000/api/v2/projects/${projectId}/cost/reject`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: rejectionReason }),
+        }
+      );
+
+      if (response.ok) {
+        alert('Cost evaluation rejected. SME will revise resources.');
+        router.push(`/projects/${projectId}`);
+      }
+    } catch (error) {
+      console.error('Error rejecting:', error);
+      alert('Failed to reject cost evaluation');
+    }
+  };
+
+  const toggleAlternative = (alternativeName: string) => {
+    setSelectedAlternatives((prev) =>
+      prev.includes(alternativeName)
+        ? prev.filter((name) => name !== alternativeName)
+        : [...prev, alternativeName]
+    );
+  };
+
+  const getResourceIcon = (type: string) => {
+    switch (type.toLowerCase()) {
+      case 'journal':
+      case 'book':
+        return <Book className="w-5 h-5 text-blue-600" />;
+      case 'database':
+        return <Database className="w-5 h-5 text-purple-600" />;
+      case 'tool':
+      case 'software':
+        return <Wrench className="w-5 h-5 text-green-600" />;
+      default:
+        return <Package className="w-5 h-5 text-gray-600" />;
     }
   };
 
@@ -90,28 +190,43 @@ export default function CostEvaluationPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin mx-auto text-blue-600 mb-4" />
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
           <p className="text-gray-600">Loading cost evaluation...</p>
         </div>
       </div>
     );
   }
 
-  if (!evaluation) {
+  if (evaluating) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600 mb-4">No cost evaluation found</p>
-          <button
-            onClick={() => router.push(`/projects/${projectId}`)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            Back to Project
-          </button>
+        <div className="text-center max-w-2xl">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Analyzing Resource Costs...</h2>
+          <p className="text-gray-600">
+            AI is scanning all 14 components, identifying paid resources, calculating costs, and
+            suggesting free alternatives. This may take a minute.
+          </p>
         </div>
       </div>
     );
   }
+
+  if (!costEval) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
+          <p className="text-gray-600">Cost evaluation not found</p>
+        </div>
+      </div>
+    );
+  }
+
+  const totalSavings = (costEval.aiSuggestedAlternatives || []).reduce(
+    (sum, alt) => sum + alt.costSaving,
+    0
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -119,183 +234,289 @@ export default function CostEvaluationPage() {
       <div className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => router.push(`/projects/${projectId}`)}
-                className="text-gray-600 hover:text-gray-900"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Resource Cost Evaluation</h1>
-                <p className="mt-2 text-sm text-gray-600">
-                  Stage 3 - Review paid resources and alternatives
-                </p>
-              </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Resource Cost Evaluation</h1>
+              <p className="mt-2 text-sm text-gray-600">
+                Stage 3: Review costs, evaluate alternatives, and approve resources
+              </p>
             </div>
-
-            <div className="text-right">
-              <div className="text-sm text-gray-600">Total Estimated Cost</div>
-              <div className="text-3xl font-bold text-gray-900">
-                ${evaluation.totalEstimatedCost.toFixed(2)}
-              </div>
-              <div
-                className={`
-                mt-2 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
-                ${evaluation.managementDecision === 'approved' ? 'bg-green-100 text-green-800' : ''}
-                ${evaluation.managementDecision === 'pending' ? 'bg-yellow-100 text-yellow-800' : ''}
-                ${evaluation.managementDecision === 'rejected' ? 'bg-red-100 text-red-800' : ''}
-              `}
-              >
-                {evaluation.managementDecision === 'approved' && <Check className="w-4 h-4 mr-1" />}
-                {evaluation.managementDecision === 'rejected' && <X className="w-4 h-4 mr-1" />}
-                {evaluation.managementDecision.replace('_', ' ').toUpperCase()}
-              </div>
-            </div>
+            <button
+              onClick={() => router.push(`/projects/${projectId}`)}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              ← Back to Dashboard
+            </button>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Resources List */}
-        <div className="space-y-6">
-          {evaluation.resources.map((resource, idx) => (
-            <div key={idx} className="bg-white rounded-lg shadow overflow-hidden">
-              {/* Resource Header */}
-              <div className="bg-gray-50 px-6 py-4 border-b">
+        {/* Cost Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Estimated Cost</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  ${costEval.totalEstimatedCost.toLocaleString()}
+                </p>
+              </div>
+              <DollarSign className="w-12 h-12 text-red-500" />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Potential Savings</p>
+                <p className="text-3xl font-bold text-green-600">
+                  ${totalSavings.toLocaleString()}
+                </p>
+              </div>
+              <TrendingDown className="w-12 h-12 text-green-500" />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Paid Resources Found</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {(costEval.paidResources || []).length}
+                </p>
+              </div>
+              <Package className="w-12 h-12 text-blue-500" />
+            </div>
+          </div>
+        </div>
+
+        {/* Cost Breakdown */}
+        <div className="bg-white rounded-lg shadow p-6 mb-8">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Cost Breakdown</h2>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {Object.entries(costEval.costBreakdown || {}).map(([category, amount]) => (
+              <div key={category} className="text-center">
+                <p className="text-sm text-gray-600 capitalize">{category}</p>
+                <p className="text-lg font-semibold text-gray-900">${amount.toLocaleString()}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Paid Resources List */}
+        <div className="bg-white rounded-lg shadow p-6 mb-8">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
+            Identified Paid Resources ({(costEval.paidResources || []).length})
+          </h2>
+          <div className="space-y-4">
+            {(costEval.paidResources || []).map((resource, index) => (
+              <div key={index} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">{resource.resourceName}</h3>
-                    <div className="mt-2 flex items-center space-x-4 text-sm text-gray-600">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md font-medium">
-                        {resource.resourceType}
-                      </span>
-                      {resource.vendor && <span>Vendor: {resource.vendor}</span>}
-                      {resource.isRecurring && (
-                        <span className="text-orange-600 font-medium">
-                          Recurring ({resource.recurringPeriod})
-                        </span>
+                  <div className="flex items-start space-x-3 flex-1">
+                    {getResourceIcon(resource.resourceType)}
+                    <div className="flex-1">
+                      <h3 className="font-medium text-gray-900">{resource.resourceName}</h3>
+                      <p className="text-sm text-gray-600 mt-1">{resource.reasoning}</p>
+                      <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                        <span className="capitalize">{resource.resourceType}</span>
+                        <span>•</span>
+                        <span>Found in: {resource.identifiedIn}</span>
+                        <span>•</span>
+                        <span className="capitalize">{resource.subscriptionType}</span>
+                      </div>
+                      {resource.url && (
+                        <a
+                          href={resource.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline text-sm mt-2 inline-block"
+                        >
+                          View Resource →
+                        </a>
                       )}
                     </div>
                   </div>
-
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-gray-900">
-                      ${resource.totalCost.toFixed(2)}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      ${resource.costPerStudent.toFixed(2)} × {resource.estimatedStudents} students
-                    </div>
+                  <div className="text-right ml-4">
+                    <p className="text-2xl font-bold text-gray-900">
+                      ${resource.cost.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gray-500">{resource.currency}</p>
                   </div>
-                </div>
-
-                <div className="mt-3">
-                  <p className="text-sm text-gray-700">
-                    <span className="font-medium">Justification:</span> {resource.justification}
-                  </p>
                 </div>
               </div>
-
-              {/* Alternatives */}
-              {resource.alternatives.length > 0 && (
-                <div className="px-6 py-4">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
-                    <TrendingDown className="w-4 h-4 mr-2 text-green-600" />
-                    AI-Suggested Alternatives
-                  </h4>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {resource.alternatives.map((alt, altIdx) => (
-                      <div
-                        key={altIdx}
-                        className="border border-gray-200 rounded-lg p-4 hover:border-blue-400 hover:shadow-md transition-all"
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <h5 className="font-medium text-gray-900 text-sm">{alt.name}</h5>
-                          {alt.cost === 0 && (
-                            <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-medium rounded">
-                              FREE
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-600">Cost:</span>
-                            <span className="font-semibold text-gray-900">
-                              ${(alt.cost * resource.estimatedStudents).toFixed(2)}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-600">Quality Match:</span>
-                            <div className="flex items-center">
-                              <div className="w-16 h-2 bg-gray-200 rounded-full mr-2">
-                                <div
-                                  className={`h-2 rounded-full ${
-                                    alt.qualityMatch >= 80
-                                      ? 'bg-green-500'
-                                      : alt.qualityMatch >= 60
-                                        ? 'bg-yellow-500'
-                                        : 'bg-red-500'
-                                  }`}
-                                  style={{ width: `${alt.qualityMatch}%` }}
-                                ></div>
-                              </div>
-                              <span className="font-semibold">{alt.qualityMatch}%</span>
-                            </div>
-                          </div>
-
-                          {alt.limitations && (
-                            <div className="text-xs text-gray-600 mt-2 pt-2 border-t">
-                              <span className="font-medium">Limitations:</span> {alt.limitations}
-                            </div>
-                          )}
-
-                          <div className="text-xs text-gray-500 mt-1">Source: {alt.source}</div>
-
-                          {/* Potential Savings */}
-                          {resource.totalCost > alt.cost * resource.estimatedStudents && (
-                            <div className="mt-2 pt-2 border-t text-xs text-green-600 font-medium">
-                              Save $
-                              {(resource.totalCost - alt.cost * resource.estimatedStudents).toFixed(
-                                2
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-
-          {evaluation.resources.length === 0 && (
-            <div className="bg-white rounded-lg shadow p-12 text-center">
-              <DollarSign className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Paid Resources Detected</h3>
-              <p className="text-gray-600">
-                The curriculum uses only free and open-source resources
-              </p>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
 
-        {/* Decision Notes */}
-        {evaluation.decisionNotes && (
-          <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <h3 className="text-sm font-semibold text-blue-900 mb-2">Management Notes</h3>
-            <p className="text-sm text-blue-800">{evaluation.decisionNotes}</p>
-            {evaluation.decidedAt && (
-              <p className="text-xs text-blue-600 mt-2">
-                Decided on {new Date(evaluation.decidedAt).toLocaleString()}
-              </p>
-            )}
+        {/* AI Suggested Alternatives */}
+        {(costEval.aiSuggestedAlternatives || []).length > 0 && (
+          <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg shadow p-6 mb-8">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              🤖 AI-Suggested Free Alternatives ({(costEval.aiSuggestedAlternatives || []).length})
+            </h2>
+            <p className="text-sm text-gray-600 mb-6">
+              Select alternatives to replace paid resources and reduce costs while maintaining
+              quality
+            </p>
+            <div className="space-y-4">
+              {(costEval.aiSuggestedAlternatives || []).map((alternative, index) => (
+                <div key={index} className="bg-white border-2 border-gray-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <input
+                      type="checkbox"
+                      checked={selectedAlternatives.includes(alternative.alternativeName)}
+                      onChange={() => toggleAlternative(alternative.alternativeName)}
+                      className="mt-1 h-5 w-5 text-blue-600 border-gray-300 rounded"
+                    />
+                    <div className="ml-4 flex-1">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-sm text-gray-600">
+                            Alternative for:{' '}
+                            <span className="font-medium">{alternative.originalResource}</span>
+                          </p>
+                          <h3 className="text-lg font-semibold text-gray-900 mt-1">
+                            {alternative.alternativeName}
+                          </h3>
+                          <p className="text-sm text-gray-700 mt-2">{alternative.reasoning}</p>
+                          <div className="flex items-center space-x-4 mt-3">
+                            <span
+                              className={`text-xs px-2 py-1 rounded-full ${
+                                alternative.qualityComparison === 'better'
+                                  ? 'bg-green-100 text-green-800'
+                                  : alternative.qualityComparison === 'similar'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-yellow-100 text-yellow-800'
+                              }`}
+                            >
+                              Quality: {alternative.qualityComparison}
+                            </span>
+                            <span className="text-sm text-green-600 font-medium">
+                              Saves: ${alternative.costSaving.toLocaleString()}
+                            </span>
+                          </div>
+                          {alternative.url && (
+                            <a
+                              href={alternative.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline text-sm mt-2 inline-block"
+                            >
+                              View Alternative →
+                            </a>
+                          )}
+                        </div>
+                        <div className="text-right ml-4">
+                          <p className="text-2xl font-bold text-green-600">
+                            $
+                            {alternative.alternativeCost === 0
+                              ? 'FREE'
+                              : alternative.alternativeCost.toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Management Decision */}
+        {costEval.managementDecision === 'pending' && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Management Decision Required</h2>
+            <p className="text-gray-600 mb-6">
+              Review the costs and alternatives above, then approve or reject this evaluation.
+            </p>
+            <div className="flex space-x-4">
+              <button
+                onClick={handleApprove}
+                className="flex-1 flex items-center justify-center px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium"
+              >
+                <CheckCircle className="w-5 h-5 mr-2" />
+                Approve & Continue to Stage 4
+              </button>
+              <button
+                onClick={() => setShowRejectModal(true)}
+                className="flex-1 flex items-center justify-center px-6 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 font-medium"
+              >
+                <XCircle className="w-5 h-5 mr-2" />
+                Reject & Request Revision
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Approved Status */}
+        {costEval.managementDecision === 'approved' && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+            <div className="flex items-center">
+              <CheckCircle className="w-6 h-6 text-green-600 mr-3" />
+              <div>
+                <h3 className="font-semibold text-green-900">Cost Evaluation Approved</h3>
+                <p className="text-sm text-green-700 mt-1">
+                  Approved on {new Date(costEval.approvedAt!).toLocaleDateString()} • Ready for
+                  Stage 4
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Rejected Status */}
+        {costEval.managementDecision === 'rejected' && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <div className="flex items-start">
+              <XCircle className="w-6 h-6 text-red-600 mr-3 mt-1" />
+              <div>
+                <h3 className="font-semibold text-red-900">Cost Evaluation Rejected</h3>
+                <p className="text-sm text-red-700 mt-1">
+                  Rejected on {new Date(costEval.rejectedAt!).toLocaleDateString()}
+                </p>
+                <p className="text-sm text-gray-700 mt-2">
+                  <strong>Reason:</strong> {costEval.rejectionReason}
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Reject Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Reject Cost Evaluation</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Please provide a reason for rejection. The SME will revise the resources based on your
+              feedback.
+            </p>
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="e.g., Too many expensive resources. Please find more open-access alternatives."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+              rows={4}
+            />
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={() => setShowRejectModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReject}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                Confirm Rejection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

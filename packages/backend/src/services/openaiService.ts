@@ -3,6 +3,7 @@ import config from '../config';
 import { loggingService } from './loggingService';
 import { monitoringService } from './monitoringService';
 import { errorTrackingService } from './errorTrackingService';
+import { analyticsStorageService } from './analyticsStorageService';
 
 /**
  * Unified OpenAI Service
@@ -27,14 +28,14 @@ export type StreamCallback = (chunk: StreamChunk) => void;
 
 export class OpenAIService {
   private client: OpenAI;
-  private readonly defaultTimeout = 30000; // 30 seconds
-  private readonly maxRetries = 3;
-  private readonly baseDelay = 1000; // 1 second for exponential backoff
+  private readonly defaultTimeout = 180000; // 180 seconds (3 minutes) for complex generation
+  private readonly maxRetries = 5; // Increased retries for curriculum generation
+  private readonly baseDelay = 2000; // 2 seconds for exponential backoff
 
   constructor() {
     this.client = new OpenAI({
       apiKey: config.openai.apiKey,
-      timeout: this.defaultTimeout,
+      timeout: 180000, // 180 seconds (3 minutes) for complex curriculum generation
       maxRetries: 0, // We handle retries manually for better control
     });
   }
@@ -55,14 +56,33 @@ export class OpenAIService {
         });
 
         const embedding = response.data[0].embedding;
-        
+
         // Record metrics
         const duration = Date.now() - startTime;
         const tokens = response.usage?.total_tokens || 0;
         const cost = this.calculateEmbeddingCost(tokens);
-        
+
         loggingService.logLLMCall('openai', config.openai.embeddingModel, tokens, cost, duration);
         monitoringService.recordLLMCost('openai', config.openai.embeddingModel, tokens, cost);
+
+        // Store in database for historical tracking
+        analyticsStorageService
+          .recordTokenUsage({
+            tokensUsed: tokens,
+            provider: 'openai',
+            model: config.openai.embeddingModel,
+            cost: cost,
+          })
+          .catch((err) => loggingService.error('Failed to store token analytics', { error: err }));
+
+        analyticsStorageService
+          .recordApiCost({
+            cost: cost,
+            provider: 'openai',
+            model: config.openai.embeddingModel,
+            tokensUsed: tokens,
+          })
+          .catch((err) => loggingService.error('Failed to store cost analytics', { error: err }));
 
         return embedding;
       } catch (error) {
@@ -93,7 +113,7 @@ export class OpenAIService {
 
     for (let i = 0; i < texts.length; i += batchSize) {
       const batch = texts.slice(i, i + batchSize);
-      
+
       const batchResults = await this.retryWithExponentialBackoff(async () => {
         try {
           const response = await this.client.embeddings.create({
@@ -106,11 +126,32 @@ export class OpenAIService {
           const duration = Date.now() - startTime;
           const tokens = response.usage?.total_tokens || 0;
           const cost = this.calculateEmbeddingCost(tokens);
-          
+
           loggingService.logLLMCall('openai', config.openai.embeddingModel, tokens, cost, duration);
           monitoringService.recordLLMCost('openai', config.openai.embeddingModel, tokens, cost);
 
-          return response.data.map(d => d.embedding);
+          // Store in database
+          analyticsStorageService
+            .recordTokenUsage({
+              tokensUsed: tokens,
+              provider: 'openai',
+              model: config.openai.embeddingModel,
+              cost: cost,
+            })
+            .catch((err) =>
+              loggingService.error('Failed to store token analytics', { error: err })
+            );
+
+          analyticsStorageService
+            .recordApiCost({
+              cost: cost,
+              provider: 'openai',
+              model: config.openai.embeddingModel,
+              tokensUsed: tokens,
+            })
+            .catch((err) => loggingService.error('Failed to store cost analytics', { error: err }));
+
+          return response.data.map((d) => d.embedding);
         } catch (error) {
           errorTrackingService.captureLLMError(
             error as Error,
@@ -175,21 +216,40 @@ export class OpenAIService {
         const duration = Date.now() - startTime;
         const tokens = response.usage?.total_tokens || 0;
         const cost = this.calculateChatCost(tokens, model);
-        
+
         loggingService.logLLMCall('openai', model, tokens, cost, duration);
         monitoringService.recordLLMCost('openai', model, tokens, cost);
+
+        // Store in database
+        analyticsStorageService
+          .recordTokenUsage({
+            tokensUsed: tokens,
+            provider: 'openai',
+            model: model,
+            cost: cost,
+          })
+          .catch((err) => loggingService.error('Failed to store token analytics', { error: err }));
+
+        analyticsStorageService
+          .recordApiCost({
+            cost: cost,
+            provider: 'openai',
+            model: model,
+            tokensUsed: tokens,
+          })
+          .catch((err) => loggingService.error('Failed to store cost analytics', { error: err }));
 
         return content;
       } catch (error) {
         clearTimeout(timeoutId);
-        
+
         errorTrackingService.captureLLMError(
           error as Error,
           'openai',
           model,
           prompt.substring(0, 100)
         );
-        
+
         if (error instanceof Error && error.name === 'AbortError') {
           throw new Error(`OpenAI request timed out after ${timeout}ms`);
         }
@@ -246,21 +306,40 @@ export class OpenAIService {
         const duration = Date.now() - startTime;
         const tokens = response.usage?.total_tokens || 0;
         const cost = this.calculateChatCost(tokens, model);
-        
+
         loggingService.logLLMCall('openai', model, tokens, cost, duration);
         monitoringService.recordLLMCost('openai', model, tokens, cost);
+
+        // Store in database
+        analyticsStorageService
+          .recordTokenUsage({
+            tokensUsed: tokens,
+            provider: 'openai',
+            model: model,
+            cost: cost,
+          })
+          .catch((err) => loggingService.error('Failed to store token analytics', { error: err }));
+
+        analyticsStorageService
+          .recordApiCost({
+            cost: cost,
+            provider: 'openai',
+            model: model,
+            tokensUsed: tokens,
+          })
+          .catch((err) => loggingService.error('Failed to store cost analytics', { error: err }));
 
         return JSON.parse(content) as T;
       } catch (error) {
         clearTimeout(timeoutId);
-        
+
         errorTrackingService.captureLLMError(
           error as Error,
           'openai',
           model,
           prompt.substring(0, 100)
         );
-        
+
         if (error instanceof Error && error.name === 'AbortError') {
           throw new Error(`OpenAI request timed out after ${timeout}ms`);
         }
@@ -315,14 +394,14 @@ export class OpenAIService {
         clearTimeout(timeoutId);
       } catch (error) {
         clearTimeout(timeoutId);
-        
+
         errorTrackingService.captureLLMError(
           error as Error,
           'openai',
           model,
           prompt.substring(0, 100)
         );
-        
+
         if (error instanceof Error && error.name === 'AbortError') {
           throw new Error(`OpenAI streaming request timed out after ${timeout}ms`);
         }
@@ -349,10 +428,10 @@ export class OpenAIService {
 
       // Calculate exponential backoff delay
       const delay = this.baseDelay * Math.pow(2, attempt - 1);
-      
+
       console.warn(
         `OpenAI request failed (attempt ${attempt}/${this.maxRetries}), ` +
-        `retrying in ${delay}ms...`,
+          `retrying in ${delay}ms...`,
         error instanceof Error ? error.message : 'Unknown error'
       );
 
@@ -372,7 +451,7 @@ export class OpenAIService {
         error.status === 500 || // Server error
         error.status === 502 || // Bad gateway
         error.status === 503 || // Service unavailable
-        error.status === 504    // Gateway timeout
+        error.status === 504 // Gateway timeout
       );
     }
 
@@ -393,7 +472,7 @@ export class OpenAIService {
    * Sleep utility for retry delays
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**

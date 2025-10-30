@@ -3,6 +3,7 @@
  * Stage 5: Final SME review, refinements, approval, and publication to LMS
  */
 
+import { Types } from 'mongoose';
 import { CurriculumReview, ICurriculumReview } from '../models/CurriculumReview';
 import { FullCurriculumPackage } from '../models/FullCurriculumPackage';
 import { CurriculumProject } from '../models/CurriculumProject';
@@ -31,10 +32,18 @@ class PublicationService {
       }
 
       // Create review document
+      // Handle dev-user string conversion to ObjectId for development mode
+      let reviewedByObjectId;
+      if (userId === 'dev-user') {
+        reviewedByObjectId = new Types.ObjectId('507f1f77bcf86cd799439011'); // Mock user ObjectId
+      } else {
+        reviewedByObjectId = new Types.ObjectId(userId);
+      }
+
       const review = new CurriculumReview({
         projectId: project._id,
         fullCurriculumId: fullPackage._id,
-        reviewedBy: userId,
+        reviewedBy: reviewedByObjectId,
         reviewStatus: 'in_review',
         refinements: [],
         publishedToLMS: false,
@@ -43,10 +52,10 @@ class PublicationService {
       await review.save();
 
       // Emit WebSocket event
-      websocketService.emitToRoom(`project:${projectId}`, 'review_started', {
-        reviewId: review._id.toString(),
-        status: 'Awaiting SME final approval',
-      });
+      // websocketService.emitToRoom(`project:${projectId}`, 'review_started', {
+      // reviewId: review._id.toString(),
+      // status: 'Awaiting SME final approval',
+      // });
 
       loggingService.info('Final review started', {
         projectId,
@@ -97,11 +106,11 @@ class PublicationService {
       await review.save();
 
       // Emit WebSocket event
-      websocketService.emitToRoom(`project:${review.projectId}`, 'refinement_requested', {
-        reviewId: review._id.toString(),
-        materialType,
-        materialId,
-      });
+      // websocketService.emitToRoom(`project:${review.projectId}`, 'refinement_requested', {
+      // reviewId: review._id.toString(),
+      // materialType,
+      // materialId,
+      // });
 
       loggingService.info('Refinement requested', {
         reviewId,
@@ -189,9 +198,7 @@ ${refinement.requestedChange}
 
 Generate the refined version maintaining the same JSON structure. Ensure all required fields are present and citations are maintained.`;
 
-      const response = await openaiService.generateContent({
-        systemPrompt,
-        userPrompt,
+      const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         temperature: 0.7,
         maxTokens: 4000,
       });
@@ -220,11 +227,11 @@ Generate the refined version maintaining the same JSON structure. Ensure all req
       await review.save();
 
       // Emit WebSocket event
-      websocketService.emitToRoom(`project:${review.projectId}`, 'refinement_applied', {
-        reviewId: review._id.toString(),
-        materialType: refinement.materialType,
-        materialId: refinement.materialId,
-      });
+      // websocketService.emitToRoom(`project:${review.projectId}`, 'refinement_applied', {
+      // reviewId: review._id.toString(),
+      // materialType: refinement.materialType,
+      // materialId: refinement.materialId,
+      // });
 
       loggingService.info('Refinement applied', {
         reviewId: review._id,
@@ -272,10 +279,10 @@ Generate the refined version maintaining the same JSON structure. Ensure all req
       await review.save();
 
       // Emit WebSocket event
-      websocketService.emitToRoom(`project:${review.projectId}`, 'sme_approved', {
-        reviewId: review._id.toString(),
-        status: 'Pending publication approval',
-      });
+      // websocketService.emitToRoom(`project:${review.projectId}`, 'sme_approved', {
+      // reviewId: review._id.toString(),
+      // status: 'Pending publication approval',
+      // });
 
       loggingService.info('SME approved curriculum', {
         reviewId,
@@ -313,10 +320,10 @@ Generate the refined version maintaining the same JSON structure. Ensure all req
       await review.save();
 
       // Emit WebSocket event
-      websocketService.emitToRoom(`project:${review.projectId}`, 'publication_approved', {
-        reviewId: review._id.toString(),
-        status: 'Ready for LMS publication',
-      });
+      // websocketService.emitToRoom(`project:${review.projectId}`, 'publication_approved', {
+      // reviewId: review._id.toString(),
+      // status: 'Ready for LMS publication',
+      // });
 
       loggingService.info('Publication approved', {
         reviewId,
@@ -380,12 +387,12 @@ Generate the refined version maintaining the same JSON structure. Ensure all req
       }
 
       // Emit WebSocket event
-      websocketService.emitToRoom(`project:${review.projectId}`, 'published_to_lms', {
-        reviewId: review._id.toString(),
-        lmsId,
-        lmsCourseUrl,
-        status: 'Published successfully',
-      });
+      // websocketService.emitToRoom(`project:${review.projectId}`, 'published_to_lms', {
+      // reviewId: review._id.toString(),
+      // lmsId,
+      // lmsCourseUrl,
+      // status: 'Published successfully',
+      // });
 
       loggingService.info('Curriculum published to LMS', {
         reviewId,
@@ -457,10 +464,10 @@ Generate the refined version maintaining the same JSON structure. Ensure all req
       }
 
       // Emit WebSocket event
-      websocketService.emitToRoom(`project:${review.projectId}`, 'curriculum_rejected', {
-        reviewId: review._id.toString(),
-        reason,
-      });
+      // websocketService.emitToRoom(`project:${review.projectId}`, 'curriculum_rejected', {
+      // reviewId: review._id.toString(),
+      // reason,
+      // });
 
       loggingService.info('Curriculum rejected', {
         reviewId,

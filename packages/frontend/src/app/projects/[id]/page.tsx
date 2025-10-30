@@ -178,66 +178,45 @@ export default function ProjectDashboardPage() {
         break;
 
       case 3:
-        // Navigate to cost evaluation or start it
-        if (project.stageProgress.stage3?.costEvaluationId) {
-          router.push(`/projects/${projectId}/cost`);
-        } else {
-          // Auto-start cost evaluation
-          try {
-            await fetch(`/api/v2/projects/${projectId}/cost/evaluate`, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem('token')}`,
-              },
-            });
-            fetchProject(); // Refresh
-          } catch (error) {
-            console.error('Error starting cost evaluation:', error);
-          }
-        }
+        // Navigate to cost evaluation page
+        console.log('Stage 3 clicked, navigating to cost evaluation');
+        router.push(`/projects/${projectId}/cost`);
         break;
 
       case 4:
-        // Start generation or view results
-        if (project.stageProgress.stage4?.fullCurriculumId) {
-          router.push(`/projects/${projectId}/curriculum`);
-        } else {
-          // Start generation
-          try {
-            await fetch(`/api/v2/projects/${projectId}/generate`, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem('token')}`,
-              },
-            });
-            fetchProject(); // Refresh
-          } catch (error) {
-            console.error('Error starting generation:', error);
-          }
-        }
+        // Navigate to curriculum generation page
+        console.log('Stage 4 clicked, navigating to curriculum generation');
+        router.push(`/projects/${projectId}/curriculum`);
         break;
 
       case 5:
-        // Navigate to review or start it
+        // Navigate to final review & publication page
+        console.log('Stage 5 clicked, navigating to final review');
+        router.push(`/projects/${projectId}/review`);
+        break;
+
+      default:
+        // Fallback for stages beyond 5
         if (project.stageProgress.stage5?.reviewId) {
           router.push(`/projects/${projectId}/review`);
-        } else {
-          // Start review
-          try {
-            const response = await fetch(`/api/v2/projects/${projectId}/review/start`, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem('token')}`,
-              },
-            });
-            if (response.ok) {
-              const data = await response.json();
-              router.push(`/projects/${projectId}/review`);
-            }
-          } catch (error) {
-            console.error('Error starting review:', error);
-          }
         }
+        // Old code - keeping for reference but disabled
+        // if (condition) {
+        //   try {
+        //     const response = await fetch(`/api/v2/projects/${projectId}/review/start`, {
+        //       method: 'POST',
+        //       headers: {
+        //         Authorization: `Bearer ${localStorage.getItem('token')}`,
+        //       },
+        //     });
+        //     if (response.ok) {
+        //       const data = await response.json();
+        //       router.push(`/projects/${projectId}/review`);
+        //     }
+        //   } catch (error) {
+        //     console.error('Error starting review:', error);
+        //   }
+        // }
         break;
     }
   };

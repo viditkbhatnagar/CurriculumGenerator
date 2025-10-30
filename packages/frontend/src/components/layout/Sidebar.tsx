@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useUIStore } from '@/stores/uiStore';
 
 const navigation = [
-  { name: 'Dashboard', href: '/admin', icon: '📊' },
+  { name: 'Dashboard', href: '/dashboard', icon: '📊' },
   { name: 'Programs', href: '/admin/programs', icon: '📚' },
   { name: 'Knowledge Base', href: '/admin/knowledge-base', icon: '🔍' },
   { name: 'Analytics', href: '/admin/analytics', icon: '📈' },
