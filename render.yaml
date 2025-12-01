@@ -38,7 +38,7 @@ services:
     plan: free
     branch: main
     rootDir: packages/backend
-    buildCommand: npm install --ignore-scripts
+    buildCommand: npm install --ignore-scripts && npm rebuild esbuild
     startCommand: npx tsx src/index.ts
     envVars:
       - key: NODE_ENV
