@@ -31,13 +31,51 @@ export class OpenAIService {
   private readonly defaultTimeout = 180000; // 180 seconds (3 minutes) for complex generation
   private readonly maxRetries = 5; // Increased retries for curriculum generation
   private readonly baseDelay = 2000; // 2 seconds for exponential backoff
+  private initialized = false;
 
   constructor() {
+    const apiKey = config.openai.apiKey;
+    
+    if (!apiKey) {
+      console.error('[OpenAI] ERROR: OPENAI_API_KEY is not set!');
+      loggingService.error('OpenAI API key is not configured', {
+        hasKey: false,
+        model: config.openai.chatModel,
+      });
+    } else {
+      console.log(`[OpenAI] Initialized with model: ${config.openai.chatModel}, key: ${apiKey.substring(0, 10)}...`);
+    }
+    
     this.client = new OpenAI({
-      apiKey: config.openai.apiKey,
+      apiKey: apiKey || 'missing-key',
       timeout: 180000, // 180 seconds (3 minutes) for complex curriculum generation
       maxRetries: 0, // We handle retries manually for better control
     });
+  }
+
+  /**
+   * Verify OpenAI connection and model availability
+   */
+  async verifyConnection(): Promise<boolean> {
+    try {
+      const response = await this.client.chat.completions.create({
+        model: config.openai.chatModel,
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 5,
+      });
+      console.log(`[OpenAI] Connection verified - Model ${config.openai.chatModel} is working`);
+      this.initialized = true;
+      return true;
+    } catch (error: any) {
+      console.error(`[OpenAI] Connection FAILED: ${error.message}`);
+      loggingService.error('OpenAI connection verification failed', {
+        error: error.message,
+        model: config.openai.chatModel,
+        code: error.code,
+        status: error.status,
+      });
+      return false;
+    }
   }
 
   /**

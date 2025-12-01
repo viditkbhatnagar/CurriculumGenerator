@@ -319,6 +319,26 @@ async function startServer() {
       });
     }
 
+    // Verify OpenAI connection
+    try {
+      const { openaiService } = await import('./services/openaiService');
+      const isConnected = await openaiService.verifyConnection();
+      if (isConnected) {
+        loggingService.info('OpenAI connection verified', {
+          model: config.openai.chatModel,
+        });
+      } else {
+        loggingService.error('OpenAI connection FAILED - curriculum generation will not work', {
+          model: config.openai.chatModel,
+          hasApiKey: !!config.openai.apiKey,
+        });
+      }
+    } catch (error) {
+      loggingService.error('Failed to verify OpenAI connection', {
+        error: String(error),
+      });
+    }
+
     // Initialize Redis for session management (optional)
     try {
       await initRedisClient();
