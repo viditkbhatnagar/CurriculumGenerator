@@ -38,8 +38,8 @@ services:
     plan: free
     branch: main
     rootDir: packages/backend
-    buildCommand: npm install --ignore-scripts && (npx tsc || true)
-    startCommand: npm start
+    buildCommand: npm install --ignore-scripts
+    startCommand: npx tsx src/index.ts
     envVars:
       - key: NODE_ENV
         value: production
