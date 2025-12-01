@@ -289,9 +289,9 @@ export default function ExportPage() {
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-white">
-                    {workflow.step4?.courses?.length || '-'}
+                    {workflow.step4?.modules?.length || '-'}
                   </p>
-                  <p className="text-xs text-slate-500">Courses</p>
+                  <p className="text-xs text-slate-500">Modules</p>
                 </div>
               </div>
             </div>
