@@ -22,15 +22,14 @@ declare global {
 // Check if Auth0 is configured
 const isAuth0Configured = config.auth0.domain && config.auth0.audience;
 
-// Development mode bypass middleware
-const devAuthBypass = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  if (config.nodeEnv === 'development' && !isAuth0Configured) {
-    // Create a mock auth object for development
+// Auth bypass middleware when Auth0 is not configured
+const authBypass = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  if (!isAuth0Configured) {
+    // Create a mock auth object when Auth0 is disabled
     req.auth = {
-      sub: 'dev-user-123',
-      email: 'dev@localhost.com',
+      sub: 'anonymous-user',
+      email: 'anonymous@curriculum-app.com',
     };
-    console.log('[DEV MODE] Authentication bypassed - using mock user');
     next();
   } else {
     next();
@@ -41,9 +40,9 @@ const devAuthBypass = async (req: Request, res: Response, next: NextFunction): P
  * JWT validation middleware using Auth0
  */
 export const validateJWT = (req: Request, res: Response, next: NextFunction): void => {
-  // Skip JWT validation in development mode if Auth0 is not configured
-  if (config.nodeEnv === 'development' && !isAuth0Configured) {
-    devAuthBypass(req, res, next);
+  // Skip JWT validation if Auth0 is not configured (works in any environment)
+  if (!isAuth0Configured) {
+    authBypass(req, res, next);
     return;
   }
 
@@ -85,15 +84,14 @@ export const loadUser = async (
     const authProviderId = req.auth.sub;
     const email = req.auth.email || req.auth['https://curriculum-app.com/email'];
 
-    // Development mode: create a mock admin user
-    if (config.nodeEnv === 'development' && !isAuth0Configured) {
+    // Create a mock admin user when Auth0 is not configured (any environment)
+    if (!isAuth0Configured) {
       req.user = {
-        id: '507f1f77bcf86cd799439011', // Valid MongoDB ObjectId for dev mode
-        email: email || 'dev@localhost.com',
-        role: UserRole.ADMINISTRATOR, // Admin role for full access in dev mode
+        id: '507f1f77bcf86cd799439011', // Valid MongoDB ObjectId for anonymous mode
+        email: email || 'anonymous@curriculum-app.com',
+        role: UserRole.ADMINISTRATOR, // Admin role for full access when auth disabled
         authProviderId,
       };
-      console.log('[DEV MODE] Using mock admin user');
       next();
       return;
     }
