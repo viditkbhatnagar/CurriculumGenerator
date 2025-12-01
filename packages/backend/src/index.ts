@@ -103,7 +103,7 @@ app.use(
   })
 );
 
-// CORS configuration with specific origins
+// CORS configuration - allow Render domains and configured origins
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -112,12 +112,23 @@ app.use(
         return callback(null, true);
       }
 
-      if (config.security.corsOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        loggingService.warn('CORS blocked request from unauthorized origin', { origin });
-        callback(new Error('Not allowed by CORS'));
+      // Allow all onrender.com domains in production
+      if (origin.endsWith('.onrender.com')) {
+        return callback(null, true);
       }
+
+      // Allow configured origins
+      if (config.security.corsOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      // Allow localhost in development
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        return callback(null, true);
+      }
+
+      loggingService.warn('CORS blocked request from unauthorized origin', { origin });
+      callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
