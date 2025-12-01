@@ -95,9 +95,6 @@ export function CurriculumReviewInterface({ programId }: CurriculumReviewInterfa
       setCurriculum({
         programSpec: curriculumData.data.programSpec || {},
         unitSpecs: curriculumData.data.modules || [],
-        modules: curriculumData.data.modules || [],
-        assessments: curriculumData.data.assessments || [],
-        skillMappings: curriculumData.data.skillMappings || [],
         qaReport: qaData || {
           overallScore: 0,
           complianceIssues: [],
@@ -167,7 +164,7 @@ export function CurriculumReviewInterface({ programId }: CurriculumReviewInterfa
     <div className="space-y-6">
       {Object.entries(curriculum.programSpec).map(([key, value]) => {
         if (key === 'generatedAt' || key === 'knowledgeSkillsCompetenciesMatrix') return null;
-        
+
         const sectionTitle = key
           .replace(/([A-Z])/g, ' $1')
           .replace(/^./, (str) => str.toUpperCase());
@@ -232,7 +229,7 @@ export function CurriculumReviewInterface({ programId }: CurriculumReviewInterfa
   );
 
   const renderUnitSpecs = () => {
-    const selectedUnitData = curriculum.unitSpecs.find(u => u.unitId === selectedUnit);
+    const selectedUnitData = curriculum.unitSpecs.find((u) => u.unitId === selectedUnit);
 
     return (
       <div className="grid grid-cols-12 gap-6">
@@ -269,7 +266,13 @@ export function CurriculumReviewInterface({ programId }: CurriculumReviewInterfa
               </div>
 
               {Object.entries(selectedUnitData).map(([key, value]) => {
-                if (key === 'unitId' || key === 'moduleCode' || key === 'unitTitle' || key === 'generatedAt') return null;
+                if (
+                  key === 'unitId' ||
+                  key === 'moduleCode' ||
+                  key === 'unitTitle' ||
+                  key === 'generatedAt'
+                )
+                  return null;
 
                 const sectionTitle = key
                   .replace(/([A-Z])/g, ' $1')
@@ -282,9 +285,7 @@ export function CurriculumReviewInterface({ programId }: CurriculumReviewInterfa
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-medium text-gray-900">{sectionTitle}</h3>
                       <div className="flex space-x-2">
-                        <button className="text-sm text-blue-600 hover:text-blue-700">
-                          Edit
-                        </button>
+                        <button className="text-sm text-blue-600 hover:text-blue-700">Edit</button>
                         <button className="text-sm text-green-600 hover:text-green-700">
                           Regenerate
                         </button>
@@ -319,11 +320,15 @@ export function CurriculumReviewInterface({ programId }: CurriculumReviewInterfa
             </p>
           </div>
           <div className="text-right">
-            <div className={`text-4xl font-bold ${
-              curriculum.qaReport.overallScore >= 80 ? 'text-green-600' :
-              curriculum.qaReport.overallScore >= 60 ? 'text-yellow-600' :
-              'text-red-600'
-            }`}>
+            <div
+              className={`text-4xl font-bold ${
+                curriculum.qaReport.overallScore >= 80
+                  ? 'text-green-600'
+                  : curriculum.qaReport.overallScore >= 60
+                    ? 'text-yellow-600'
+                    : 'text-red-600'
+              }`}
+            >
               {curriculum.qaReport.overallScore}
             </div>
             <p className="text-sm text-gray-600">out of 100</p>
@@ -343,11 +348,13 @@ export function CurriculumReviewInterface({ programId }: CurriculumReviewInterfa
             {curriculum.qaReport.complianceIssues.map((issue, index) => (
               <div key={index} className="px-6 py-4">
                 <div className="flex items-start">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    issue.severity === 'error' 
-                      ? 'bg-red-100 text-red-800' 
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      issue.severity === 'error'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}
+                  >
                     {issue.severity}
                   </span>
                   <div className="ml-4 flex-1">
@@ -378,8 +385,16 @@ export function CurriculumReviewInterface({ programId }: CurriculumReviewInterfa
           <ul className="space-y-2">
             {curriculum.qaReport.recommendations.map((rec, index) => (
               <li key={index} className="flex items-start">
-                <svg className="h-5 w-5 text-blue-500 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                <svg
+                  className="h-5 w-5 text-blue-500 mr-2 mt-0.5"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                    clipRule="evenodd"
+                  />
                 </svg>
                 <span className="text-sm text-gray-700">{rec}</span>
               </li>
@@ -397,8 +412,16 @@ export function CurriculumReviewInterface({ programId }: CurriculumReviewInterfa
           <ul className="grid grid-cols-2 gap-2">
             {curriculum.qaReport.passedChecks.map((check, index) => (
               <li key={index} className="flex items-center text-sm text-gray-700">
-                <svg className="h-4 w-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                <svg
+                  className="h-4 w-4 text-green-500 mr-2"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
                 </svg>
                 {check}
               </li>
@@ -445,7 +468,7 @@ export function CurriculumReviewInterface({ programId }: CurriculumReviewInterfa
             Quality Assurance
             {curriculum.qaReport.complianceIssues.length > 0 && (
               <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                {curriculum.qaReport.complianceIssues.filter(i => i.severity === 'error').length}
+                {curriculum.qaReport.complianceIssues.filter((i) => i.severity === 'error').length}
               </span>
             )}
           </button>
