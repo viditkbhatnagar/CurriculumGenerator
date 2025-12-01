@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { ChatMessage, TutorResponse, ChatRequest } from '@/types/tutorBot';
@@ -8,7 +8,7 @@ export function useTutorBot(studentId: string, courseId: string) {
   const [isTyping, setIsTyping] = useState(false);
 
   // Fetch conversation history
-  const { data: history, isLoading } = useQuery({
+  const { data: historyData, isLoading } = useQuery({
     queryKey: ['tutor-history', studentId, courseId],
     queryFn: async () => {
       const response = await api.get(`/api/tutor/history/${studentId}`, {
@@ -16,15 +16,19 @@ export function useTutorBot(studentId: string, courseId: string) {
       });
       return response.data;
     },
-    onSuccess: (data) => {
-      if (data?.messages) {
-        setMessages(data.messages.map((msg: any) => ({
+  });
+
+  // Handle history data when it loads
+  useEffect(() => {
+    if (historyData?.messages) {
+      setMessages(
+        historyData.messages.map((msg: ChatMessage) => ({
           ...msg,
           timestamp: new Date(msg.timestamp),
-        })));
-      }
-    },
-  });
+        }))
+      );
+    }
+  }, [historyData]);
 
   // Send chat message
   const sendMessageMutation = useMutation({
