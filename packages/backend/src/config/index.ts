@@ -54,7 +54,9 @@ const config: Config = {
   port: parseInt(process.env.PORT || '4000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   database: {
-    mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/curriculum_db',
+    mongoUri:
+      process.env.MONGODB_URI ||
+      'mongodb+srv://agi_admin:X7UJ82nzrrtORPNM@dev.gdddmth.mongodb.net/curriculum_generator?retryWrites=true&w=majority&appName=dev',
   },
   redis: {
     url: process.env.REDIS_URL || '', // Empty string means Redis is disabled

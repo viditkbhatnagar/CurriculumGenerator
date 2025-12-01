@@ -3,7 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@curriculum-app/shared-types'],
   output: 'standalone',
-  
+
   // Environment variables validation
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000',
@@ -14,7 +14,7 @@ const nextConfig = {
   // Render deployment optimizations
   compress: true,
   poweredByHeader: false,
-  
+
   // Image optimization for Render
   images: {
     domains: [],
@@ -31,6 +31,22 @@ const nextConfig = {
       };
     }
     return config;
+  },
+
+  // API Rewrites - Proxy /api/* to backend (Single URL deployment)
+  // This allows frontend to be the ONLY public URL
+  async rewrites() {
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${backendUrl}/api/:path*`,
+      },
+      {
+        source: '/health',
+        destination: `${backendUrl}/health`,
+      },
+    ];
   },
 
   // Headers for security and performance

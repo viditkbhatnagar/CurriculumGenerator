@@ -1,10 +1,15 @@
 # Render Blueprint for Curriculum Generator App
-# This file defines all services, databases, and configuration for deployment on Render
+# SINGLE URL DEPLOYMENT - Users only access the frontend URL
+# Backend is private (internal service) and accessed via frontend proxy
 
 services:
-  # Frontend Web Service - Next.js Application
+  # ===========================================
+  # MAIN APPLICATION (Public URL)
+  # ===========================================
+  # This is the ONLY URL users will access
+  # All API requests are proxied to the backend
   - type: web
-    name: curriculum-frontend
+    name: curriculum-generator
     runtime: node
     region: oregon
     plan: starter
@@ -17,8 +22,13 @@ services:
         value: production
       - key: PORT
         value: 3000
+      - key: BACKEND_URL
+        fromService:
+          type: pserv
+          name: curriculum-api
+          property: hostport
       - key: NEXT_PUBLIC_API_URL
-        sync: false  # Set manually to https://curriculum-api.onrender.com
+        value: ""  # Empty - uses same origin with rewrites
       - key: NEXT_PUBLIC_AUTH0_DOMAIN
         sync: false
       - key: NEXT_PUBLIC_AUTH0_CLIENT_ID
@@ -26,15 +36,18 @@ services:
     healthCheckPath: /
     autoDeploy: true
 
-  # Backend API Web Service - Express/Node.js Application
-  - type: web
+  # ===========================================
+  # BACKEND API (Private - Internal Only)
+  # ===========================================
+  # Not publicly accessible - only frontend can reach it
+  - type: pserv
     name: curriculum-api
     runtime: node
     region: oregon
-    plan: standard
+    plan: starter
     branch: main
     rootDir: packages/backend
-    buildCommand: npm install && npm run build && npm run migrate:up
+    buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -42,7 +55,7 @@ services:
       - key: PORT
         value: 4000
       - key: MONGODB_URI
-        sync: false
+        value: mongodb+srv://agi_admin:X7UJ82nzrrtORPNM@dev.gdddmth.mongodb.net/curriculum_generator?retryWrites=true&w=majority&appName=dev
       - key: REDIS_URL
         fromService:
           type: redis
@@ -61,77 +74,22 @@ services:
       - key: API_SIGNING_SECRET
         generateValue: true
       - key: CORS_ORIGINS
-        sync: false  # Set to your frontend URL: https://curriculum-frontend.onrender.com
+        value: "*"  # Allow all since it's internal
       - key: UPLOAD_DIR
-        value: /app/uploads
+        value: ./uploads
       - key: MAX_FILE_SIZE
         value: 52428800
       - key: RATE_LIMIT_WINDOW_MS
         value: 60000
       - key: RATE_LIMIT_MAX_REQUESTS
         value: 100
-      - key: SESSION_TIMEOUT_SECONDS
-        value: 1800
       - key: LOG_LEVEL
         value: info
-      - key: SENTRY_DSN
-        sync: false
-    disk:
-      name: curriculum-uploads
-      mountPath: /app/uploads
-      sizeGB: 10
-    healthCheckPath: /health
     autoDeploy: true
 
-  # Background Worker Service - Curriculum Generation Worker
-  - type: worker
-    name: curriculum-worker
-    runtime: node
-    region: oregon
-    plan: standard
-    branch: main
-    rootDir: packages/backend
-    buildCommand: npm install && npm run build
-    startCommand: npm run worker
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: MONGODB_URI
-        sync: false
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: curriculum-redis
-          property: connectionString
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: OPENAI_CHAT_MODEL
-        value: gpt-5
-      - key: ENCRYPTION_KEY
-        sync: false
-      - key: LOG_LEVEL
-        value: info
-      - key: SENTRY_DSN
-        sync: false
-    autoDeploy: true
-
-# Redis Add-on for caching and job queue
+# Redis for caching (optional - can be removed if not needed)
 databases:
   - name: curriculum-redis
     region: oregon
     plan: starter
     ipAllowList: []
-
-# Environment Variable Groups (optional - for shared configuration)
-# Note: Environment variable groups must be created manually in Render dashboard
-# and then referenced in services using envVarGroups field
-
-# Example usage (uncomment and configure in Render dashboard):
-# envVarGroups:
-#   - name: shared-secrets
-#     envVars:
-#       - MONGODB_URI
-#       - OPENAI_API_KEY
-#       - AUTH0_DOMAIN
-#       - AUTH0_AUDIENCE
-#       - SENTRY_DSN
