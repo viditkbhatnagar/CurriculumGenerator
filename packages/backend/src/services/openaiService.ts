@@ -61,7 +61,7 @@ export class OpenAIService {
       const response = await this.client.chat.completions.create({
         model: config.openai.chatModel,
         messages: [{ role: 'user', content: 'Hello' }],
-        max_tokens: 5,
+        max_completion_tokens: 5,
       });
       console.log(`[OpenAI] Connection verified - Model ${config.openai.chatModel} is working`);
       this.initialized = true;
@@ -244,7 +244,7 @@ export class OpenAIService {
               { role: 'user' as const, content: prompt },
             ],
             temperature,
-            max_tokens: maxTokens,
+            max_completion_tokens: maxTokens, // GPT-5 uses max_completion_tokens instead of max_tokens
           },
           { signal: controller.signal as any }
         );
@@ -334,7 +334,7 @@ export class OpenAIService {
               { role: 'user', content: prompt },
             ],
             temperature,
-            max_tokens: maxTokens,
+            max_completion_tokens: maxTokens, // GPT-5 uses max_completion_tokens
             response_format: { type: 'json_object' },
           },
           { signal: controller.signal as any }
@@ -423,7 +423,7 @@ export class OpenAIService {
               { role: 'user' as const, content: prompt },
             ],
             temperature,
-            max_tokens: maxTokens,
+            max_completion_tokens: maxTokens, // GPT-5 uses max_completion_tokens
             stream: true,
           },
           { signal: controller.signal as any }
