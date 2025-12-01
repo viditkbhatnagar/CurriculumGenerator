@@ -57,10 +57,7 @@ services:
       - key: MONGODB_URI
         sync: false
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: curriculum-redis
-          property: connectionString
+        value: ""
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_CHAT_MODEL
@@ -87,8 +84,4 @@ services:
         value: info
     autoDeploy: true
 
-# Redis for caching
-databases:
-  - name: curriculum-redis
-    plan: free
-    region: oregon
+# No Redis needed - app works without it (caching is optional)
