@@ -1,0 +1,39 @@
+{
+  "indexes": [
+    { "v": { "$numberInt": "2" }, "key": { "_id": { "$numberInt": "1" } }, "name": "_id_" },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "projectId": { "$numberInt": "1" } },
+      "name": "projectId_1",
+      "background": true,
+      "unique": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "managementDecision": { "$numberInt": "1" } },
+      "name": "managementDecision_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "preliminaryPackageId": { "$numberInt": "1" } },
+      "name": "preliminaryPackageId_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "totalEstimatedCost": { "$numberInt": "1" } },
+      "name": "totalEstimatedCost_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "createdAt": { "$numberInt": "-1" } },
+      "name": "createdAt_-1",
+      "background": true
+    }
+  ],
+  "uuid": "a094d16103264d95981a3f7d824abedc",
+  "collectionName": "resourcecostevaluations",
+  "type": "collection"
+}

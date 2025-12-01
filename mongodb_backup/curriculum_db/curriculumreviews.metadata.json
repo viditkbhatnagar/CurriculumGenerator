@@ -1,0 +1,33 @@
+{
+  "indexes": [
+    { "v": { "$numberInt": "2" }, "key": { "_id": { "$numberInt": "1" } }, "name": "_id_" },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "projectId": { "$numberInt": "1" } },
+      "name": "projectId_1",
+      "background": true,
+      "unique": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "reviewedBy": { "$numberInt": "1" }, "reviewStatus": { "$numberInt": "1" } },
+      "name": "reviewedBy_1_reviewStatus_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "reviewStatus": { "$numberInt": "1" } },
+      "name": "reviewStatus_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "publishedAt": { "$numberInt": "-1" } },
+      "name": "publishedAt_-1",
+      "background": true
+    }
+  ],
+  "uuid": "223a165785e74a0e9a5e5cafdae12e8a",
+  "collectionName": "curriculumreviews",
+  "type": "collection"
+}

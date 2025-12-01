@@ -1,0 +1,38 @@
+{
+  "indexes": [
+    { "v": { "$numberInt": "2" }, "key": { "_id": { "$numberInt": "1" } }, "name": "_id_" },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "programName": { "$numberInt": "1" } },
+      "name": "programName_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "status": { "$numberInt": "1" } },
+      "name": "status_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "createdBy": { "$numberInt": "1" } },
+      "name": "createdBy_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "createdBy": { "$numberInt": "1" }, "status": { "$numberInt": "1" } },
+      "name": "createdBy_1_status_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "createdBy": { "$numberInt": "1" }, "createdAt": { "$numberInt": "-1" } },
+      "name": "createdBy_1_createdAt_-1",
+      "background": true
+    }
+  ],
+  "uuid": "e3aaaffa626e448886501f615d365d08",
+  "collectionName": "programs",
+  "type": "collection"
+}

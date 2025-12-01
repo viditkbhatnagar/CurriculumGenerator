@@ -1,0 +1,54 @@
+{
+  "indexes": [
+    { "v": { "$numberInt": "2" }, "key": { "_id": { "$numberInt": "1" } }, "name": "_id_" },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "metricType": { "$numberInt": "1" } },
+      "name": "metricType_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "projectId": { "$numberInt": "1" } },
+      "name": "projectId_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "recordedAt": { "$numberInt": "1" } },
+      "name": "recordedAt_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "metricType": { "$numberInt": "1" }, "recordedAt": { "$numberInt": "-1" } },
+      "name": "metricType_1_recordedAt_-1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "projectId": { "$numberInt": "1" }, "metricType": { "$numberInt": "1" } },
+      "name": "projectId_1_metricType_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "recordedAt": { "$numberInt": "-1" } },
+      "name": "recordedAt_-1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": {
+        "metricType": { "$numberInt": "1" },
+        "provider": { "$numberInt": "1" },
+        "recordedAt": { "$numberInt": "-1" }
+      },
+      "name": "metricType_1_provider_1_recordedAt_-1",
+      "background": true
+    }
+  ],
+  "uuid": "319cc221837c4b2c897c40fbf9b41005",
+  "collectionName": "analyticsmetrics",
+  "type": "collection"
+}

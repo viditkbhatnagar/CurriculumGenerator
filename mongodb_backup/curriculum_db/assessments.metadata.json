@@ -1,0 +1,44 @@
+{
+  "indexes": [
+    { "v": { "$numberInt": "2" }, "key": { "_id": { "$numberInt": "1" } }, "name": "_id_" },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "moduleId": { "$numberInt": "1" } },
+      "name": "moduleId_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "questionType": { "$numberInt": "1" } },
+      "name": "questionType_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "difficulty": { "$numberInt": "1" } },
+      "name": "difficulty_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "learningOutcomeId": { "$numberInt": "1" } },
+      "name": "learningOutcomeId_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "moduleId": { "$numberInt": "1" }, "difficulty": { "$numberInt": "1" } },
+      "name": "moduleId_1_difficulty_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "moduleId": { "$numberInt": "1" }, "questionType": { "$numberInt": "1" } },
+      "name": "moduleId_1_questionType_1",
+      "background": true
+    }
+  ],
+  "uuid": "c8174fc6f2814e6cb42c6cd4e143d4a5",
+  "collectionName": "assessments",
+  "type": "collection"
+}

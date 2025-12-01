@@ -1,0 +1,62 @@
+{
+  "indexes": [
+    { "v": { "$numberInt": "2" }, "key": { "_id": { "$numberInt": "1" } }, "name": "_id_" },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "promptId": { "$numberInt": "1" } },
+      "name": "promptId_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "smeId": { "$numberInt": "1" } },
+      "name": "smeId_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "courseCode": { "$numberInt": "1" } },
+      "name": "courseCode_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "status": { "$numberInt": "1" } },
+      "name": "status_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "currentStage": { "$numberInt": "1" } },
+      "name": "currentStage_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "smeId": { "$numberInt": "1" }, "status": { "$numberInt": "1" } },
+      "name": "smeId_1_status_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "status": { "$numberInt": "1" }, "currentStage": { "$numberInt": "1" } },
+      "name": "status_1_currentStage_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "courseCode": { "$numberInt": "1" }, "createdAt": { "$numberInt": "-1" } },
+      "name": "courseCode_1_createdAt_-1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "createdAt": { "$numberInt": "-1" } },
+      "name": "createdAt_-1",
+      "background": true
+    }
+  ],
+  "uuid": "cfedcdda913c480ea6d07c3fb79efbf9",
+  "collectionName": "curriculumprojects",
+  "type": "collection"
+}

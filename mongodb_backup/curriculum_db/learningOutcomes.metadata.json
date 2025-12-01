@@ -1,0 +1,29 @@
+{
+  "indexes": [
+    { "v": { "$numberInt": "2" }, "key": { "_id": { "$numberInt": "1" } }, "name": "_id_" },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "moduleId": { "$numberInt": "1" } },
+      "name": "moduleId_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "knowledgeSkillCompetency": { "$numberInt": "1" } },
+      "name": "knowledgeSkillCompetency_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": {
+        "moduleId": { "$numberInt": "1" },
+        "knowledgeSkillCompetency": { "$numberInt": "1" }
+      },
+      "name": "moduleId_1_knowledgeSkillCompetency_1",
+      "background": true
+    }
+  ],
+  "uuid": "dae425aec3d94050b2027147e20caa96",
+  "collectionName": "learningOutcomes",
+  "type": "collection"
+}

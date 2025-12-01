@@ -1,0 +1,50 @@
+{
+  "indexes": [
+    { "v": { "$numberInt": "2" }, "key": { "_id": { "$numberInt": "1" } }, "name": "_id_" },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "sourceType": { "$numberInt": "1" } },
+      "name": "sourceType_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "publicationDate": { "$numberInt": "1" } },
+      "name": "publicationDate_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "domain": { "$numberInt": "1" } },
+      "name": "domain_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "credibilityScore": { "$numberInt": "1" } },
+      "name": "credibilityScore_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "domain": { "$numberInt": "1" }, "credibilityScore": { "$numberInt": "-1" } },
+      "name": "domain_1_credibilityScore_-1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "domain": { "$numberInt": "1" }, "publicationDate": { "$numberInt": "-1" } },
+      "name": "domain_1_publicationDate_-1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "sourceType": { "$numberInt": "1" }, "domain": { "$numberInt": "1" } },
+      "name": "sourceType_1_domain_1",
+      "background": true
+    }
+  ],
+  "uuid": "745731db3fb04ff2a8f32e7d21d5aee2",
+  "collectionName": "knowledgeBase",
+  "type": "collection"
+}

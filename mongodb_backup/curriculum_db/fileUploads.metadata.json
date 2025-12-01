@@ -1,0 +1,32 @@
+{
+  "indexes": [
+    { "v": { "$numberInt": "2" }, "key": { "_id": { "$numberInt": "1" } }, "name": "_id_" },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "programId": { "$numberInt": "1" } },
+      "name": "programId_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "uploadedBy": { "$numberInt": "1" } },
+      "name": "uploadedBy_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "uploadedBy": { "$numberInt": "1" }, "createdAt": { "$numberInt": "-1" } },
+      "name": "uploadedBy_1_createdAt_-1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "programId": { "$numberInt": "1" }, "createdAt": { "$numberInt": "-1" } },
+      "name": "programId_1_createdAt_-1",
+      "background": true
+    }
+  ],
+  "uuid": "051148800f304e67aa22790328fccf06",
+  "collectionName": "fileUploads",
+  "type": "collection"
+}

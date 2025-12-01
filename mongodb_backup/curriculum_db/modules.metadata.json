@@ -1,0 +1,27 @@
+{
+  "indexes": [
+    { "v": { "$numberInt": "2" }, "key": { "_id": { "$numberInt": "1" } }, "name": "_id_" },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "programId": { "$numberInt": "1" } },
+      "name": "programId_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "programId": { "$numberInt": "1" }, "sequenceOrder": { "$numberInt": "1" } },
+      "name": "programId_1_sequenceOrder_1",
+      "background": true
+    },
+    {
+      "v": { "$numberInt": "2" },
+      "key": { "programId": { "$numberInt": "1" }, "moduleCode": { "$numberInt": "1" } },
+      "name": "programId_1_moduleCode_1",
+      "background": true,
+      "unique": true
+    }
+  ],
+  "uuid": "86ed89b04fd64d47b9e22828c5d126f1",
+  "collectionName": "modules",
+  "type": "collection"
+}
