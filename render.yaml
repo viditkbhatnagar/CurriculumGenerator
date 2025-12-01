@@ -90,6 +90,7 @@ services:
 # Redis for caching (optional - can be removed if not needed)
 databases:
   - name: curriculum-redis
+    type: redis
     region: oregon
-    plan: starter
+    plan: free
     ipAllowList: []
