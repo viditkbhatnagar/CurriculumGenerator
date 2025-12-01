@@ -217,7 +217,7 @@ export default function AdminDashboard() {
             <div>
               <p className="text-sm text-gray-500">Cache Hit Rate</p>
               <p className="text-2xl font-bold text-gray-900">
-                {(metrics?.llmMetrics.cacheHitRate * 100).toFixed(1) || 0}%
+                {((metrics?.llmMetrics?.cacheHitRate ?? 0) * 100).toFixed(1)}%
               </p>
               <p className="text-xs text-gray-400 mt-1">Last hour</p>
             </div>
