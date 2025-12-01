@@ -5,12 +5,11 @@ import config from '../config';
 
 export class FileStorageService {
   private uploadDir: string;
+  private initialized: boolean = false;
 
   constructor() {
-    // Use Render persistent disk mount point in production, local directory in development
-    this.uploadDir = config.nodeEnv === 'production' 
-      ? '/app/uploads'
-      : path.join(process.cwd(), 'uploads');
+    // Use config uploadDir or default to relative uploads folder
+    this.uploadDir = config.storage.uploadDir || path.join(process.cwd(), 'uploads');
   }
 
   /**
@@ -19,11 +18,17 @@ export class FileStorageService {
   async initialize(): Promise<void> {
     try {
       await fs.mkdir(this.uploadDir, { recursive: true });
+      this.initialized = true;
       console.log(`File storage initialized at: ${this.uploadDir}`);
     } catch (error) {
-      console.error('Failed to initialize file storage:', error);
-      throw new Error('Failed to initialize file storage');
+      // Non-fatal - just warn and continue (file uploads will fail but app will run)
+      console.warn('Warning: File storage initialization failed. File uploads disabled.', error);
+      this.initialized = false;
     }
+  }
+
+  isInitialized(): boolean {
+    return this.initialized;
   }
 
   /**
@@ -138,7 +143,7 @@ export class FileStorageService {
       // Find temporary files (without programId) older than 7 days
       const oldFiles = await FileUpload.find({
         createdAt: { $lt: sevenDaysAgo },
-        programId: { $exists: false }
+        programId: { $exists: false },
       });
 
       let deletedCount = 0;
@@ -166,9 +171,7 @@ export class FileStorageService {
    */
   async getFilesByProgramId(programId: string): Promise<IFileUpload[]> {
     try {
-      return await FileUpload.find({ programId })
-        .sort({ createdAt: -1 })
-        .exec();
+      return await FileUpload.find({ programId }).sort({ createdAt: -1 }).exec();
     } catch (error) {
       console.error('Failed to get files by program ID:', error);
       throw new Error('Failed to get files by program ID');
@@ -180,9 +183,7 @@ export class FileStorageService {
    */
   async getFilesByUserId(userId: string): Promise<IFileUpload[]> {
     try {
-      return await FileUpload.find({ uploadedBy: userId })
-        .sort({ createdAt: -1 })
-        .exec();
+      return await FileUpload.find({ uploadedBy: userId }).sort({ createdAt: -1 }).exec();
     } catch (error) {
       console.error('Failed to get files by user ID:', error);
       throw new Error('Failed to get files by user ID');

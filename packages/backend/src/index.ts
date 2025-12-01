@@ -295,19 +295,17 @@ async function startServer() {
       }
     }
 
-    // Initialize file storage service
+    // Initialize file storage service (optional - app works without it)
     try {
       const { fileStorageService } = await import('./services/fileStorageService');
       await fileStorageService.initialize();
       loggingService.info('File storage service initialized', {
-        uploadDir: config.nodeEnv === 'production' ? '/app/uploads' : 'uploads',
+        uploadDir: config.storage.uploadDir,
       });
     } catch (error) {
-      loggingService.error('Failed to initialize file storage service', error);
-      errorTrackingService.captureException(error as Error, {
-        component: 'file-storage-initialization',
+      loggingService.warn('File storage initialization failed, file uploads disabled', {
+        error: String(error),
       });
-      throw new Error('Failed to initialize file storage - server cannot start');
     }
 
     // Initialize Redis for session management (optional)
