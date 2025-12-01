@@ -249,8 +249,17 @@ export class OpenAIService {
 
         clearTimeout(timeoutId);
 
+        // Debug: log response for GPT-5 troubleshooting
+        console.log(`[OpenAI] Response - choices: ${response.choices?.length}, finish_reason: ${response.choices?.[0]?.finish_reason}, content_length: ${response.choices?.[0]?.message?.content?.length || 0}`);
+
         const content = response.choices[0]?.message?.content;
         if (!content) {
+          loggingService.error('OpenAI returned empty content', {
+            model,
+            finishReason: response.choices?.[0]?.finish_reason,
+            messageRole: response.choices?.[0]?.message?.role,
+            usage: response.usage,
+          });
           throw new Error('No content generated from OpenAI');
         }
 
