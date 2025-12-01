@@ -13,10 +13,10 @@ import { analyticsStorageService } from './analyticsStorageService';
 
 export interface OpenAIGenerateOptions {
   model?: string;
-  temperature?: number;
   maxTokens?: number;
   timeout?: number;
   responseFormat?: 'text' | 'json_object';
+  // Note: temperature is not supported by GPT-5 (only default value 1 is allowed)
 }
 
 export interface StreamChunk {
@@ -224,7 +224,6 @@ export class OpenAIService {
   ): Promise<string> {
     const {
       model = config.openai.chatModel, // Default: gpt-5
-      temperature = 0.7,
       maxTokens = 4000, // GPT-5 supports larger context
       timeout = this.defaultTimeout,
     } = options;
@@ -243,8 +242,7 @@ export class OpenAIService {
               ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
               { role: 'user' as const, content: prompt },
             ],
-            temperature,
-            max_completion_tokens: maxTokens, // GPT-5 uses max_completion_tokens instead of max_tokens
+            max_completion_tokens: maxTokens,
           },
           { signal: controller.signal as any }
         );
@@ -314,7 +312,6 @@ export class OpenAIService {
   ): Promise<T> {
     const {
       model = config.openai.chatModel, // Default: gpt-5
-      temperature = 0.7,
       maxTokens = 4000, // GPT-5 supports larger context
       timeout = this.defaultTimeout,
     } = options;
@@ -333,8 +330,7 @@ export class OpenAIService {
               { role: 'system', content: systemPrompt },
               { role: 'user', content: prompt },
             ],
-            temperature,
-            max_completion_tokens: maxTokens, // GPT-5 uses max_completion_tokens
+            max_completion_tokens: maxTokens,
             response_format: { type: 'json_object' },
           },
           { signal: controller.signal as any }
@@ -405,7 +401,6 @@ export class OpenAIService {
   ): Promise<void> {
     const {
       model = config.openai.chatModel, // Default: gpt-5
-      temperature = 0.7,
       maxTokens = 4000, // GPT-5 supports larger context
       timeout = this.defaultTimeout,
     } = options;
@@ -422,8 +417,7 @@ export class OpenAIService {
               ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
               { role: 'user' as const, content: prompt },
             ],
-            temperature,
-            max_completion_tokens: maxTokens, // GPT-5 uses max_completion_tokens
+            max_completion_tokens: maxTokens,
             stream: true,
           },
           { signal: controller.signal as any }
