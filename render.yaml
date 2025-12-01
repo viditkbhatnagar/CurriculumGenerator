@@ -12,7 +12,7 @@ services:
     name: curriculum-generator
     runtime: node
     region: oregon
-    plan: starter
+    plan: free
     branch: main
     rootDir: packages/frontend
     buildCommand: npm install && npm run build
@@ -28,7 +28,7 @@ services:
           name: curriculum-api
           property: hostport
       - key: NEXT_PUBLIC_API_URL
-        value: ""  # Empty - uses same origin with rewrites
+        value: ""
       - key: NEXT_PUBLIC_AUTH0_DOMAIN
         sync: false
       - key: NEXT_PUBLIC_AUTH0_CLIENT_ID
@@ -44,7 +44,7 @@ services:
     name: curriculum-api
     runtime: node
     region: oregon
-    plan: starter
+    plan: free
     branch: main
     rootDir: packages/backend
     buildCommand: npm install && npm run build
@@ -55,7 +55,7 @@ services:
       - key: PORT
         value: 4000
       - key: MONGODB_URI
-        value: mongodb+srv://agi_admin:X7UJ82nzrrtORPNM@dev.gdddmth.mongodb.net/curriculum_generator?retryWrites=true&w=majority&appName=dev
+        sync: false
       - key: REDIS_URL
         fromService:
           type: redis
@@ -74,23 +74,21 @@ services:
       - key: API_SIGNING_SECRET
         generateValue: true
       - key: CORS_ORIGINS
-        value: "*"  # Allow all since it's internal
+        value: "*"
       - key: UPLOAD_DIR
         value: ./uploads
       - key: MAX_FILE_SIZE
-        value: 52428800
+        value: "52428800"
       - key: RATE_LIMIT_WINDOW_MS
-        value: 60000
+        value: "60000"
       - key: RATE_LIMIT_MAX_REQUESTS
-        value: 100
+        value: "100"
       - key: LOG_LEVEL
         value: info
     autoDeploy: true
 
-# Redis for caching (optional - can be removed if not needed)
+# Redis for caching
 databases:
   - name: curriculum-redis
-    type: redis
-    region: oregon
     plan: free
-    ipAllowList: []
+    region: oregon
