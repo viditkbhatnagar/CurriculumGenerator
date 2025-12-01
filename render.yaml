@@ -70,4 +70,4 @@ services:
       - key: LOG_LEVEL
         value: info
     healthCheckPath: /health
-    autoDeploy: true (caching is optional)
+    autoDeploy: true
