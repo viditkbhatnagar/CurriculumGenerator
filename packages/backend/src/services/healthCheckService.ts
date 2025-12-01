@@ -163,8 +163,9 @@ class HealthCheckService {
     services: Record<string, ServiceHealth>,
     metrics: any
   ): 'healthy' | 'degraded' | 'unhealthy' {
-    // Check if any critical service is unhealthy
-    const criticalServices = ['database', 'cache'];
+    // Check if any critical service is unhealthy (only database is critical)
+    // Cache/Redis is optional
+    const criticalServices = ['database'];
     const hasUnhealthyService = criticalServices.some(
       (service) => services[service]?.status === 'unhealthy'
     );
@@ -194,12 +195,9 @@ class HealthCheckService {
   // Perform readiness check (can the service handle requests?)
   async performReadinessCheck(): Promise<boolean> {
     try {
-      const [dbHealthy, cacheHealthy] = await Promise.all([
-        this.checkDatabase().then((h) => h.status !== 'unhealthy'),
-        this.checkCache().then((h) => h.status !== 'unhealthy'),
-      ]);
-
-      return dbHealthy && cacheHealthy;
+      // Only database is required - cache is optional
+      const dbHealth = await this.checkDatabase();
+      return dbHealth.status !== 'unhealthy';
     } catch (error) {
       loggingService.error('Readiness check failed', error);
       return false;
