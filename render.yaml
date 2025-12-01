@@ -1,15 +1,12 @@
 # Render Blueprint for Curriculum Generator App
-# SINGLE URL DEPLOYMENT - Users only access the frontend URL
-# Backend is private (internal service) and accessed via frontend proxy
+# Two public web services on free tier
 
 services:
   # ===========================================
-  # MAIN APPLICATION (Public URL)
+  # FRONTEND (Next.js)
   # ===========================================
-  # This is the ONLY URL users will access
-  # All API requests are proxied to the backend
   - type: web
-    name: curriculum-generator
+    name: curriculum-frontend
     runtime: node
     region: oregon
     plan: free
@@ -22,13 +19,8 @@ services:
         value: production
       - key: PORT
         value: 3000
-      - key: BACKEND_URL
-        fromService:
-          type: pserv
-          name: curriculum-api
-          property: hostport
       - key: NEXT_PUBLIC_API_URL
-        value: ""
+        sync: false
       - key: NEXT_PUBLIC_AUTH0_DOMAIN
         sync: false
       - key: NEXT_PUBLIC_AUTH0_CLIENT_ID
@@ -37,10 +29,9 @@ services:
     autoDeploy: true
 
   # ===========================================
-  # BACKEND API (Private - Internal Only)
+  # BACKEND API (Express)
   # ===========================================
-  # Not publicly accessible - only frontend can reach it
-  - type: pserv
+  - type: web
     name: curriculum-api
     runtime: node
     region: oregon
@@ -62,16 +53,12 @@ services:
         sync: false
       - key: OPENAI_CHAT_MODEL
         value: gpt-5
-      - key: AUTH0_DOMAIN
-        sync: false
-      - key: AUTH0_AUDIENCE
+      - key: CORS_ORIGINS
         sync: false
       - key: ENCRYPTION_KEY
         generateValue: true
       - key: API_SIGNING_SECRET
         generateValue: true
-      - key: CORS_ORIGINS
-        value: "*"
       - key: UPLOAD_DIR
         value: ./uploads
       - key: MAX_FILE_SIZE
@@ -82,6 +69,5 @@ services:
         value: "100"
       - key: LOG_LEVEL
         value: info
-    autoDeploy: true
-
-# No Redis needed - app works without it (caching is optional)
+    healthCheckPath: /health
+    autoDeploy: true (caching is optional)

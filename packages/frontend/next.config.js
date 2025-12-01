@@ -33,22 +33,6 @@ const nextConfig = {
     return config;
   },
 
-  // API Rewrites - Proxy /api/* to backend (Single URL deployment)
-  // This allows frontend to be the ONLY public URL
-  async rewrites() {
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${backendUrl}/api/:path*`,
-      },
-      {
-        source: '/health',
-        destination: `${backendUrl}/health`,
-      },
-    ];
-  },
-
   // Headers for security and performance
   async headers() {
     return [
