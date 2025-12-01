@@ -25,19 +25,22 @@ export function sanitizeString(input: string): string {
     return '';
   }
 
-  return input
-    .trim()
-    // Remove null bytes
-    .replace(/\0/g, '')
-    // Remove control characters except newlines and tabs
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    // Escape HTML special characters
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
+  return (
+    input
+      .trim()
+      // Remove null bytes
+      .replace(/\0/g, '')
+      // Remove control characters except newlines and tabs
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+      // Escape HTML special characters
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;')
+      .replace(/\//g, '&#x2F;')
+  );
 }
 
 /**
@@ -53,13 +56,13 @@ export function sanitizeObject(obj: any): any {
   }
 
   if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeObject(item));
+    return obj.map((item) => sanitizeObject(item));
   }
 
   if (typeof obj === 'object') {
     const sanitized: any = {};
     for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
         sanitized[key] = sanitizeObject(obj[key]);
       }
     }
@@ -143,7 +146,7 @@ export const sanitizeInput = (req: Request, res: Response, next: NextFunction): 
 export const validateUUIDParam = (paramName: string) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     const value = req.params[paramName];
-    
+
     if (!value || !isValidUUID(value)) {
       res.status(400).json({
         error: {
@@ -155,7 +158,7 @@ export const validateUUIDParam = (paramName: string) => {
       });
       return;
     }
-    
+
     next();
   };
 };
@@ -166,7 +169,7 @@ export const validateUUIDParam = (paramName: string) => {
 export const validateObjectIdParam = (paramName: string) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     const value = req.params[paramName];
-    
+
     if (!value || !isValidObjectId(value)) {
       res.status(400).json({
         error: {
@@ -178,7 +181,7 @@ export const validateObjectIdParam = (paramName: string) => {
       });
       return;
     }
-    
+
     next();
   };
 };
@@ -189,13 +192,18 @@ export const validateObjectIdParam = (paramName: string) => {
 export const validateRequiredFields = (fields: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     const missingFields: string[] = [];
-    
+
     for (const field of fields) {
-      if (!req.body || req.body[field] === undefined || req.body[field] === null || req.body[field] === '') {
+      if (
+        !req.body ||
+        req.body[field] === undefined ||
+        req.body[field] === null ||
+        req.body[field] === ''
+      ) {
         missingFields.push(field);
       }
     }
-    
+
     if (missingFields.length > 0) {
       res.status(400).json({
         error: {
@@ -207,7 +215,7 @@ export const validateRequiredFields = (fields: string[]) => {
       });
       return;
     }
-    
+
     next();
   };
 };
@@ -215,20 +223,22 @@ export const validateRequiredFields = (fields: string[]) => {
 /**
  * Validate field types in request body
  */
-export const validateFieldTypes = (schema: Record<string, 'string' | 'number' | 'boolean' | 'object' | 'array'>) => {
+export const validateFieldTypes = (
+  schema: Record<string, 'string' | 'number' | 'boolean' | 'object' | 'array'>
+) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     const invalidFields: string[] = [];
-    
+
     for (const [field, expectedType] of Object.entries(schema)) {
       if (req.body && req.body[field] !== undefined) {
         const actualType = Array.isArray(req.body[field]) ? 'array' : typeof req.body[field];
-        
+
         if (actualType !== expectedType) {
           invalidFields.push(`${field} (expected ${expectedType}, got ${actualType})`);
         }
       }
     }
-    
+
     if (invalidFields.length > 0) {
       res.status(400).json({
         error: {
@@ -240,7 +250,7 @@ export const validateFieldTypes = (schema: Record<string, 'string' | 'number' | 
       });
       return;
     }
-    
+
     next();
   };
 };
@@ -264,10 +274,7 @@ export function generateRequestSignature(
   secret: string = config.security.apiSigningSecret
 ): string {
   const payload = `${method}:${path}:${JSON.stringify(body)}:${timestamp}`;
-  return crypto
-    .createHmac('sha256', secret)
-    .update(payload)
-    .digest('hex');
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
 }
 
 /**
@@ -282,13 +289,10 @@ export function verifyRequestSignature(
   secret: string = config.security.apiSigningSecret
 ): boolean {
   const expectedSignature = generateRequestSignature(method, path, body, timestamp, secret);
-  
+
   // Use timing-safe comparison to prevent timing attacks
   try {
-    return crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSignature)
-    );
+    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
   } catch {
     return false;
   }
@@ -300,14 +304,14 @@ export function verifyRequestSignature(
 export const requireSignature = (req: Request, res: Response, next: NextFunction): void => {
   const signature = req.headers['x-api-signature'] as string;
   const timestamp = parseInt(req.headers['x-api-timestamp'] as string, 10);
-  
+
   if (!signature || !timestamp) {
     loggingService.warn('Missing API signature or timestamp', {
       path: req.path,
       method: req.method,
       userId: req.user?.id,
     });
-    
+
     res.status(401).json({
       error: {
         code: 'MISSING_SIGNATURE',
@@ -318,12 +322,12 @@ export const requireSignature = (req: Request, res: Response, next: NextFunction
     });
     return;
   }
-  
+
   // Check timestamp is within 5 minutes
   const now = Date.now();
   const timeDiff = Math.abs(now - timestamp);
   const maxTimeDiff = 5 * 60 * 1000; // 5 minutes
-  
+
   if (timeDiff > maxTimeDiff) {
     loggingService.warn('API signature timestamp expired', {
       path: req.path,
@@ -332,7 +336,7 @@ export const requireSignature = (req: Request, res: Response, next: NextFunction
       timeDiff,
       userId: req.user?.id,
     });
-    
+
     res.status(401).json({
       error: {
         code: 'SIGNATURE_EXPIRED',
@@ -343,23 +347,17 @@ export const requireSignature = (req: Request, res: Response, next: NextFunction
     });
     return;
   }
-  
+
   // Verify signature
-  const isValid = verifyRequestSignature(
-    req.method,
-    req.path,
-    req.body,
-    timestamp,
-    signature
-  );
-  
+  const isValid = verifyRequestSignature(req.method, req.path, req.body, timestamp, signature);
+
   if (!isValid) {
     loggingService.warn('Invalid API signature', {
       path: req.path,
       method: req.method,
       userId: req.user?.id,
     });
-    
+
     res.status(401).json({
       error: {
         code: 'INVALID_SIGNATURE',
@@ -370,45 +368,78 @@ export const requireSignature = (req: Request, res: Response, next: NextFunction
     });
     return;
   }
-  
+
   next();
 };
 
 /**
  * Prevent SQL injection by validating input doesn't contain SQL keywords
+ * Note: Relaxed for content-heavy routes like curriculum workflow since we use MongoDB
  */
 export const preventSQLInjection = (req: Request, res: Response, next: NextFunction): void => {
-  const sqlKeywords = [
-    'DROP', 'DELETE', 'TRUNCATE', 'ALTER', 'EXEC', 'EXECUTE',
-    'UNION', 'INSERT', 'UPDATE', '--', ';--', '/*', '*/',
-    'xp_', 'sp_', 'SCRIPT', 'JAVASCRIPT', 'ONERROR'
+  // Skip SQL injection check for content-heavy routes (we use MongoDB, not SQL)
+  // These routes legitimately contain educational content that may include words like "script", "update", etc.
+  const exemptPaths = [
+    '/api/v3/workflow', // 9-step workflow (curriculum content)
+    '/api/v2/projects', // Old workflow (curriculum content)
+    '/api/curriculum', // Curriculum generation
+    '/api/knowledge-base', // Knowledge base content
   ];
-  
+
+  const isExempt = exemptPaths.some((path) => req.path.startsWith(path));
+  if (isExempt) {
+    return next();
+  }
+
+  // Only check for actual dangerous SQL patterns, not common words
+  const sqlKeywords = [
+    'DROP TABLE',
+    'DROP DATABASE',
+    'DELETE FROM',
+    'TRUNCATE TABLE',
+    'ALTER TABLE',
+    'EXEC(',
+    'EXECUTE(',
+    'UNION SELECT',
+    'UNION ALL',
+    'INSERT INTO',
+    'UPDATE SET',
+    ';--',
+    '/*',
+    '*/',
+    'xp_',
+    'sp_',
+  ];
+
   const checkForSQLInjection = (obj: any): boolean => {
     if (typeof obj === 'string') {
       const upperStr = obj.toUpperCase();
-      return sqlKeywords.some(keyword => upperStr.includes(keyword));
+      return sqlKeywords.some((keyword) => upperStr.includes(keyword));
     }
-    
+
     if (Array.isArray(obj)) {
-      return obj.some(item => checkForSQLInjection(item));
+      return obj.some((item) => checkForSQLInjection(item));
     }
-    
+
     if (typeof obj === 'object' && obj !== null) {
-      return Object.values(obj).some(value => checkForSQLInjection(value));
+      return Object.values(obj).some((value) => checkForSQLInjection(value));
     }
-    
+
     return false;
   };
-  
-  if (checkForSQLInjection(req.body) || checkForSQLInjection(req.query) || checkForSQLInjection(req.params)) {
+
+  if (
+    checkForSQLInjection(req.body) ||
+    checkForSQLInjection(req.query) ||
+    checkForSQLInjection(req.params)
+  ) {
     loggingService.warn('Potential SQL injection attempt detected', {
       path: req.path,
       method: req.method,
       ip: req.ip,
       userId: req.user?.id,
     });
-    
+
     res.status(400).json({
       error: {
         code: 'INVALID_INPUT',
@@ -419,7 +450,7 @@ export const preventSQLInjection = (req: Request, res: Response, next: NextFunct
     });
     return;
   }
-  
+
   next();
 };
 
@@ -435,23 +466,23 @@ export const preventXSS = (req: Request, res: Response, next: NextFunction): voi
     /<object/gi,
     /<embed/gi,
   ];
-  
+
   const checkForXSS = (obj: any): boolean => {
     if (typeof obj === 'string') {
-      return xssPatterns.some(pattern => pattern.test(obj));
+      return xssPatterns.some((pattern) => pattern.test(obj));
     }
-    
+
     if (Array.isArray(obj)) {
-      return obj.some(item => checkForXSS(item));
+      return obj.some((item) => checkForXSS(item));
     }
-    
+
     if (typeof obj === 'object' && obj !== null) {
-      return Object.values(obj).some(value => checkForXSS(value));
+      return Object.values(obj).some((value) => checkForXSS(value));
     }
-    
+
     return false;
   };
-  
+
   if (checkForXSS(req.body) || checkForXSS(req.query) || checkForXSS(req.params)) {
     loggingService.warn('Potential XSS attempt detected', {
       path: req.path,
@@ -459,7 +490,7 @@ export const preventXSS = (req: Request, res: Response, next: NextFunction): voi
       ip: req.ip,
       userId: req.user?.id,
     });
-    
+
     res.status(400).json({
       error: {
         code: 'INVALID_INPUT',
@@ -470,15 +501,11 @@ export const preventXSS = (req: Request, res: Response, next: NextFunction): voi
     });
     return;
   }
-  
+
   next();
 };
 
 /**
  * Combined security validation middleware
  */
-export const securityValidation = [
-  sanitizeInput,
-  preventSQLInjection,
-  preventXSS,
-];
+export const securityValidation = [sanitizeInput, preventSQLInjection, preventXSS];

@@ -65,16 +65,19 @@ const config: Config = {
   openai: {
     apiKey: process.env.OPENAI_API_KEY || '',
     embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large',
-    chatModel: process.env.OPENAI_CHAT_MODEL || 'gpt-4-turbo',
+    chatModel: process.env.OPENAI_CHAT_MODEL || 'gpt-5',
   },
   auth0: {
     domain: process.env.AUTH0_DOMAIN || '',
     audience: process.env.AUTH0_AUDIENCE || '',
   },
   storage: {
-    type: (process.env.STORAGE_TYPE as 'render_disk' | 'cloudinary' | 'local') || 
-          (process.env.NODE_ENV === 'production' ? 'render_disk' : 'local'),
-    uploadDir: process.env.UPLOAD_DIR || (process.env.NODE_ENV === 'production' ? '/app/uploads' : './uploads'),
+    type:
+      (process.env.STORAGE_TYPE as 'render_disk' | 'cloudinary' | 'local') ||
+      (process.env.NODE_ENV === 'production' ? 'render_disk' : 'local'),
+    uploadDir:
+      process.env.UPLOAD_DIR ||
+      (process.env.NODE_ENV === 'production' ? '/app/uploads' : './uploads'),
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '52428800', 10), // 50MB default
   },
   monitoring: {
@@ -95,7 +98,8 @@ const config: Config = {
     rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10),
     rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
     enableHttps: process.env.ENABLE_HTTPS === 'true',
-    apiSigningSecret: process.env.API_SIGNING_SECRET || 'default-signing-secret-change-in-production',
+    apiSigningSecret:
+      process.env.API_SIGNING_SECRET || 'default-signing-secret-change-in-production',
   },
 };
 
@@ -108,40 +112,49 @@ function validateConfig(): void {
     if (!process.env.MONGODB_URI) {
       errors.push('MONGODB_URI is required in production');
     }
-    
+
     if (!process.env.OPENAI_API_KEY) {
       errors.push('OPENAI_API_KEY is required in production');
     }
-    
+
     if (!process.env.AUTH0_DOMAIN || !process.env.AUTH0_AUDIENCE) {
       errors.push('AUTH0_DOMAIN and AUTH0_AUDIENCE are required in production');
     }
-    
+
     if (config.encryption.key === 'default-dev-key-change-in-production') {
       errors.push('ENCRYPTION_KEY must be set to a secure value in production');
     }
-    
+
     if (config.security.apiSigningSecret === 'default-signing-secret-change-in-production') {
       errors.push('API_SIGNING_SECRET must be set to a secure value in production');
     }
-    
+
     if (!process.env.SENTRY_DSN) {
       console.warn('Warning: SENTRY_DSN is not set. Error tracking will be disabled.');
     }
-    
+
     if (!process.env.REDIS_URL) {
       console.warn('Warning: REDIS_URL is not set. Caching and job queue will be disabled.');
     }
   }
 
   // Validate MongoDB URI format
-  if (config.database.mongoUri && !config.database.mongoUri.startsWith('mongodb://') && !config.database.mongoUri.startsWith('mongodb+srv://')) {
+  if (
+    config.database.mongoUri &&
+    !config.database.mongoUri.startsWith('mongodb://') &&
+    !config.database.mongoUri.startsWith('mongodb+srv://')
+  ) {
     errors.push('MONGODB_URI must start with mongodb:// or mongodb+srv://');
   }
 
   // Validate storage configuration
-  if (config.storage.type === 'render_disk' && !config.storage.uploadDir.startsWith('/app/uploads')) {
-    console.warn('Warning: Using render_disk storage type but UPLOAD_DIR is not set to /app/uploads');
+  if (
+    config.storage.type === 'render_disk' &&
+    !config.storage.uploadDir.startsWith('/app/uploads')
+  ) {
+    console.warn(
+      'Warning: Using render_disk storage type but UPLOAD_DIR is not set to /app/uploads'
+    );
   }
 
   // Validate encryption key length
@@ -151,7 +164,7 @@ function validateConfig(): void {
 
   if (errors.length > 0) {
     console.error('Configuration validation failed:');
-    errors.forEach(error => console.error(`  - ${error}`));
+    errors.forEach((error) => console.error(`  - ${error}`));
     throw new Error('Invalid configuration. Please check environment variables.');
   }
 }

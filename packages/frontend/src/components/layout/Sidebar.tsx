@@ -6,6 +6,7 @@ import { useUIStore } from '@/stores/uiStore';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊' },
+  { name: '9-Step Workflow', href: '/workflow', icon: '🚀', highlight: true },
   { name: 'Programs', href: '/admin/programs', icon: '📚' },
   { name: 'Knowledge Base', href: '/admin/knowledge-base', icon: '🔍' },
   { name: 'Analytics', href: '/admin/analytics', icon: '📈' },
@@ -24,19 +25,27 @@ export function Sidebar() {
       </div>
       <nav className="mt-6">
         {navigation.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+          const isHighlight = (item as any).highlight;
           return (
             <Link
               key={item.name}
               href={item.href}
               className={`flex items-center px-6 py-3 text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-gray-800 text-white border-l-4 border-blue-500'
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'bg-gray-800 text-white border-l-4 border-cyan-500'
+                  : isHighlight
+                    ? 'text-cyan-400 hover:bg-gray-800 hover:text-cyan-300 border-l-4 border-transparent'
+                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
               }`}
             >
               <span className="mr-3 text-lg">{item.icon}</span>
               {item.name}
+              {isHighlight && !isActive && (
+                <span className="ml-auto text-xs bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded">
+                  NEW
+                </span>
+              )}
             </Link>
           );
         })}

@@ -35,6 +35,7 @@ import { createRAGRouter } from './routes/rag';
 import { createTutorBotRouter } from './routes/tutorBot';
 import { createSimulationsRouter } from './routes/simulations';
 import newWorkflowRoutes from './routes/newWorkflowRoutes';
+import workflowRoutes from './routes/workflowRoutes';
 
 dotenv.config();
 
@@ -212,8 +213,11 @@ app.use('/api/tutor', tutorBotRouter);
 const simulationsRouter = createSimulationsRouter();
 app.use('/api/simulations', simulationsRouter);
 
-// New 5-stage workflow routes (v2 API)
+// New 5-stage workflow routes (v2 API) - DEPRECATED
 app.use('/api/v2', newWorkflowRoutes);
+
+// New 9-step workflow routes (v3 API) - Current
+app.use('/api/v3/workflow', workflowRoutes);
 
 // Sentry error handler (must be before other error handlers)
 app.use(errorTrackingService.getErrorHandler());

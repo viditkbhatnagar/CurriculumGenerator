@@ -15,11 +15,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 3000
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: curriculum-api
-          property: host
+        sync: false  # Set manually to https://curriculum-api.onrender.com
       - key: NEXT_PUBLIC_AUTH0_DOMAIN
         sync: false
       - key: NEXT_PUBLIC_AUTH0_CLIENT_ID
@@ -52,7 +51,7 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_CHAT_MODEL
-        value: gpt-4-turbo
+        value: gpt-5
       - key: AUTH0_DOMAIN
         sync: false
       - key: AUTH0_AUDIENCE
@@ -62,10 +61,7 @@ services:
       - key: API_SIGNING_SECRET
         generateValue: true
       - key: CORS_ORIGINS
-        fromService:
-          type: web
-          name: curriculum-frontend
-          property: host
+        sync: false  # Set to your frontend URL: https://curriculum-frontend.onrender.com
       - key: UPLOAD_DIR
         value: /app/uploads
       - key: MAX_FILE_SIZE
@@ -110,7 +106,7 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_CHAT_MODEL
-        value: gpt-4-turbo
+        value: gpt-5
       - key: ENCRYPTION_KEY
         sync: false
       - key: LOG_LEVEL

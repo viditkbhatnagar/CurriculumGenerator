@@ -33,19 +33,38 @@ api.interceptors.response.use(
   }
 );
 
+// Custom error class to include more details
+class APIError extends Error {
+  details?: string[];
+  code?: string;
+
+  constructor(message: string, details?: string[], code?: string) {
+    super(message);
+    this.name = 'APIError';
+    this.details = details;
+    this.code = code;
+  }
+}
+
 // Legacy fetch API for backward compatibility
 export async function fetchAPI(endpoint: string, options?: RequestInit) {
+  // Get auth token
+  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     },
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
-    throw new Error(error.message || 'Request failed');
+    const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+    const message = errorData.error || errorData.message || 'Request failed';
+    const details = errorData.details || [];
+    throw new APIError(message, details, errorData.code);
   }
 
   return response.json();

@@ -170,8 +170,14 @@ export class OpenAIService {
   }
 
   /**
-   * Generate content using GPT-4-turbo
+   * Generate content using GPT-5
    * Implements Requirement 5.1
+   *
+   * GPT-5 Features:
+   * - Enhanced reasoning capabilities
+   * - Improved contextual understanding
+   * - Multimodal processing support
+   * - Supports streaming, structured outputs, prompt caching
    */
   async generateContent(
     prompt: string,
@@ -179,9 +185,9 @@ export class OpenAIService {
     options: OpenAIGenerateOptions = {}
   ): Promise<string> {
     const {
-      model = config.openai.chatModel,
+      model = config.openai.chatModel, // Default: gpt-5
       temperature = 0.7,
-      maxTokens = 2000,
+      maxTokens = 4000, // GPT-5 supports larger context
       timeout = this.defaultTimeout,
     } = options;
 
@@ -261,6 +267,7 @@ export class OpenAIService {
   /**
    * Generate structured JSON content
    * Implements Requirement 5.4
+   * GPT-5 has native structured output support
    */
   async generateStructuredContent<T>(
     prompt: string,
@@ -268,9 +275,9 @@ export class OpenAIService {
     options: OpenAIGenerateOptions = {}
   ): Promise<T> {
     const {
-      model = config.openai.chatModel,
+      model = config.openai.chatModel, // Default: gpt-5
       temperature = 0.7,
-      maxTokens = 2000,
+      maxTokens = 4000, // GPT-5 supports larger context
       timeout = this.defaultTimeout,
     } = options;
 
@@ -350,6 +357,7 @@ export class OpenAIService {
 
   /**
    * Generate content with streaming for better UX
+   * GPT-5 has optimized streaming support
    */
   async generateContentStream(
     prompt: string,
@@ -358,9 +366,9 @@ export class OpenAIService {
     options: OpenAIGenerateOptions = {}
   ): Promise<void> {
     const {
-      model = config.openai.chatModel,
+      model = config.openai.chatModel, // Default: gpt-5
       temperature = 0.7,
-      maxTokens = 2000,
+      maxTokens = 4000, // GPT-5 supports larger context
       timeout = this.defaultTimeout,
     } = options;
 
@@ -485,16 +493,26 @@ export class OpenAIService {
 
   /**
    * Calculate cost for chat completion API calls
+   * Updated for GPT-5 models (August 2025)
+   * Pricing per 1M tokens: gpt-5 ($1.25 in / $10 out), gpt-5-mini ($0.25 in / $2 out), gpt-5-nano ($0.05 in / $0.40 out)
    */
   private calculateChatCost(tokens: number, model: string): number {
+    // Cost per 1K tokens (average of input/output)
     const costPer1kTokens: Record<string, number> = {
-      'gpt-4': 0.045, // Average of input/output
+      // GPT-5 models (per 1K = per 1M / 1000)
+      'gpt-5': 0.005625, // ($1.25 + $10) / 2 / 1000 = avg $5.625/1M = $0.005625/1K
+      'gpt-5-mini': 0.001125, // ($0.25 + $2) / 2 / 1000 = avg $1.125/1M = $0.001125/1K
+      'gpt-5-nano': 0.000225, // ($0.05 + $0.40) / 2 / 1000 = avg $0.225/1M = $0.000225/1K
+      // Legacy GPT-4 models
+      'gpt-4': 0.045,
       'gpt-4-turbo': 0.02,
       'gpt-4-turbo-preview': 0.02,
+      'gpt-4o': 0.00625, // ($2.50 + $10) / 2 / 1000
+      'gpt-4o-mini': 0.000375, // ($0.15 + $0.60) / 2 / 1000
       'gpt-3.5-turbo': 0.002,
     };
 
-    const rate = costPer1kTokens[model] || 0.02;
+    const rate = costPer1kTokens[model] || 0.005625; // Default to gpt-5
     return (tokens / 1000) * rate;
   }
 
