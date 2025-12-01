@@ -271,7 +271,7 @@ export default function ExportPage() {
               <div className="grid grid-cols-4 gap-4 pt-4 border-t border-slate-700">
                 <div className="text-center">
                   <p className="text-2xl font-bold text-white">
-                    {workflow.step1?.creditFramework?.credits || '-'}
+                    {workflow.step1?.creditFramework?.totalCredits || '-'}
                   </p>
                   <p className="text-xs text-slate-500">Credits</p>
                 </div>
