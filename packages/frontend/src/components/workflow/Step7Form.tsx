@@ -883,7 +883,7 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
               {!isApproved && (
                 <button
                   onClick={handleApprove}
-                  disabled={approveStep7.isPending || !workflow.step7?.isValid}
+                  disabled={approveStep7.isPending}
                   className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
                 >
                   {approveStep7.isPending ? 'Approving...' : 'Approve & Continue →'}

@@ -596,10 +596,7 @@ export default function Step5View({ workflow, onComplete, onRefresh }: Props) {
               {!isApproved && (
                 <button
                   onClick={handleApprove}
-                  disabled={
-                    approveStep5.isPending ||
-                    (!workflow.step5?.agiCompliant && !workflow.step5?.adminOverrideApprovedBy)
-                  }
+                  disabled={approveStep5.isPending}
                   className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
                 >
                   {approveStep5.isPending ? 'Approving...' : 'Approve & Continue →'}
@@ -621,13 +618,11 @@ export default function Step5View({ workflow, onComplete, onRefresh }: Props) {
             </div>
           </div>
 
-          {!workflow.step5?.agiCompliant &&
-            !workflow.step5?.adminOverrideApprovedBy &&
-            !isApproved && (
-              <p className="text-xs text-amber-400 text-center">
-                AGI Standards must be met or admin override required before approval.
-              </p>
-            )}
+          {!workflow.step5?.agiCompliant && !isApproved && (
+            <p className="text-xs text-amber-400 text-center">
+              Note: Some AGI standards not fully met. Approval will proceed with warnings logged.
+            </p>
+          )}
         </div>
       )}
     </div>

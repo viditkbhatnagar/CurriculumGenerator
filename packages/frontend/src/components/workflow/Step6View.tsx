@@ -603,7 +603,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
               {!isApproved && (
                 <button
                   onClick={handleApprove}
-                  disabled={approveStep6.isPending || !workflow.step6?.isValid}
+                  disabled={approveStep6.isPending}
                   className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
                 >
                   {approveStep6.isPending ? 'Approving...' : 'Approve & Continue →'}
