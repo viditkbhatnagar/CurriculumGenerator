@@ -227,7 +227,7 @@ function ModuleTermListCard({ moduleList }: { moduleList: ModuleTermList }) {
   );
 }
 
-export default function Step9View({ workflow, _onComplete, onRefresh }: Props) {
+export default function Step9View({ workflow, onComplete: _onComplete, onRefresh }: Props) {
   const submitStep9 = useSubmitStep9();
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
