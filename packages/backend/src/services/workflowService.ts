@@ -4170,7 +4170,7 @@ ${harvestSources.caseStudyTerms.slice(0, 10).join('\n')}
 
 ---
 
-GENERATE 40-70 GLOSSARY ENTRIES with the following structure:
+GENERATE 25-40 GLOSSARY ENTRIES with the following structure (focus on the most important terms first):
 
 FOR EACH TERM INCLUDE:
 1. **id**: unique identifier (e.g., "term-001")
@@ -4231,10 +4231,19 @@ Return ONLY valid JSON:
 
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
-        maxTokens: 28000,
+        maxTokens: 40000, // Increased for comprehensive glossary
+      });
+
+      loggingService.info('Step 9 raw response received', {
+        responseLength: response?.length || 0,
+        firstChars: response?.substring(0, 200) || 'empty',
       });
 
       const parsed = this.parseJSON(response, 'step9');
+      loggingService.info('Step 9 parsed result', {
+        hasTerms: !!parsed.terms,
+        termsCount: parsed.terms?.length || 0,
+      });
       return {
         terms: parsed.terms || [],
       };
@@ -4253,6 +4262,10 @@ Return ONLY valid JSON:
     try {
       return JSON.parse(response);
     } catch (e) {
+      loggingService.warn(`Direct JSON parse failed for ${context}, trying alternatives`, {
+        responseLength: response?.length || 0,
+      });
+
       // Try extracting from markdown code block
       const match = response.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (match) {
@@ -4269,11 +4282,15 @@ Return ONLY valid JSON:
         try {
           return JSON.parse(jsonMatch[0]);
         } catch (e3) {
-          loggingService.warn(`Failed to extract JSON for ${context}`);
+          loggingService.warn(`Failed to extract JSON for ${context}`, {
+            extractedLength: jsonMatch[0]?.length || 0,
+          });
         }
       }
 
-      loggingService.error(`All JSON parsing failed for ${context}`);
+      loggingService.error(`All JSON parsing failed for ${context}`, {
+        responsePreview: response?.substring(0, 500) || 'empty',
+      });
       return {};
     }
   }
