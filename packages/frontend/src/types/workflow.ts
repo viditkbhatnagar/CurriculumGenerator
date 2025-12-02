@@ -67,6 +67,7 @@ export interface JobRole {
 // Credit Framework with credit-awarding flag
 export interface CreditFramework {
   isCreditAwarding: boolean; // Yes/No - determines which options are shown
+  system?: CreditSystem; // Legacy: backend may send this
   creditSystem: CreditSystem;
   credits?: number; // Only for credit-awarding systems
   totalHours: number;
@@ -1206,7 +1207,7 @@ export interface Step1FormData {
 }
 
 export interface Step2FormData {
-  benchmarkPrograms?: string[];
+  benchmarkPrograms?: BenchmarkProgram[];
   industryFrameworks?: string[];
   institutionalFrameworks?: string[];
 }
