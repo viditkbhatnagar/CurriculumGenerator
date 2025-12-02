@@ -3250,7 +3250,7 @@ IMPORTANT:
 
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
-        maxTokens: 32000,
+        maxTokens: 40000,
       });
 
       const parsed = this.parseJSON(response, 'step6');

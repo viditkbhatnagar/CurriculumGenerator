@@ -28,7 +28,7 @@ export type StreamCallback = (chunk: StreamChunk) => void;
 
 export class OpenAIService {
   private client: OpenAI;
-  private readonly defaultTimeout = 600000; // 600 seconds (10 minutes) for complex curriculum generation with large prompts
+  private readonly defaultTimeout = 1200000; // 1200 seconds (20 minutes) for complex curriculum generation with large prompts
   private readonly maxRetries = 5; // Increased retries for curriculum generation
   private readonly baseDelay = 2000; // 2 seconds for exponential backoff
   private initialized = false;
@@ -50,7 +50,7 @@ export class OpenAIService {
 
     this.client = new OpenAI({
       apiKey: apiKey || 'missing-key',
-      timeout: 600000, // 600 seconds (10 minutes) for complex curriculum generation with large prompts
+      timeout: 1200000, // 1200 seconds (20 minutes) for complex curriculum generation with large prompts
       maxRetries: 0, // We handle retries manually for better control
     });
   }

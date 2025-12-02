@@ -3,8 +3,8 @@ import axios from 'axios';
 // Use NEXT_PUBLIC_API_URL from environment, fallback to localhost for development
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-// 10 minute timeout for long-running LLM requests (curriculum generation)
-const REQUEST_TIMEOUT = 600000;
+// 20 minute timeout for long-running LLM requests (curriculum generation)
+const REQUEST_TIMEOUT = 1200000;
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

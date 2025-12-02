@@ -62,10 +62,10 @@ if (config.security.enableHttps) {
   httpServer = createServer(app);
 }
 
-// Set server timeouts to 10 minutes for long-running LLM requests
-httpServer.timeout = 600000; // 10 minutes
-httpServer.keepAliveTimeout = 610000; // Slightly longer than timeout
-httpServer.headersTimeout = 620000; // Slightly longer than keepAliveTimeout
+// Set server timeouts to 20 minutes for long-running LLM requests
+httpServer.timeout = 1200000; // 20 minutes
+httpServer.keepAliveTimeout = 1210000; // Slightly longer than timeout
+httpServer.headersTimeout = 1220000; // Slightly longer than keepAliveTimeout
 
 // Rate limiting middleware - per user when authenticated, per IP otherwise
 const limiter = rateLimit({
