@@ -246,7 +246,10 @@ export class OpenAIService {
             ],
             max_completion_tokens: maxTokens,
           },
-          { signal: controller.signal as any }
+          {
+            signal: controller.signal as any,
+            timeout: timeout, // Pass timeout to each request
+          }
         );
 
         clearTimeout(timeoutId);
@@ -346,7 +349,10 @@ export class OpenAIService {
             max_completion_tokens: maxTokens,
             response_format: { type: 'json_object' },
           },
-          { signal: controller.signal as any }
+          {
+            signal: controller.signal as any,
+            timeout: timeout, // Pass timeout to each request
+          }
         );
 
         clearTimeout(timeoutId);
@@ -433,7 +439,10 @@ export class OpenAIService {
             max_completion_tokens: maxTokens,
             stream: true,
           },
-          { signal: controller.signal as any }
+          {
+            signal: controller.signal as any,
+            timeout: timeout, // Pass timeout to each request
+          }
         );
 
         for await (const chunk of stream) {
