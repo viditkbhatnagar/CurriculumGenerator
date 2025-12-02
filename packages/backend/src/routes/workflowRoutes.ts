@@ -6,7 +6,7 @@
  *
  * Steps:
  * 1. Program Foundation (15-20 min)
- * 2. Competency & Knowledge Framework - KSA (10-15 min)
+ * 2. Competency & Knowledge Framework - KSC (10-15 min)
  * 3. Program Learning Outcomes - PLOs (15-20 min)
  * 4. Course Framework & MLOs (25-30 min)
  * 5. Topic-Level Sources - AGI Standards (10 min)
@@ -335,7 +335,7 @@ router.post('/:id/step1/approve', validateJWT, loadUser, async (req: Request, re
     res.json({
       success: true,
       data: { currentStep: workflow.currentStep, status: workflow.status },
-      message: 'Step 1 approved. Now at Step 2: Competency Framework (KSA).',
+      message: 'Step 1 approved. Now at Step 2: Competency Framework (KSC).',
     });
   } catch (error) {
     loggingService.error('Error approving Step 1', { error });
@@ -347,7 +347,7 @@ router.post('/:id/step1/approve', validateJWT, loadUser, async (req: Request, re
 });
 
 // ============================================================================
-// STEP 2: COMPETENCY & KNOWLEDGE FRAMEWORK (KSA)
+// STEP 2: COMPETENCY & KNOWLEDGE FRAMEWORK (KSC)
 // ============================================================================
 
 /**
@@ -372,7 +372,7 @@ router.post('/:id/step2', validateJWT, loadUser, async (req: Request, res: Respo
         currentStep: workflow.currentStep,
         status: workflow.status,
       },
-      message: 'Step 2 complete. KSA framework generated. Ready for Step 3: PLOs.',
+      message: 'Step 2 complete. KSC framework generated. Ready for Step 3: PLOs.',
     });
   } catch (error) {
     loggingService.error('Error processing Step 2', { error, workflowId: req.params.id });
@@ -385,7 +385,7 @@ router.post('/:id/step2', validateJWT, loadUser, async (req: Request, res: Respo
 
 /**
  * PUT /api/v3/workflow/:id/step2/ksa/:ksaId
- * Edit a specific KSA item
+ * Edit a specific KSC item
  */
 router.put('/:id/step2/ksa/:ksaId', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
@@ -397,7 +397,7 @@ router.put('/:id/step2/ksa/:ksaId', validateJWT, loadUser, async (req: Request, 
       return res.status(404).json({ success: false, error: 'Workflow or Step 2 not found' });
     }
 
-    // Find and update the KSA item
+    // Find and update the KSC item
     const allItems = [
       ...workflow.step2.knowledgeItems,
       ...workflow.step2.skillItems,
@@ -406,7 +406,7 @@ router.put('/:id/step2/ksa/:ksaId', validateJWT, loadUser, async (req: Request, 
 
     const item = allItems.find((i: any) => i.id === ksaId);
     if (!item) {
-      return res.status(404).json({ success: false, error: 'KSA item not found' });
+      return res.status(404).json({ success: false, error: 'KSC item not found' });
     }
 
     if (statement) item.statement = statement;
@@ -418,13 +418,13 @@ router.put('/:id/step2/ksa/:ksaId', validateJWT, loadUser, async (req: Request, 
     res.json({
       success: true,
       data: item,
-      message: 'KSA item updated successfully',
+      message: 'KSC item updated successfully',
     });
   } catch (error) {
-    loggingService.error('Error updating KSA item', { error });
+    loggingService.error('Error updating KSC item', { error });
     res.status(500).json({
       success: false,
-      error: 'Failed to update KSA item',
+      error: 'Failed to update KSC item',
     });
   }
 });
@@ -446,7 +446,7 @@ router.post('/:id/step2/approve', validateJWT, loadUser, async (req: Request, re
     if (workflow.step2.totalItems < 10) {
       return res.status(400).json({
         success: false,
-        error: 'At least 10 KSA items are required',
+        error: 'At least 10 KSC items are required',
       });
     }
 
@@ -749,10 +749,12 @@ router.post('/:id/step5/approve', validateJWT, loadUser, async (req: Request, re
       return res.status(404).json({ success: false, error: 'Workflow or Step 5 not found' });
     }
 
-    if (!workflow.step5.agiCompliant && !workflow.step5.adminOverrideApprovedBy) {
-      return res.status(400).json({
-        success: false,
-        error: 'Sources must be AGI compliant or have admin override approval',
+    // Validation is informational only - no longer blocks approval
+    // Issues will be logged but approval proceeds
+    if (!workflow.step5.agiCompliant) {
+      loggingService.warn('Step 5 approved with AGI compliance warnings', {
+        workflowId: req.params.id,
+        agiCompliant: workflow.step5.agiCompliant,
       });
     }
 
@@ -765,6 +767,9 @@ router.post('/:id/step5/approve', validateJWT, loadUser, async (req: Request, re
       success: true,
       data: { currentStep: workflow.currentStep, status: workflow.status },
       message: 'Step 5 approved. Now at Step 6: Reading Lists.',
+      warnings: !workflow.step5.agiCompliant
+        ? ['Some AGI compliance issues exist - review recommended']
+        : [],
     });
   } catch (error) {
     loggingService.error('Error approving Step 5', { error });
@@ -909,10 +914,13 @@ router.post('/:id/step7/approve', validateJWT, loadUser, async (req: Request, re
       return res.status(404).json({ success: false, error: 'Workflow or Step 7 not found' });
     }
 
+    // Validation is informational only - no longer blocks approval
+    const warnings: string[] = [];
     if (!workflow.step7.validation?.allAutoGradable) {
-      return res.status(400).json({
-        success: false,
-        error: 'All assessments must be auto-gradable (MCQ or Cloze only)',
+      warnings.push('Some assessments may not be fully auto-gradable');
+      loggingService.warn('Step 7 approved with validation warnings', {
+        workflowId: req.params.id,
+        validation: workflow.step7.validation,
       });
     }
 
@@ -925,6 +933,7 @@ router.post('/:id/step7/approve', validateJWT, loadUser, async (req: Request, re
       success: true,
       data: { currentStep: workflow.currentStep, status: workflow.status },
       message: 'Step 7 approved. Now at Step 8: Case Studies.',
+      warnings,
     });
   } catch (error) {
     loggingService.error('Error approving Step 7', { error });

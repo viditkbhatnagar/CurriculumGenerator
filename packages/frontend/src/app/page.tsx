@@ -5,7 +5,7 @@ import { ArrowRight, Sparkles, BookOpen, Zap, CheckCircle, Clock, Target } from 
 
 const WORKFLOW_STEPS = [
   { step: 1, name: 'Program Foundation', time: '15-20 min', icon: '📋' },
-  { step: 2, name: 'Competency Framework (KSA)', time: '10-15 min', icon: '🎯' },
+  { step: 2, name: 'Competency Framework (KSC)', time: '10-15 min', icon: '🎯' },
   { step: 3, name: 'Program Learning Outcomes', time: '15-20 min', icon: '⚡' },
   { step: 4, name: 'Course Framework & MLOs', time: '25-30 min', icon: '📚' },
   { step: 5, name: 'Topic-Level Sources', time: '10 min', icon: '📖' },

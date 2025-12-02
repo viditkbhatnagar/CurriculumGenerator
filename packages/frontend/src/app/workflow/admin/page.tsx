@@ -37,7 +37,7 @@ interface DashboardData {
 
 const STEP_NAMES: Record<number, string> = {
   1: 'Program Foundation',
-  2: 'KSA Framework',
+  2: 'KSC Framework',
   3: 'PLOs',
   4: 'Course Framework',
   5: 'Sources',
