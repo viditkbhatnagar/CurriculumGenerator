@@ -275,14 +275,14 @@ export class WordExportService {
     }
 
     // =========================================================================
-    // Section 2: Competency Framework (KSA)
+    // Section 2: Competency Framework (KSC)
     // =========================================================================
     if (workflow.step2) {
       const step2 = workflow.step2;
       contentChildren.push(
         new Paragraph({ children: [new PageBreak()] }),
         new Paragraph({
-          text: '2. Competency Framework (KSA)',
+          text: '2. Competency Framework (KSC)',
           heading: HeadingLevel.HEADING_1,
           spacing: { before: 400, after: 200 },
         })
@@ -348,16 +348,17 @@ export class WordExportService {
         });
       }
 
-      // Attitude Items
-      if (step2.attitudeItems?.length) {
+      // Competency Items (was Attitude Items - now KSC)
+      const competencyItems = step2.competencyItems || step2.attitudeItems;
+      if (competencyItems?.length) {
         contentChildren.push(
           new Paragraph({
-            text: 'Attitudes',
+            text: 'Competencies',
             heading: HeadingLevel.HEADING_2,
             spacing: { before: 200, after: 100 },
           })
         );
-        step2.attitudeItems.forEach((item: any) => {
+        competencyItems.forEach((item: any) => {
           contentChildren.push(
             new Paragraph({
               children: [
@@ -581,7 +582,8 @@ export class WordExportService {
     // =========================================================================
     // Section 5: Academic Sources
     // =========================================================================
-    if (workflow.step5?.topicSources?.length) {
+    const step5Sources = workflow.step5?.sources || workflow.step5?.topicSources;
+    if (step5Sources?.length) {
       const step5 = workflow.step5;
       contentChildren.push(
         new Paragraph({ children: [new PageBreak()] }),
@@ -592,48 +594,73 @@ export class WordExportService {
         })
       );
 
-      if (step5.validationSummary) {
-        contentChildren.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `Total Sources: ${step5.validationSummary.total_sources || '-'} | Peer-Reviewed: ${step5.validationSummary.peer_reviewed_count || '-'} | Applied: ${step5.validationSummary.applied_count || '-'}`,
-                size: 20,
-                color: '4a5568',
-              }),
-            ],
-            spacing: { after: 200 },
-          })
-        );
-      }
+      // Summary stats
+      contentChildren.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `Total Sources: ${step5.totalSources || step5Sources.length || '-'} | Peer-Reviewed: ${step5.totalPeerReviewed || '-'}% | Recent (<5yr): ${step5.recentSourcesPercent || '-'}%`,
+              size: 20,
+              color: '4a5568',
+            }),
+          ],
+          spacing: { after: 200 },
+        })
+      );
 
-      step5.topicSources.forEach((topicSource: any) => {
-        contentChildren.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `Topic: ${topicSource.topic}`,
-                bold: true,
-                size: 22,
-                color: '1a365d',
+      // Group sources by module if available
+      if (step5.sourcesByModule && Object.keys(step5.sourcesByModule).length > 0) {
+        Object.entries(step5.sourcesByModule).forEach(([moduleId, sources]: [string, any]) => {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Module: ${moduleId}`,
+                  bold: true,
+                  size: 22,
+                  color: '1a365d',
+                }),
+              ],
+              spacing: { before: 150, after: 100 },
+            })
+          );
+          sources?.forEach((source: any, idx: number) => {
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({ text: `[${idx + 1}] `, bold: true, size: 20 }),
+                  new TextRun({ text: source.citation || source.title || '', size: 20 }),
+                ],
+                spacing: { after: 30 },
               }),
-            ],
-            spacing: { before: 150, after: 100 },
-          })
-        );
-        topicSource.sources?.forEach((source: any, idx: number) => {
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `Type: ${source.sourceType || source.source_type || '-'} | Category: ${source.category || '-'}`,
+                    size: 18,
+                    color: '718096',
+                  }),
+                ],
+                spacing: { after: 80 },
+              })
+            );
+          });
+        });
+      } else {
+        // Flat list of sources
+        step5Sources.forEach((source: any, idx: number) => {
           contentChildren.push(
             new Paragraph({
               children: [
                 new TextRun({ text: `[${idx + 1}] `, bold: true, size: 20 }),
-                new TextRun({ text: source.citation || '', size: 20 }),
+                new TextRun({ text: source.citation || source.title || '', size: 20 }),
               ],
               spacing: { after: 30 },
             }),
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `Type: ${source.source_type || '-'} | Classification: ${source.classification || '-'}`,
+                  text: `Type: ${source.sourceType || source.source_type || '-'} | Category: ${source.category || '-'}`,
                   size: 18,
                   color: '718096',
                 }),
@@ -642,13 +669,17 @@ export class WordExportService {
             })
           );
         });
-      });
+      }
     }
 
     // =========================================================================
     // Section 6: Reading Lists
     // =========================================================================
-    if (workflow.step6?.moduleReadingLists?.length) {
+    const step6Readings = workflow.step6?.readings || workflow.step6?.moduleReadingLists;
+    if (
+      step6Readings?.length ||
+      (workflow.step6?.moduleReadings && Object.keys(workflow.step6.moduleReadings).length > 0)
+    ) {
       const step6 = workflow.step6;
       contentChildren.push(
         new Paragraph({ children: [new PageBreak()] }),
@@ -659,36 +690,110 @@ export class WordExportService {
         })
       );
 
-      step6.moduleReadingLists.forEach((list: any) => {
-        contentChildren.push(
-          new Paragraph({
-            text: list.module || 'Module',
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 200, after: 100 },
-          })
-        );
+      // Summary stats
+      contentChildren.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `Total Readings: ${step6.totalReadings || step6Readings?.length || '-'} | Core: ${step6.coreCount || '-'} | Supplementary: ${step6.supplementaryCount || '-'}`,
+              size: 20,
+              color: '4a5568',
+            }),
+          ],
+          spacing: { after: 200 },
+        })
+      );
 
-        if (list.coreReadings?.length) {
+      // If we have moduleReadings (grouped by module)
+      if (step6.moduleReadings && Object.keys(step6.moduleReadings).length > 0) {
+        Object.entries(step6.moduleReadings).forEach(([moduleId, readings]: [string, any]) => {
+          contentChildren.push(
+            new Paragraph({
+              text: moduleId,
+              heading: HeadingLevel.HEADING_2,
+              spacing: { before: 200, after: 100 },
+            })
+          );
+
+          const coreReadings = readings?.filter((r: any) => r.category === 'core') || [];
+          const suppReadings = readings?.filter((r: any) => r.category === 'supplementary') || [];
+
+          if (coreReadings.length) {
+            contentChildren.push(
+              new Paragraph({
+                children: [new TextRun({ text: 'Core Readings:', bold: true, size: 22 })],
+                spacing: { after: 50 },
+              })
+            );
+            coreReadings.forEach((item: any) => {
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: `• ${item.title || 'Untitled'}`, size: 20 }),
+                    new TextRun({
+                      text: item.authors?.length ? ` - ${item.authors.join(', ')}` : '',
+                      size: 20,
+                      color: '718096',
+                    }),
+                    new TextRun({
+                      text: item.estimatedReadingMinutes
+                        ? ` (${item.estimatedReadingMinutes} min)`
+                        : '',
+                      size: 18,
+                      color: '4a5568',
+                    }),
+                  ],
+                  spacing: { after: 30 },
+                })
+              );
+            });
+          }
+
+          if (suppReadings.length) {
+            contentChildren.push(
+              new Paragraph({
+                children: [new TextRun({ text: 'Supplementary Readings:', bold: true, size: 22 })],
+                spacing: { before: 100, after: 50 },
+              })
+            );
+            suppReadings.forEach((item: any) => {
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: `• ${item.title || 'Untitled'}`, size: 20 }),
+                    new TextRun({
+                      text: item.authors?.length ? ` - ${item.authors.join(', ')}` : '',
+                      size: 20,
+                      color: '718096',
+                    }),
+                  ],
+                  spacing: { after: 30 },
+                })
+              );
+            });
+          }
+        });
+      } else if (step6Readings?.length) {
+        // Flat list - separate core and supplementary
+        const coreReadings = step6Readings.filter((r: any) => r.category === 'core');
+        const suppReadings = step6Readings.filter((r: any) => r.category === 'supplementary');
+
+        if (coreReadings.length) {
           contentChildren.push(
             new Paragraph({
               children: [new TextRun({ text: 'Core Readings:', bold: true, size: 22 })],
               spacing: { after: 50 },
             })
           );
-          list.coreReadings.forEach((item: any) => {
+          coreReadings.forEach((item: any) => {
             contentChildren.push(
               new Paragraph({
                 children: [
                   new TextRun({ text: `• ${item.title || 'Untitled'}`, size: 20 }),
                   new TextRun({
-                    text: ` - ${item.author || 'Unknown'}`,
+                    text: item.authors?.length ? ` - ${item.authors.join(', ')}` : '',
                     size: 20,
                     color: '718096',
-                  }),
-                  new TextRun({
-                    text: item.effortMinutes ? ` (${item.effortMinutes} min)` : '',
-                    size: 18,
-                    color: '4a5568',
                   }),
                 ],
                 spacing: { after: 30 },
@@ -697,20 +802,20 @@ export class WordExportService {
           });
         }
 
-        if (list.supplementaryReadings?.length) {
+        if (suppReadings.length) {
           contentChildren.push(
             new Paragraph({
               children: [new TextRun({ text: 'Supplementary Readings:', bold: true, size: 22 })],
               spacing: { before: 100, after: 50 },
             })
           );
-          list.supplementaryReadings.forEach((item: any) => {
+          suppReadings.forEach((item: any) => {
             contentChildren.push(
               new Paragraph({
                 children: [
                   new TextRun({ text: `• ${item.title || 'Untitled'}`, size: 20 }),
                   new TextRun({
-                    text: ` - ${item.author || 'Unknown'}`,
+                    text: item.authors?.length ? ` - ${item.authors.join(', ')}` : '',
                     size: 20,
                     color: '718096',
                   }),
@@ -720,13 +825,13 @@ export class WordExportService {
             );
           });
         }
-      });
+      }
     }
 
     // =========================================================================
     // Section 7: Assessment Blueprint
     // =========================================================================
-    if (workflow.step7?.blueprint) {
+    if (workflow.step7?.blueprint || workflow.step7?.quizzes?.length) {
       const step7 = workflow.step7;
       contentChildren.push(
         new Paragraph({ children: [new PageBreak()] }),
@@ -737,7 +842,7 @@ export class WordExportService {
         })
       );
 
-      const blueprint = step7.blueprint;
+      const blueprint = step7.blueprint || {};
       contentChildren.push(
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
@@ -752,6 +857,12 @@ export class WordExportService {
               children: [
                 this.createTableCell('Final Exam Weight'),
                 this.createTableCell(`${blueprint.finalExamWeight || '-'}%`),
+              ],
+            }),
+            new TableRow({
+              children: [
+                this.createTableCell('Total Quiz Weight'),
+                this.createTableCell(`${blueprint.totalQuizWeight || '-'}%`),
               ],
             }),
             new TableRow({
@@ -780,8 +891,14 @@ export class WordExportService {
             }),
             new TableRow({
               children: [
-                this.createTableCell('Randomize Questions'),
-                this.createTableCell(blueprint.randomize ? 'Yes' : 'No'),
+                this.createTableCell('Total Questions'),
+                this.createTableCell(String(step7.totalQuestions || '-')),
+              ],
+            }),
+            new TableRow({
+              children: [
+                this.createTableCell('Total Bank Questions'),
+                this.createTableCell(String(step7.totalBankQuestions || '-')),
               ],
             }),
           ],
@@ -789,20 +906,75 @@ export class WordExportService {
         new Paragraph({ children: [], spacing: { after: 200 } })
       );
 
-      if (blueprint.moduleQuizWeights?.length) {
+      // Quizzes summary
+      if (step7.quizzes?.length) {
         contentChildren.push(
           new Paragraph({
-            children: [new TextRun({ text: 'Module Quiz Weights:', bold: true, size: 22 })],
+            children: [new TextRun({ text: 'Module Quizzes:', bold: true, size: 22 })],
             spacing: { before: 100, after: 100 },
           })
         );
-        blueprint.moduleQuizWeights.forEach((mw: any) => {
+        step7.quizzes.forEach((quiz: any) => {
           contentChildren.push(
             new Paragraph({
-              children: [new TextRun({ text: `• ${mw.moduleId}: ${mw.weight}%`, size: 20 })],
+              children: [
+                new TextRun({
+                  text: `• ${quiz.title || quiz.moduleTitle || 'Quiz'}: `,
+                  bold: true,
+                  size: 20,
+                }),
+                new TextRun({
+                  text: `${quiz.questionCount || quiz.questions?.length || 0} questions, ${quiz.weight || '-'}%`,
+                  size: 20,
+                }),
+              ],
               spacing: { after: 30 },
             })
           );
+        });
+      }
+
+      // Sample questions
+      const sampleQuestions =
+        step7.questionBank?.slice(0, 3) || step7.questionBanks?.[0]?.questions?.slice(0, 3) || [];
+      if (sampleQuestions.length > 0) {
+        contentChildren.push(
+          new Paragraph({
+            children: [new TextRun({ text: 'Sample MCQ Questions:', bold: true, size: 22 })],
+            spacing: { before: 200, after: 100 },
+          })
+        );
+        sampleQuestions.forEach((q: any, idx: number) => {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: `Q${idx + 1}: `, bold: true, size: 20 }),
+                new TextRun({ text: q.stem || q.question || '', size: 20 }),
+              ],
+              spacing: { before: 100, after: 50 },
+            })
+          );
+          if (q.options?.length) {
+            q.options.forEach((opt: any, optIdx: number) => {
+              const letter = String.fromCharCode(65 + optIdx);
+              const isCorrect = opt.isCorrect || optIdx === q.correctOption;
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `  ${letter}. ${opt.text || opt}`,
+                      size: 18,
+                      color: isCorrect ? '22c55e' : '4a5568',
+                    }),
+                    isCorrect
+                      ? new TextRun({ text: ' ✓', size: 18, color: '22c55e' })
+                      : new TextRun({ text: '' }),
+                  ],
+                  spacing: { after: 20 },
+                })
+              );
+            });
+          }
         });
       }
     }
@@ -911,7 +1083,8 @@ export class WordExportService {
     // =========================================================================
     // Section 9: Glossary
     // =========================================================================
-    if (workflow.step9?.entries?.length) {
+    const step9Terms = workflow.step9?.terms || workflow.step9?.entries;
+    if (step9Terms?.length) {
       const step9 = workflow.step9;
       contentChildren.push(
         new Paragraph({ children: [new PageBreak()] }),
@@ -923,30 +1096,33 @@ export class WordExportService {
       );
 
       // Statistics
-      if (step9.statistics) {
-        contentChildren.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `Total Entries: ${step9.statistics.totalEntries || step9.totalTerms || '-'}`,
-                size: 20,
-                color: '4a5568',
-              }),
-            ],
-            spacing: { after: 200 },
-          })
-        );
-      }
+      contentChildren.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `Total Terms: ${step9.totalTerms || step9Terms.length || '-'} | Categories: ${step9.categories?.length || '-'} | Acronyms: ${step9.acronymCount || '-'}`,
+              size: 20,
+              color: '4a5568',
+            }),
+          ],
+          spacing: { after: 200 },
+        })
+      );
 
       // Sort alphabetically
-      const sortedTerms = [...step9.entries].sort((a: any, b: any) =>
+      const sortedTerms = [...step9Terms].sort((a: any, b: any) =>
         (a.term || '').localeCompare(b.term || '')
       );
 
       sortedTerms.forEach((entry: any) => {
         contentChildren.push(
           new Paragraph({
-            children: [new TextRun({ text: entry.term || '', bold: true, size: 22 })],
+            children: [
+              new TextRun({ text: entry.term || '', bold: true, size: 22 }),
+              entry.isAcronym
+                ? new TextRun({ text: ' (Acronym)', size: 18, color: '718096', italics: true })
+                : new TextRun({ text: '' }),
+            ],
             spacing: { before: 100, after: 30 },
           }),
           new Paragraph({
@@ -954,6 +1130,18 @@ export class WordExportService {
             spacing: { after: 30 },
           })
         );
+
+        if (entry.acronymExpansion) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Stands for: ', italics: true, size: 18, color: '4a5568' }),
+                new TextRun({ text: entry.acronymExpansion, size: 18, color: '4a5568' }),
+              ],
+              spacing: { after: 30 },
+            })
+          );
+        }
 
         if (entry.exampleSentence) {
           contentChildren.push(
