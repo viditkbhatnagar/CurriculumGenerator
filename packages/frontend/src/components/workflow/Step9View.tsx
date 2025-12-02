@@ -240,7 +240,7 @@ export default function Step9View({ workflow, _onComplete, onRefresh }: Props) {
 
   // Check for completion when data appears
   useEffect(() => {
-    if (workflow.step9?.terms?.length > 0) {
+    if ((workflow.step9?.terms?.length ?? 0) > 0) {
       completeGeneration(workflow._id, 9);
     }
   }, [workflow.step9, workflow._id, completeGeneration]);

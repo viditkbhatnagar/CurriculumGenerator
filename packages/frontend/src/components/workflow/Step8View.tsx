@@ -318,7 +318,10 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
 
   // Check for completion when data appears
   useEffect(() => {
-    if (workflow.step8?.caseStudies?.length > 0 || workflow.step8?.proposals?.length > 0) {
+    if (
+      (workflow.step8?.caseStudies?.length ?? 0) > 0 ||
+      (workflow.step8?.proposals?.length ?? 0) > 0
+    ) {
       completeGeneration(workflow._id, 8);
     }
   }, [workflow.step8, workflow._id, completeGeneration]);
