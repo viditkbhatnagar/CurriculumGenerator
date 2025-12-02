@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSubmitStep7, useApproveStep7 } from '@/hooks/useWorkflow';
 import {
   CurriculumWorkflow,
@@ -10,6 +10,7 @@ import {
   BloomLevel,
   BLOOM_LEVELS,
 } from '@/types/workflow';
+import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -187,6 +188,9 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
   const approveStep7 = useApproveStep7();
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'config' | 'modules'>('config');
+  const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+
+  const isCurrentlyGenerating = isGenerating(workflow._id, 7) || submitStep7.isPending;
 
   const modules = workflow.step4?.modules || [];
   const moduleCount = modules.length;
@@ -212,6 +216,13 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
     })),
   });
 
+  // Check for completion when data appears
+  useEffect(() => {
+    if ((workflow.step7?.quizzes?.length ?? 0) > 0 || (workflow.step7?.totalQuestions ?? 0) > 0) {
+      completeGeneration(workflow._id, 7);
+    }
+  }, [workflow.step7, workflow._id, completeGeneration]);
+
   // Calculate quiz weight
   const quizWeight = 100 - formData.finalExamWeight;
   const perQuizWeight = moduleCount > 0 ? Math.round((quizWeight / moduleCount) * 10) / 10 : 0;
@@ -222,14 +233,17 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
 
   const handleGenerate = async () => {
     setError(null);
+    startGeneration(workflow._id, 7, 120); // 2 minutes estimated
     try {
       await submitStep7.mutateAsync({
         id: workflow._id,
         data: formData,
       });
+      completeGeneration(workflow._id, 7);
       onRefresh();
     } catch (err: any) {
       console.error('Failed to generate assessments:', err);
+      failGeneration(workflow._id, 7, err.message || 'Failed to generate');
       setError(err.message || 'Failed to generate assessments');
     }
   };
@@ -253,7 +267,25 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      {!hasStep7Data ? (
+      {/* Show generating state even when navigating back */}
+      {isCurrentlyGenerating && !hasStep7Data && (
+        <div className="mb-6 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 border-3 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+            <div>
+              <h3 className="text-lg font-semibold text-white">
+                Generating Auto-Gradable Assessments...
+              </h3>
+              <p className="text-sm text-slate-400">
+                This may take 2 minutes. You can navigate away and come back.
+              </p>
+            </div>
+          </div>
+          <GenerationProgressBar workflowId={workflow._id} step={7} />
+        </div>
+      )}
+
+      {!hasStep7Data && !isCurrentlyGenerating ? (
         // Configuration Form
         <div className="space-y-6">
           {/* About This Step */}
@@ -660,10 +692,10 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
           {/* Generate Button */}
           <button
             onClick={handleGenerate}
-            disabled={submitStep7.isPending}
+            disabled={isCurrentlyGenerating}
             className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
           >
-            {submitStep7.isPending ? (
+            {isCurrentlyGenerating ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Generating MCQ Banks ({bankPerModule * moduleCount + finalBankSize} questions)...

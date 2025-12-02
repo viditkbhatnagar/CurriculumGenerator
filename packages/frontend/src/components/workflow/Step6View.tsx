@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSubmitStep6, useApproveStep6 } from '@/hooks/useWorkflow';
 import {
   CurriculumWorkflow,
@@ -8,6 +8,7 @@ import {
   ModuleReadingSummary,
   ReadingComplexity,
 } from '@/types/workflow';
+import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -236,14 +237,30 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
   const approveStep6 = useApproveStep6();
   const [error, setError] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
+  const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+
+  const isCurrentlyGenerating = isGenerating(workflow._id, 6) || submitStep6.isPending;
+
+  // Check for completion when data appears
+  useEffect(() => {
+    if (
+      workflow.step6 &&
+      (workflow.step6.readings?.length > 0 || workflow.step6.totalReadings > 0)
+    ) {
+      completeGeneration(workflow._id, 6);
+    }
+  }, [workflow.step6, workflow._id, completeGeneration]);
 
   const handleGenerate = async () => {
     setError(null);
+    startGeneration(workflow._id, 6, 60); // 60 seconds estimated
     try {
       await submitStep6.mutateAsync(workflow._id);
+      completeGeneration(workflow._id, 6);
       onRefresh();
     } catch (err: any) {
       console.error('Failed to generate reading lists:', err);
+      failGeneration(workflow._id, 6, err.message || 'Failed to generate');
       setError(err.message || 'Failed to generate reading lists');
     }
   };
@@ -276,7 +293,23 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      {!hasStep6Data ? (
+      {/* Show generating state even when navigating back */}
+      {isCurrentlyGenerating && !hasStep6Data && (
+        <div className="mb-6 bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border border-blue-500/30 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <div>
+              <h3 className="text-lg font-semibold text-white">Generating Reading Lists...</h3>
+              <p className="text-sm text-slate-400">
+                This may take a minute. You can navigate away and come back.
+              </p>
+            </div>
+          </div>
+          <GenerationProgressBar workflowId={workflow._id} step={6} />
+        </div>
+      )}
+
+      {!hasStep6Data && !isCurrentlyGenerating ? (
         // Generation Form
         <div className="space-y-6">
           {/* About This Step */}
@@ -368,10 +401,10 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
           {/* Generate Button */}
           <button
             onClick={handleGenerate}
-            disabled={submitStep6.isPending}
+            disabled={isCurrentlyGenerating}
             className="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
           >
-            {submitStep6.isPending ? (
+            {isCurrentlyGenerating ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Generating Reading Lists...

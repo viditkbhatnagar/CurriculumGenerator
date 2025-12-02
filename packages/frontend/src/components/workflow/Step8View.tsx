@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSubmitStep8, useApproveStep8 } from '@/hooks/useWorkflow';
 import {
   CurriculumWorkflow,
@@ -9,6 +9,7 @@ import {
   CaseType,
   CaseDifficulty,
 } from '@/types/workflow';
+import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -309,16 +310,29 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
   const submitStep8 = useSubmitStep8();
   const approveStep8 = useApproveStep8();
   const [error, setError] = useState<string | null>(null);
-  const [selectedProposals, setSelectedProposals] = useState<string[]>([]);
+  const [_selectedProposals, _setSelectedProposals] = useState<string[]>([]);
   const [filterType, setFilterType] = useState<CaseType | 'all'>('all');
+  const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+
+  const isCurrentlyGenerating = isGenerating(workflow._id, 8) || submitStep8.isPending;
+
+  // Check for completion when data appears
+  useEffect(() => {
+    if (workflow.step8?.caseStudies?.length > 0 || workflow.step8?.proposals?.length > 0) {
+      completeGeneration(workflow._id, 8);
+    }
+  }, [workflow.step8, workflow._id, completeGeneration]);
 
   const handleGenerateProposals = async () => {
     setError(null);
+    startGeneration(workflow._id, 8, 180); // 3 minutes estimated for case studies
     try {
       await submitStep8.mutateAsync(workflow._id);
+      completeGeneration(workflow._id, 8);
       onRefresh();
     } catch (err: any) {
       console.error('Failed to generate case studies:', err);
+      failGeneration(workflow._id, 8, err.message || 'Failed to generate');
       setError(err.message || 'Failed to generate case studies');
     }
   };
@@ -348,7 +362,23 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      {!hasStep8Data ? (
+      {/* Show generating state even when navigating back */}
+      {isCurrentlyGenerating && !hasStep8Data && (
+        <div className="mb-6 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            <div>
+              <h3 className="text-lg font-semibold text-white">Generating Case Studies...</h3>
+              <p className="text-sm text-slate-400">
+                This may take 2-3 minutes. You can navigate away and come back.
+              </p>
+            </div>
+          </div>
+          <GenerationProgressBar workflowId={workflow._id} step={8} />
+        </div>
+      )}
+
+      {!hasStep8Data && !isCurrentlyGenerating ? (
         // Pre-Generation View
         <div className="space-y-6">
           {/* About This Step */}
@@ -433,10 +463,10 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
           {/* Generate Button */}
           <button
             onClick={handleGenerateProposals}
-            disabled={submitStep8.isPending}
+            disabled={isCurrentlyGenerating}
             className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
           >
-            {submitStep8.isPending ? (
+            {isCurrentlyGenerating ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Generating Case Studies...

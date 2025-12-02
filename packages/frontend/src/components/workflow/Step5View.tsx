@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSubmitStep5, useApproveStep5 } from '@/hooks/useWorkflow';
 import {
   CurriculumWorkflow,
@@ -9,6 +9,7 @@ import {
   SourceCategory,
   SourceType,
 } from '@/types/workflow';
+import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -259,14 +260,27 @@ export default function Step5View({ workflow, onComplete, onRefresh }: Props) {
   const approveStep5 = useApproveStep5();
   const [error, setError] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
+  const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+
+  const isCurrentlyGenerating = isGenerating(workflow._id, 5) || submitStep5.isPending;
+
+  // Check for completion when data appears
+  useEffect(() => {
+    if (workflow.step5?.sources?.length > 0 || workflow.step5?.totalSources > 0) {
+      completeGeneration(workflow._id, 5);
+    }
+  }, [workflow.step5, workflow._id, completeGeneration]);
 
   const handleGenerate = async () => {
     setError(null);
+    startGeneration(workflow._id, 5, 120); // 2 minutes estimated
     try {
       await submitStep5.mutateAsync(workflow._id);
+      completeGeneration(workflow._id, 5);
       onRefresh();
     } catch (err: any) {
       console.error('Failed to generate sources:', err);
+      failGeneration(workflow._id, 5, err.message || 'Failed to generate');
       setError(err.message || 'Failed to generate sources');
     }
   };
@@ -295,7 +309,25 @@ export default function Step5View({ workflow, onComplete, onRefresh }: Props) {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      {!hasStep5Data ? (
+      {/* Show generating state even when navigating back */}
+      {isCurrentlyGenerating && !hasStep5Data && (
+        <div className="mb-6 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            <div>
+              <h3 className="text-lg font-semibold text-white">
+                Generating Topic-Level Sources...
+              </h3>
+              <p className="text-sm text-slate-400">
+                This may take 2 minutes. You can navigate away and come back.
+              </p>
+            </div>
+          </div>
+          <GenerationProgressBar workflowId={workflow._id} step={5} />
+        </div>
+      )}
+
+      {!hasStep5Data && !isCurrentlyGenerating ? (
         // Generation Form
         <div className="space-y-6">
           {/* About This Step */}
@@ -365,10 +397,10 @@ export default function Step5View({ workflow, onComplete, onRefresh }: Props) {
           {/* Generate Button */}
           <button
             onClick={handleGenerate}
-            disabled={submitStep5.isPending}
+            disabled={isCurrentlyGenerating}
             className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
           >
-            {submitStep5.isPending ? (
+            {isCurrentlyGenerating ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Generating AGI-Compliant Sources...

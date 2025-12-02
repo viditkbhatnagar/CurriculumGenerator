@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSubmitStep9 } from '@/hooks/useWorkflow';
 import { CurriculumWorkflow, GlossaryTerm, ModuleTermList, TermPriority } from '@/types/workflow';
+import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -226,22 +227,35 @@ function ModuleTermListCard({ moduleList }: { moduleList: ModuleTermList }) {
   );
 }
 
-export default function Step9View({ workflow, onComplete, onRefresh }: Props) {
+export default function Step9View({ workflow, _onComplete, onRefresh }: Props) {
   const submitStep9 = useSubmitStep9();
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'alphabetical' | 'modules'>('alphabetical');
   const [justGenerated, setJustGenerated] = useState(false);
+  const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+
+  const isCurrentlyGenerating = isGenerating(workflow._id, 9) || submitStep9.isPending;
+
+  // Check for completion when data appears
+  useEffect(() => {
+    if (workflow.step9?.terms?.length > 0) {
+      completeGeneration(workflow._id, 9);
+    }
+  }, [workflow.step9, workflow._id, completeGeneration]);
 
   const handleGenerate = async () => {
     setError(null);
+    startGeneration(workflow._id, 9, 45); // 45 seconds estimated
     try {
       await submitStep9.mutateAsync(workflow._id);
+      completeGeneration(workflow._id, 9);
       await onRefresh();
       setJustGenerated(true);
     } catch (err: any) {
       console.error('Failed to generate glossary:', err);
+      failGeneration(workflow._id, 9, err.message || 'Failed to generate');
       setError(err.message || 'Failed to generate glossary');
     }
   };
@@ -265,7 +279,23 @@ export default function Step9View({ workflow, onComplete, onRefresh }: Props) {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      {!hasStep9Data ? (
+      {/* Show generating state even when navigating back */}
+      {isCurrentlyGenerating && !hasStep9Data && (
+        <div className="mb-6 bg-gradient-to-br from-emerald-500/10 to-green-500/10 border border-emerald-500/30 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            <div>
+              <h3 className="text-lg font-semibold text-white">Generating Glossary...</h3>
+              <p className="text-sm text-slate-400">
+                This may take 45 seconds. You can navigate away and come back.
+              </p>
+            </div>
+          </div>
+          <GenerationProgressBar workflowId={workflow._id} step={9} />
+        </div>
+      )}
+
+      {!hasStep9Data && !isCurrentlyGenerating ? (
         // Pre-Generation View
         <div className="space-y-6">
           {/* About This Step */}
@@ -365,10 +395,10 @@ export default function Step9View({ workflow, onComplete, onRefresh }: Props) {
           {/* Generate Button */}
           <button
             onClick={handleGenerate}
-            disabled={submitStep9.isPending}
+            disabled={isCurrentlyGenerating}
             className="w-full py-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
           >
-            {submitStep9.isPending ? (
+            {isCurrentlyGenerating ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Generating Glossary...
