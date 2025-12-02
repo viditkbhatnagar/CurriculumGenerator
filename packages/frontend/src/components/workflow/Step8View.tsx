@@ -30,7 +30,7 @@ const CASE_TYPE_LABELS: Record<CaseType, string> = {
   assessment_ready: 'Assessment-Ready',
 };
 
-const CASE_TYPE_DESCRIPTIONS: Record<CaseType, string> = {
+const _CASE_TYPE_DESCRIPTIONS: Record<CaseType, string> = {
   practice: 'Ungraded learning activity - build confidence, allow trial and error',
   discussion: 'Forum prompt - graded on participation, encourage perspective-sharing',
   assessment_ready: 'Structured scenario with hooks for future question development',
@@ -43,8 +43,8 @@ const DIFFICULTY_COLORS: Record<CaseDifficulty, string> = {
   advanced: 'bg-red-500/20 text-red-400',
 };
 
-// Case Proposal Card (Stage 1)
-function ProposalCard({
+// Case Proposal Card (Stage 1) - kept for future two-stage implementation
+function _ProposalCard({
   proposal,
   isSelected,
   onToggle,
@@ -330,10 +330,11 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
       await submitStep8.mutateAsync(workflow._id);
       completeGeneration(workflow._id, 8);
       onRefresh();
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate case studies';
       console.error('Failed to generate case studies:', err);
-      failGeneration(workflow._id, 8, err.message || 'Failed to generate');
-      setError(err.message || 'Failed to generate case studies');
+      failGeneration(workflow._id, 8, errorMessage);
+      setError(errorMessage);
     }
   };
 
@@ -342,9 +343,10 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
     try {
       await approveStep8.mutateAsync(workflow._id);
       onComplete();
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to approve Step 8';
       console.error('Failed to approve Step 8:', err);
-      setError(err.message || 'Failed to approve Step 8');
+      setError(errorMessage);
     }
   };
 

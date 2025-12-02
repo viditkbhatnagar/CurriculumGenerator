@@ -67,9 +67,10 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
         // Filter out old generations (older than 30 minutes)
         const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
         const filtered: Record<string, GenerationState> = {};
-        Object.entries(parsed).forEach(([key, state]: [string, any]) => {
-          if (state.startTime > thirtyMinutesAgo && state.status === 'generating') {
-            filtered[key] = state;
+        Object.entries(parsed).forEach(([key, state]) => {
+          const genState = state as GenerationState;
+          if (genState.startTime > thirtyMinutesAgo && genState.status === 'generating') {
+            filtered[key] = genState;
           }
         });
         setGenerations(filtered);

@@ -33,6 +33,7 @@ export interface LearningOutcome {
   id: string;
   module_id: string;
   outcome_text: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   assessment_criteria: any;
   knowledge_skill_competency: string;
   bloom_level: string;

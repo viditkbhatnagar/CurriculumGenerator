@@ -8,7 +8,6 @@ import { fetchAPI } from '@/lib/api';
 import {
   CurriculumWorkflow,
   WorkflowResponse,
-  WorkflowListResponse,
   WorkflowProgressResponse,
   Step1FormData,
   Step2FormData,

@@ -33,7 +33,7 @@ function formatTime(minutes: number): string {
 
 // Reading Item Card
 function ReadingCard({ reading }: { reading: ReadingItem }) {
-  const [expanded, setExpanded] = useState(false);
+  const [_expanded, _setExpanded] = useState(false);
 
   return (
     <div
@@ -258,10 +258,11 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
       await submitStep6.mutateAsync(workflow._id);
       completeGeneration(workflow._id, 6);
       onRefresh();
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate reading lists';
       console.error('Failed to generate reading lists:', err);
-      failGeneration(workflow._id, 6, err.message || 'Failed to generate');
-      setError(err.message || 'Failed to generate reading lists');
+      failGeneration(workflow._id, 6, errorMessage);
+      setError(errorMessage);
     }
   };
 
@@ -270,9 +271,10 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
     try {
       await approveStep6.mutateAsync(workflow._id);
       onComplete();
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to approve Step 6';
       console.error('Failed to approve Step 6:', err);
-      setError(err.message || 'Failed to approve Step 6');
+      setError(errorMessage);
     }
   };
 

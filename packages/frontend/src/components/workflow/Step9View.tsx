@@ -253,10 +253,11 @@ export default function Step9View({ workflow, _onComplete, onRefresh }: Props) {
       completeGeneration(workflow._id, 9);
       await onRefresh();
       setJustGenerated(true);
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate glossary';
       console.error('Failed to generate glossary:', err);
-      failGeneration(workflow._id, 9, err.message || 'Failed to generate');
-      setError(err.message || 'Failed to generate glossary');
+      failGeneration(workflow._id, 9, errorMessage);
+      setError(errorMessage);
     }
   };
 

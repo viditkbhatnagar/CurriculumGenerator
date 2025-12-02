@@ -9,6 +9,8 @@ import {
   Quiz,
   BloomLevel,
   BLOOM_LEVELS,
+  Module,
+  MLO,
 } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 
@@ -209,9 +211,9 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
     finalExamTimeLimit: 90,
     openBook: false,
     calculatorPermitted: false,
-    moduleSettings: modules.map((mod: any) => ({
+    moduleSettings: modules.map((mod: Module) => ({
       moduleId: mod.id,
-      mlosCovered: mod.mlos?.map((mlo: any) => mlo.id) || [],
+      mlosCovered: mod.mlos?.map((mlo: MLO) => mlo.id) || [],
       bloomEmphasis: ['apply', 'analyze'] as BloomLevel[],
     })),
   });
@@ -241,10 +243,11 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
       });
       completeGeneration(workflow._id, 7);
       onRefresh();
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate assessments';
       console.error('Failed to generate assessments:', err);
-      failGeneration(workflow._id, 7, err.message || 'Failed to generate');
-      setError(err.message || 'Failed to generate assessments');
+      failGeneration(workflow._id, 7, errorMessage);
+      setError(errorMessage);
     }
   };
 
@@ -253,9 +256,10 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
     try {
       await approveStep7.mutateAsync(workflow._id);
       onComplete();
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to approve Step 7';
       console.error('Failed to approve Step 7:', err);
-      setError(err.message || 'Failed to approve Step 7');
+      setError(errorMessage);
     }
   };
 
@@ -592,7 +596,7 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
               <p className="text-sm text-slate-400">
                 Configure which MLOs to assess and Bloom's emphasis for each module.
               </p>
-              {modules.map((mod: any, idx: number) => {
+              {modules.map((mod: Module, _idx: number) => {
                 const modSettings = formData.moduleSettings?.find((s) => s.moduleId === mod.id);
                 const mlos = mod.mlos || [];
 
@@ -607,7 +611,7 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
                     <div className="mb-3">
                       <p className="text-xs text-slate-500 mb-2">MLOs to Assess:</p>
                       <div className="flex flex-wrap gap-2">
-                        {mlos.map((mlo: any) => {
+                        {mlos.map((mlo: MLO) => {
                           const isSelected = modSettings?.mlosCovered?.includes(mlo.id);
                           return (
                             <button

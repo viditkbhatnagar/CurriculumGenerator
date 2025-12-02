@@ -6,6 +6,7 @@ export interface KnowledgeBaseSource {
   publication_date: string;
   domain: string;
   credibility_score: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: any;
   created_at: string;
 }

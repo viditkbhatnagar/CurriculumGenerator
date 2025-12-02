@@ -266,7 +266,7 @@ export default function Step5View({ workflow, onComplete, onRefresh }: Props) {
 
   // Check for completion when data appears
   useEffect(() => {
-    if (workflow.step5?.sources?.length > 0 || workflow.step5?.totalSources > 0) {
+    if ((workflow.step5?.sources?.length ?? 0) > 0 || (workflow.step5?.totalSources ?? 0) > 0) {
       completeGeneration(workflow._id, 5);
     }
   }, [workflow.step5, workflow._id, completeGeneration]);
@@ -278,10 +278,11 @@ export default function Step5View({ workflow, onComplete, onRefresh }: Props) {
       await submitStep5.mutateAsync(workflow._id);
       completeGeneration(workflow._id, 5);
       onRefresh();
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate sources';
       console.error('Failed to generate sources:', err);
-      failGeneration(workflow._id, 5, err.message || 'Failed to generate');
-      setError(err.message || 'Failed to generate sources');
+      failGeneration(workflow._id, 5, errorMessage);
+      setError(errorMessage);
     }
   };
 
@@ -290,9 +291,10 @@ export default function Step5View({ workflow, onComplete, onRefresh }: Props) {
     try {
       await approveStep5.mutateAsync(workflow._id);
       onComplete();
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to approve Step 5';
       console.error('Failed to approve Step 5:', err);
-      setError(err.message || 'Failed to approve Step 5');
+      setError(errorMessage);
     }
   };
 
