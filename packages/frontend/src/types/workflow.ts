@@ -33,9 +33,14 @@ export type WorkflowStatus =
   | 'published';
 
 // Credit system types
-export type CreditSystem = 'uk' | 'ects' | 'us_semester';
+export type CreditSystem = 'uk' | 'ects' | 'us_semester' | 'non_credit';
 export type AcademicLevel = 'certificate' | 'micro-credential' | 'diploma';
-export type DeliveryMode = 'online' | 'blended' | 'on-campus';
+export type DeliveryMode =
+  | 'online_self_study'
+  | 'online_facilitated'
+  | 'hybrid_blended'
+  | 'in_person';
+export type ExperienceLevel = 'beginner' | 'professional' | 'expert';
 
 // Bloom's Taxonomy levels
 export type BloomLevel = 'remember' | 'understand' | 'apply' | 'analyze' | 'evaluate' | 'create';
@@ -43,92 +48,231 @@ export type BloomLevel = 'remember' | 'understand' | 'apply' | 'analyze' | 'eval
 // =============================================================================
 // STEP 1: PROGRAM FOUNDATION
 // =============================================================================
+
+// Target Learner Profile (structured per workflow v2.2)
+export interface TargetLearnerProfile {
+  ageRange: string; // e.g., "25-45 years"
+  educationalBackground: string; // min 10 characters
+  industrySector: string; // min 5 characters
+  experienceLevel: ExperienceLevel; // Beginner (0-2 yrs), Professional (3-7 yrs), Expert (8+ yrs)
+}
+
+// Job Role with description and tasks (per workflow v2.2)
+export interface JobRole {
+  title: string;
+  description: string; // 100-1000 words
+  tasks: string[]; // Workplace tasks
+}
+
+// Credit Framework with credit-awarding flag
 export interface CreditFramework {
+  isCreditAwarding: boolean; // Yes/No - determines which options are shown
   creditSystem: CreditSystem;
-  totalCredits: number;
+  credits?: number; // Only for credit-awarding systems
   totalHours: number;
-  contactPercent: number;
+  contactPercent: number; // 30% for UK/ECTS, 33% for US, customizable
   contactHours: number;
-  selfStudyHours: number;
+  independentHours: number; // Independent study + assessment
+  customContactPercent?: number; // Optional override
+}
+
+// International Credit Equivalencies
+export interface CreditEquivalencies {
+  ukCredits: number;
+  ectsCredits: number;
+  usSemesterCredits: number;
+  totalHours: number;
+}
+
+// Delivery Structure (per workflow v2.2)
+export interface DeliveryStructure {
+  mode: DeliveryMode;
+  description: string; // 1-3 sentences describing how program is delivered
+  customContactPercent?: number; // Override default if specified
 }
 
 export interface Step1ProgramFoundation {
-  programTitle: string;
-  programDescription: string;
+  // Program Identity
+  programTitle: string; // 5-100 characters
+  programDescription: string; // 50-500 words
   academicLevel: AcademicLevel;
+
+  // Credit Framework
   creditFramework: CreditFramework;
-  targetLearner: string;
-  deliveryMode: DeliveryMode;
-  deliveryDescription?: string;
-  programPurpose: string;
-  jobRoles: string[];
+  creditEquivalencies?: CreditEquivalencies;
+
+  // Target Learner (structured)
+  targetLearner: TargetLearnerProfile;
+
+  // Delivery
+  delivery: DeliveryStructure;
+
+  // Labour Market Rationale
+  programPurpose: string; // 50-300 words
+  jobRoles: JobRole[]; // min 2 roles with descriptions and tasks
+
+  // Generated Outputs (by AI)
+  executiveSummary?: string; // 400-700 words
+  programAims?: string[]; // 3-5 strategic intentions
+  entryRequirements?: string;
+  careerPathways?: string[];
+
+  // Validation
   completenessScore: number;
+  validatedAt?: string;
   approvedAt?: string;
   approvedBy?: string;
 }
 
 // =============================================================================
-// STEP 2: COMPETENCY & KNOWLEDGE FRAMEWORK (KSA)
+// STEP 2: COMPETENCY & KNOWLEDGE FRAMEWORK (KSC)
+// Knowledge, Skills, Competencies
 // =============================================================================
-export interface KSAItem {
+
+// Importance levels per workflow v2.2
+export type KSCImportance = 'essential' | 'desirable';
+
+export interface KSCItem {
   id: string;
-  statement: string;
+  type: 'knowledge' | 'skill' | 'competency';
+  statement: string; // ≤50 words
   description: string;
-  importance: 'critical' | 'important' | 'supplementary';
-  source?: string;
-  linkedPLOs?: string[];
+  importance: KSCImportance;
+  source?: string; // Which benchmark this came from
+  jobTaskMapping?: string[]; // Links to job tasks from Step 1
 }
 
-export interface Step2CompetencyKSA {
-  knowledgeItems: KSAItem[];
-  skillItems: KSAItem[];
-  attitudeItems: KSAItem[];
-  benchmarkPrograms?: string[];
-  industryFrameworks?: string[];
-  institutionalFrameworks?: string[];
-  totalItems: number;
+// Benchmark program for Step 2 (moved from Step 1 per workflow v2.2)
+export interface BenchmarkProgram {
+  programName: string;
+  institution: string;
+  url?: string;
+  accreditationStatus?: string;
+  publicationYear?: number;
+}
+
+export interface Step2CompetencyKSC {
+  // Input
+  benchmarkPrograms: BenchmarkProgram[];
+  industryFrameworks?: string[]; // SHRM, PMI, SFIA, CIPD, ASCM
+  institutionalFrameworks?: string[]; // Graduate attributes, competency models
+
+  // Generated KSC Items (per workflow v2.2 ratios)
+  knowledgeItems: KSCItem[]; // 30-40% of total
+  skillItems: KSCItem[]; // 40-50% of total
+  competencyItems: KSCItem[]; // 10-30% of total (was attitudeItems)
+
+  // Benchmarking Report
+  benchmarkingReport?: {
+    programsAnalyzed: BenchmarkProgram[];
+    keyFindings: string[];
+    coverageAnalysis: string;
+  };
+
+  // Validation
+  totalItems: number; // 10-30 items
+  essentialCount: number;
+  validatedAt?: string;
   approvedAt?: string;
   approvedBy?: string;
 }
+
+// Legacy alias for backward compatibility
+export type KSAItem = KSCItem;
+export type Step2CompetencyKSA = Step2CompetencyKSC;
 
 // =============================================================================
 // STEP 3: PROGRAM LEARNING OUTCOMES (PLOs)
+// Per workflow v2.2: Transform competency framework into 4-8 precise,
+// measurable PLOs using Bloom's taxonomy
 // =============================================================================
+
+// Outcome emphasis options per workflow v2.2
+export type OutcomeEmphasis = 'technical' | 'professional' | 'strategic' | 'mixed';
+
 export interface PLO {
   id: string;
-  code: string;
-  statement: string;
+  code: string; // e.g., PLO1, PLO2
+  outcomeNumber: number;
+  statement: string; // [Verb + Task + Context], ≤25 words
   bloomLevel: BloomLevel;
-  verb: string;
-  linkedKSAs: string[];
+  verb: string; // The Bloom's verb used
+
+  // Mappings
+  linkedKSCs: string[]; // KSC item IDs from Step 2 (competency links)
+  jobTaskMapping: string[]; // Connection to workplace requirements from Step 1
+
+  // Assessment
+  assessmentAlignment?: string; // How it will be measured
   assessable: boolean;
   measurable: boolean;
 }
 
 export interface Step3PLOs {
+  // Input Selections (4 Decisions per workflow v2.2)
+  bloomLevels: BloomLevel[]; // Must have ≥1 lower + ≥1 higher
+  priorityCompetencies: string[]; // Selected Essential KSCs from Step 2
+  outcomeEmphasis: OutcomeEmphasis;
+  targetCount: number; // 4-8
+
+  // Optional Advanced Controls
+  contextConstraints?: string; // Industry context, tools, limits
+  preferredVerbs?: string[]; // Bloom-appropriate verbs to favor
+  avoidVerbs?: string[]; // Vague verbs like "know", "understand"
+  stakeholderPriorities?: string; // Employer/client expectations
+  exclusions?: string[]; // Things outcomes must not commit to
+
+  // Generated PLOs
   outcomes: PLO[];
+
+  // Coverage Report
+  coverageReport?: {
+    competenciesCovered: number;
+    totalEssentialCompetencies: number;
+    coveragePercent: number; // Must be ≥70%
+    bloomDistribution: Record<BloomLevel, number>;
+    jobTasksCovered: string[];
+    validation: {
+      hasLowerLevel: boolean; // At least 1 Understand/Apply
+      hasHigherLevel: boolean; // At least 1 Analyze/Evaluate/Create
+      noSingleLevelOver50: boolean;
+      allUnique: boolean;
+      allMeasurable: boolean;
+    };
+  };
+
+  // Legacy compatibility
   bloomDistribution: Record<BloomLevel, number>;
   configuration: {
     targetCount: number;
     priorityCompetencies: string[];
-    outcomeEmphasis: 'cognitive' | 'practical' | 'mixed';
+    outcomeEmphasis: OutcomeEmphasis;
     preferredVerbs?: string[];
     avoidVerbs?: string[];
   };
+
+  validatedAt?: string;
   approvedAt?: string;
   approvedBy?: string;
 }
 
 // =============================================================================
 // STEP 4: COURSE FRAMEWORK & MLOs
+// Per workflow v2.2: Organize program into 6-8 modules with precise hours
+// allocation and Module Learning Outcomes that build toward PLOs
 // =============================================================================
+
+// Module phase for progressive complexity
+export type ModulePhase = 'early' | 'middle' | 'late';
+
 export interface MLO {
   id: string;
-  code: string;
-  statement: string;
+  code: string; // e.g., M1-LO1, M2-LO2
+  statement: string; // [Verb + Task + Context]
   bloomLevel: BloomLevel;
   verb: string;
-  linkedPLOs: string[];
+  linkedPLOs: string[]; // Which PLOs this MLO builds toward
+  linkedKSCs?: string[]; // Which competencies this addresses
   assessmentCriteria?: string[];
 }
 
@@ -138,29 +282,95 @@ export interface Topic {
   description: string;
   hours: number;
   sequence: number;
+  linkedMLOs?: string[];
+}
+
+// Contact activity for module (per workflow v2.2)
+export interface ContactActivity {
+  type: 'lecture' | 'workshop' | 'tutorial' | 'seminar' | 'lab' | 'discussion';
+  title: string;
+  hours: number;
+}
+
+// Independent study activity
+export interface IndependentActivity {
+  type: 'reading' | 'practice' | 'assessment' | 'research' | 'project';
+  title: string;
+  hours: number;
 }
 
 export interface Module {
   id: string;
-  code: string;
+  code: string; // e.g., M1, M2
   title: string;
   description: string;
-  totalHours: number;
-  contactHours: number;
-  selfStudyHours: number;
-  credits: number;
   sequence: number;
+
+  // Hours breakdown (per workflow v2.2)
+  totalHours: number; // Portion of program total
+  contactHours: number; // Based on Step 1 percentage (default 30%)
+  selfStudyHours: number; // Independent study & assessment (remaining %)
+
+  // Credits
+  credits: number;
+
+  // Prerequisites (per workflow v2.2)
+  prerequisites: string[]; // Module IDs that must be completed first
+
+  // Linkages
   linkedPLOs: string[];
-  mlos: MLO[];
+  mlos: MLO[]; // 2-4 MLOs per module typically
+
+  // Topics
   topics: Topic[];
+
+  // Optional detailed breakdown
+  contactActivities?: ContactActivity[];
+  independentActivities?: IndependentActivity[];
+
+  // Progressive complexity (enforced per workflow v2.2)
+  phase: ModulePhase; // early (1-2), middle (3-5), late (6-8)
+  bloomDistribution?: Record<BloomLevel, number>;
 }
 
 export interface Step4CourseFramework {
+  // Configuration
+  moduleCount: number; // 6-8 (default)
+  contactHoursPercent: number; // From Step 1 (default 30%)
+  deliveryMode?: string; // From Step 1
+
+  // Generated modules
   modules: Module[];
-  totalProgramHours: number;
+
+  // Hours validation (CRITICAL per workflow v2.2)
+  totalProgramHours: number; // Must match Step 1 exactly
   totalContactHours: number;
-  hoursIntegrity: boolean;
-  ploMapping: Record<string, string[]>;
+  totalIndependentHours: number;
+  hoursIntegrity: boolean; // Σ module hours = program hours (exact)
+  contactHoursIntegrity: boolean; // Contact hours sum correctly
+
+  // PLO coverage
+  ploMapping: Record<string, string[]>; // PLO ID -> MLO IDs
+  ploCoveragePercent: number; // All PLOs should map to ≥1 MLO
+
+  // Progressive complexity validation
+  progressiveComplexity: {
+    earlyModulesValid: boolean; // ≥60% at Understand/Apply
+    middleModulesValid: boolean; // Balanced Apply/Analyze
+    lateModulesValid: boolean; // ≥30% at Analyze/Evaluate/Create
+  };
+
+  // Validation summary
+  validationReport?: {
+    hoursMatch: boolean;
+    contactHoursMatch: boolean;
+    allPLOsCovered: boolean;
+    progressionValid: boolean;
+    noCircularDeps: boolean;
+    minMLOsPerModule: boolean;
+  };
+
+  validatedAt?: string;
   approvedAt?: string;
   approvedBy?: string;
 }
@@ -168,39 +378,133 @@ export interface Step4CourseFramework {
 // =============================================================================
 // STEP 5: TOPIC-LEVEL SOURCES (AGI STANDARDS)
 // =============================================================================
-export type SourceType = 'primary' | 'secondary' | 'grey_literature';
+// STEP 5: TOPIC-LEVEL SOURCES (AGI ACADEMIC STANDARDS)
+// Per workflow v2.2: Identify, validate, and tag high-quality academic and
+// professional sources with APA 7th edition citations
+// =============================================================================
+
+// Source categories per AGI Standards (approved sources only)
 export type SourceCategory =
-  | 'textbook'
-  | 'journal_article'
-  | 'white_paper'
-  | 'standard'
-  | 'case_study'
-  | 'video'
-  | 'website';
+  | 'peer_reviewed_journal' // Academic journal article
+  | 'academic_textbook' // Published academic textbook
+  | 'professional_body' // SHRM, PMI, ASCM, CIPD publications
+  | 'open_access' // DOAJ, PubMed, arXiv
+  | 'institutional'; // Requires admin approval
+
+// Source type for display purposes
+export type SourceType = 'academic' | 'applied' | 'industry';
+
+// Source access status per workflow v2.2
+export type SourceAccessStatus =
+  | 'verified_accessible' // AGI Library or open access
+  | 'requires_approval' // Institutional subscription needed
+  | 'rejected' // Paywalled without license
+  | 'flagged_for_review'; // Potential access issue
+
+// AGI Standards compliance badges
+export interface AGIComplianceBadges {
+  peerReviewed: boolean;
+  academicText: boolean;
+  professionalBody: boolean;
+  recent: boolean; // <5 years
+  seminal: boolean; // >5 years with justification
+  verifiedAccess: boolean;
+  apaValidated: boolean;
+}
 
 export interface Source {
   id: string;
+
+  // Bibliographic Information (APA 7th)
   title: string;
   authors: string[];
   year: number;
-  type: SourceType;
-  category: SourceCategory;
-  url?: string;
+  edition?: string;
+  publisher: string;
+  citation: string; // Full APA 7th citation
   doi?: string;
+  url?: string;
   isbn?: string;
-  citation: string;
-  relevantTopics: string[];
-  qualityScore?: number;
+
+  // Classification
+  category: SourceCategory;
+  type: SourceType;
+  accessStatus: SourceAccessStatus;
+
+  // AGI Standards Compliance
+  complianceBadges: AGIComplianceBadges;
   agiCompliant: boolean;
   complianceNotes?: string;
+
+  // Seminal work handling (for >5 year sources)
+  isSeminal?: boolean;
+  seminalJustification?: string;
+  pairedRecentSourceId?: string; // Required for seminal works
+
+  // Mapping
+  relevantTopics: string[];
+  linkedMLOs: string[];
+  moduleId: string;
+
+  // Quality Indicators
+  complexityLevel: 'introductory' | 'intermediate' | 'advanced';
+  estimatedReadingHours?: number;
+  qualityScore?: number;
+  impactFactor?: number; // For journals
+  authorCredentialsVerified?: boolean;
+}
+
+export interface ModuleSourceSummary {
+  moduleId: string;
+  moduleTitle: string;
+  totalSources: number;
+  peerReviewedCount: number;
+  peerReviewedPercent: number; // Must be ≥50%
+  recentCount: number; // <5 years
+  seminalCount: number;
+  academicCount: number;
+  appliedCount: number;
+  totalReadingHours: number;
+  allocatedIndependentHours: number;
+  allMLOsSupported: boolean;
+  agiCompliant: boolean;
 }
 
 export interface Step5Sources {
+  // Sources organized by module
   sources: Source[];
-  topicCoverage: Record<string, Source[]>;
+  sourcesByModule: Record<string, Source[]>;
+  moduleSummaries: ModuleSourceSummary[];
+
+  // Overall statistics
+  totalSources: number;
+  totalPeerReviewed: number;
+  peerReviewedPercent: number;
+  recentSourcesPercent: number;
+  academicAppliedBalance: boolean;
+
+  // Validation (AGI Standards)
+  validationReport: {
+    allSourcesApproved: boolean; // No prohibited sources
+    recencyCompliance: boolean; // All ≤5 years OR justified seminal
+    minimumSourcesPerTopic: boolean; // 2-3 per topic
+    academicAppliedBalance: boolean; // Each topic has both
+    peerReviewRatio: boolean; // ≥50%
+    completeCitations: boolean; // All have required fields
+    apaAccuracy: boolean; // ≥95% validated
+    verifiedAccess: boolean; // All core sources accessible
+    noPaywalled: boolean; // No unlicensed paywalled
+    everyMLOSupported: boolean; // Each MLO has ≥1 source
+    traceabilityComplete: boolean; // Validation log complete
+  };
+
   agiCompliant: boolean;
   complianceIssues: string[];
+  adminOverrideRequired?: boolean;
   adminOverrideApprovedBy?: string;
+  adminOverrideJustification?: string;
+
+  validatedAt?: string;
   approvedAt?: string;
   approvedBy?: string;
 }
@@ -208,108 +512,474 @@ export interface Step5Sources {
 // =============================================================================
 // STEP 6: READING LISTS
 // =============================================================================
+// STEP 6: INDICATIVE & ADDITIONAL READING LISTS
+// Per workflow v2.2: Transform AGI-validated sources into structured reading
+// lists with Core (Indicative) and Supplementary (Additional) classifications
+// =============================================================================
+
+// Reading complexity level
+export type ReadingComplexity = 'introductory' | 'intermediate' | 'advanced';
+
+// Complexity multipliers for effort estimation (200 words/min base)
+export const COMPLEXITY_MULTIPLIERS: Record<ReadingComplexity, number> = {
+  introductory: 1.0,
+  intermediate: 1.2,
+  advanced: 1.5,
+};
+
 export interface ReadingItem {
   id: string;
   sourceId: string;
   moduleId: string;
-  category: 'core' | 'supplementary';
-  specificChapters?: string;
+
+  // Classification (per workflow v2.2)
+  category: 'core' | 'supplementary'; // Core = 3-6 per module, Supplementary = 4-8
+
+  // Source details (inherited from Step 5)
+  title: string;
+  authors: string[];
+  year: number;
+  citation: string;
+  publisher?: string;
+  doi?: string;
+  url?: string;
+
+  // Specific reading assignment
+  specificChapters?: string; // e.g., "Chapters 2-3"
+  pageRange?: string; // e.g., "pp. 45-67"
   notes?: string;
-  importance: 'essential' | 'recommended' | 'optional';
+
+  // Effort estimation (per workflow v2.2)
+  estimatedWordCount?: number;
+  complexity: ReadingComplexity;
+  estimatedReadingMinutes: number; // Calculated: wordCount / 200 × complexity multiplier
+
+  // Study scheduling
+  suggestedWeek?: string; // e.g., "Week 1-2" for self-paced
+  scheduledDate?: string; // Specific date for cohort mode
+
+  // MLO mapping (required for Core readings)
+  linkedMLOs: string[];
+  assessmentRelevance: 'high' | 'medium' | 'low';
+
+  // AGI Standards (inherited from Step 5 source)
+  agiCompliant: boolean;
+  complianceBadges?: {
+    peerReviewed: boolean;
+    academicText: boolean;
+    professionalBody: boolean;
+    recent: boolean;
+    seminal: boolean;
+    verifiedAccess: boolean;
+    apaValidated: boolean;
+  };
+
+  // Cross-module reference
+  isReference?: boolean; // True if this is a reference to another module's reading
+  originalModuleId?: string; // "See Module X, Reading Y"
+}
+
+export interface ModuleReadingSummary {
+  moduleId: string;
+  moduleTitle: string;
+  coreCount: number; // Should be 3-6
+  supplementaryCount: number; // Should be 4-8
+  totalReadings: number;
+  coreReadingMinutes: number;
+  supplementaryReadingMinutes: number;
+  totalReadingMinutes: number;
+  independentStudyMinutes: number; // Allocated from module hours
+  readingTimePercent: number; // Should be ≤100% of independent study
+  allCoreMapToMLO: boolean;
+  academicAppliedBalance: boolean;
+  agiCompliant: boolean;
 }
 
 export interface Step6ReadingLists {
+  // Readings organized
   readings: ReadingItem[];
   moduleReadings: Record<string, ReadingItem[]>;
-  coreCount: number;
-  supplementaryCount: number;
+  moduleSummaries: ModuleReadingSummary[];
+
+  // Overall counts
+  totalReadings: number;
+  coreCount: number; // 3-6 per module
+  supplementaryCount: number; // 4-8 per module
+
+  // Time totals
+  totalCoreMinutes: number;
+  totalSupplementaryMinutes: number;
+  totalReadingMinutes: number;
+
+  // Validation (per workflow v2.2)
+  validationReport: {
+    coreCountValid: boolean; // 3-6 per module
+    supplementaryCountValid: boolean; // 4-8 per module
+    allCoreMapToMLO: boolean; // All Core readings map to ≥1 MLO
+    allAGICompliant: boolean; // All sources AGI Standards compliant
+    academicAppliedMix: boolean; // Mix of academic and applied
+    readingTimeWithinBudget: boolean; // Total ≤ independent study hours
+    allAccessible: boolean; // All sources accessible with verified links
+  };
+
+  isValid: boolean;
+  validationIssues: string[];
+
+  validatedAt?: string;
   approvedAt?: string;
   approvedBy?: string;
 }
 
 // =============================================================================
 // STEP 7: AUTO-GRADABLE ASSESSMENTS (MCQ-FIRST)
+// Per workflow v2.2: Create comprehensive auto-gradable assessment materials
+// with MCQ question banks, module quizzes, and final exam blueprint
 // =============================================================================
+
+export type QuestionDifficulty = 'easy' | 'medium' | 'hard';
+
 export interface MCQOption {
   id: string;
   text: string;
   isCorrect: boolean;
-  explanation?: string;
+  // Per workflow v2.2: Why distractor is plausible but incorrect
+  explanation: string;
 }
 
 export interface MCQQuestion {
   id: string;
+  // Clear stem focused on single concept
   stem: string;
+  // 4 options (A, B, C, D) - one correct, 3 plausible distractors
   options: MCQOption[];
-  correctOption: string;
-  explanation: string;
-  bloomLevel: BloomLevel;
+  correctOption: string; // Option ID
+
+  // Comprehensive rationale (50-100 words per workflow v2.2)
+  rationale: string;
+
+  // Metadata tags per workflow v2.2
   linkedMLO: string;
-  difficulty: 'easy' | 'medium' | 'hard';
+  bloomLevel: BloomLevel;
+  difficulty: QuestionDifficulty;
   topicId?: string;
+  contentArea?: string;
+
+  // Tracking
+  isUsedInQuiz?: boolean;
+  isUsedInFinal?: boolean;
 }
 
 export interface ClozeQuestion {
   id: string;
   text: string;
-  blanks: { id: string; answer: string; alternatives?: string[] }[];
+  blanks: {
+    id: string;
+    answer: string;
+    alternatives?: string[]; // Accepted synonyms
+  }[];
+  // Case-insensitive matching
+  caseInsensitive: boolean;
   bloomLevel: BloomLevel;
   linkedMLO: string;
+  difficulty: QuestionDifficulty;
+}
+
+// Per-module assessment settings
+export interface ModuleAssessmentSettings {
+  moduleId: string;
+  moduleTitle: string;
+  // Required per workflow v2.2
+  mlosCovered: string[]; // Which MLOs to assess
+  bloomEmphasis: BloomLevel[]; // Pick 1-2 bands
+  // Optional
+  contextConstraints?: string;
+  preferTerms?: string[];
+  avoidTerms?: string[];
 }
 
 export interface Quiz {
   id: string;
   moduleId: string;
+  moduleTitle: string;
   title: string;
   questions: MCQQuestion[];
+  clozeQuestions?: ClozeQuestion[];
+  questionCount: number;
+  weight: number; // % of total grade
   passMark: number;
-  timeLimit?: number;
+  timeLimit?: number; // minutes
   randomized: boolean;
+  // Validation
+  mlosCovered: string[];
+  bloomDistribution: Record<BloomLevel, number>;
+}
+
+export interface FinalExam {
+  id: string;
+  title: string;
+  questions: MCQQuestion[];
+  clozeQuestions?: ClozeQuestion[];
+  questionCount: number;
+  weight: number; // % of total grade (typically 30-50%)
+  passMark: number;
+  timeLimit?: number; // minutes
+  randomized: boolean;
+  // Proportional representation per workflow v2.2
+  moduleDistribution: Record<string, number>; // moduleId -> question count
+  // No overlap with quizzes per workflow v2.2
+  noQuizOverlap: boolean;
+  // All PLOs assessed
+  plosCovered: string[];
+  bloomDistribution: Record<BloomLevel, number>;
+}
+
+export interface AssessmentBlueprint {
+  // Weights (must sum to 100%)
+  finalExamWeight: number;
+  totalQuizWeight: number; // 100 - finalExamWeight
+  perQuizWeight: number; // totalQuizWeight / moduleCount
+
+  // Settings
+  passMark: number;
+  questionsPerQuiz: number;
+  questionsForFinal: number;
+  bankMultiplier: number; // Default 3×
+
+  // Options
+  randomize: boolean;
+  enableCloze: boolean;
+  clozeCountPerModule?: number;
+  timeLimit?: number;
+  openBook?: boolean;
+  calculatorPermitted?: boolean;
 }
 
 export interface Step7Assessments {
-  structure: {
-    finalExamWeight: number;
-    quizWeight: number;
-    passMark: number;
-  };
+  // Blueprint (generated first per workflow v2.2)
+  blueprint: AssessmentBlueprint;
+
+  // Per-module settings
+  moduleSettings: ModuleAssessmentSettings[];
+
+  // Generated content
   quizzes: Quiz[];
-  finalExam: {
-    questions: MCQQuestion[];
-    passMark: number;
-    timeLimit?: number;
-  };
-  questionBank: MCQQuestion[];
+  finalExam: FinalExam;
+
+  // Question banks (3× multiplier per workflow v2.2)
+  questionBanks: Record<string, MCQQuestion[]>; // moduleId -> questions
+  questionBank: MCQQuestion[]; // All questions flat
+  finalExamPool: MCQQuestion[]; // Separate bank for final, no quiz overlap
+
+  // Optional cloze
   clozeQuestions?: ClozeQuestion[];
-  validation: {
-    allAutoGradable: boolean;
-    mlosCovered: string[];
-    missingMLOs: string[];
+
+  // Validation per workflow v2.2
+  validationReport: {
+    weightsSum100: boolean; // Weights sum to exactly 100%
+    everyMLOAssessed: boolean; // Every selected MLO has ≥1 item
+    bloomDistributionMatch: boolean; // Within ±10% tolerance
+    allHaveRationales: boolean; // All items have complete rationales
+    allAutoGradable: boolean; // MCQ or Cloze only
+    noDuplicates: boolean; // No duplicate questions
+    finalProportional: boolean; // Final pulls proportionally
+    noQuizFinalOverlap: boolean; // No overlap between quiz and final
   };
+
+  // Coverage summary
+  mlosCovered: string[];
+  missingMLOs: string[];
+  totalQuestions: number;
+  totalBankQuestions: number;
+
+  isValid: boolean;
+  validationIssues: string[];
+
+  // LMS configuration
+  lmsConfig?: {
+    randomization: boolean;
+    timeLimits: Record<string, number>;
+    passingCriteria: number;
+    feedbackSettings: 'immediate' | 'delayed' | 'afterDeadline';
+  };
+
+  validatedAt?: string;
   approvedAt?: string;
   approvedBy?: string;
 }
 
 // =============================================================================
-// STEP 8: CASE STUDIES (HOOKS)
 // =============================================================================
-export interface CaseStudy {
+// STEP 8: CASE STUDIES (PRACTICE, DISCUSSION, OR ASSESSMENT-READY)
+// Per workflow v2.2: Generate realistic, industry-relevant scenarios with
+// optional data assets and assessment hooks (NOT assessment questions)
+// =============================================================================
+
+// Three case types per workflow v2.2
+export type CaseType = 'practice' | 'discussion' | 'assessment_ready';
+
+export type CaseDifficulty = 'entry' | 'intermediate' | 'advanced';
+
+// Case proposal (Stage 1)
+export interface CaseProposal {
   id: string;
   moduleId: string;
   title: string;
+  abstract: string; // 2-3 sentence summary
+  mappingSummary: string;
+  caseType: CaseType;
+  difficulty: CaseDifficulty;
+  isSelected: boolean;
+}
+
+// Data asset schema (optional)
+export interface DataAssetSchema {
+  name: string;
+  description: string;
+  columns: {
+    name: string;
+    type: 'string' | 'number' | 'date' | 'boolean';
+    description: string;
+    sampleValue: string;
+  }[];
+  sampleRow: Record<string, string | number | boolean>;
+}
+
+// Assessment hooks (for Assessment-Ready cases only)
+export interface AssessmentHooks {
+  // Key Facts: 10-15 atomic statements for future MCQ creation
+  keyFacts: string[];
+  // Common Misconceptions: 5-8 typical errors for distractor creation
+  misconceptions: string[];
+  // Decision Points: 3-5 judgment moments for scenario questions
+  decisionPoints: string[];
+  // Technical Terminology: Domain terms with definitions for glossary
+  terminology: { term: string; definition: string }[];
+}
+
+// Tier mapping for case complexity (per Ivy League prompt library)
+export type CaseTier = 1 | 2 | 3 | 4 | 5;
+
+export interface CaseExhibit {
+  id: string;
+  title: string;
+  description: string;
+  type: 'table' | 'chart' | 'document' | 'screenshot' | 'calculation' | 'form';
+}
+
+export interface TeachingNote {
+  synopsis: string; // 150-200 words
+  learningObjectives: string[]; // Mapped to Bloom's levels
+  assignmentQuestions: string[]; // 3-5 analysis questions
+  sessionPlan: string; // Suggested timing for class use
+  answerGuidance: string; // Key points for each question
+}
+
+export interface CaseStudy {
+  id: string;
+  moduleId: string;
+  moduleTitle?: string;
+
+  // Basic info
+  title: string;
+  caseType: CaseType;
+  difficulty: CaseDifficulty;
+  tier?: CaseTier; // 1=MBA, 2=Masters, 3=UG, 4=Cert/Diploma, 5=Corporate
+
+  // Protagonist details (per Ivy League prompt library)
+  protagonistName?: string;
+  protagonistRole?: string;
+
+  // Scenario content (word count varies by tier)
   scenario: string;
-  hook: string;
-  context: string;
-  linkedTopics: string[];
+  wordCount: number;
+
+  // Structured content
+  organizationalContext: string;
+  backgroundInformation: string;
+  challengeDescription: string;
+  dataPresentation?: string;
+
+  // Exhibit list (per Ivy League prompt library)
+  exhibitList?: CaseExhibit[];
+  hasDataAssets: boolean;
+
+  // Data assets (optional - for raw files)
+  dataAssets?: DataAssetSchema[];
+
+  // Mapping
+  linkedModules: string[];
   linkedMLOs: string[];
-  industry?: string;
-  complexity: 'introductory' | 'intermediate' | 'advanced';
+  linkedTopics: string[];
+  linkedKSCs?: string[];
+
+  // Context
+  industryContext: string;
+  organizationType?: string;
+  brandName: string; // Fictitious default
+  isRealBrand: boolean;
+
+  // Assessment hooks (Assessment-Ready cases only)
+  assessmentHooks?: AssessmentHooks;
+  hasHooks: boolean;
+
+  // Teaching note (per Ivy League prompt library)
+  teachingNote?: TeachingNote;
+
+  // Usage guidance
+  suggestedTiming?: string; // e.g., "After Module 5 core readings"
+  estimatedDuration?: string; // e.g., "90 min individual + 30 min group"
+  learningApplication?: string;
+  prerequisiteKnowledge?: string;
+
+  // For Practice cases
+  suggestedApproach?: string;
+  sampleSolution?: string;
+
+  // For Discussion cases
+  discussionPrompts?: string[];
+  participationCriteria?: string;
+
+  // Ethics compliance
+  ethicsCompliant: boolean;
+  noPII: boolean;
+  anonymized: boolean;
 }
 
 export interface Step8CaseStudies {
+  // Two-stage process per workflow v2.2
+  stage: 'proposals' | 'development' | 'complete';
+
+  // Stage 1: Proposals
+  proposals: CaseProposal[];
+  selectedProposals: string[]; // IDs of selected proposals
+
+  // Stage 2: Full Development
   caseStudies: CaseStudy[];
+
+  // Organization
   moduleCoverage: Record<string, CaseStudy[]>;
+  casesByType: Record<CaseType, CaseStudy[]>;
+
+  // Counts
   totalCases: number;
+  practiceCount: number;
+  discussionCount: number;
+  assessmentReadyCount: number;
+
+  // Validation per workflow v2.2
+  validationReport: {
+    allMappedToModule: boolean; // Each case maps to ≥1 module
+    allMappedToMLO: boolean; // Each case maps to ≥1 MLO
+    wordCountValid: boolean; // 400-800 words
+    ethicsCompliant: boolean; // No PII, brands anonymized
+    hooksComplete: boolean; // Assessment-Ready cases have hooks
+    noAssessmentQuestions: boolean; // Hooks only, no MCQs
+  };
+
+  isValid: boolean;
+  validationIssues: string[];
+
+  validatedAt?: string;
   approvedAt?: string;
   approvedBy?: string;
 }
@@ -317,20 +987,117 @@ export interface Step8CaseStudies {
 // =============================================================================
 // STEP 9: GLOSSARY (AUTO-GENERATED)
 // =============================================================================
+// STEP 9: GLOSSARY (AUTO-GENERATED, NO SME INPUT)
+// Per workflow v2.2: Automatically create comprehensive terminology reference
+// by identifying and defining all key terms used throughout curriculum
+// =============================================================================
+
+// Term priority level per workflow v2.2
+export type TermPriority = 'must_include' | 'should_include' | 'optional';
+
+// Term source for harvesting
+export type TermSource =
+  | 'competency_framework' // Step 2
+  | 'plos' // Step 3
+  | 'mlos' // Step 4
+  | 'assessment' // Step 7
+  | 'reading_list' // Steps 5-6
+  | 'case_study' // Step 8
+  | 'program_description'; // Step 1
+
 export interface GlossaryTerm {
   id: string;
   term: string;
+
+  // Main Definition (20-40 words per workflow v2.2)
   definition: string;
-  category?: string;
-  relatedTerms?: string[];
+  wordCount: number; // Should be 20-40
+
+  // Optional elements per workflow v2.2
+  exampleSentence?: string; // Demonstrates authentic usage (20 words)
+  technicalNote?: string; // Additional detail for advanced learners
+
+  // Cross-References per workflow v2.2
+  relatedTerms?: string[]; // Related terms
+  broaderTerms?: string[]; // More general concepts
+  narrowerTerms?: string[]; // More specific concepts
+  synonyms?: string[];
+
+  // Acronym handling
+  isAcronym: boolean;
+  acronymExpansion?: string; // Full form if this is an acronym
+  acronymForm?: string; // Acronym if this is a full term
+
+  // Categorization
+  category: string;
+  priority: TermPriority;
+
+  // Source tracking
+  sources: TermSource[];
   sourceModules: string[];
+  sourceOutcomes?: string[]; // PLO/MLO IDs where term appears
+  usedInAssessment: boolean; // Must include if true
+
+  // Accessibility per workflow v2.2
+  readingLevel?: string; // Grade level
+  pronunciationGuide?: string;
+}
+
+export interface ModuleTermList {
+  moduleId: string;
+  moduleTitle: string;
+  terms: GlossaryTerm[];
+  termCount: number;
 }
 
 export interface Step9Glossary {
+  // Terms collection
   terms: GlossaryTerm[];
-  categories: string[];
   totalTerms: number;
+
+  // Organization
+  categories: string[];
+  termsByCategory: Record<string, GlossaryTerm[]>;
+
+  // Module-Linked Keyword Lists (Deliverable Format 2)
+  moduleTermLists: ModuleTermList[];
+
+  // Acronyms
+  acronyms: GlossaryTerm[];
+  acronymCount: number;
+
+  // Statistics
+  assessmentTermsCount: number; // 100% must be included
+  essentialCompetencyTermsCount: number;
+  averageDefinitionLength: number; // Should be 20-40
+
+  // Validation per workflow v2.2
+  validationReport: {
+    allAssessmentTermsIncluded: boolean; // 100% of assessment terms
+    definitionLengthValid: boolean; // All 20-40 words
+    noCircularDefinitions: boolean;
+    allCrossReferencesValid: boolean;
+    ukEnglishConsistent: boolean;
+    allTermsMappedToModule: boolean; // Every term maps to ≥1 module
+    noDuplicateEntries: boolean; // Canonical with synonyms
+  };
+
+  isValid: boolean;
+  validationIssues: string[];
+
+  // Export formats available per workflow v2.2
+  exportFormats: {
+    alphabeticalPDF: boolean;
+    moduleLinkedPDF: boolean;
+    lmsImport: boolean;
+    spreadsheet: boolean;
+    mobileWeb: boolean;
+  };
+
+  // Metadata
   generatedAt: string;
+  programType?: 'certificate' | 'diploma'; // Affects typical size
+  typicalSize?: string; // "30-50 terms" for certificate, "50-80" for diploma
 }
 
 // =============================================================================
@@ -411,18 +1178,31 @@ export interface WorkflowListResponse {
 // STEP CONFIGURATION INTERFACES (for forms)
 // =============================================================================
 export interface Step1FormData {
+  // Program Identity
   programTitle: string;
   programDescription: string;
   academicLevel: AcademicLevel;
+
+  // Credit Framework
+  isCreditAwarding: boolean;
   creditSystem: CreditSystem;
-  credits: number;
-  totalHours?: number;
-  customContactPercent?: number;
-  targetLearner: string;
+  credits?: number; // Only if isCreditAwarding = true
+  totalHours?: number; // Only if isCreditAwarding = false (non_credit)
+  customContactPercent?: number; // Optional override (default 30% UK/ECTS, 33% US)
+
+  // Target Learner Profile (structured)
+  targetLearnerAgeRange: string;
+  targetLearnerEducationalBackground: string;
+  targetLearnerIndustrySector: string;
+  targetLearnerExperienceLevel: ExperienceLevel;
+
+  // Delivery
   deliveryMode: DeliveryMode;
-  deliveryDescription?: string;
+  deliveryDescription: string; // 1-3 sentences
+
+  // Labour Market
   programPurpose: string;
-  jobRoles: string[];
+  jobRoles: JobRole[]; // Expanded with description and tasks
 }
 
 export interface Step2FormData {
@@ -432,23 +1212,47 @@ export interface Step2FormData {
 }
 
 export interface Step3FormData {
-  bloomLevels: BloomLevel[];
-  priorityCompetencies?: string[];
-  outcomeEmphasis?: 'cognitive' | 'practical' | 'mixed';
-  targetCount: number;
-  contextConstraints?: string;
-  preferredVerbs?: string[];
-  avoidVerbs?: string[];
+  // 4 Required Decisions (per workflow v2.2)
+  bloomLevels: BloomLevel[]; // Choose ≥2, must have lower + higher
+  priorityCompetencies?: string[]; // Essential KSCs from Step 2
+  outcomeEmphasis: OutcomeEmphasis; // technical | professional | strategic | mixed
+  targetCount: number; // 4-8 (default 6)
+
+  // Optional Advanced Controls
+  contextConstraints?: string; // Industry context, tools, limits
+  preferredVerbs?: string[]; // Bloom-appropriate verbs to favor
+  avoidVerbs?: string[]; // Vague verbs like "know", "understand"
+  stakeholderPriorities?: string; // Employer/client expectations
+  exclusions?: string[]; // Things outcomes must not commit to
 }
 
+// Step 7 Form Data per workflow v2.2
 export interface Step7FormData {
-  finalExamWeight?: number;
-  passMark?: number;
-  questionsPerQuiz?: number;
-  questionsForFinal?: number;
-  bankMultiplier?: number;
-  randomize?: boolean;
-  enableCloze?: boolean;
+  // Global Settings (Required)
+  finalExamWeight: number; // %, typically 30-50%
+  passMark: number; // %, typically 50-70%
+  questionsPerQuiz: number; // typically 15-25
+  questionsForFinal: number; // typically 50-80
+  bankMultiplier: number; // default 3×
+  randomize: boolean; // Shuffle items and options
+
+  // Global Settings (Optional)
+  enableCloze: boolean;
+  clozeCountPerModule?: number;
+  timeLimit?: number; // minutes per quiz
+  finalExamTimeLimit?: number; // minutes for final
+  openBook?: boolean;
+  calculatorPermitted?: boolean;
+
+  // Per-Module Settings
+  moduleSettings?: {
+    moduleId: string;
+    mlosCovered: string[]; // Which MLOs to assess
+    bloomEmphasis: BloomLevel[]; // 1-2 bands
+    contextConstraints?: string;
+    preferTerms?: string[];
+    avoidTerms?: string[];
+  }[];
 }
 
 // =============================================================================
@@ -456,7 +1260,7 @@ export interface Step7FormData {
 // =============================================================================
 export const STEP_NAMES: Record<WorkflowStep, string> = {
   1: 'Program Foundation',
-  2: 'Competency Framework (KSA)',
+  2: 'Competency Framework (KSC)',
   3: 'Program Learning Outcomes',
   4: 'Course Framework & MLOs',
   5: 'Topic-Level Sources',
@@ -468,7 +1272,7 @@ export const STEP_NAMES: Record<WorkflowStep, string> = {
 
 export const STEP_DESCRIPTIONS: Record<WorkflowStep, string> = {
   1: 'Define program basics: title, level, credits, and target audience',
-  2: 'Generate Knowledge, Skills, and Attitudes (KSA) framework',
+  2: 'Generate Knowledge, Skills, and Competencies (KSC) framework',
   3: "Create measurable Program Learning Outcomes using Bloom's Taxonomy",
   4: 'Structure modules, topics, and Module Learning Outcomes',
   5: 'Assign AGI-compliant academic sources to topics',
@@ -507,3 +1311,113 @@ export const BLOOM_VERBS: Record<BloomLevel, string[]> = {
   evaluate: ['assess', 'critique', 'evaluate', 'judge', 'justify', 'recommend'],
   create: ['compose', 'construct', 'create', 'design', 'develop', 'formulate'],
 };
+
+// =============================================================================
+// STEP 1 HELPER CONSTANTS (Workflow v2.2)
+// =============================================================================
+
+export const ACADEMIC_LEVELS: { value: AcademicLevel; label: string; description: string }[] = [
+  {
+    value: 'certificate',
+    label: 'Certificate',
+    description: 'Short-form credential (30-60 credits)',
+  },
+  {
+    value: 'micro-credential',
+    label: 'Micro-Credential',
+    description: 'Focused skill (10-30 credits)',
+  },
+  { value: 'diploma', label: 'Diploma', description: 'Comprehensive program (60-120 credits)' },
+];
+
+export const CREDIT_SYSTEMS: {
+  value: CreditSystem;
+  label: string;
+  hoursPerCredit: number;
+  defaultContactPercent: number;
+  description: string;
+}[] = [
+  {
+    value: 'uk',
+    label: 'UK Credits',
+    hoursPerCredit: 10,
+    defaultContactPercent: 30, // 30% default per workflow
+    description: '1 UK credit = 10 hours total workload',
+  },
+  {
+    value: 'ects',
+    label: 'ECTS (Bologna Process)',
+    hoursPerCredit: 25,
+    defaultContactPercent: 30, // 30% default per workflow
+    description: '1 ECTS = 25 hours total workload',
+  },
+  {
+    value: 'us_semester',
+    label: 'US Semester Credits',
+    hoursPerCredit: 45,
+    defaultContactPercent: 33, // 33% DEFINED ratio (not default)
+    description: '1 US credit = 15 contact + 30 independent = 45 total hours',
+  },
+  {
+    value: 'non_credit',
+    label: 'Non-Credit (Direct Hours)',
+    hoursPerCredit: 1,
+    defaultContactPercent: 30,
+    description: 'Direct hours entry (20-500 hours)',
+  },
+];
+
+export const DELIVERY_MODES: {
+  value: DeliveryMode;
+  label: string;
+  typicalContactPercent: string;
+}[] = [
+  { value: 'online_self_study', label: 'Online Self-Study', typicalContactPercent: '10-20%' },
+  { value: 'online_facilitated', label: 'Online Facilitated', typicalContactPercent: '15-30%' },
+  { value: 'hybrid_blended', label: 'Hybrid/Blended', typicalContactPercent: '20-40%' },
+  { value: 'in_person', label: 'In-Person', typicalContactPercent: '30-50%' },
+];
+
+export const EXPERIENCE_LEVELS: { value: ExperienceLevel; label: string; years: string }[] = [
+  { value: 'beginner', label: 'Beginner', years: '0-2 years' },
+  { value: 'professional', label: 'Professional', years: '3-7 years' },
+  { value: 'expert', label: 'Expert', years: '8+ years' },
+];
+
+// Credit Equivalencies Helper (per workflow v2.2 Appendix C)
+export function calculateCreditEquivalencies(
+  system: CreditSystem,
+  credits: number,
+  totalHours?: number
+): CreditEquivalencies {
+  let hours: number;
+
+  if (system === 'non_credit') {
+    hours = totalHours || 120;
+  } else {
+    const systemConfig = CREDIT_SYSTEMS.find((s) => s.value === system);
+    hours = credits * (systemConfig?.hoursPerCredit || 10);
+  }
+
+  return {
+    ukCredits: Math.round(hours / 10),
+    ectsCredits: Math.round(hours / 25),
+    usSemesterCredits: Math.round(hours / 45),
+    totalHours: hours,
+  };
+}
+
+// Contact Hours Calculator
+export function calculateContactHours(
+  totalHours: number,
+  system: CreditSystem,
+  customPercent?: number
+): { contactHours: number; independentHours: number; contactPercent: number } {
+  const systemConfig = CREDIT_SYSTEMS.find((s) => s.value === system);
+  const contactPercent = customPercent || systemConfig?.defaultContactPercent || 30;
+
+  const contactHours = Math.round(totalHours * (contactPercent / 100));
+  const independentHours = totalHours - contactHours;
+
+  return { contactHours, independentHours, contactPercent };
+}

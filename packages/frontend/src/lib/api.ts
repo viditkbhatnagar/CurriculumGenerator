@@ -3,8 +3,12 @@ import axios from 'axios';
 // Use NEXT_PUBLIC_API_URL from environment, fallback to localhost for development
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
+// 10 minute timeout for long-running LLM requests (curriculum generation)
+const REQUEST_TIMEOUT = 600000;
+
 export const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: REQUEST_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -55,21 +59,40 @@ export async function fetchAPI(endpoint: string, options?: RequestInit) {
   // Use relative URL if no base URL (production with proxy)
   const url = API_BASE_URL ? `${API_BASE_URL}${endpoint}` : endpoint;
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options?.headers,
-    },
-  });
+  // Create AbortController with 10-minute timeout for long-running LLM requests
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
-    const message = errorData.error || errorData.message || 'Request failed';
-    const details = errorData.details || [];
-    throw new APIError(message, details, errorData.code);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options?.headers,
+      },
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+      const message = errorData.error || errorData.message || 'Request failed';
+      const details = errorData.details || [];
+      throw new APIError(message, details, errorData.code);
+    }
+
+    return response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new APIError(
+        'Request timed out. The operation is taking longer than expected. Please try again.',
+        [],
+        'TIMEOUT'
+      );
+    }
+    throw error;
   }
-
-  return response.json();
 }

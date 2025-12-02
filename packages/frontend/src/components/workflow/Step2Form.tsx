@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { useSubmitStep2, useApproveStep2, useUpdateKSAItem } from '@/hooks/useWorkflow';
-import { CurriculumWorkflow, Step2FormData, KSAItem } from '@/types/workflow';
+import { useState, useEffect } from 'react';
+import { useSubmitStep2, useApproveStep2 } from '@/hooks/useWorkflow';
+import { CurriculumWorkflow, KSCItem, BenchmarkProgram, KSCImportance } from '@/types/workflow';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -10,35 +10,65 @@ interface Props {
   onRefresh: () => void;
 }
 
-function KSACard({
+// Industry/Professional Frameworks options
+const INDUSTRY_FRAMEWORKS = [
+  { value: 'SHRM', label: 'SHRM (HR / People Management)' },
+  { value: 'PMI', label: 'PMI (Project Management)' },
+  { value: 'SFIA', label: 'SFIA (IT Skills)' },
+  { value: 'CIPD', label: 'CIPD (People Development)' },
+  { value: 'ASCM', label: 'ASCM (Supply Chain)' },
+  { value: 'CFA', label: 'CFA (Finance)' },
+  { value: 'ACCA', label: 'ACCA (Accounting)' },
+  { value: 'ISO', label: 'ISO Standards' },
+];
+
+// KSC Item Card Component
+function KSCCard({
   item,
   type,
   onEdit,
 }: {
-  item: KSAItem;
-  type: string;
-  onEdit: (item: KSAItem) => void;
+  item: KSCItem;
+  type: 'knowledge' | 'skill' | 'competency';
+  onEdit: (item: KSCItem) => void;
 }) {
-  const importanceColors = {
-    critical: 'bg-red-500/20 text-red-400 border-red-500/30',
-    important: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-    supplementary: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+  const importanceColors: Record<KSCImportance, string> = {
+    essential: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    desirable: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+  };
+
+  const typeColors = {
+    knowledge: 'bg-cyan-500/20 text-cyan-400',
+    skill: 'bg-emerald-500/20 text-emerald-400',
+    competency: 'bg-amber-500/20 text-amber-400',
+  };
+
+  const typeLabels = {
+    knowledge: 'K',
+    skill: 'S',
+    competency: 'C',
   };
 
   return (
-    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-white font-medium">{item.statement}</p>
+    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700 hover:border-slate-600 transition-colors">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex items-start gap-3">
+          <span className={`text-xs px-2 py-1 rounded font-medium ${typeColors[type]}`}>
+            {typeLabels[type]}
+          </span>
+          <p className="text-white">{item.statement}</p>
+        </div>
         <span
-          className={`text-xs px-2 py-1 rounded-full border ${importanceColors[item.importance]}`}
+          className={`text-xs px-2 py-1 rounded-full border whitespace-nowrap ${importanceColors[item.importance as KSCImportance] || importanceColors.desirable}`}
         >
           {item.importance}
         </span>
       </div>
-      <p className="text-sm text-slate-400">{item.description}</p>
+      {item.description && <p className="text-sm text-slate-400 ml-10 mb-2">{item.description}</p>}
+      {item.source && <p className="text-xs text-slate-500 ml-10">Source: {item.source}</p>}
       <button
         onClick={() => onEdit(item)}
-        className="mt-2 text-xs text-cyan-400 hover:text-cyan-300"
+        className="mt-2 ml-10 text-xs text-cyan-400 hover:text-cyan-300"
       >
         Edit
       </button>
@@ -46,115 +76,309 @@ function KSACard({
   );
 }
 
+// Empty benchmark template
+const EMPTY_BENCHMARK: BenchmarkProgram = {
+  programName: '',
+  institution: '',
+  url: '',
+};
+
 export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
   const submitStep2 = useSubmitStep2();
   const approveStep2 = useApproveStep2();
-  const updateKSAItem = useUpdateKSAItem();
 
-  const [formData, setFormData] = useState<Step2FormData>({
-    benchmarkPrograms: [],
-    industryFrameworks: [],
-    institutionalFrameworks: [],
-  });
+  // Form state for inputs
+  const [benchmarks, setBenchmarks] = useState<BenchmarkProgram[]>([{ ...EMPTY_BENCHMARK }]);
+  const [selectedFrameworks, setSelectedFrameworks] = useState<string[]>([]);
+  const [institutionalFramework, setInstitutionalFramework] = useState('');
+  const [editingItem, setEditingItem] = useState<KSCItem | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const [benchmarkInput, setBenchmarkInput] = useState('');
-  const [editingItem, setEditingItem] = useState<KSAItem | null>(null);
+  // Initialize from existing data
+  useEffect(() => {
+    if (workflow.step2?.benchmarkPrograms && workflow.step2.benchmarkPrograms.length > 0) {
+      // Handle both old string format and new object format
+      const existingBenchmarks = workflow.step2.benchmarkPrograms.map((b: any) =>
+        typeof b === 'string'
+          ? { programName: b, institution: '', url: '' }
+          : { programName: b.programName || '', institution: b.institution || '', url: b.url || '' }
+      );
+      setBenchmarks(existingBenchmarks.length > 0 ? existingBenchmarks : [{ ...EMPTY_BENCHMARK }]);
+    }
+    if (workflow.step2?.industryFrameworks) {
+      setSelectedFrameworks(workflow.step2.industryFrameworks);
+    }
+    if (
+      workflow.step2?.institutionalFrameworks &&
+      workflow.step2.institutionalFrameworks.length > 0
+    ) {
+      setInstitutionalFramework(workflow.step2.institutionalFrameworks.join(', '));
+    }
+  }, [workflow.step2]);
 
   const handleGenerate = async () => {
+    setError(null);
     try {
+      // Filter out empty benchmarks
+      const validBenchmarks = benchmarks.filter((b) => b.programName.trim());
+
       await submitStep2.mutateAsync({
         id: workflow._id,
-        data: formData,
+        data: {
+          benchmarkPrograms: validBenchmarks,
+          industryFrameworks: selectedFrameworks,
+          institutionalFrameworks: institutionalFramework
+            ? institutionalFramework
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : [],
+        },
       });
       onRefresh();
-    } catch (err) {
-      console.error('Failed to generate KSA:', err);
+    } catch (err: any) {
+      console.error('Failed to generate KSC:', err);
+      setError(err.message || 'Failed to generate competency framework');
     }
   };
 
   const handleApprove = async () => {
+    setError(null);
     try {
       await approveStep2.mutateAsync(workflow._id);
       onComplete();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to approve Step 2:', err);
+      setError(err.message || 'Failed to approve Step 2');
     }
   };
 
+  // Benchmark management
   const addBenchmark = () => {
-    if (benchmarkInput.trim()) {
-      setFormData((prev) => ({
-        ...prev,
-        benchmarkPrograms: [...(prev.benchmarkPrograms || []), benchmarkInput.trim()],
-      }));
-      setBenchmarkInput('');
+    setBenchmarks((prev) => [...prev, { ...EMPTY_BENCHMARK }]);
+  };
+
+  const updateBenchmark = (index: number, field: keyof BenchmarkProgram, value: string) => {
+    setBenchmarks((prev) => prev.map((b, i) => (i === index ? { ...b, [field]: value } : b)));
+  };
+
+  const removeBenchmark = (index: number) => {
+    if (benchmarks.length > 1) {
+      setBenchmarks((prev) => prev.filter((_, i) => i !== index));
     }
   };
 
-  const hasStep2Data = workflow.step2 && workflow.step2.totalItems > 0;
-  const isApproved = !!workflow.step2?.approvedAt;
+  // Framework toggle
+  const toggleFramework = (framework: string) => {
+    setSelectedFrameworks((prev) =>
+      prev.includes(framework) ? prev.filter((f) => f !== framework) : [...prev, framework]
+    );
+  };
+
+  // Check for existing data - handle both old and new field names
+  const step2Data = workflow.step2;
+  const hasStep2Data =
+    step2Data &&
+    (step2Data.totalItems > 0 ||
+      (step2Data.knowledgeItems?.length || 0) +
+        (step2Data.skillItems?.length || 0) +
+        ((step2Data as any).competencyItems?.length ||
+          (step2Data as any).attitudeItems?.length ||
+          0) >
+        0);
+  const isApproved = !!step2Data?.approvedAt;
+
+  // Get competency items (handle both old 'attitudeItems' and new 'competencyItems')
+  const competencyItems =
+    (step2Data as any)?.competencyItems || (step2Data as any)?.attitudeItems || [];
+
+  // Calculate distribution percentages
+  const totalItems =
+    (step2Data?.knowledgeItems?.length || 0) +
+    (step2Data?.skillItems?.length || 0) +
+    competencyItems.length;
+  const knowledgePercent =
+    totalItems > 0 ? Math.round(((step2Data?.knowledgeItems?.length || 0) / totalItems) * 100) : 0;
+  const skillPercent =
+    totalItems > 0 ? Math.round(((step2Data?.skillItems?.length || 0) / totalItems) * 100) : 0;
+  const competencyPercent =
+    totalItems > 0 ? Math.round((competencyItems.length / totalItems) * 100) : 0;
 
   return (
-    <div className="p-6">
+    <div className="p-6 max-w-4xl mx-auto">
       {!hasStep2Data ? (
         // Generation Form
-        <div className="space-y-6">
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-            <h3 className="text-blue-400 font-medium mb-2">About This Step</h3>
-            <p className="text-sm text-slate-300">
-              The AI will analyze your program foundation and generate a comprehensive Knowledge,
-              Skills, and Attitudes (KSA) framework. You can optionally provide benchmark programs
-              for reference.
+        <div className="space-y-8">
+          {/* About This Step */}
+          <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/30 rounded-xl p-5">
+            <h3 className="text-blue-400 font-semibold mb-3 flex items-center gap-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              About Step 2: Competency Framework (KSC)
+            </h3>
+            <p className="text-sm text-slate-300 mb-3">
+              The AI will analyze your program foundation and generate a comprehensive{' '}
+              <strong className="text-cyan-400">Knowledge</strong>,{' '}
+              <strong className="text-emerald-400">Skills</strong>, and{' '}
+              <strong className="text-amber-400">Competencies</strong> (KSC) framework by
+              researching similar programs and industry standards.
             </p>
-          </div>
-
-          {/* Benchmark Programs */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Benchmark Programs (Optional)
-            </label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={benchmarkInput}
-                onChange={(e) => setBenchmarkInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addBenchmark())}
-                placeholder="e.g., MIT Data Science Certificate"
-                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-              />
-              <button
-                type="button"
-                onClick={addBenchmark}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg"
-              >
-                Add
-              </button>
-            </div>
-            {formData.benchmarkPrograms && formData.benchmarkPrograms.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {formData.benchmarkPrograms.map((program, index) => (
-                  <span
-                    key={index}
-                    className="px-3 py-1 bg-slate-800 text-slate-300 rounded-full text-sm flex items-center gap-2"
-                  >
-                    {program}
-                    <button
-                      onClick={() =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          benchmarkPrograms: prev.benchmarkPrograms?.filter((_, i) => i !== index),
-                        }))
-                      }
-                      className="text-slate-500 hover:text-white"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
+            <div className="grid grid-cols-3 gap-4 text-center text-xs">
+              <div className="bg-cyan-500/10 rounded-lg p-2">
+                <p className="text-cyan-400 font-semibold">Knowledge (K)</p>
+                <p className="text-slate-400">30-40% of items</p>
+                <p className="text-slate-500 mt-1">What learners understand</p>
               </div>
-            )}
+              <div className="bg-emerald-500/10 rounded-lg p-2">
+                <p className="text-emerald-400 font-semibold">Skills (S)</p>
+                <p className="text-slate-400">40-50% of items</p>
+                <p className="text-slate-500 mt-1">What learners can do</p>
+              </div>
+              <div className="bg-amber-500/10 rounded-lg p-2">
+                <p className="text-amber-400 font-semibold">Competencies (C)</p>
+                <p className="text-slate-400">10-30% of items</p>
+                <p className="text-slate-500 mt-1">Professional behaviors</p>
+              </div>
+            </div>
           </div>
 
+          {/* Benchmark Programs Section */}
+          <section className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2 mb-4">
+                Benchmark Programs
+              </h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Provide similar programs you want the AI to analyze for competencies. These are the
+                primary source for generating your KSC framework.
+              </p>
+            </div>
+
+            {benchmarks.map((benchmark, index) => (
+              <div
+                key={index}
+                className="bg-slate-900/30 border border-slate-700 rounded-lg p-4 space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-400">Benchmark {index + 1}</span>
+                  {benchmarks.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeBenchmark(index)}
+                      className="text-sm text-red-400 hover:text-red-300"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Program Name</label>
+                    <input
+                      type="text"
+                      value={benchmark.programName}
+                      onChange={(e) => updateBenchmark(index, 'programName', e.target.value)}
+                      placeholder="e.g., MSc Project Management"
+                      className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Institution</label>
+                    <input
+                      type="text"
+                      value={benchmark.institution}
+                      onChange={(e) => updateBenchmark(index, 'institution', e.target.value)}
+                      placeholder="e.g., University of Manchester"
+                      className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">URL (optional)</label>
+                  <input
+                    type="url"
+                    value={benchmark.url}
+                    onChange={(e) => updateBenchmark(index, 'url', e.target.value)}
+                    placeholder="https://..."
+                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={addBenchmark}
+              className="w-full py-2 border border-dashed border-slate-600 rounded-lg text-slate-400 hover:border-cyan-500 hover:text-cyan-400 transition-colors"
+            >
+              + Add Another Benchmark Program
+            </button>
+          </section>
+
+          {/* Industry Frameworks Section */}
+          <section className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2 mb-4">
+                Industry/Professional Frameworks (Optional)
+              </h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Select professional body standards to include in the analysis.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {INDUSTRY_FRAMEWORKS.map((framework) => (
+                <button
+                  key={framework.value}
+                  type="button"
+                  onClick={() => toggleFramework(framework.value)}
+                  className={`p-3 rounded-lg border text-left text-sm transition-all ${
+                    selectedFrameworks.includes(framework.value)
+                      ? 'bg-cyan-500/20 border-cyan-500 text-white'
+                      : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                  }`}
+                >
+                  {framework.label}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {/* Institutional Frameworks Section */}
+          <section className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2 mb-4">
+                Institutional Frameworks (Optional)
+              </h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Add your organization's graduate attributes, competency models, or capability
+                frameworks.
+              </p>
+            </div>
+
+            <textarea
+              value={institutionalFramework}
+              onChange={(e) => setInstitutionalFramework(e.target.value)}
+              placeholder="Enter institutional frameworks, separated by commas (e.g., Graduate Attributes Framework, Digital Skills Matrix)"
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+            />
+          </section>
+
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+              <p className="text-red-400">{error}</p>
+            </div>
+          )}
+
+          {/* Generate Button */}
           <button
             onClick={handleGenerate}
             disabled={submitStep2.isPending}
@@ -163,87 +387,172 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             {submitStep2.isPending ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Generating KSA Framework...
+                Generating KSC Framework...
               </span>
             ) : (
-              'Generate KSA Framework with AI'
+              'Generate KSC Framework with AI'
             )}
           </button>
+
+          <p className="text-xs text-slate-500 text-center">
+            If you don't provide benchmarks, the AI will use public programs from the knowledge
+            base.
+          </p>
         </div>
       ) : (
-        // Display Generated KSA
+        // Display Generated KSC
         <div className="space-y-6">
-          {/* Stats */}
+          {/* Stats Overview */}
           <div className="grid grid-cols-4 gap-4">
-            <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700 text-center">
-              <p className="text-2xl font-bold text-white">{workflow.step2?.totalItems}</p>
-              <p className="text-xs text-slate-500">Total Items</p>
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+              <p className="text-3xl font-bold text-white">{totalItems}</p>
+              <p className="text-xs text-slate-500 mt-1">Total Items</p>
             </div>
-            <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700 text-center">
-              <p className="text-2xl font-bold text-cyan-400">
-                {workflow.step2?.knowledgeItems?.length || 0}
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+              <p className="text-3xl font-bold text-cyan-400">
+                {step2Data?.knowledgeItems?.length || 0}
               </p>
-              <p className="text-xs text-slate-500">Knowledge</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Knowledge <span className="text-slate-600">({knowledgePercent}%)</span>
+              </p>
             </div>
-            <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700 text-center">
-              <p className="text-2xl font-bold text-emerald-400">
-                {workflow.step2?.skillItems?.length || 0}
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+              <p className="text-3xl font-bold text-emerald-400">
+                {step2Data?.skillItems?.length || 0}
               </p>
-              <p className="text-xs text-slate-500">Skills</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Skills <span className="text-slate-600">({skillPercent}%)</span>
+              </p>
             </div>
-            <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700 text-center">
-              <p className="text-2xl font-bold text-amber-400">
-                {workflow.step2?.attitudeItems?.length || 0}
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+              <p className="text-3xl font-bold text-amber-400">{competencyItems.length}</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Competencies <span className="text-slate-600">({competencyPercent}%)</span>
               </p>
-              <p className="text-xs text-slate-500">Attitudes</p>
+            </div>
+          </div>
+
+          {/* Distribution Bar */}
+          <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+            <p className="text-xs text-slate-400 mb-2">KSC Distribution</p>
+            <div className="flex h-3 rounded-full overflow-hidden">
+              <div
+                className="bg-cyan-500"
+                style={{ width: `${knowledgePercent}%` }}
+                title={`Knowledge: ${knowledgePercent}%`}
+              />
+              <div
+                className="bg-emerald-500"
+                style={{ width: `${skillPercent}%` }}
+                title={`Skills: ${skillPercent}%`}
+              />
+              <div
+                className="bg-amber-500"
+                style={{ width: `${competencyPercent}%` }}
+                title={`Competencies: ${competencyPercent}%`}
+              />
+            </div>
+            <div className="flex justify-between text-xs text-slate-500 mt-2">
+              <span>K: 30-40%</span>
+              <span>S: 40-50%</span>
+              <span>C: 10-30%</span>
             </div>
           </div>
 
           {/* Knowledge Items */}
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-cyan-400" />
+          <section>
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-cyan-400" />
               Knowledge (K)
+              <span className="text-sm font-normal text-slate-500">
+                — What learners need to understand
+              </span>
             </h3>
-            <div className="grid gap-3">
-              {workflow.step2?.knowledgeItems?.map((item) => (
-                <KSACard key={item.id} item={item} type="knowledge" onEdit={setEditingItem} />
+            <div className="space-y-3">
+              {step2Data?.knowledgeItems?.map((item: KSCItem) => (
+                <KSCCard key={item.id} item={item} type="knowledge" onEdit={setEditingItem} />
               ))}
             </div>
-          </div>
+          </section>
 
           {/* Skills Items */}
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          <section>
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-emerald-400" />
               Skills (S)
+              <span className="text-sm font-normal text-slate-500">
+                — What learners need to be able to do
+              </span>
             </h3>
-            <div className="grid gap-3">
-              {workflow.step2?.skillItems?.map((item) => (
-                <KSACard key={item.id} item={item} type="skill" onEdit={setEditingItem} />
+            <div className="space-y-3">
+              {step2Data?.skillItems?.map((item: KSCItem) => (
+                <KSCCard key={item.id} item={item} type="skill" onEdit={setEditingItem} />
               ))}
             </div>
-          </div>
+          </section>
 
-          {/* Attitude Items */}
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-400" />
-              Attitudes (A)
+          {/* Competency Items */}
+          <section>
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-amber-400" />
+              Competencies (C)
+              <span className="text-sm font-normal text-slate-500">
+                — Professional behaviors and values
+              </span>
             </h3>
-            <div className="grid gap-3">
-              {workflow.step2?.attitudeItems?.map((item) => (
-                <KSACard key={item.id} item={item} type="attitude" onEdit={setEditingItem} />
+            <div className="space-y-3">
+              {competencyItems.map((item: KSCItem) => (
+                <KSCCard key={item.id} item={item} type="competency" onEdit={setEditingItem} />
               ))}
             </div>
-          </div>
+          </section>
+
+          {/* Benchmarking Report */}
+          {step2Data?.benchmarkingReport && (
+            <section className="bg-slate-900/30 border border-slate-700 rounded-lg p-5">
+              <h3 className="text-lg font-semibold text-white mb-3">Benchmarking Report</h3>
+              {step2Data.benchmarkingReport.programsAnalyzed && (
+                <div className="mb-3">
+                  <p className="text-sm text-slate-400 mb-2">Programs Analyzed:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {step2Data.benchmarkingReport.programsAnalyzed.map((p: any, i: number) => (
+                      <span
+                        key={i}
+                        className="px-2 py-1 bg-slate-800 text-slate-300 rounded text-xs"
+                      >
+                        {typeof p === 'string' ? p : p.programName}
+                        {typeof p === 'object' && p.institution && ` (${p.institution})`}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {step2Data.benchmarkingReport.keyFindings && (
+                <div>
+                  <p className="text-sm text-slate-400 mb-2">Key Findings:</p>
+                  <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
+                    {step2Data.benchmarkingReport.keyFindings.map((finding: string, i: number) => (
+                      <li key={i}>{finding}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+              <p className="text-red-400">{error}</p>
+            </div>
+          )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-4 border-t border-slate-700">
+          <div className="flex items-center justify-between pt-6 border-t border-slate-700">
             <button
               onClick={handleGenerate}
               disabled={submitStep2.isPending}
-              className="px-4 py-2 text-slate-400 hover:text-white"
+              className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
             >
               Regenerate
             </button>
@@ -251,8 +560,8 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
               {!isApproved && (
                 <button
                   onClick={handleApprove}
-                  disabled={approveStep2.isPending || (workflow.step2?.totalItems || 0) < 10}
-                  className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+                  disabled={approveStep2.isPending || totalItems < 10}
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
                 >
                   {approveStep2.isPending ? 'Approving...' : 'Approve & Continue →'}
                 </button>
@@ -272,6 +581,12 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
               )}
             </div>
           </div>
+
+          {totalItems < 10 && !isApproved && (
+            <p className="text-xs text-amber-400 text-center">
+              Minimum 10 items required to approve. Currently: {totalItems}
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -28,14 +28,14 @@ export type StreamCallback = (chunk: StreamChunk) => void;
 
 export class OpenAIService {
   private client: OpenAI;
-  private readonly defaultTimeout = 180000; // 180 seconds (3 minutes) for complex generation
+  private readonly defaultTimeout = 600000; // 600 seconds (10 minutes) for complex curriculum generation with large prompts
   private readonly maxRetries = 5; // Increased retries for curriculum generation
   private readonly baseDelay = 2000; // 2 seconds for exponential backoff
   private initialized = false;
 
   constructor() {
     const apiKey = config.openai.apiKey;
-    
+
     if (!apiKey) {
       console.error('[OpenAI] ERROR: OPENAI_API_KEY is not set!');
       loggingService.error('OpenAI API key is not configured', {
@@ -43,12 +43,14 @@ export class OpenAIService {
         model: config.openai.chatModel,
       });
     } else {
-      console.log(`[OpenAI] Initialized with model: ${config.openai.chatModel}, key: ${apiKey.substring(0, 10)}...`);
+      console.log(
+        `[OpenAI] Initialized with model: ${config.openai.chatModel}, key: ${apiKey.substring(0, 10)}...`
+      );
     }
-    
+
     this.client = new OpenAI({
       apiKey: apiKey || 'missing-key',
-      timeout: 180000, // 180 seconds (3 minutes) for complex curriculum generation
+      timeout: 600000, // 600 seconds (10 minutes) for complex curriculum generation with large prompts
       maxRetries: 0, // We handle retries manually for better control
     });
   }
@@ -224,7 +226,7 @@ export class OpenAIService {
   ): Promise<string> {
     const {
       model = config.openai.chatModel, // Default: gpt-5
-      maxTokens = 4000, // GPT-5 supports larger context
+      maxTokens = 16000, // GPT-5 needs more tokens for reasoning + output
       timeout = this.defaultTimeout,
     } = options;
 
@@ -250,7 +252,9 @@ export class OpenAIService {
         clearTimeout(timeoutId);
 
         // Debug: log response for GPT-5 troubleshooting
-        console.log(`[OpenAI] Response - choices: ${response.choices?.length}, finish_reason: ${response.choices?.[0]?.finish_reason}, content_length: ${response.choices?.[0]?.message?.content?.length || 0}`);
+        console.log(
+          `[OpenAI] Response - choices: ${response.choices?.length}, finish_reason: ${response.choices?.[0]?.finish_reason}, content_length: ${response.choices?.[0]?.message?.content?.length || 0}`
+        );
 
         const content = response.choices[0]?.message?.content;
         if (!content) {
@@ -321,7 +325,7 @@ export class OpenAIService {
   ): Promise<T> {
     const {
       model = config.openai.chatModel, // Default: gpt-5
-      maxTokens = 4000, // GPT-5 supports larger context
+      maxTokens = 16000, // GPT-5 needs more tokens for reasoning + output
       timeout = this.defaultTimeout,
     } = options;
 
@@ -410,7 +414,7 @@ export class OpenAIService {
   ): Promise<void> {
     const {
       model = config.openai.chatModel, // Default: gpt-5
-      maxTokens = 4000, // GPT-5 supports larger context
+      maxTokens = 16000, // GPT-5 needs more tokens for reasoning + output
       timeout = this.defaultTimeout,
     } = options;
 
@@ -504,13 +508,17 @@ export class OpenAIService {
       );
     }
 
-    // Retry on timeout errors
+    // Retry on timeout, abort, and connection errors
     if (error instanceof Error) {
       const message = error.message.toLowerCase();
       return (
         message.includes('timeout') ||
+        message.includes('aborted') ||
+        message.includes('abort') ||
         message.includes('econnreset') ||
-        message.includes('econnrefused')
+        message.includes('econnrefused') ||
+        message.includes('network') ||
+        error.name === 'AbortError'
       );
     }
 

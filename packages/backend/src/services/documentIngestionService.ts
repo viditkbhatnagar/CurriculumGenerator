@@ -1,8 +1,11 @@
-const pdfParse = require('pdf-parse');
 import mammoth from 'mammoth';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { DocumentSource, ProcessedDocument, IngestionResult } from '../types/knowledgeBase';
+import { DocumentSource, ProcessedDocument } from '../types/knowledgeBase';
+
+// pdf-parse is a CommonJS module that doesn't support ES imports
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require('pdf-parse/lib/pdf-parse');
 
 /**
  * Document Ingestion Service
@@ -49,7 +52,9 @@ export class DocumentIngestionService {
       const data = await pdfParse(buffer);
       return data.text;
     } catch (error) {
-      throw new Error(`Failed to parse PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to parse PDF: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -61,7 +66,9 @@ export class DocumentIngestionService {
       const result = await mammoth.extractRawText({ buffer });
       return result.value;
     } catch (error) {
-      throw new Error(`Failed to parse DOCX: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to parse DOCX: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -94,7 +101,9 @@ export class DocumentIngestionService {
       if (axios.isAxiosError(error)) {
         throw new Error(`Failed to fetch URL: ${error.message}`);
       }
-      throw new Error(`Failed to extract text from URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to extract text from URL: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -107,7 +116,7 @@ export class DocumentIngestionService {
 
     if (timeSinceLastRequest < this.rateLimitDelay) {
       const waitTime = this.rateLimitDelay - timeSinceLastRequest;
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
 
     this.lastRequestTime = Date.now();
@@ -126,6 +135,7 @@ export class DocumentIngestionService {
     cleaned = cleaned.normalize('NFKD');
 
     // Remove control characters except newlines and tabs
+    // eslint-disable-next-line no-control-regex
     cleaned = cleaned.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
 
     // Replace multiple spaces with single space
@@ -137,7 +147,7 @@ export class DocumentIngestionService {
     // Remove leading/trailing whitespace from each line
     cleaned = cleaned
       .split('\n')
-      .map(line => line.trim())
+      .map((line) => line.trim())
       .join('\n');
 
     // Remove empty lines at start and end
@@ -157,7 +167,9 @@ export class DocumentIngestionService {
         const processed = await this.processDocument(source);
         results.push(processed);
       } catch (error) {
-        console.error(`Failed to process document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        console.error(
+          `Failed to process document: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
         // Continue processing other documents
       }
     }

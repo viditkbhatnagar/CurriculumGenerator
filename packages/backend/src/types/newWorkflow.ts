@@ -57,7 +57,8 @@ export type ExperienceLevel = 'beginner' | 'professional' | 'expert';
 
 export type BloomLevel = 'remember' | 'understand' | 'apply' | 'analyze' | 'evaluate' | 'create';
 
-export type KSAType = 'knowledge' | 'skill' | 'attitude';
+export type KSCType = 'knowledge' | 'skill' | 'competency';
+export type KSAType = KSCType; // Legacy alias
 
 export type ImportanceLevel = 'essential' | 'desirable';
 
@@ -72,12 +73,22 @@ export type CaseStudyType = 'practice' | 'discussion' | 'assessment_ready';
 // ============================================================================
 
 export interface CreditFramework {
+  isCreditAwarding?: boolean; // Yes/No determines which options are shown
   system: CreditSystem;
-  credits?: number; // For credit-awarding systems
-  totalHours: number; // Calculated or entered directly
+  credits?: number; // For credit-awarding systems (UK, ECTS, US)
+  totalHours: number; // Calculated or entered directly (non-credit)
   contactHoursPercent: number; // Default 30% for UK/ECTS, 33% for US
   contactHours: number; // Calculated
   independentHours: number; // Calculated
+  customContactPercent?: number; // Optional override
+}
+
+// International Credit Equivalencies (per workflow v2.2 Appendix C)
+export interface CreditEquivalencies {
+  ukCredits: number;
+  ectsCredits: number;
+  usSemesterCredits: number;
+  totalHours: number;
 }
 
 export interface TargetLearnerProfile {
@@ -132,7 +143,8 @@ export interface Step1ProgramFoundation {
 }
 
 // ============================================================================
-// STEP 2: COMPETENCY & KNOWLEDGE FRAMEWORK (KSA)
+// STEP 2: COMPETENCY & KNOWLEDGE FRAMEWORK (KSC)
+// Knowledge, Skills, Competencies
 // ============================================================================
 
 export interface BenchmarkProgram {
@@ -150,9 +162,9 @@ export interface CompetencySource {
   publicationDate: Date;
 }
 
-export interface KSAItem {
+export interface KSCItem {
   id: string;
-  type: KSAType;
+  type: KSCType;
   statement: string; // ≤50 words
   description: string;
   importance: ImportanceLevel;
@@ -160,16 +172,19 @@ export interface KSAItem {
   jobTaskMapping?: string[]; // Links to job tasks from Step 1
 }
 
-export interface Step2CompetencyKSA {
+// Legacy alias
+export type KSAItem = KSCItem;
+
+export interface Step2CompetencyKSC {
   // Input
   benchmarkPrograms: BenchmarkProgram[];
-  industryFrameworks?: string[]; // SHRM, PMI, etc.
+  industryFrameworks?: string[]; // SHRM, PMI, SFIA, CIPD, ASCM
   institutionalFrameworks?: string[];
 
-  // Generated KSA Items
-  knowledgeItems: KSAItem[]; // 30-40% of total
-  skillItems: KSAItem[]; // 40-50% of total
-  attitudeItems: KSAItem[]; // 10-30% of total
+  // Generated KSC Items (per workflow v2.2 ratios)
+  knowledgeItems: KSCItem[]; // 30-40% of total
+  skillItems: KSCItem[]; // 40-50% of total
+  competencyItems: KSCItem[]; // 10-30% of total (professional behaviors)
 
   // Benchmarking Report
   benchmarkingReport?: {
@@ -179,12 +194,15 @@ export interface Step2CompetencyKSA {
   };
 
   // Validation
-  totalItems: number;
+  totalItems: number; // 10-30 items
   essentialCount: number;
   validatedAt?: Date;
   approvedAt?: Date;
   approvedBy?: string;
 }
+
+// Legacy alias for backward compatibility
+export type Step2CompetencyKSA = Step2CompetencyKSC;
 
 // ============================================================================
 // STEP 3: PROGRAM LEARNING OUTCOMES (PLOs)

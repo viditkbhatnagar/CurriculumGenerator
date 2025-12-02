@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep1, useApproveStep1 } from '@/hooks/useWorkflow';
 import {
   CurriculumWorkflow,
@@ -8,6 +8,14 @@ import {
   AcademicLevel,
   CreditSystem,
   DeliveryMode,
+  ExperienceLevel,
+  JobRole,
+  ACADEMIC_LEVELS,
+  CREDIT_SYSTEMS,
+  DELIVERY_MODES,
+  EXPERIENCE_LEVELS,
+  calculateCreditEquivalencies,
+  calculateContactHours,
 } from '@/types/workflow';
 
 interface Props {
@@ -16,97 +24,186 @@ interface Props {
   onRefresh: () => void;
 }
 
-const ACADEMIC_LEVELS: { value: AcademicLevel; label: string; description: string }[] = [
-  {
-    value: 'certificate',
-    label: 'Certificate',
-    description: 'Short-form credential (30-60 credits)',
-  },
-  {
-    value: 'micro-credential',
-    label: 'Micro-Credential',
-    description: 'Focused skill (10-30 credits)',
-  },
-  { value: 'diploma', label: 'Diploma', description: 'Comprehensive program (60-120 credits)' },
-];
-
-const CREDIT_SYSTEMS: {
-  value: CreditSystem;
-  label: string;
-  hoursPerCredit: number;
-  contactPercent: number;
-}[] = [
-  { value: 'uk', label: 'UK Credits', hoursPerCredit: 10, contactPercent: 25 },
-  { value: 'ects', label: 'ECTS (European)', hoursPerCredit: 25, contactPercent: 33 },
-  { value: 'us_semester', label: 'US Semester Hours', hoursPerCredit: 45, contactPercent: 33 },
-];
-
-const DELIVERY_MODES: { value: DeliveryMode; label: string }[] = [
-  { value: 'online', label: 'Fully Online' },
-  { value: 'blended', label: 'Blended (Online + In-Person)' },
-  { value: 'on-campus', label: 'On-Campus' },
-];
+// Empty job role template
+const EMPTY_JOB_ROLE: JobRole = {
+  title: '',
+  description: '',
+  tasks: [''],
+};
 
 export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
   const submitStep1 = useSubmitStep1();
   const approveStep1 = useApproveStep1();
 
+  // Track if form has been initialized to prevent resets
+  const isInitialized = useRef(false);
+  const lastWorkflowId = useRef<string | null>(null);
+
+  // Form state
   const [formData, setFormData] = useState<Step1FormData>({
+    // Program Identity
     programTitle: '',
     programDescription: '',
     academicLevel: 'certificate',
+
+    // Credit Framework
+    isCreditAwarding: true,
     creditSystem: 'uk',
     credits: 60,
-    targetLearner: '',
-    deliveryMode: 'online',
+    totalHours: 120,
+    customContactPercent: undefined,
+
+    // Target Learner Profile (structured)
+    targetLearnerAgeRange: '',
+    targetLearnerEducationalBackground: '',
+    targetLearnerIndustrySector: '',
+    targetLearnerExperienceLevel: 'professional',
+
+    // Delivery
+    deliveryMode: 'hybrid_blended',
+    deliveryDescription: '',
+
+    // Labour Market
     programPurpose: '',
-    jobRoles: ['', ''],
+    jobRoles: [{ ...EMPTY_JOB_ROLE }, { ...EMPTY_JOB_ROLE }],
   });
 
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [showCustomContactHours, setShowCustomContactHours] = useState(false);
 
-  const [calculatedHours, setCalculatedHours] = useState({ total: 0, contact: 0, selfStudy: 0 });
+  // Calculated values
+  const [calculations, setCalculations] = useState({
+    totalHours: 0,
+    contactHours: 0,
+    independentHours: 0,
+    contactPercent: 30,
+    equivalencies: {
+      ukCredits: 0,
+      ectsCredits: 0,
+      usSemesterCredits: 0,
+      totalHours: 0,
+    },
+  });
 
-  // Initialize form with existing data
+  // Initialize form with existing data - only on initial load or workflow change
   useEffect(() => {
-    if (workflow.step1) {
+    // Only initialize if:
+    // 1. Form hasn't been initialized yet, OR
+    // 2. Workflow ID has changed (user switched to different workflow)
+    const workflowId = workflow._id;
+    const shouldInitialize = !isInitialized.current || lastWorkflowId.current !== workflowId;
+
+    if (shouldInitialize && workflow.step1) {
+      const step1 = workflow.step1;
+      const targetLearner = step1.targetLearner;
+      const delivery = step1.delivery;
+      const creditFramework = step1.creditFramework;
+
       setFormData({
-        programTitle: workflow.step1.programTitle || '',
-        programDescription: workflow.step1.programDescription || '',
-        academicLevel: workflow.step1.academicLevel || 'certificate',
-        creditSystem: workflow.step1.creditFramework?.creditSystem || 'uk',
-        credits: workflow.step1.creditFramework?.totalCredits || 60,
-        targetLearner: workflow.step1.targetLearner || '',
-        deliveryMode: workflow.step1.deliveryMode || 'online',
-        deliveryDescription: workflow.step1.deliveryDescription,
-        programPurpose: workflow.step1.programPurpose || '',
-        jobRoles: workflow.step1.jobRoles?.length ? workflow.step1.jobRoles : ['', ''],
-      });
-    }
-  }, [workflow.step1]);
+        programTitle: step1.programTitle || '',
+        programDescription: step1.programDescription || '',
+        academicLevel: step1.academicLevel || 'certificate',
 
-  // Calculate hours when credits or system changes
-  useEffect(() => {
-    const system = CREDIT_SYSTEMS.find((s) => s.value === formData.creditSystem);
-    if (system) {
-      const total = formData.credits * system.hoursPerCredit;
-      const contact = Math.round(total * (system.contactPercent / 100));
-      setCalculatedHours({
-        total,
-        contact,
-        selfStudy: total - contact,
+        isCreditAwarding: creditFramework?.isCreditAwarding ?? true,
+        creditSystem: creditFramework?.creditSystem || creditFramework?.system || 'uk',
+        credits: creditFramework?.credits || 60,
+        totalHours: creditFramework?.totalHours || 120,
+        customContactPercent: creditFramework?.customContactPercent,
+
+        targetLearnerAgeRange:
+          typeof targetLearner === 'object' ? targetLearner?.ageRange || '' : '',
+        targetLearnerEducationalBackground:
+          typeof targetLearner === 'object' ? targetLearner?.educationalBackground || '' : '',
+        targetLearnerIndustrySector:
+          typeof targetLearner === 'object' ? targetLearner?.industrySector || '' : '',
+        targetLearnerExperienceLevel:
+          typeof targetLearner === 'object'
+            ? targetLearner?.experienceLevel || 'professional'
+            : 'professional',
+
+        deliveryMode:
+          typeof delivery === 'object' ? delivery?.mode || 'hybrid_blended' : 'hybrid_blended',
+        deliveryDescription: typeof delivery === 'object' ? delivery?.description || '' : '',
+
+        programPurpose: step1.programPurpose || '',
+        jobRoles:
+          step1.jobRoles && step1.jobRoles.length > 0
+            ? step1.jobRoles.map((role: any) =>
+                typeof role === 'string'
+                  ? { title: role, description: '', tasks: [''] }
+                  : {
+                      title: role.title || '',
+                      description: role.description || '',
+                      tasks: role.tasks || [''],
+                    }
+              )
+            : [{ ...EMPTY_JOB_ROLE }, { ...EMPTY_JOB_ROLE }],
       });
+
+      if (creditFramework?.customContactPercent) {
+        setShowCustomContactHours(true);
+      }
+
+      isInitialized.current = true;
+      lastWorkflowId.current = workflowId;
+    } else if (shouldInitialize && !workflow.step1) {
+      // New workflow with no step1 data yet - mark as initialized
+      isInitialized.current = true;
+      lastWorkflowId.current = workflowId;
     }
-  }, [formData.credits, formData.creditSystem]);
+  }, [workflow._id, workflow.step1]);
+
+  // Calculate hours when credits/system changes
+  useEffect(() => {
+    let totalHours: number;
+
+    if (formData.isCreditAwarding && formData.creditSystem !== 'non_credit') {
+      const systemConfig = CREDIT_SYSTEMS.find((s) => s.value === formData.creditSystem);
+      totalHours = (formData.credits || 60) * (systemConfig?.hoursPerCredit || 10);
+    } else {
+      totalHours = formData.totalHours || 120;
+    }
+
+    const { contactHours, independentHours, contactPercent } = calculateContactHours(
+      totalHours,
+      formData.creditSystem,
+      formData.customContactPercent
+    );
+
+    const equivalencies = calculateCreditEquivalencies(
+      formData.creditSystem,
+      formData.credits || 0,
+      totalHours
+    );
+
+    setCalculations({
+      totalHours,
+      contactHours,
+      independentHours,
+      contactPercent,
+      equivalencies,
+    });
+  }, [
+    formData.isCreditAwarding,
+    formData.creditSystem,
+    formData.credits,
+    formData.totalHours,
+    formData.customContactPercent,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setValidationErrors([]);
 
-    // Filter out empty job roles
-    const cleanedJobRoles = formData.jobRoles.filter((role) => role.trim());
+    // Filter out empty job roles and tasks
+    const cleanedJobRoles = formData.jobRoles
+      .filter((role) => role.title.trim())
+      .map((role) => ({
+        ...role,
+        tasks: role.tasks.filter((task) => task.trim()),
+      }));
 
     try {
       await submitStep1.mutateAsync({
@@ -114,7 +211,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
         data: {
           ...formData,
           jobRoles: cleanedJobRoles,
-          totalHours: calculatedHours.total,
+          totalHours: calculations.totalHours,
         },
       });
       onRefresh();
@@ -128,9 +225,9 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
     setError(null);
     setValidationErrors([]);
 
-    // Client-side validation before sending
+    // Client-side validation
     const errors: string[] = [];
-    const filledJobRoles = formData.jobRoles.filter((r) => r.trim());
+    const filledJobRoles = formData.jobRoles.filter((r) => r.title.trim());
 
     if (!formData.programTitle || formData.programTitle.length < 5) {
       errors.push('Program title must be at least 5 characters');
@@ -138,11 +235,20 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
     if (!formData.programDescription || formData.programDescription.length < 50) {
       errors.push('Program description must be at least 50 characters');
     }
-    if (!formData.targetLearner || formData.targetLearner.length < 20) {
-      errors.push('Target learner description must be at least 20 characters');
+    if (
+      !formData.targetLearnerEducationalBackground ||
+      formData.targetLearnerEducationalBackground.length < 10
+    ) {
+      errors.push('Educational background must be at least 10 characters');
     }
-    if (!formData.programPurpose || formData.programPurpose.length < 20) {
-      errors.push('Program purpose must be at least 20 characters');
+    if (!formData.targetLearnerIndustrySector || formData.targetLearnerIndustrySector.length < 5) {
+      errors.push('Industry sector must be at least 5 characters');
+    }
+    if (!formData.deliveryDescription || formData.deliveryDescription.length < 10) {
+      errors.push('Delivery structure description must be at least 10 characters');
+    }
+    if (!formData.programPurpose || formData.programPurpose.length < 50) {
+      errors.push('Program purpose must be at least 50 characters');
     }
     if (filledJobRoles.length < 2) {
       errors.push('At least 2 job roles are required');
@@ -155,50 +261,45 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
     }
 
     try {
-      // First save the current form data
+      const cleanedJobRoles = formData.jobRoles
+        .filter((role) => role.title.trim())
+        .map((role) => ({
+          ...role,
+          tasks: role.tasks.filter((task) => task.trim()),
+        }));
+
       await submitStep1.mutateAsync({
         id: workflow._id,
         data: {
           ...formData,
-          jobRoles: filledJobRoles,
-          totalHours: calculatedHours.total,
+          jobRoles: cleanedJobRoles,
+          totalHours: calculations.totalHours,
         },
       });
 
-      // Then approve
       await approveStep1.mutateAsync(workflow._id);
       onComplete();
     } catch (err: any) {
       console.error('Failed to approve Step 1:', err);
-      // Handle different error formats
-      let errorMessage = 'Failed to approve Step 1';
-      if (typeof err === 'string') {
-        errorMessage = err;
-      } else if (err?.message && typeof err.message === 'string') {
-        errorMessage = err.message;
-      } else if (err?.error && typeof err.error === 'string') {
-        errorMessage = err.error;
-      }
-      setError(errorMessage);
-
-      // Try to parse detailed errors from response
+      setError(err?.message || 'Failed to approve Step 1');
       if (err?.details && Array.isArray(err.details)) {
         setValidationErrors(err.details);
       }
     }
   };
 
+  // Job role management
   const addJobRole = () => {
     setFormData((prev) => ({
       ...prev,
-      jobRoles: [...prev.jobRoles, ''],
+      jobRoles: [...prev.jobRoles, { ...EMPTY_JOB_ROLE }],
     }));
   };
 
-  const updateJobRole = (index: number, value: string) => {
+  const updateJobRole = (index: number, field: keyof JobRole, value: any) => {
     setFormData((prev) => ({
       ...prev,
-      jobRoles: prev.jobRoles.map((role, i) => (i === index ? value : role)),
+      jobRoles: prev.jobRoles.map((role, i) => (i === index ? { ...role, [field]: value } : role)),
     }));
   };
 
@@ -211,227 +312,603 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
     }
   };
 
+  const addTask = (roleIndex: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      jobRoles: prev.jobRoles.map((role, i) =>
+        i === roleIndex ? { ...role, tasks: [...role.tasks, ''] } : role
+      ),
+    }));
+  };
+
+  const updateTask = (roleIndex: number, taskIndex: number, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      jobRoles: prev.jobRoles.map((role, i) =>
+        i === roleIndex
+          ? { ...role, tasks: role.tasks.map((task, j) => (j === taskIndex ? value : task)) }
+          : role
+      ),
+    }));
+  };
+
+  const removeTask = (roleIndex: number, taskIndex: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      jobRoles: prev.jobRoles.map((role, i) =>
+        i === roleIndex && role.tasks.length > 1
+          ? { ...role, tasks: role.tasks.filter((_, j) => j !== taskIndex) }
+          : role
+      ),
+    }));
+  };
+
   const isComplete = workflow.step1?.completenessScore && workflow.step1.completenessScore >= 70;
   const isApproved = !!workflow.step1?.approvedAt;
 
   return (
-    <div className="p-6">
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Program Title */}
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Program Title <span className="text-red-400">*</span>
-          </label>
-          <input
-            type="text"
-            value={formData.programTitle}
-            onChange={(e) => setFormData((prev) => ({ ...prev, programTitle: e.target.value }))}
-            placeholder="e.g., Professional Certificate in Data Science"
-            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-            required
-            minLength={5}
-          />
-        </div>
+    <div className="p-6 max-w-4xl mx-auto">
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {/* ============================================================ */}
+        {/* SECTION 1: PROGRAM IDENTITY & DESCRIPTION */}
+        {/* ============================================================ */}
+        <section className="space-y-6">
+          <h2 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2">
+            Program Identity & Description
+          </h2>
 
-        {/* Program Description */}
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Program Description <span className="text-red-400">*</span>
-          </label>
-          <textarea
-            value={formData.programDescription}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, programDescription: e.target.value }))
-            }
-            placeholder="Describe the program's scope, focus areas, and what learners will gain..."
-            rows={4}
-            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 resize-none"
-            required
-            minLength={50}
-          />
-          <p className="text-xs text-slate-500 mt-1">
-            {formData.programDescription.length}/50 minimum characters
-          </p>
-        </div>
-
-        {/* Academic Level */}
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Academic Level <span className="text-red-400">*</span>
-          </label>
-          <div className="grid grid-cols-3 gap-3">
-            {ACADEMIC_LEVELS.map((level) => (
-              <button
-                key={level.value}
-                type="button"
-                onClick={() => setFormData((prev) => ({ ...prev, academicLevel: level.value }))}
-                className={`p-4 rounded-lg border text-left transition-all ${
-                  formData.academicLevel === level.value
-                    ? 'bg-cyan-500/20 border-cyan-500 text-white'
-                    : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
-                }`}
-              >
-                <p className="font-medium">{level.label}</p>
-                <p className="text-xs mt-1 opacity-70">{level.description}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Credit System & Credits */}
-        <div className="grid grid-cols-2 gap-6">
+          {/* Program Title */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Credit System <span className="text-red-400">*</span>
-            </label>
-            <select
-              value={formData.creditSystem}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, creditSystem: e.target.value as CreditSystem }))
-              }
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-            >
-              {CREDIT_SYSTEMS.map((system) => (
-                <option key={system.value} value={system.value}>
-                  {system.label} ({system.hoursPerCredit} hrs/credit)
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Total Credits <span className="text-red-400">*</span>
+              Program Title <span className="text-red-400">*</span>
+              <span className="text-slate-500 font-normal ml-2">(5-100 characters)</span>
             </label>
             <input
-              type="number"
-              value={formData.credits}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, credits: parseInt(e.target.value) || 0 }))
-              }
-              min={10}
-              max={360}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+              type="text"
+              value={formData.programTitle}
+              onChange={(e) => setFormData((prev) => ({ ...prev, programTitle: e.target.value }))}
+              placeholder="e.g., Professional Diploma in Project Management"
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              required
+              minLength={5}
+              maxLength={100}
             />
           </div>
-        </div>
 
-        {/* Calculated Hours Display */}
-        <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-          <h4 className="text-sm font-medium text-slate-300 mb-3">Calculated Learning Hours</h4>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <p className="text-2xl font-bold text-cyan-400">{calculatedHours.total}</p>
-              <p className="text-xs text-slate-500">Total Hours</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-emerald-400">{calculatedHours.contact}</p>
-              <p className="text-xs text-slate-500">Contact Hours</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-amber-400">{calculatedHours.selfStudy}</p>
-              <p className="text-xs text-slate-500">Self-Study Hours</p>
+          {/* Program Description */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Program Description <span className="text-red-400">*</span>
+              <span className="text-slate-500 font-normal ml-2">(50-500 words)</span>
+            </label>
+            <textarea
+              value={formData.programDescription}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, programDescription: e.target.value }))
+              }
+              placeholder="Provide a comprehensive description of the program's scope, focus areas, and what learners will gain..."
+              rows={5}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              required
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              {formData.programDescription.split(/\s+/).filter(Boolean).length} words (minimum 50)
+            </p>
+          </div>
+
+          {/* Academic Level */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Academic Level <span className="text-red-400">*</span>
+            </label>
+            <div className="grid grid-cols-3 gap-3">
+              {ACADEMIC_LEVELS.map((level) => (
+                <button
+                  key={level.value}
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, academicLevel: level.value }))}
+                  className={`p-4 rounded-lg border text-left transition-all ${
+                    formData.academicLevel === level.value
+                      ? 'bg-cyan-500/20 border-cyan-500 text-white'
+                      : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                  }`}
+                >
+                  <p className="font-medium">{level.label}</p>
+                  <p className="text-xs mt-1 opacity-70">{level.description}</p>
+                </button>
+              ))}
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Target Learner */}
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Target Learner Profile <span className="text-red-400">*</span>
-          </label>
-          <textarea
-            value={formData.targetLearner}
-            onChange={(e) => setFormData((prev) => ({ ...prev, targetLearner: e.target.value }))}
-            placeholder="Describe your ideal learner: their background, experience level, and goals..."
-            rows={3}
-            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
-            required
-          />
-        </div>
+        {/* ============================================================ */}
+        {/* SECTION 2: CREDIT STRUCTURE & CONTACT HOURS */}
+        {/* ============================================================ */}
+        <section className="space-y-6">
+          <h2 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2">
+            Credit Structure & Contact Hours
+          </h2>
 
-        {/* Delivery Mode */}
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Delivery Mode <span className="text-red-400">*</span>
-          </label>
-          <div className="grid grid-cols-3 gap-3">
-            {DELIVERY_MODES.map((mode) => (
+          {/* Is Credit Awarding? */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-3">
+              Is this program credit-awarding? <span className="text-red-400">*</span>
+            </label>
+            <div className="flex gap-4">
               <button
-                key={mode.value}
                 type="button"
-                onClick={() => setFormData((prev) => ({ ...prev, deliveryMode: mode.value }))}
-                className={`p-3 rounded-lg border text-center transition-all ${
-                  formData.deliveryMode === mode.value
-                    ? 'bg-cyan-500/20 border-cyan-500 text-white'
+                onClick={() =>
+                  setFormData((prev) => ({ ...prev, isCreditAwarding: true, creditSystem: 'uk' }))
+                }
+                className={`flex-1 p-4 rounded-lg border text-center transition-all ${
+                  formData.isCreditAwarding
+                    ? 'bg-emerald-500/20 border-emerald-500 text-white'
                     : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
                 }`}
               >
-                {mode.label}
+                <p className="font-medium">Yes</p>
+                <p className="text-xs mt-1 opacity-70">Select credit framework (UK, ECTS, US)</p>
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    isCreditAwarding: false,
+                    creditSystem: 'non_credit',
+                  }))
+                }
+                className={`flex-1 p-4 rounded-lg border text-center transition-all ${
+                  !formData.isCreditAwarding
+                    ? 'bg-amber-500/20 border-amber-500 text-white'
+                    : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                }`}
+              >
+                <p className="font-medium">No</p>
+                <p className="text-xs mt-1 opacity-70">Enter direct hours (20-500)</p>
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Program Purpose */}
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Program Purpose <span className="text-red-400">*</span>
-          </label>
-          <textarea
-            value={formData.programPurpose}
-            onChange={(e) => setFormData((prev) => ({ ...prev, programPurpose: e.target.value }))}
-            placeholder="What is the overarching purpose of this program? What gap does it fill?"
-            rows={3}
-            className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
-            required
-          />
-        </div>
-
-        {/* Job Roles */}
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Target Job Roles <span className="text-red-400">*</span>
-            <span className="text-slate-500 font-normal ml-2">(minimum 2)</span>
-          </label>
-          <div className="space-y-2">
-            {formData.jobRoles.map((role, index) => (
-              <div key={index} className="flex gap-2">
-                <input
-                  type="text"
-                  value={role}
-                  onChange={(e) => updateJobRole(index, e.target.value)}
-                  placeholder={`e.g., ${index === 0 ? 'Data Scientist' : index === 1 ? 'Machine Learning Engineer' : 'Job Role'}`}
-                  className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                />
-                {formData.jobRoles.length > 2 && (
-                  <button
-                    type="button"
-                    onClick={() => removeJobRole(index)}
-                    className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                )}
+          {/* Credit-Awarding Options */}
+          {formData.isCreditAwarding ? (
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Credit Framework <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={formData.creditSystem}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      creditSystem: e.target.value as CreditSystem,
+                    }))
+                  }
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                >
+                  {CREDIT_SYSTEMS.filter((s) => s.value !== 'non_credit').map((system) => (
+                    <option key={system.value} value={system.value}>
+                      {system.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">
+                  {CREDIT_SYSTEMS.find((s) => s.value === formData.creditSystem)?.description}
+                </p>
               </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={addJobRole}
-            className="mt-2 text-sm text-cyan-400 hover:text-cyan-300"
-          >
-            + Add another job role
-          </button>
-        </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Total Credits <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="number"
+                  value={formData.credits}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, credits: parseInt(e.target.value) || 60 }))
+                  }
+                  min={10}
+                  max={360}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+            </div>
+          ) : (
+            /* Non-Credit: Direct Hours Entry */
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Total Program Hours <span className="text-red-400">*</span>
+                <span className="text-slate-500 font-normal ml-2">(20-500 hours)</span>
+              </label>
+              <input
+                type="number"
+                value={formData.totalHours}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, totalHours: parseInt(e.target.value) || 120 }))
+                }
+                min={20}
+                max={500}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+          )}
 
-        {/* Error Display */}
+          {/* Custom Contact Hours Override */}
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showCustomContactHours}
+                onChange={(e) => {
+                  setShowCustomContactHours(e.target.checked);
+                  if (!e.target.checked) {
+                    setFormData((prev) => ({ ...prev, customContactPercent: undefined }));
+                  }
+                }}
+                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
+              />
+              <span className="text-sm text-slate-300">
+                Override default contact hours percentage
+              </span>
+            </label>
+            {showCustomContactHours && (
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Custom Contact Hours %
+                </label>
+                <input
+                  type="number"
+                  value={formData.customContactPercent || ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      customContactPercent: parseInt(e.target.value) || undefined,
+                    }))
+                  }
+                  min={10}
+                  max={60}
+                  placeholder={`Default: ${calculations.contactPercent}%`}
+                  className="w-32 px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Calculated Hours Display */}
+          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-5 border border-slate-700">
+            <h4 className="text-sm font-medium text-slate-300 mb-4">Workload Distribution</h4>
+            <div className="grid grid-cols-3 gap-6">
+              <div className="text-center">
+                <p className="text-3xl font-bold text-cyan-400">{calculations.totalHours}</p>
+                <p className="text-xs text-slate-500 mt-1">Total Hours</p>
+              </div>
+              <div className="text-center">
+                <p className="text-3xl font-bold text-emerald-400">
+                  {calculations.contactHours}
+                  <span className="text-sm font-normal text-slate-500 ml-1">
+                    ({calculations.contactPercent}%)
+                  </span>
+                </p>
+                <p className="text-xs text-slate-500 mt-1">Contact Hours</p>
+              </div>
+              <div className="text-center">
+                <p className="text-3xl font-bold text-amber-400">{calculations.independentHours}</p>
+                <p className="text-xs text-slate-500 mt-1">Independent/Assessment</p>
+              </div>
+            </div>
+
+            {/* International Equivalencies */}
+            <div className="mt-5 pt-4 border-t border-slate-700">
+              <h5 className="text-xs font-medium text-slate-400 mb-3">
+                International Equivalencies
+              </h5>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="bg-slate-800/50 rounded-lg p-3">
+                  <p className="text-lg font-semibold text-white">
+                    {calculations.equivalencies.ukCredits}
+                  </p>
+                  <p className="text-xs text-slate-500">UK Credits</p>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-3">
+                  <p className="text-lg font-semibold text-white">
+                    {calculations.equivalencies.ectsCredits}
+                  </p>
+                  <p className="text-xs text-slate-500">ECTS</p>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-3">
+                  <p className="text-lg font-semibold text-white">
+                    {calculations.equivalencies.usSemesterCredits}
+                  </p>
+                  <p className="text-xs text-slate-500">US Semester</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================ */}
+        {/* SECTION 3: TARGET LEARNER PROFILE */}
+        {/* ============================================================ */}
+        <section className="space-y-6">
+          <h2 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2">
+            Target Learner Profile
+          </h2>
+
+          <div className="grid grid-cols-2 gap-6">
+            {/* Age Range */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Age Range</label>
+              <input
+                type="text"
+                value={formData.targetLearnerAgeRange}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, targetLearnerAgeRange: e.target.value }))
+                }
+                placeholder="e.g., 25-45 years"
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            {/* Experience Level */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Experience Level <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={formData.targetLearnerExperienceLevel}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    targetLearnerExperienceLevel: e.target.value as ExperienceLevel,
+                  }))
+                }
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+              >
+                {EXPERIENCE_LEVELS.map((level) => (
+                  <option key={level.value} value={level.value}>
+                    {level.label} ({level.years})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Educational Background */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Educational Background <span className="text-red-400">*</span>
+              <span className="text-slate-500 font-normal ml-2">(minimum 10 characters)</span>
+            </label>
+            <textarea
+              value={formData.targetLearnerEducationalBackground}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  targetLearnerEducationalBackground: e.target.value,
+                }))
+              }
+              placeholder="Describe the typical educational background of your target learners..."
+              rows={2}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              required
+            />
+          </div>
+
+          {/* Industry Sector */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Industry Sector <span className="text-red-400">*</span>
+              <span className="text-slate-500 font-normal ml-2">(minimum 5 characters)</span>
+            </label>
+            <input
+              type="text"
+              value={formData.targetLearnerIndustrySector}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, targetLearnerIndustrySector: e.target.value }))
+              }
+              placeholder="e.g., Healthcare, Finance, Technology, Manufacturing"
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              required
+            />
+          </div>
+        </section>
+
+        {/* ============================================================ */}
+        {/* SECTION 4: PROGRAM DELIVERY */}
+        {/* ============================================================ */}
+        <section className="space-y-6">
+          <h2 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2">
+            Program Delivery
+          </h2>
+
+          {/* Delivery Mode */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Delivery Mode <span className="text-red-400">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {DELIVERY_MODES.map((mode) => (
+                <button
+                  key={mode.value}
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, deliveryMode: mode.value }))}
+                  className={`p-4 rounded-lg border text-left transition-all ${
+                    formData.deliveryMode === mode.value
+                      ? 'bg-cyan-500/20 border-cyan-500 text-white'
+                      : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                  }`}
+                >
+                  <p className="font-medium">{mode.label}</p>
+                  <p className="text-xs mt-1 opacity-70">
+                    Typical contact: {mode.typicalContactPercent}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Delivery Structure Description */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Delivery Structure <span className="text-red-400">*</span>
+              <span className="text-slate-500 font-normal ml-2">(1-3 sentences)</span>
+            </label>
+            <textarea
+              value={formData.deliveryDescription}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, deliveryDescription: e.target.value }))
+              }
+              placeholder="Describe how the program will be delivered, including the balance of contact vs. independent learning..."
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              required
+            />
+          </div>
+        </section>
+
+        {/* ============================================================ */}
+        {/* SECTION 5: LABOUR MARKET RATIONALE */}
+        {/* ============================================================ */}
+        <section className="space-y-6">
+          <h2 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2">
+            Labour Market Rationale
+          </h2>
+
+          {/* Program Purpose */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Program Purpose <span className="text-red-400">*</span>
+              <span className="text-slate-500 font-normal ml-2">(50-300 words)</span>
+            </label>
+            <textarea
+              value={formData.programPurpose}
+              onChange={(e) => setFormData((prev) => ({ ...prev, programPurpose: e.target.value }))}
+              placeholder="Explain why this program exists, what gap it fills, and its value proposition..."
+              rows={4}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              required
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              {formData.programPurpose.split(/\s+/).filter(Boolean).length} words (50-300 required)
+            </p>
+          </div>
+
+          {/* Job Roles */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-3">
+              Target Job Roles <span className="text-red-400">*</span>
+              <span className="text-slate-500 font-normal ml-2">
+                (minimum 2 roles with descriptions)
+              </span>
+            </label>
+
+            <div className="space-y-6">
+              {formData.jobRoles.map((role, roleIndex) => (
+                <div
+                  key={roleIndex}
+                  className="bg-slate-900/30 border border-slate-700 rounded-lg p-5 space-y-4"
+                >
+                  <div className="flex items-start justify-between">
+                    <h4 className="text-sm font-medium text-slate-300">Job Role {roleIndex + 1}</h4>
+                    {formData.jobRoles.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => removeJobRole(roleIndex)}
+                        className="text-red-400 hover:text-red-300 text-sm"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Job Title */}
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Job Title</label>
+                    <input
+                      type="text"
+                      value={role.title}
+                      onChange={(e) => updateJobRole(roleIndex, 'title', e.target.value)}
+                      placeholder="e.g., Project Manager"
+                      className="w-full px-4 py-2 bg-slate-800/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  {/* Job Description */}
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">
+                      Job Description (100-1000 words)
+                    </label>
+                    <textarea
+                      value={role.description}
+                      onChange={(e) => updateJobRole(roleIndex, 'description', e.target.value)}
+                      placeholder="Describe the role, responsibilities, and typical workplace context..."
+                      rows={3}
+                      className="w-full px-4 py-2 bg-slate-800/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+                    />
+                  </div>
+
+                  {/* Workplace Tasks */}
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-2">Workplace Tasks</label>
+                    <div className="space-y-2">
+                      {role.tasks.map((task, taskIndex) => (
+                        <div key={taskIndex} className="flex gap-2">
+                          <input
+                            type="text"
+                            value={task}
+                            onChange={(e) => updateTask(roleIndex, taskIndex, e.target.value)}
+                            placeholder={`Task ${taskIndex + 1}`}
+                            className="flex-1 px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                          />
+                          {role.tasks.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeTask(roleIndex, taskIndex)}
+                              className="p-2 text-slate-500 hover:text-red-400"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M6 18L18 6M6 6l12 12"
+                                />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => addTask(roleIndex)}
+                      className="mt-2 text-xs text-cyan-400 hover:text-cyan-300"
+                    >
+                      + Add task
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={addJobRole}
+              className="mt-4 px-4 py-2 border border-dashed border-slate-600 rounded-lg text-slate-400 hover:border-cyan-500 hover:text-cyan-400 transition-colors w-full"
+            >
+              + Add another job role
+            </button>
+          </div>
+        </section>
+
+        {/* ============================================================ */}
+        {/* ERROR DISPLAY */}
+        {/* ============================================================ */}
         {(error || validationErrors.length > 0) && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
             {error && <p className="text-red-400 font-medium mb-2">{error}</p>}
@@ -445,12 +922,14 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="flex items-center justify-between pt-4 border-t border-slate-700">
+        {/* ============================================================ */}
+        {/* ACTION BUTTONS */}
+        {/* ============================================================ */}
+        <div className="flex items-center justify-between pt-6 border-t border-slate-700">
           <div>
             {workflow.step1?.completenessScore !== undefined && (
-              <div className="flex items-center gap-2">
-                <div className="w-32 h-2 bg-slate-700 rounded-full overflow-hidden">
+              <div className="flex items-center gap-3">
+                <div className="w-40 h-2 bg-slate-700 rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${
                       workflow.step1.completenessScore >= 70 ? 'bg-emerald-500' : 'bg-amber-500'
@@ -468,7 +947,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
             <button
               type="submit"
               disabled={submitStep1.isPending}
-              className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors disabled:opacity-50"
+              className="px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors disabled:opacity-50"
             >
               {submitStep1.isPending ? 'Saving...' : 'Save Draft'}
             </button>
@@ -477,7 +956,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                 type="button"
                 onClick={handleApprove}
                 disabled={approveStep1.isPending}
-                className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+                className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
               >
                 {approveStep1.isPending ? 'Approving...' : 'Approve & Continue →'}
               </button>

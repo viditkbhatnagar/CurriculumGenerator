@@ -180,13 +180,22 @@ router.post('/:id/step1', validateJWT, loadUser, async (req: Request, res: Respo
       programTitle,
       programDescription,
       academicLevel,
+      // Credit Framework
+      isCreditAwarding,
       creditSystem,
       credits,
       totalHours,
       customContactPercent,
-      targetLearner,
+      // Target Learner Profile (structured v2.2)
+      targetLearner, // Legacy: single string or object
+      targetLearnerAgeRange,
+      targetLearnerEducationalBackground,
+      targetLearnerIndustrySector,
+      targetLearnerExperienceLevel,
+      // Delivery
       deliveryMode,
       deliveryDescription,
+      // Labour Market
       programPurpose,
       jobRoles,
     } = req.body;
@@ -199,20 +208,32 @@ router.post('/:id/step1', validateJWT, loadUser, async (req: Request, res: Respo
       });
     }
 
-    // Filter out empty job roles
-    const filteredJobRoles = (jobRoles || []).filter((role: string) => role && role.trim());
+    // Filter out empty job roles - handle both string and object formats
+    const filteredJobRoles = (jobRoles || []).filter((role: any) => {
+      if (typeof role === 'string') {
+        return role && role.trim();
+      }
+      // Object format: { title, description, tasks }
+      return role && role.title && role.title.trim();
+    });
 
     const workflow = await workflowService.processStep1(id, {
       programTitle,
       programDescription: programDescription || '',
       academicLevel: academicLevel || 'certificate',
+      isCreditAwarding: isCreditAwarding ?? true,
       creditSystem: creditSystem || 'uk',
       credits: credits || 60,
       totalHours,
       customContactPercent,
-      targetLearner: targetLearner || '',
-      deliveryMode: deliveryMode || 'online',
-      deliveryDescription,
+      // Pass structured target learner fields
+      targetLearnerAgeRange: targetLearnerAgeRange || '',
+      targetLearnerEducationalBackground: targetLearnerEducationalBackground || '',
+      targetLearnerIndustrySector: targetLearnerIndustrySector || '',
+      targetLearnerExperienceLevel: targetLearnerExperienceLevel || 'professional',
+      targetLearner: targetLearner, // Legacy support
+      deliveryMode: deliveryMode || 'hybrid_blended',
+      deliveryDescription: deliveryDescription || '',
       programPurpose: programPurpose || '',
       jobRoles: filteredJobRoles,
     });
@@ -268,13 +289,33 @@ router.post('/:id/step1/approve', validateJWT, loadUser, async (req: Request, re
     if (!workflow.step1.programDescription || workflow.step1.programDescription.length < 50) {
       errors.push('Program description must be at least 50 characters');
     }
-    if (!workflow.step1.targetLearner || workflow.step1.targetLearner.length < 20) {
-      errors.push('Target learner description must be at least 20 characters');
+
+    // Handle targetLearner as string or object
+    const targetLearner = workflow.step1.targetLearner;
+    if (typeof targetLearner === 'string') {
+      if (!targetLearner || targetLearner.length < 20) {
+        errors.push('Target learner description must be at least 20 characters');
+      }
+    } else if (targetLearner && typeof targetLearner === 'object') {
+      // Object format with industrySector, experienceLevel, etc.
+      if (!targetLearner.industrySector && !targetLearner.educationalBackground) {
+        errors.push('Target learner must have industry sector or educational background');
+      }
+    } else {
+      errors.push('Target learner information is required');
     }
+
     if (!workflow.step1.programPurpose || workflow.step1.programPurpose.length < 20) {
       errors.push('Program purpose must be at least 20 characters');
     }
-    if (!workflow.step1.jobRoles || workflow.step1.jobRoles.length < 2) {
+
+    // Handle jobRoles as array of strings or objects
+    const jobRoles = workflow.step1.jobRoles || [];
+    const validJobRoles = jobRoles.filter((role: any) => {
+      if (typeof role === 'string') return role && role.trim();
+      return role && role.title && role.title.trim();
+    });
+    if (validJobRoles.length < 2) {
       errors.push('At least 2 job roles are required');
     }
 
