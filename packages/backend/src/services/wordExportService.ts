@@ -934,21 +934,131 @@ export class WordExportService {
         });
       }
 
-      // Sample questions
-      const sampleQuestions =
-        step7.questionBank?.slice(0, 3) || step7.questionBanks?.[0]?.questions?.slice(0, 3) || [];
-      if (sampleQuestions.length > 0) {
+      // ALL MCQ Questions - organized by module
+      const allQuestions = step7.questionBank || [];
+      if (allQuestions.length > 0) {
         contentChildren.push(
           new Paragraph({
-            children: [new TextRun({ text: 'Sample MCQ Questions:', bold: true, size: 22 })],
-            spacing: { before: 200, after: 100 },
+            children: [
+              new TextRun({ text: 'Question Bank', bold: true, size: 24 }),
+              new TextRun({
+                text: ` (${allQuestions.length} questions)`,
+                size: 20,
+                color: '4a5568',
+              }),
+            ],
+            spacing: { before: 300, after: 150 },
           })
         );
-        sampleQuestions.forEach((q: any, idx: number) => {
+
+        allQuestions.forEach((q: any, idx: number) => {
+          // Question header with metadata
           contentChildren.push(
             new Paragraph({
               children: [
-                new TextRun({ text: `Q${idx + 1}: `, bold: true, size: 20 }),
+                new TextRun({ text: `Question ${idx + 1}`, bold: true, size: 22 }),
+                new TextRun({
+                  text: ` [${q.bloomLevel || 'N/A'} | ${q.difficulty || 'Medium'} | MLO: ${q.linkedMLO || 'N/A'}]`,
+                  size: 16,
+                  color: '6b7280',
+                  italics: true,
+                }),
+              ],
+              spacing: { before: 150, after: 50 },
+            })
+          );
+
+          // Question stem
+          contentChildren.push(
+            new Paragraph({
+              children: [new TextRun({ text: q.stem || q.question || '', size: 20 })],
+              spacing: { after: 50 },
+            })
+          );
+
+          // Options
+          if (q.options?.length) {
+            q.options.forEach((opt: any, optIdx: number) => {
+              const letter = String.fromCharCode(65 + optIdx);
+              const isCorrect = opt.isCorrect || optIdx === q.correctOption;
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `${letter}. ${opt.text || opt}`,
+                      size: 18,
+                      bold: isCorrect,
+                      color: isCorrect ? '16a34a' : '374151',
+                    }),
+                    isCorrect
+                      ? new TextRun({ text: ' ✓ (Correct)', size: 16, color: '16a34a' })
+                      : new TextRun({ text: '' }),
+                  ],
+                  spacing: { after: 20 },
+                })
+              );
+              // Option explanation if available
+              if (opt.explanation) {
+                contentChildren.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: '   Explanation: ',
+                        size: 16,
+                        italics: true,
+                        color: '6b7280',
+                      }),
+                      new TextRun({
+                        text: opt.explanation,
+                        size: 16,
+                        italics: true,
+                        color: '6b7280',
+                      }),
+                    ],
+                    spacing: { after: 10 },
+                  })
+                );
+              }
+            });
+          }
+
+          // Rationale
+          if (q.rationale) {
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({ text: 'Rationale: ', bold: true, size: 18, color: '1e40af' }),
+                  new TextRun({ text: q.rationale, size: 18, italics: true, color: '1e40af' }),
+                ],
+                spacing: { before: 50, after: 100 },
+              })
+            );
+          }
+        });
+      }
+
+      // Final Exam Pool (if separate)
+      const finalExamPool = step7.finalExamPool || [];
+      if (finalExamPool.length > 0) {
+        contentChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Final Exam Question Pool', bold: true, size: 24 }),
+              new TextRun({
+                text: ` (${finalExamPool.length} questions)`,
+                size: 20,
+                color: '4a5568',
+              }),
+            ],
+            spacing: { before: 300, after: 150 },
+          })
+        );
+
+        finalExamPool.forEach((q: any, idx: number) => {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: `Final Q${idx + 1}: `, bold: true, size: 20 }),
                 new TextRun({ text: q.stem || q.question || '', size: 20 }),
               ],
               spacing: { before: 100, after: 50 },
@@ -962,12 +1072,13 @@ export class WordExportService {
                 new Paragraph({
                   children: [
                     new TextRun({
-                      text: `  ${letter}. ${opt.text || opt}`,
+                      text: `${letter}. ${opt.text || opt}`,
                       size: 18,
-                      color: isCorrect ? '22c55e' : '4a5568',
+                      bold: isCorrect,
+                      color: isCorrect ? '16a34a' : '374151',
                     }),
                     isCorrect
-                      ? new TextRun({ text: ' ✓', size: 18, color: '22c55e' })
+                      ? new TextRun({ text: ' ✓', size: 16, color: '16a34a' })
                       : new TextRun({ text: '' }),
                   ],
                   spacing: { after: 20 },
