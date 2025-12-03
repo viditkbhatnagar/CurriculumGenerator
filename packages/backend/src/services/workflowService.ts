@@ -2411,6 +2411,17 @@ CRITICAL VALIDATION:
 
     // Process case studies
     const caseStudies = caseStudyContent.caseStudies || [];
+    const debugInfo = caseStudyContent._debugInfo;
+    const debugError = caseStudyContent._debugError;
+
+    // Log debug info if case studies are empty
+    if (caseStudies.length === 0) {
+      loggingService.warn('Step 8: No case studies generated', {
+        debugInfo,
+        debugError,
+        workflowId,
+      });
+    }
     const modules = workflow.step4?.modules || [];
 
     // Calculate word counts
@@ -2492,6 +2503,9 @@ CRITICAL VALIDATION:
       isValid,
       validationIssues,
       validatedAt: new Date(),
+      // Include debug info if case studies are empty
+      ...(caseStudies.length === 0 && debugInfo ? { _debugInfo: debugInfo } : {}),
+      ...(caseStudies.length === 0 && debugError ? { _debugError: debugError } : {}),
     };
 
     workflow.currentStep = 8;
