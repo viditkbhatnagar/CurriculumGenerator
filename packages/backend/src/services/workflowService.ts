@@ -3911,9 +3911,9 @@ ${mod.topics.map((t: any) => `  - ${t.id}: ${t.title}`).join('\n')}
 Using the Discovery Questionnaire answers above and the Case Study Framework rules, generate teaching cases following this exact distribution:
 
 **CASE DISTRIBUTION:**
-- Total Cases: ${Math.max(modules.length + 2, 6)} cases
-- At least 2 Assessment-Ready cases (with full hooks for MCQ development)
-- At least 2 Practice cases (with suggested approach and sample solution)
+- Total Cases: ${Math.min(modules.length, 4)} cases (1 per module, max 4)
+- At least 1 Assessment-Ready case (with full hooks for MCQ development)
+- At least 1 Practice case (with suggested approach and sample solution)
 - At least 2 Discussion cases (with forum prompts and participation criteria)
 
 **TIER ${tierInfo.tier} REQUIREMENTS:**
