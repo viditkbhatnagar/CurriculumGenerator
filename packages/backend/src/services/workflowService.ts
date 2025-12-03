@@ -3261,8 +3261,11 @@ IMPORTANT:
       loggingService.info('Step 6: LLM response received', {
         responseLength: response?.length || 0,
         hasContent: !!response,
-        preview: response?.substring(0, 300) || 'EMPTY',
+        preview: response?.substring(0, 500) || 'EMPTY',
       });
+
+      // Store raw response for debugging if it fails to parse correctly
+      const rawResponsePreview = response?.substring(0, 2000) || 'EMPTY';
 
       const parsed = this.parseJSON(response, 'step6');
 
@@ -3273,6 +3276,23 @@ IMPORTANT:
         summariesCount: parsed.moduleSummaries?.length || 0,
       });
 
+      // If readings are empty, include debug info
+      if (!parsed.readings || parsed.readings.length === 0) {
+        loggingService.warn('Step 6: LLM returned empty readings', {
+          rawResponsePreview,
+          parsedKeys: Object.keys(parsed),
+        });
+        return {
+          readings: [],
+          moduleSummaries: parsed.moduleSummaries || [],
+          _debugInfo: {
+            rawResponsePreview,
+            parsedKeys: Object.keys(parsed),
+            responseLength: response?.length || 0,
+          },
+        };
+      }
+
       return {
         readings: parsed.readings || [],
         moduleSummaries: parsed.moduleSummaries || [],
@@ -3282,7 +3302,7 @@ IMPORTANT:
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      return { readings: [] };
+      return { readings: [], _debugError: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -4109,6 +4129,9 @@ Begin output with the first case now.`;
         preview: response?.substring(0, 500) || 'EMPTY',
       });
 
+      // Store raw response for debugging if it fails to parse correctly
+      const rawResponsePreview = response?.substring(0, 2000) || 'EMPTY';
+
       const parsed = this.parseJSON(response, 'step8');
 
       loggingService.info('Step 8: JSON parsed', {
@@ -4116,6 +4139,22 @@ Begin output with the first case now.`;
         caseStudiesCount: parsed.caseStudies?.length || 0,
         firstCaseTitle: parsed.caseStudies?.[0]?.title || 'N/A',
       });
+
+      // If caseStudies are empty, include debug info
+      if (!parsed.caseStudies || parsed.caseStudies.length === 0) {
+        loggingService.warn('Step 8: LLM returned empty caseStudies', {
+          rawResponsePreview,
+          parsedKeys: Object.keys(parsed),
+        });
+        return {
+          caseStudies: [],
+          _debugInfo: {
+            rawResponsePreview,
+            parsedKeys: Object.keys(parsed),
+            responseLength: response?.length || 0,
+          },
+        };
+      }
 
       return {
         caseStudies: parsed.caseStudies || [],
@@ -4125,7 +4164,10 @@ Begin output with the first case now.`;
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      return { caseStudies: [] };
+      return {
+        caseStudies: [],
+        _debugError: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 
