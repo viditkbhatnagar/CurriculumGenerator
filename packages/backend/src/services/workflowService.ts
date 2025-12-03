@@ -3249,17 +3249,39 @@ IMPORTANT:
 - Create a logical reading progression through each module`;
 
     try {
+      loggingService.info('Step 6: Starting LLM generation', {
+        promptLength: userPrompt.length,
+        systemPromptLength: systemPrompt.length,
+      });
+
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 40000,
       });
 
+      loggingService.info('Step 6: LLM response received', {
+        responseLength: response?.length || 0,
+        hasContent: !!response,
+        preview: response?.substring(0, 300) || 'EMPTY',
+      });
+
       const parsed = this.parseJSON(response, 'step6');
+
+      loggingService.info('Step 6: JSON parsed', {
+        hasReadings: !!parsed.readings,
+        readingsCount: parsed.readings?.length || 0,
+        hasSummaries: !!parsed.moduleSummaries,
+        summariesCount: parsed.moduleSummaries?.length || 0,
+      });
+
       return {
         readings: parsed.readings || [],
         moduleSummaries: parsed.moduleSummaries || [],
       };
     } catch (error) {
-      loggingService.error('Error generating Step 6 content', { error });
+      loggingService.error('Error generating Step 6 content', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       return { readings: [] };
     }
   }
@@ -4070,16 +4092,39 @@ Return ONLY valid JSON:
 Begin output with the first case now.`;
 
     try {
+      loggingService.info('Step 8: Starting LLM generation', {
+        promptLength: userPrompt.length,
+        systemPromptLength: systemPrompt.length,
+        tier: tierInfo.tier,
+        moduleCount: modules.length,
+      });
+
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 40000,
       });
 
+      loggingService.info('Step 8: LLM response received', {
+        responseLength: response?.length || 0,
+        hasContent: !!response,
+        preview: response?.substring(0, 500) || 'EMPTY',
+      });
+
       const parsed = this.parseJSON(response, 'step8');
+
+      loggingService.info('Step 8: JSON parsed', {
+        hasCaseStudies: !!parsed.caseStudies,
+        caseStudiesCount: parsed.caseStudies?.length || 0,
+        firstCaseTitle: parsed.caseStudies?.[0]?.title || 'N/A',
+      });
+
       return {
         caseStudies: parsed.caseStudies || [],
       };
     } catch (error) {
-      loggingService.error('Error generating Step 8 content', { error });
+      loggingService.error('Error generating Step 8 content', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       return { caseStudies: [] };
     }
   }
