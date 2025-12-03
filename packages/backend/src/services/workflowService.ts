@@ -4135,6 +4135,7 @@ Begin output with the first case now.`;
 
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 40000,
+        timeout: 1800000, // 30 minutes for complex case study generation
       });
 
       loggingService.info('Step 8: LLM response received', {
