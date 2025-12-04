@@ -3502,44 +3502,51 @@ CRITICAL REQUIREMENTS:
       finalPoolSize,
     });
 
-    // Generate quiz questions for ALL modules in PARALLEL (much faster!)
-    const modulePromises = modules.map(async (mod: any, i: number) => {
-      const modReadings = readings.filter(
-        (r: any) => r.moduleId === mod.id && r.category === 'core'
-      );
+    // Generate quiz questions for all modules with LIMITED CONCURRENCY to reduce aborts/timeouts
+    const quizResults: any[] = [];
+    const concurrency = Math.min(3, modules.length); // throttle to 3 concurrent module calls
+    let moduleIndex = 0;
 
-      loggingService.info(`Step 7: Starting quiz for module ${i + 1}/${modules.length}`, {
-        moduleId: mod.id,
-        moduleTitle: mod.title,
-      });
+    const worker = async () => {
+      while (moduleIndex < modules.length) {
+        const i = moduleIndex++;
+        const mod = modules[i];
+        const modReadings = readings.filter(
+          (r: any) => r.moduleId === mod.id && r.category === 'core'
+        );
 
-      try {
-        const moduleQuiz = await this.generateModuleQuiz({
-          module: mod,
-          moduleIndex: i,
-          coreReadings: modReadings.slice(0, 3).map((r: any) => r.title),
-          questionsPerModule,
-          blueprint,
-          programTitle,
-          academicLevel,
-          industrySector,
+        loggingService.info(`Step 7: Starting quiz for module ${i + 1}/${modules.length}`, {
+          moduleId: mod.id,
+          moduleTitle: mod.title,
         });
 
-        loggingService.info(`Step 7: Module ${mod.id} quiz complete`, {
-          questionsGenerated: moduleQuiz.questions?.length || 0,
-        });
+        try {
+          const moduleQuiz = await this.generateModuleQuiz({
+            module: mod,
+            moduleIndex: i,
+            coreReadings: modReadings.slice(0, 3).map((r: any) => r.title),
+            questionsPerModule,
+            blueprint,
+            programTitle,
+            academicLevel,
+            industrySector,
+          });
 
-        return moduleQuiz;
-      } catch (moduleError) {
-        loggingService.error(`Step 7: Error generating quiz for module ${mod.id}`, {
-          error: moduleError instanceof Error ? moduleError.message : String(moduleError),
-        });
-        return { questions: [], clozeQuestions: [] };
+          loggingService.info(`Step 7: Module ${mod.id} quiz complete`, {
+            questionsGenerated: moduleQuiz.questions?.length || 0,
+          });
+
+          quizResults[i] = moduleQuiz;
+        } catch (moduleError) {
+          loggingService.error(`Step 7: Error generating quiz for module ${mod.id}`, {
+            error: moduleError instanceof Error ? moduleError.message : String(moduleError),
+          });
+          quizResults[i] = { questions: [], clozeQuestions: [] };
+        }
       }
-    });
+    };
 
-    // Wait for ALL module quizzes in parallel
-    const quizResults = await Promise.all(modulePromises);
+    await Promise.all(Array.from({ length: concurrency }).map(() => worker()));
 
     // Combine results
     const allQuestions: any[] = [];
@@ -3844,23 +3851,45 @@ CRITICAL REQUIREMENTS:
 - Every MLO must have at least one question
 - UK English spelling throughout`;
 
-    try {
-      const response = await openaiService.generateContent(userPrompt, systemPrompt, {
-        maxTokens: 32000, // Good size for single module quiz
-        timeout: 300000, // 5 minutes per module
-      });
+    let attempts = 0;
+    const maxAttempts = 3;
+    const backoffMs = [2000, 4000];
 
-      const parsed = this.parseJSON(response, `step7-quiz-${mod.id}`);
-      return {
-        questions: parsed.questions || [],
-        clozeQuestions: parsed.clozeQuestions || [],
-      };
-    } catch (error) {
-      loggingService.error(`Error generating quiz for module ${mod.id}`, {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    while (attempts < maxAttempts) {
+      try {
+        const response = await openaiService.generateContent(userPrompt, systemPrompt, {
+          maxTokens: 32000, // Good size for single module quiz
+          timeout: 600000, // 10 minutes per module - reduce aborts
+        });
+
+        const parsed = this.parseJSON(response, `step7-quiz-${mod.id}`);
+        return {
+          questions: parsed.questions || [],
+          clozeQuestions: parsed.clozeQuestions || [],
+        };
+      } catch (error: any) {
+        attempts += 1;
+        const isAbort = error?.message?.toLowerCase().includes('aborted');
+
+        loggingService.error(
+          `Error generating quiz for module ${mod.id} (attempt ${attempts}/${maxAttempts})`,
+          {
+            error: error instanceof Error ? error.message : String(error),
+            isAbort,
+          }
+        );
+
+        if (!isAbort || attempts >= maxAttempts) {
+          throw error;
+        }
+
+        const wait = backoffMs[attempts - 1] || 5000;
+        await new Promise((res) => setTimeout(res, wait));
+      }
     }
+
+    // Fallback
+    return { questions: [], clozeQuestions: [] };
   }
 
   /**

@@ -23,7 +23,7 @@ interface EditWithAIButtonProps {
 export default function EditWithAIButton({
   target,
   onEdit,
-  label = 'Edit with AI',
+  label = 'Edit with VB',
   size = 'sm',
   variant = 'both',
   className = '',
@@ -56,7 +56,7 @@ export default function EditWithAIButton({
         border
         ${className}
       `}
-      title="Edit with AI Canvas"
+      title="Edit with VB Canvas"
     >
       {(variant === 'icon' || variant === 'both') && (
         <svg
