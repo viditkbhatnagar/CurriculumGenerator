@@ -10,11 +10,13 @@ import {
   BLOOM_LEVELS,
   ModulePhase,
 } from '@/types/workflow';
+import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
   onComplete: () => void;
   onRefresh: () => void;
+  onOpenCanvas?: (target: EditTarget) => void;
 }
 
 // Bloom's level colors
@@ -70,17 +72,19 @@ function ModuleCard({
   module,
   totalProgramHours,
   contactPercent,
+  onEdit,
 }: {
   module: Module;
   totalProgramHours: number;
   contactPercent: number;
+  onEdit?: (target: EditTarget) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hoursPercent =
     totalProgramHours > 0 ? Math.round((module.totalHours / totalProgramHours) * 100) : 0;
 
   return (
-    <div className="bg-slate-900/50 rounded-xl border border-slate-700 overflow-hidden">
+    <div className="bg-slate-900/50 rounded-xl border border-slate-700 overflow-hidden group">
       {/* Header */}
       <div className="p-4 border-b border-slate-700/50">
         <div className="flex items-start justify-between gap-4">
@@ -100,6 +104,23 @@ function ModuleCard({
             </div>
           </div>
           <div className="text-right shrink-0">
+            <div className="flex items-start gap-2 justify-end mb-1">
+              {onEdit && (
+                <EditWithAIButton
+                  target={{
+                    type: 'item',
+                    stepNumber: 4,
+                    itemId: module.id,
+                    originalContent: module,
+                    fieldPath: `Module ${module.sequence}: ${module.title}`,
+                  }}
+                  onEdit={onEdit}
+                  size="sm"
+                  variant="icon"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                />
+              )}
+            </div>
             <p className="text-cyan-400 font-bold text-xl">{module.totalHours}h</p>
             <p className="text-xs text-slate-500">{hoursPercent}% of program</p>
             {module.credits > 0 && (
@@ -226,7 +247,7 @@ function ModuleCard({
   );
 }
 
-export default function Step4View({ workflow, onComplete, onRefresh }: Props) {
+export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanvas }: Props) {
   const submitStep4 = useSubmitStep4();
   const approveStep4 = useApproveStep4();
   const [error, setError] = useState<string | null>(null);
@@ -521,6 +542,7 @@ export default function Step4View({ workflow, onComplete, onRefresh }: Props) {
                   module={module}
                   totalProgramHours={workflow.step4?.totalProgramHours || totalModuleHours}
                   contactPercent={contactPercent}
+                  onEdit={onOpenCanvas}
                 />
               ))}
             </div>

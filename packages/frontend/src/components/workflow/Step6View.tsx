@@ -9,11 +9,13 @@ import {
   ReadingComplexity,
 } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import { EditTarget } from './EditWithAIButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
   onComplete: () => void;
   onRefresh: () => void;
+  onOpenCanvas?: (target: EditTarget) => void;
 }
 
 // Complexity colors
@@ -31,9 +33,38 @@ function formatTime(minutes: number): string {
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
+// Content type labels and colors
+const CONTENT_TYPE_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
+  textbook_chapter: {
+    label: 'Textbook Chapter',
+    icon: '📖',
+    color: 'bg-blue-500/20 text-blue-400',
+  },
+  journal_article: {
+    label: 'Journal Article',
+    icon: '📄',
+    color: 'bg-purple-500/20 text-purple-400',
+  },
+  online_article: { label: 'Online Article', icon: '🌐', color: 'bg-cyan-500/20 text-cyan-400' },
+  report: { label: 'Report', icon: '📊', color: 'bg-amber-500/20 text-amber-400' },
+  case_study: { label: 'Case Study', icon: '💼', color: 'bg-emerald-500/20 text-emerald-400' },
+  video: { label: 'Video', icon: '🎬', color: 'bg-red-500/20 text-red-400' },
+  other: { label: 'Resource', icon: '📁', color: 'bg-slate-500/20 text-slate-400' },
+};
+
+const READING_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
+  academic: { label: 'Academic', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
+  applied: { label: 'Applied', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  industry: { label: 'Industry', color: 'bg-teal-500/20 text-teal-400 border-teal-500/30' },
+};
+
 // Reading Item Card
 function ReadingCard({ reading }: { reading: ReadingItem }) {
   const [_expanded, _setExpanded] = useState(false);
+  const contentConfig =
+    CONTENT_TYPE_CONFIG[(reading as any).contentType] || CONTENT_TYPE_CONFIG.other;
+  const readingTypeConfig =
+    READING_TYPE_CONFIG[(reading as any).readingType] || READING_TYPE_CONFIG.academic;
 
   return (
     <div
@@ -47,7 +78,7 @@ function ReadingCard({ reading }: { reading: ReadingItem }) {
         {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span
                 className={`text-xs px-2 py-0.5 rounded font-medium ${
                   reading.category === 'core'
@@ -56,6 +87,14 @@ function ReadingCard({ reading }: { reading: ReadingItem }) {
                 }`}
               >
                 {reading.category === 'core' ? '📘 Core' : '📙 Supplementary'}
+              </span>
+              {/* Content Type Badge */}
+              <span className={`text-xs px-2 py-0.5 rounded ${contentConfig.color}`}>
+                {contentConfig.icon} {contentConfig.label}
+              </span>
+              {/* Reading Type Badge (Academic/Applied/Industry) */}
+              <span className={`text-xs px-2 py-0.5 rounded border ${readingTypeConfig.color}`}>
+                {readingTypeConfig.label}
               </span>
               {reading.suggestedWeek && (
                 <span className="text-xs text-slate-500">{reading.suggestedWeek}</span>
@@ -78,15 +117,74 @@ function ReadingCard({ reading }: { reading: ReadingItem }) {
           </div>
         </div>
 
-        {/* Specific Assignment */}
-        {reading.specificChapters && (
-          <p className="text-sm text-emerald-400 mb-2">{reading.specificChapters}</p>
+        {/* Specific Assignment - Enhanced with chapter, pages, sections */}
+        {(reading.specificChapters ||
+          reading.pageRange ||
+          (reading as any).sectionNames?.length > 0) && (
+          <div className="mb-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded">
+            <p className="text-xs text-emerald-400 font-medium mb-1">📖 What to Read:</p>
+            {reading.specificChapters && (
+              <p className="text-sm text-emerald-300">{reading.specificChapters}</p>
+            )}
+            {reading.pageRange && (
+              <p className="text-xs text-emerald-400/80">Pages: {reading.pageRange}</p>
+            )}
+            {(reading as any).sectionNames?.length > 0 && (
+              <p className="text-xs text-emerald-400/80 mt-1">
+                Sections: {(reading as any).sectionNames.join(', ')}
+              </p>
+            )}
+          </div>
         )}
 
         {/* Citation */}
         <p className="text-xs text-slate-500 font-mono bg-slate-800/50 p-2 rounded">
           {reading.citation}
         </p>
+
+        {/* Clickable Links */}
+        {(reading.doi || reading.url) && (
+          <div className="flex gap-2 mt-2">
+            {reading.doi && (
+              <a
+                href={
+                  reading.doi.startsWith('http') ? reading.doi : `https://doi.org/${reading.doi}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  />
+                </svg>
+                DOI
+              </a>
+            )}
+            {reading.url && (
+              <a
+                href={reading.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded hover:bg-cyan-500/30"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  />
+                </svg>
+                Open Link
+              </a>
+            )}
+          </div>
+        )}
 
         {/* MLO Links (for Core) */}
         {reading.category === 'core' && reading.linkedMLOs && reading.linkedMLOs.length > 0 && (

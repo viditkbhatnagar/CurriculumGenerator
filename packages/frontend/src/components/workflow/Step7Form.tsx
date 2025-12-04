@@ -13,11 +13,13 @@ import {
   MLO,
 } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import { EditTarget } from './EditWithAIButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
   onComplete: () => void;
   onRefresh: () => void;
+  onOpenCanvas?: (target: EditTarget) => void;
 }
 
 // Difficulty colors
@@ -198,23 +200,26 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
   const moduleCount = modules.length;
 
   // Form state with defaults per workflow v2.2
+  // Final exam is separate from quizzes with higher limits
   const [formData, setFormData] = useState<Step7FormData>({
     finalExamWeight: 40,
     passMark: 60,
     questionsPerQuiz: 20,
-    questionsForFinal: 60,
+    questionsForFinal: 80, // Increased from 60 - separate from quizzes
     bankMultiplier: 3,
     randomize: true,
     enableCloze: false,
     clozeCountPerModule: 5,
     timeLimit: 30,
-    finalExamTimeLimit: 90,
+    finalExamTimeLimit: 120, // Increased from 90 - longer for comprehensive exam
     openBook: false,
     calculatorPermitted: false,
+    // All modules get quizzes by default
     moduleSettings: modules.map((mod: Module) => ({
       moduleId: mod.id,
       mlosCovered: mod.mlos?.map((mlo: MLO) => mlo.id) || [],
       bloomEmphasis: ['apply', 'analyze'] as BloomLevel[],
+      generateQuiz: true, // Ensure all modules get quizzes by default
     })),
   });
 
@@ -412,21 +417,26 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-slate-400 mb-2">Questions for Final</label>
+                    <label className="block text-sm text-slate-400 mb-2">
+                      Questions for Final Exam
+                    </label>
                     <input
                       type="number"
                       min={40}
-                      max={100}
+                      max={150}
                       value={formData.questionsForFinal}
                       onChange={(e) =>
                         setFormData((prev) => ({
                           ...prev,
-                          questionsForFinal: parseInt(e.target.value) || 60,
+                          questionsForFinal: parseInt(e.target.value) || 80,
                         }))
                       }
                       className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
                     />
-                    <p className="text-xs text-slate-500 mt-1">Bank: {finalBankSize}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Bank: {finalBankSize} | Final exam is generated{' '}
+                      <span className="text-amber-400">separately</span> from module quizzes
+                    </p>
                   </div>
 
                   <div>
@@ -883,8 +893,17 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
               {!isApproved && (
                 <button
                   onClick={handleApprove}
-                  disabled={approveStep7.isPending}
-                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+                  disabled={approveStep7.isPending || !validation?.everyMLOAssessed}
+                  title={
+                    !validation?.everyMLOAssessed
+                      ? '100% MLO coverage required before approval'
+                      : undefined
+                  }
+                  className={`px-6 py-2.5 font-medium rounded-lg transition-all disabled:opacity-50 ${
+                    !validation?.everyMLOAssessed
+                      ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white'
+                  }`}
                 >
                   {approveStep7.isPending ? 'Approving...' : 'Approve & Continue →'}
                 </button>
@@ -905,9 +924,45 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
             </div>
           </div>
 
-          {!workflow.step7?.isValid && !isApproved && (
-            <p className="text-xs text-amber-400 text-center">
-              All validation checks must pass before approval.
+          {/* MLO Coverage Warning - Must be 100% */}
+          {!validation?.everyMLOAssessed && !isApproved && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mt-4">
+              <div className="flex items-start gap-3">
+                <svg
+                  className="w-5 h-5 text-red-400 shrink-0 mt-0.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+                <div>
+                  <p className="text-red-400 font-medium">100% MLO Coverage Required</p>
+                  <p className="text-sm text-red-400/80 mt-1">
+                    All Module Learning Outcomes must be assessed before approval.
+                    {workflow.step7?.missingMLOs && workflow.step7.missingMLOs.length > 0 && (
+                      <span className="block mt-1">
+                        Missing:{' '}
+                        <span className="font-mono">{workflow.step7.missingMLOs.join(', ')}</span>
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-2">
+                    Click "Regenerate" to create additional questions covering missing MLOs.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!workflow.step7?.isValid && !isApproved && validation?.everyMLOAssessed && (
+            <p className="text-xs text-amber-400 text-center mt-2">
+              Some validation checks did not pass. Review the report above.
             </p>
           )}
         </div>

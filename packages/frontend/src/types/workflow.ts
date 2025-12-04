@@ -397,7 +397,12 @@ export type SourceType = 'academic' | 'applied' | 'industry';
 
 // Source access status per workflow v2.2
 export type SourceAccessStatus =
-  | 'verified_accessible' // AGI Library or open access
+  | 'agi_library' // Available in AGI Library
+  | 'knowledge_base' // Available in system knowledge base
+  | 'open_access' // Freely available online
+  | 'institutional_subscription' // Requires institutional access
+  | 'requires_purchase' // Requires separate purchase
+  | 'verified_accessible' // Legacy: AGI Library or open access
   | 'requires_approval' // Institutional subscription needed
   | 'rejected' // Paywalled without license
   | 'flagged_for_review'; // Potential access issue
@@ -545,10 +550,24 @@ export interface ReadingItem {
   doi?: string;
   url?: string;
 
-  // Specific reading assignment
-  specificChapters?: string; // e.g., "Chapters 2-3"
-  pageRange?: string; // e.g., "pp. 45-67"
+  // Specific reading assignment (per workflow feedback)
+  specificChapters?: string; // e.g., "Chapter 1: Modeling and Decision Analysis"
+  pageRange?: string; // e.g., "pp. 17-24"
+  sectionNames?: string[]; // e.g., ["Introduction to Financial Modeling", "Data Validation"]
   notes?: string;
+
+  // Content type indicator
+  contentType:
+    | 'textbook_chapter'
+    | 'journal_article'
+    | 'online_article'
+    | 'report'
+    | 'case_study'
+    | 'video'
+    | 'other';
+
+  // Reading type (academic vs applied)
+  readingType: 'academic' | 'applied' | 'industry'; // For proper tagging
 
   // Effort estimation (per workflow v2.2)
   estimatedWordCount?: number;

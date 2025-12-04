@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSubmitStep5, useApproveStep5 } from '@/hooks/useWorkflow';
+import { api } from '@/lib/api';
 import {
   CurriculumWorkflow,
   Source,
@@ -10,12 +11,16 @@ import {
   SourceType,
 } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
   onComplete: () => void;
   onRefresh: () => void;
+  onOpenCanvas?: (target: EditTarget) => void;
 }
+
+type SourceStatus = 'accepted' | 'rejected' | 'pending';
 
 // Category colors and labels
 const CATEGORY_LABELS: Record<SourceCategory, string> = {
@@ -40,14 +45,71 @@ const TYPE_LABELS: Record<SourceType, string> = {
   industry: 'Industry',
 };
 
+// Access status display helper
+const ACCESS_STATUS_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
+  agi_library: { label: 'AGI Library', icon: '📚', color: 'bg-emerald-500/20 text-emerald-400' },
+  knowledge_base: { label: 'Knowledge Base', icon: '🗄️', color: 'bg-cyan-500/20 text-cyan-400' },
+  open_access: { label: 'Open Access', icon: '🔓', color: 'bg-green-500/20 text-green-400' },
+  institutional_subscription: {
+    label: 'Institutional Access',
+    icon: '🏛️',
+    color: 'bg-amber-500/20 text-amber-400',
+  },
+  requires_purchase: {
+    label: 'Requires Purchase',
+    icon: '💰',
+    color: 'bg-red-500/20 text-red-400',
+  },
+  verified_accessible: {
+    label: 'Verified Access',
+    icon: '✓',
+    color: 'bg-emerald-500/20 text-emerald-400',
+  },
+  requires_approval: {
+    label: 'Needs Approval',
+    icon: '⚠',
+    color: 'bg-amber-500/20 text-amber-400',
+  },
+  rejected: { label: 'Not Accessible', icon: '✗', color: 'bg-red-500/20 text-red-400' },
+  flagged_for_review: {
+    label: 'Under Review',
+    icon: '🔍',
+    color: 'bg-slate-500/20 text-slate-400',
+  },
+};
+
 // Source Card Component
-function SourceCard({ source }: { source: Source }) {
+function SourceCard({
+  source,
+  onAccept,
+  onReject,
+  onEdit,
+  status = 'pending',
+  isReplacement = false,
+}: {
+  source: Source;
+  onAccept?: (sourceId: string) => void;
+  onReject?: (sourceId: string) => void;
+  onEdit?: (target: EditTarget) => void;
+  status?: SourceStatus;
+  isReplacement?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const currentYear = new Date().getFullYear();
   const isRecent = currentYear - source.year <= 5;
+  const accessConfig =
+    ACCESS_STATUS_CONFIG[source.accessStatus] || ACCESS_STATUS_CONFIG.flagged_for_review;
+
+  const getBorderColor = () => {
+    if (status === 'accepted') return 'border-emerald-500/50';
+    if (status === 'rejected') return 'border-red-500/50 opacity-50';
+    return 'border-slate-700';
+  };
 
   return (
-    <div className="bg-slate-900/50 rounded-lg border border-slate-700 overflow-hidden">
+    <div
+      className={`bg-slate-900/50 rounded-lg border overflow-hidden group ${getBorderColor()} ${isReplacement ? 'ring-2 ring-cyan-500/30' : ''}`}
+    >
       {/* Header */}
       <div className="p-4">
         <div className="flex items-start justify-between gap-3 mb-2">
@@ -75,6 +137,58 @@ function SourceCard({ source }: { source: Source }) {
         <p className="text-xs text-slate-500 font-mono bg-slate-800/50 p-2 rounded mt-2">
           {source.citation}
         </p>
+
+        {/* Clickable DOI/URL Links */}
+        {(source.doi || source.url) && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {source.doi && (
+              <a
+                href={source.doi.startsWith('http') ? source.doi : `https://doi.org/${source.doi}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  />
+                </svg>
+                DOI
+              </a>
+            )}
+            {source.url && (
+              <a
+                href={source.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded hover:bg-cyan-500/30 transition-colors"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  />
+                </svg>
+                Open Link
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* Access Status Badge */}
+        <div className="mt-2">
+          <span
+            className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${accessConfig.color}`}
+          >
+            <span>{accessConfig.icon}</span>
+            {accessConfig.label}
+          </span>
+        </div>
 
         {/* Compliance Badges */}
         <div className="flex flex-wrap gap-2 mt-3">
@@ -117,6 +231,105 @@ function SourceCard({ source }: { source: Source }) {
             </span>
           )}
         </div>
+
+        {/* Accept/Reject Buttons */}
+        {(onAccept || onReject) && status === 'pending' && (
+          <div className="flex gap-2 mt-3 pt-3 border-t border-slate-700/50">
+            {onAccept && (
+              <button
+                onClick={() => onAccept(source.id)}
+                className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400 text-xs hover:bg-emerald-500/20 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+                Accept
+              </button>
+            )}
+            {onReject && (
+              <button
+                onClick={() => onReject(source.id)}
+                className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-xs hover:bg-red-500/20 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+                Reject & Replace
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Status Indicator */}
+        {status === 'accepted' && (
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-700/50 text-emerald-400 text-xs">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+            Accepted
+          </div>
+        )}
+        {status === 'rejected' && (
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-700/50 text-red-400 text-xs">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+            Rejected - Replacement pending
+          </div>
+        )}
+
+        {/* Replacement Badge */}
+        {isReplacement && (
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-cyan-500/30 text-cyan-400 text-xs">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            AI-Generated Replacement
+          </div>
+        )}
+
+        {/* Edit with AI Button */}
+        {onEdit && (
+          <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <EditWithAIButton
+              target={{
+                type: 'item',
+                stepNumber: 5,
+                itemId: source.id,
+                originalContent: source,
+                fieldPath: `Source: ${source.title.substring(0, 40)}...`,
+              }}
+              onEdit={onEdit}
+              size="sm"
+              variant="both"
+            />
+          </div>
+        )}
       </div>
 
       {/* Expand Button */}
@@ -255,7 +468,42 @@ function ModuleSummaryCard({ summary }: { summary: ModuleSourceSummary }) {
   );
 }
 
-export default function Step5View({ workflow, onComplete, onRefresh }: Props) {
+export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanvas }: Props) {
+  // Source status management
+  const [sourceStatuses, setSourceStatuses] = useState<Record<string, SourceStatus>>({});
+  const [replacementSources, setReplacementSources] = useState<Record<string, Source[]>>({});
+  const [isRequestingReplacement, setIsRequestingReplacement] = useState(false);
+
+  const handleAcceptSource = (sourceId: string) => {
+    setSourceStatuses((prev) => ({ ...prev, [sourceId]: 'accepted' }));
+  };
+
+  const handleRejectSource = async (sourceId: string) => {
+    setSourceStatuses((prev) => ({ ...prev, [sourceId]: 'rejected' }));
+    setIsRequestingReplacement(true);
+
+    try {
+      // Request AI to generate replacement source
+      const response = await api.post('/api/v3/workflow/replace-source', {
+        workflowId: workflow._id,
+        rejectedSourceId: sourceId,
+        moduleId: (workflow.step5?.sources || workflow.step5?.topicSources || []).find(
+          (s: Source) => s.id === sourceId
+        )?.moduleId,
+      });
+
+      if (response.data?.data?.replacementSource) {
+        setReplacementSources((prev) => ({
+          ...prev,
+          [sourceId]: [...(prev[sourceId] || []), response.data.data.replacementSource],
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to request replacement source:', error);
+    } finally {
+      setIsRequestingReplacement(false);
+    }
+  };
   const submitStep5 = useSubmitStep5();
   const approveStep5 = useApproveStep5();
   const [error, setError] = useState<string | null>(null);

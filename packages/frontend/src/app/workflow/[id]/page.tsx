@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useWorkflow, useWorkflowProgress, useCompleteWorkflow } from '@/hooks/useWorkflow';
+import { api } from '@/lib/api';
 import {
   WorkflowStep,
   STEP_NAMES,
@@ -11,7 +13,7 @@ import {
   StepStatus,
 } from '@/types/workflow';
 
-// Step components (we'll create these next)
+// Step components
 import Step1Form from '@/components/workflow/Step1Form';
 import Step2Form from '@/components/workflow/Step2Form';
 import Step3Form from '@/components/workflow/Step3Form';
@@ -21,6 +23,8 @@ import Step6View from '@/components/workflow/Step6View';
 import Step7Form from '@/components/workflow/Step7Form';
 import Step8View from '@/components/workflow/Step8View';
 import Step9View from '@/components/workflow/Step9View';
+import CanvasChatbot from '@/components/workflow/CanvasChatbot';
+import { EditTarget } from '@/components/workflow/EditWithAIButton';
 
 // Step icons
 const STEP_ICONS: Record<WorkflowStep, React.ReactNode> = {
@@ -132,15 +136,56 @@ function getStepStatusColor(status?: StepStatus, isCurrent: boolean = false): st
 export default function WorkflowDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const id = params.id as string;
 
   // All hooks MUST be declared before any conditional returns
   const [activeStep, setActiveStep] = useState<WorkflowStep | null>(null);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
 
+  // Canvas chatbot state - GLOBAL for entire workflow
+  const [isCanvasOpen, setIsCanvasOpen] = useState(false);
+  const [canvasEditTarget, setCanvasEditTarget] = useState<EditTarget | undefined>(undefined);
+
   const { data: workflow, isLoading, error, refetch } = useWorkflow(id);
   const { data: progress } = useWorkflowProgress(id);
   const completeWorkflow = useCompleteWorkflow();
+
+  // Handle opening canvas chatbot - can be opened from anywhere
+  const handleOpenCanvas = useCallback((target?: EditTarget) => {
+    setCanvasEditTarget(target);
+    setIsCanvasOpen(true);
+  }, []);
+
+  // Handle applying changes from canvas - FORCE UI UPDATE
+  const handleApplyCanvasChanges = useCallback(
+    async (target: EditTarget, newContent: any) => {
+      console.log('Applying canvas changes:', { target, newContent });
+
+      // Apply changes via API
+      const response = await api.post(`/api/v3/workflow/${id}/apply-edit`, {
+        stepNumber: target.stepNumber,
+        itemId: target.itemId,
+        sectionId: target.sectionId,
+        fieldPath: target.fieldPath,
+        newContent,
+      });
+
+      console.log('Apply edit response:', response.data);
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to apply changes');
+      }
+
+      // FORCE INVALIDATE ALL CACHED DATA for this workflow
+      await queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+      await queryClient.invalidateQueries({ queryKey: ['workflow', id, 'progress'] });
+
+      // Also refetch to ensure fresh data
+      await refetch();
+    },
+    [id, refetch, queryClient]
+  );
 
   if (isLoading) {
     return (
@@ -197,6 +242,7 @@ export default function WorkflowDetailPage() {
       workflow,
       onComplete: handleStepComplete,
       onRefresh: refetch,
+      onOpenCanvas: handleOpenCanvas,
     };
 
     switch (currentStep) {
@@ -394,6 +440,40 @@ export default function WorkflowDetailPage() {
           </div>
         </main>
       </div>
+
+      {/* Canvas AI Chatbot Side Panel */}
+      {workflow && (
+        <CanvasChatbot
+          workflow={workflow}
+          isOpen={isCanvasOpen}
+          onClose={() => {
+            setIsCanvasOpen(false);
+            setCanvasEditTarget(undefined);
+          }}
+          currentStep={currentStep}
+          editTarget={canvasEditTarget}
+          onApplyChanges={handleApplyCanvasChanges}
+          onRefresh={refetch}
+        />
+      )}
+
+      {/* Floating Edit with AI Button */}
+      {workflow && !isCanvasOpen && (
+        <button
+          onClick={() => setIsCanvasOpen(true)}
+          className="fixed right-6 bottom-6 px-4 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-xl shadow-lg shadow-cyan-500/30 flex items-center gap-2 transition-all z-40"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+            />
+          </svg>
+          Edit with AI
+        </button>
+      )}
 
       {/* Completion Modal */}
       {showCompletionModal && (

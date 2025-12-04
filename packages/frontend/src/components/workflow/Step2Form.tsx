@@ -1,13 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep2, useApproveStep2 } from '@/hooks/useWorkflow';
+import { api } from '@/lib/api';
 import { CurriculumWorkflow, KSCItem, BenchmarkProgram, KSCImportance } from '@/types/workflow';
+
+// Custom framework upload type
+interface UploadedFramework {
+  id: string;
+  name: string;
+  fileName: string;
+  uploadedAt: string;
+}
 
 interface Props {
   workflow: CurriculumWorkflow;
   onComplete: () => void;
   onRefresh: () => void;
+  onOpenCanvas?: (target: any) => void;
 }
 
 // Industry/Professional Frameworks options
@@ -20,6 +30,66 @@ const INDUSTRY_FRAMEWORKS = [
   { value: 'CFA', label: 'CFA (Finance)' },
   { value: 'ACCA', label: 'ACCA (Accounting)' },
   { value: 'ISO', label: 'ISO Standards' },
+];
+
+// Knowledge Base Sources (from workflow document pg 7)
+const KNOWLEDGE_BASE_SOURCES = [
+  {
+    id: 'benchmark_programs',
+    label: 'Your provided benchmark programs',
+    description: 'Primary source - programs you specify above',
+    priority: 1,
+    default: true,
+  },
+  {
+    id: 'provided_frameworks',
+    label: 'Your provided frameworks',
+    description: 'Industry frameworks you select above',
+    priority: 2,
+    default: true,
+  },
+  {
+    id: 'competency_framework_kb',
+    label: 'Competency-Framework folder',
+    description: 'Competency frameworks in knowledge base',
+    priority: 3,
+    default: true,
+  },
+  {
+    id: 'uk_diploma_programs',
+    label: 'UK-Diploma-Programs folder',
+    description: 'UK accredited diploma specifications',
+    priority: 4,
+    default: true,
+  },
+  {
+    id: 'ofqual_register',
+    label: 'OFQUAL Register (UK)',
+    description: 'UK qualifications register',
+    priority: 5,
+    default: true,
+  },
+  {
+    id: 'hlc_wasc_databases',
+    label: 'HLC and WASC databases (US)',
+    description: 'US accreditation databases',
+    priority: 6,
+    default: true,
+  },
+  {
+    id: 'professional_body_websites',
+    label: 'Professional body websites',
+    description: 'SHRM, PMI, ASCM, CIPD official resources',
+    priority: 7,
+    default: true,
+  },
+  {
+    id: 'recent_accredited_programs',
+    label: 'Recent accredited programs',
+    description: 'Recently accredited program descriptions',
+    priority: 8,
+    default: true,
+  },
 ];
 
 // KSC Item Card Component
@@ -86,13 +156,74 @@ const EMPTY_BENCHMARK: BenchmarkProgram = {
 export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
   const submitStep2 = useSubmitStep2();
   const approveStep2 = useApproveStep2();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state for inputs
   const [benchmarks, setBenchmarks] = useState<BenchmarkProgram[]>([{ ...EMPTY_BENCHMARK }]);
   const [selectedFrameworks, setSelectedFrameworks] = useState<string[]>([]);
   const [institutionalFramework, setInstitutionalFramework] = useState('');
+  const [selectedKBSources, setSelectedKBSources] = useState<string[]>(
+    KNOWLEDGE_BASE_SOURCES.filter((s) => s.default).map((s) => s.id)
+  );
+  const [uploadedFrameworks, setUploadedFrameworks] = useState<UploadedFramework[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const [editingItem, setEditingItem] = useState<KSCItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Handle framework file upload (per-workflow only)
+  const handleFrameworkUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      for (const file of Array.from(files)) {
+        // Validate file type
+        const validTypes = ['.pdf', '.docx', '.doc', '.txt'];
+        const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+        if (!validTypes.includes(fileExt)) {
+          throw new Error(`Invalid file type: ${file.name}. Accepted: PDF, DOCX, DOC, TXT`);
+        }
+
+        // Create form data and upload
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('workflowId', workflow._id);
+        formData.append('type', 'framework');
+
+        const response = await api.post('/api/v3/workflow/upload-framework', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        const result = response.data;
+
+        // Add to uploaded frameworks list
+        setUploadedFrameworks((prev) => [
+          ...prev,
+          {
+            id: result.data.id || `fw-${Date.now()}`,
+            name: file.name.replace(/\.[^/.]+$/, ''),
+            fileName: file.name,
+            uploadedAt: new Date().toISOString(),
+          },
+        ]);
+      }
+    } catch (err: any) {
+      console.error('Framework upload failed:', err);
+      setError(err.message || 'Failed to upload framework');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const removeUploadedFramework = (id: string) => {
+    setUploadedFrameworks((prev) => prev.filter((f) => f.id !== id));
+  };
 
   // Initialize from existing data
   useEffect(() => {
@@ -133,6 +264,12 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
                 .map((s) => s.trim())
                 .filter(Boolean)
             : [],
+          knowledgeBaseSources: selectedKBSources,
+          uploadedFrameworks: uploadedFrameworks.map((f) => ({
+            id: f.id,
+            name: f.name,
+            fileName: f.fileName,
+          })),
         },
       });
       onRefresh();
@@ -348,6 +485,95 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
                 </button>
               ))}
             </div>
+
+            {/* Custom Framework Upload */}
+            <div className="mt-4 pt-4 border-t border-slate-700">
+              <p className="text-sm text-slate-400 mb-3">
+                Have a framework not listed above? Upload it for this workflow:
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.doc,.txt"
+                multiple
+                onChange={handleFrameworkUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="px-4 py-2 border border-dashed border-slate-600 rounded-lg text-slate-400 hover:border-cyan-500 hover:text-cyan-400 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isUploading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                      />
+                    </svg>
+                    Upload Framework (PDF, DOCX, TXT)
+                  </>
+                )}
+              </button>
+
+              {/* Uploaded Frameworks List */}
+              {uploadedFrameworks.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {uploadedFrameworks.map((framework) => (
+                    <div
+                      key={framework.id}
+                      className="flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg"
+                    >
+                      <div className="flex items-center gap-2">
+                        <svg
+                          className="w-4 h-4 text-emerald-400"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        <span className="text-sm text-emerald-300">{framework.name}</span>
+                        <span className="text-xs text-slate-500">({framework.fileName})</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeUploadedFramework(framework.id)}
+                        className="text-red-400 hover:text-red-300 p-1"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
 
           {/* Institutional Frameworks Section */}
@@ -369,6 +595,92 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
               rows={3}
               className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
             />
+          </section>
+
+          {/* Knowledge Base Sources Section */}
+          <section className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2 mb-4">
+                Knowledge Base Sources
+              </h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Select which sources the AI will search when generating your competency framework.
+                Sources are searched in priority order (1 = highest).
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {KNOWLEDGE_BASE_SOURCES.map((source) => {
+                const isSelected = selectedKBSources.includes(source.id);
+                return (
+                  <button
+                    key={source.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedKBSources((prev) =>
+                        isSelected ? prev.filter((id) => id !== source.id) : [...prev, source.id]
+                      );
+                    }}
+                    className={`w-full p-3 rounded-lg border text-left transition-all ${
+                      isSelected
+                        ? 'bg-emerald-500/10 border-emerald-500/50 text-white'
+                        : 'bg-slate-800/30 border-slate-700 text-slate-400 hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`w-5 h-5 rounded border flex items-center justify-center mt-0.5 ${
+                          isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'
+                        }`}
+                      >
+                        {isSelected && (
+                          <svg
+                            className="w-3 h-3 text-white"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={3}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">
+                            #{source.priority}
+                          </span>
+                          <span className="font-medium text-sm">{source.label}</span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">{source.description}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setSelectedKBSources(KNOWLEDGE_BASE_SOURCES.map((s) => s.id))}
+                className="px-3 py-1 text-cyan-400 hover:text-cyan-300"
+              >
+                Select All
+              </button>
+              <span className="text-slate-600">|</span>
+              <button
+                type="button"
+                onClick={() => setSelectedKBSources([])}
+                className="px-3 py-1 text-slate-400 hover:text-slate-300"
+              >
+                Deselect All
+              </button>
+            </div>
           </section>
 
           {/* Error Display */}

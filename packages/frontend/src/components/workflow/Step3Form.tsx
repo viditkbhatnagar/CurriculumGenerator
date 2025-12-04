@@ -12,11 +12,13 @@ import {
   PLO,
   KSCItem,
 } from '@/types/workflow';
+import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
   onComplete: () => void;
   onRefresh: () => void;
+  onOpenCanvas?: (target: EditTarget) => void;
 }
 
 // Bloom's taxonomy level colors
@@ -56,11 +58,19 @@ const EMPHASIS_OPTIONS: { value: OutcomeEmphasis; label: string; description: st
 ];
 
 // PLO Card Component
-function PLOCard({ plo, index }: { plo: PLO; index: number }) {
+function PLOCard({
+  plo,
+  index,
+  onEdit,
+}: {
+  plo: PLO;
+  index: number;
+  onEdit?: (target: EditTarget) => void;
+}) {
   const wordCount = plo.statement?.split(/\s+/).length || 0;
 
   return (
-    <div className="bg-slate-900/50 rounded-xl p-5 border border-slate-700 hover:border-slate-600 transition-colors">
+    <div className="bg-slate-900/50 rounded-xl p-5 border border-slate-700 hover:border-slate-600 transition-colors group">
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
@@ -75,7 +85,24 @@ function PLOCard({ plo, index }: { plo: PLO; index: number }) {
             {plo.bloomLevel}
           </span>
         </div>
-        <span className="text-xs text-slate-500">{wordCount}/25 words</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">{wordCount}/25 words</span>
+          {onEdit && (
+            <EditWithAIButton
+              target={{
+                type: 'item',
+                stepNumber: 3,
+                itemId: plo.id,
+                originalContent: plo,
+                fieldPath: `PLO ${index + 1}: ${plo.statement?.substring(0, 30)}...`,
+              }}
+              onEdit={onEdit}
+              size="sm"
+              variant="icon"
+              className="opacity-0 group-hover:opacity-100 transition-opacity"
+            />
+          )}
+        </div>
       </div>
 
       {/* Statement */}
@@ -160,7 +187,7 @@ function PLOCard({ plo, index }: { plo: PLO; index: number }) {
   );
 }
 
-export default function Step3Form({ workflow, onComplete, onRefresh }: Props) {
+export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanvas }: Props) {
   const submitStep3 = useSubmitStep3();
   const approveStep3 = useApproveStep3();
 
@@ -705,7 +732,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh }: Props) {
             </h3>
             <div className="space-y-4">
               {workflow.step3?.outcomes?.map((plo, index) => (
-                <PLOCard key={plo.id} plo={plo} index={index} />
+                <PLOCard key={plo.id} plo={plo} index={index} onEdit={onOpenCanvas} />
               ))}
             </div>
           </div>

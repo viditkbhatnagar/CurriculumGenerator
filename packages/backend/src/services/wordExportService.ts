@@ -554,11 +554,25 @@ export class WordExportService {
         }
 
         if (module.contactActivities?.length) {
+          // Format activities properly - handle both string arrays and object arrays
+          const formattedContactActivities = module.contactActivities
+            .map((activity: any) => {
+              if (typeof activity === 'string') return activity;
+              // Format object: "Type: Title (Xh)" or just "Title (Xh)"
+              const type = activity.type
+                ? `${activity.type.charAt(0).toUpperCase()}${activity.type.slice(1)}`
+                : '';
+              const title = activity.title || activity.description || '';
+              const hours = activity.hours ? `(${activity.hours}h)` : '';
+              return type ? `${type}: ${title} ${hours}`.trim() : `${title} ${hours}`.trim();
+            })
+            .filter(Boolean);
+
           contentChildren.push(
             new Paragraph({
               children: [
                 new TextRun({ text: 'Contact Activities: ', bold: true, size: 20 }),
-                new TextRun({ text: module.contactActivities.join(', '), size: 20 }),
+                new TextRun({ text: formattedContactActivities.join(', '), size: 20 }),
               ],
               spacing: { after: 50 },
             })
@@ -566,11 +580,25 @@ export class WordExportService {
         }
 
         if (module.independentActivities?.length) {
+          // Format activities properly - handle both string arrays and object arrays
+          const formattedIndependentActivities = module.independentActivities
+            .map((activity: any) => {
+              if (typeof activity === 'string') return activity;
+              // Format object: "Type: Title (Xh)" or just "Title (Xh)"
+              const type = activity.type
+                ? `${activity.type.charAt(0).toUpperCase()}${activity.type.slice(1)}`
+                : '';
+              const title = activity.title || activity.description || '';
+              const hours = activity.hours ? `(${activity.hours}h)` : '';
+              return type ? `${type}: ${title} ${hours}`.trim() : `${title} ${hours}`.trim();
+            })
+            .filter(Boolean);
+
           contentChildren.push(
             new Paragraph({
               children: [
                 new TextRun({ text: 'Independent Activities: ', bold: true, size: 20 }),
-                new TextRun({ text: module.independentActivities.join(', '), size: 20 }),
+                new TextRun({ text: formattedIndependentActivities.join(', '), size: 20 }),
               ],
               spacing: { after: 150 },
             })

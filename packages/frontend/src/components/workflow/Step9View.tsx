@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react';
 import { useSubmitStep9 } from '@/hooks/useWorkflow';
 import { CurriculumWorkflow, GlossaryTerm, ModuleTermList, TermPriority } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import { EditTarget } from './EditWithAIButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
   onComplete: () => void;
   onRefresh: () => void;
+  onOpenCanvas?: (target: EditTarget) => void;
 }
 
 // Priority colors

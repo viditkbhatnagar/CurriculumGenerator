@@ -16,7 +16,7 @@
  * 9. Glossary - Auto-Generated (5 min)
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { validateJWT, loadUser } from '../middleware/auth';
 import { workflowService } from '../services/workflowService';
 import { loggingService } from '../services/loggingService';
@@ -25,6 +25,116 @@ import { wordExportService } from '../services/wordExportService';
 import { analyticsStorageService } from '../services/analyticsStorageService';
 
 const router = Router();
+
+// ============================================================================
+// TIMEOUT MIDDLEWARE FOR LONG-RUNNING AI GENERATION
+// ============================================================================
+
+/**
+ * Middleware to extend request timeout for AI-heavy operations
+ * Steps 5, 6, 7, 8, 9 can take several minutes with parallel processing
+ */
+const extendTimeout = (timeoutMs: number = 600000) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    // Set Node.js socket timeout
+    req.setTimeout(timeoutMs);
+    res.setTimeout(timeoutMs);
+
+    // Set keep-alive
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Keep-Alive', `timeout=${Math.floor(timeoutMs / 1000)}`);
+
+    loggingService.info('Extended timeout for long-running operation', {
+      timeoutMs,
+      path: req.path,
+    });
+
+    next();
+  };
+};
+
+// ============================================================================
+// HELPER: PROPAGATE CHANGES ACROSS ALL STEPS
+// ============================================================================
+
+/**
+ * Propagate module title changes to all steps that store module info
+ * This ensures data consistency across the entire workflow
+ */
+function propagateModuleTitleChange(
+  workflow: any,
+  moduleId: string,
+  oldTitle: string,
+  newTitle: string
+) {
+  const stepsToUpdate: string[] = [];
+
+  // Step 5: moduleSummaries
+  if (workflow.step5?.moduleSummaries) {
+    workflow.step5.moduleSummaries.forEach((summary: any) => {
+      if (summary.moduleId === moduleId || summary.moduleTitle === oldTitle) {
+        summary.moduleTitle = newTitle;
+        stepsToUpdate.push('step5');
+      }
+    });
+  }
+
+  // Step 5: sources (moduleId reference - title in sourcesByModule key)
+  if (workflow.step5?.sourcesByModule) {
+    // sourcesByModule is keyed by moduleId, not title, so no change needed
+    // But if there's a moduleTitle field in sources, update it
+  }
+
+  // Step 6: moduleReadingLists or readings with module references
+  if (workflow.step6?.moduleReadingLists) {
+    workflow.step6.moduleReadingLists.forEach((list: any) => {
+      if (list.moduleId === moduleId || list.moduleTitle === oldTitle) {
+        list.moduleTitle = newTitle;
+        stepsToUpdate.push('step6');
+      }
+    });
+  }
+  if (workflow.step6?.moduleSummaries) {
+    workflow.step6.moduleSummaries.forEach((summary: any) => {
+      if (summary.moduleId === moduleId || summary.moduleTitle === oldTitle) {
+        summary.moduleTitle = newTitle;
+      }
+    });
+  }
+
+  // Step 7: quizzes with module references
+  if (workflow.step7?.quizzes) {
+    workflow.step7.quizzes.forEach((quiz: any) => {
+      if (quiz.moduleId === moduleId || quiz.moduleTitle === oldTitle) {
+        quiz.moduleTitle = newTitle;
+        stepsToUpdate.push('step7');
+      }
+    });
+  }
+
+  // Step 8: caseStudies with module references
+  if (workflow.step8?.caseStudies) {
+    workflow.step8.caseStudies.forEach((cs: any) => {
+      if (cs.moduleId === moduleId || cs.moduleTitle === oldTitle) {
+        cs.moduleTitle = newTitle;
+        stepsToUpdate.push('step8');
+      }
+    });
+  }
+
+  // Mark all affected steps as modified
+  const uniqueSteps = [...new Set(stepsToUpdate)];
+  uniqueSteps.forEach((step) => workflow.markModified(step));
+
+  if (uniqueSteps.length > 0) {
+    loggingService.info('Module title propagated across steps', {
+      moduleId,
+      oldTitle,
+      newTitle,
+      affectedSteps: uniqueSteps,
+    });
+  }
+}
 
 // ============================================================================
 // WORKFLOW MANAGEMENT
@@ -709,32 +819,38 @@ router.post('/:id/step4/approve', validateJWT, loadUser, async (req: Request, re
  * POST /api/v3/workflow/:id/step5
  * Submit Step 5: Generate Topic Sources
  */
-router.post('/:id/step5', validateJWT, loadUser, async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
+router.post(
+  '/:id/step5',
+  validateJWT,
+  loadUser,
+  extendTimeout(600000),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
 
-    const workflow = await workflowService.processStep5(id);
+      const workflow = await workflowService.processStep5(id);
 
-    res.json({
-      success: true,
-      data: {
-        step5: workflow.step5,
-        currentStep: workflow.currentStep,
-        status: workflow.status,
-        agiCompliant: workflow.step5?.agiCompliant,
-      },
-      message: workflow.step5?.agiCompliant
-        ? 'Step 5 complete. AGI-compliant sources generated. Ready for Step 6: Reading Lists.'
-        : 'Step 5 complete but has compliance issues. Review required.',
-    });
-  } catch (error) {
-    loggingService.error('Error processing Step 5', { error, workflowId: req.params.id });
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to process Step 5',
-    });
+      res.json({
+        success: true,
+        data: {
+          step5: workflow.step5,
+          currentStep: workflow.currentStep,
+          status: workflow.status,
+          agiCompliant: workflow.step5?.agiCompliant,
+        },
+        message: workflow.step5?.agiCompliant
+          ? 'Step 5 complete. AGI-compliant sources generated. Ready for Step 6: Reading Lists.'
+          : 'Step 5 complete but has compliance issues. Review required.',
+      });
+    } catch (error) {
+      loggingService.error('Error processing Step 5', { error, workflowId: req.params.id });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to process Step 5',
+      });
+    }
   }
-});
+);
 
 /**
  * POST /api/v3/workflow/:id/step5/approve
@@ -788,29 +904,35 @@ router.post('/:id/step5/approve', validateJWT, loadUser, async (req: Request, re
  * POST /api/v3/workflow/:id/step6
  * Submit Step 6: Generate Reading Lists
  */
-router.post('/:id/step6', validateJWT, loadUser, async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
+router.post(
+  '/:id/step6',
+  validateJWT,
+  loadUser,
+  extendTimeout(600000),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
 
-    const workflow = await workflowService.processStep6(id);
+      const workflow = await workflowService.processStep6(id);
 
-    res.json({
-      success: true,
-      data: {
-        step6: workflow.step6,
-        currentStep: workflow.currentStep,
-        status: workflow.status,
-      },
-      message: 'Step 6 complete. Reading lists generated. Ready for Step 7: Assessments.',
-    });
-  } catch (error) {
-    loggingService.error('Error processing Step 6', { error, workflowId: req.params.id });
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to process Step 6',
-    });
+      res.json({
+        success: true,
+        data: {
+          step6: workflow.step6,
+          currentStep: workflow.currentStep,
+          status: workflow.status,
+        },
+        message: 'Step 6 complete. Reading lists generated. Ready for Step 7: Assessments.',
+      });
+    } catch (error) {
+      loggingService.error('Error processing Step 6', { error, workflowId: req.params.id });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to process Step 6',
+      });
+    }
   }
-});
+);
 
 /**
  * POST /api/v3/workflow/:id/step6/approve
@@ -852,54 +974,60 @@ router.post('/:id/step6/approve', validateJWT, loadUser, async (req: Request, re
  * POST /api/v3/workflow/:id/step7
  * Submit Step 7: Generate Assessments
  */
-router.post('/:id/step7', validateJWT, loadUser, async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const {
-      finalExamWeight = 40,
-      passMark = 60,
-      questionsPerQuiz = 20,
-      questionsForFinal = 60,
-      bankMultiplier = 3,
-      randomize = true,
-      enableCloze = false,
-    } = req.body;
+router.post(
+  '/:id/step7',
+  validateJWT,
+  loadUser,
+  extendTimeout(600000),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const {
+        finalExamWeight = 40,
+        passMark = 60,
+        questionsPerQuiz = 20,
+        questionsForFinal = 60,
+        bankMultiplier = 3,
+        randomize = true,
+        enableCloze = false,
+      } = req.body;
 
-    // Validation
-    if (finalExamWeight < 30 || finalExamWeight > 50) {
-      return res.status(400).json({
+      // Validation
+      if (finalExamWeight < 30 || finalExamWeight > 50) {
+        return res.status(400).json({
+          success: false,
+          error: 'Final exam weight must be between 30% and 50%',
+        });
+      }
+
+      const workflow = await workflowService.processStep7(id, {
+        finalExamWeight,
+        passMark,
+        questionsPerQuiz,
+        questionsForFinal,
+        bankMultiplier,
+        randomize,
+        enableCloze,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          step7: workflow.step7,
+          currentStep: workflow.currentStep,
+          status: workflow.status,
+        },
+        message: 'Step 7 complete. MCQ banks generated. Ready for Step 8: Case Studies.',
+      });
+    } catch (error) {
+      loggingService.error('Error processing Step 7', { error, workflowId: req.params.id });
+      res.status(500).json({
         success: false,
-        error: 'Final exam weight must be between 30% and 50%',
+        error: error instanceof Error ? error.message : 'Failed to process Step 7',
       });
     }
-
-    const workflow = await workflowService.processStep7(id, {
-      finalExamWeight,
-      passMark,
-      questionsPerQuiz,
-      questionsForFinal,
-      bankMultiplier,
-      randomize,
-      enableCloze,
-    });
-
-    res.json({
-      success: true,
-      data: {
-        step7: workflow.step7,
-        currentStep: workflow.currentStep,
-        status: workflow.status,
-      },
-      message: 'Step 7 complete. MCQ banks generated. Ready for Step 8: Case Studies.',
-    });
-  } catch (error) {
-    loggingService.error('Error processing Step 7', { error, workflowId: req.params.id });
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to process Step 7',
-    });
   }
-});
+);
 
 /**
  * POST /api/v3/workflow/:id/step7/approve
@@ -952,29 +1080,35 @@ router.post('/:id/step7/approve', validateJWT, loadUser, async (req: Request, re
  * POST /api/v3/workflow/:id/step8
  * Submit Step 8: Generate Case Studies
  */
-router.post('/:id/step8', validateJWT, loadUser, async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
+router.post(
+  '/:id/step8',
+  validateJWT,
+  loadUser,
+  extendTimeout(600000),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
 
-    const workflow = await workflowService.processStep8(id);
+      const workflow = await workflowService.processStep8(id);
 
-    res.json({
-      success: true,
-      data: {
-        step8: workflow.step8,
-        currentStep: workflow.currentStep,
-        status: workflow.status,
-      },
-      message: 'Step 8 complete. Case studies generated. Ready for Step 9: Glossary.',
-    });
-  } catch (error) {
-    loggingService.error('Error processing Step 8', { error, workflowId: req.params.id });
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to process Step 8',
-    });
+      res.json({
+        success: true,
+        data: {
+          step8: workflow.step8,
+          currentStep: workflow.currentStep,
+          status: workflow.status,
+        },
+        message: 'Step 8 complete. Case studies generated. Ready for Step 9: Glossary.',
+      });
+    } catch (error) {
+      loggingService.error('Error processing Step 8', { error, workflowId: req.params.id });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to process Step 8',
+      });
+    }
   }
-});
+);
 
 /**
  * POST /api/v3/workflow/:id/step8/approve
@@ -1016,30 +1150,36 @@ router.post('/:id/step8/approve', validateJWT, loadUser, async (req: Request, re
  * POST /api/v3/workflow/:id/step9
  * Submit Step 9: Generate Glossary (Automatic - No SME Input)
  */
-router.post('/:id/step9', validateJWT, loadUser, async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
+router.post(
+  '/:id/step9',
+  validateJWT,
+  loadUser,
+  extendTimeout(600000),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
 
-    const workflow = await workflowService.processStep9(id);
+      const workflow = await workflowService.processStep9(id);
 
-    res.json({
-      success: true,
-      data: {
-        step9: workflow.step9,
-        currentStep: workflow.currentStep,
-        status: workflow.status,
-        totalTerms: workflow.step9?.totalTerms,
-      },
-      message: 'Step 9 complete. Glossary auto-generated. Workflow complete!',
-    });
-  } catch (error) {
-    loggingService.error('Error processing Step 9', { error, workflowId: req.params.id });
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to process Step 9',
-    });
+      res.json({
+        success: true,
+        data: {
+          step9: workflow.step9,
+          currentStep: workflow.currentStep,
+          status: workflow.status,
+          totalTerms: workflow.step9?.totalTerms,
+        },
+        message: 'Step 9 complete. Glossary auto-generated. Workflow complete!',
+      });
+    } catch (error) {
+      loggingService.error('Error processing Step 9', { error, workflowId: req.params.id });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to process Step 9',
+      });
+    }
   }
-});
+);
 
 /**
  * POST /api/v3/workflow/:id/complete
@@ -1405,6 +1545,570 @@ router.get('/analytics/dashboard', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch analytics',
+    });
+  }
+});
+
+// ============================================================================
+// CANVAS AI EDITING ROUTES
+// ============================================================================
+
+/**
+ * POST /api/v3/workflow/canvas-edit
+ * AI-powered canvas editing - processes user edit requests and generates proposals
+ */
+router.post('/canvas-edit', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { workflowId, stepNumber, userMessage, editTarget, context } = req.body;
+
+    if (!workflowId || !stepNumber || !userMessage) {
+      return res.status(400).json({
+        success: false,
+        error: 'workflowId, stepNumber, and userMessage are required',
+      });
+    }
+
+    loggingService.info('Canvas AI edit request', { workflowId, stepNumber, editTarget });
+
+    // Call the AI service to generate edit proposals
+    const result = await workflowService.canvasEdit({
+      workflowId,
+      stepNumber,
+      userMessage,
+      editTarget,
+      context,
+    });
+
+    res.json({
+      success: true,
+      message: result.message,
+      proposedChanges: result.proposedChanges,
+    });
+  } catch (error: any) {
+    loggingService.error('Canvas AI edit failed', { error });
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to process edit request',
+    });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/replace-source
+ * Request AI to generate a replacement source for a rejected one
+ */
+router.post('/replace-source', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { workflowId, rejectedSourceId, moduleId } = req.body;
+
+    if (!workflowId || !rejectedSourceId) {
+      return res.status(400).json({
+        success: false,
+        error: 'workflowId and rejectedSourceId are required',
+      });
+    }
+
+    loggingService.info('Replacement source request', { workflowId, rejectedSourceId, moduleId });
+
+    // Call the AI service to generate a replacement source
+    const result = await workflowService.generateReplacementSource({
+      workflowId,
+      rejectedSourceId,
+      moduleId,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        replacementSource: result.replacementSource,
+      },
+    });
+  } catch (error: any) {
+    loggingService.error('Replacement source generation failed', { error });
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to generate replacement source',
+    });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/upload-framework
+ * Upload a custom framework document for a specific workflow
+ */
+router.post('/upload-framework', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { workflowId, type } = req.body;
+    const file = (req as any).file;
+
+    if (!workflowId) {
+      return res.status(400).json({
+        success: false,
+        error: 'workflowId is required',
+      });
+    }
+
+    loggingService.info('Framework upload request', {
+      workflowId,
+      type,
+      fileName: file?.originalname,
+    });
+
+    // TODO: Implement file upload handling with multer
+    // For now, return a placeholder response
+    res.json({
+      success: true,
+      data: {
+        id: `fw-${Date.now()}`,
+        name: file?.originalname || 'Uploaded Framework',
+        status: 'uploaded',
+      },
+    });
+  } catch (error: any) {
+    loggingService.error('Framework upload failed', { error });
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to upload framework',
+    });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/apply-edit
+ * Apply canvas AI edit changes to the workflow
+ */
+router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { stepNumber, itemId, sectionId, fieldPath, newContent } = req.body;
+
+    if (!stepNumber || !newContent) {
+      return res.status(400).json({
+        success: false,
+        error: 'stepNumber and newContent are required',
+      });
+    }
+
+    loggingService.info('Applying canvas edit', { workflowId: id, stepNumber, itemId, fieldPath });
+
+    // Find and update the workflow
+    const workflow = await CurriculumWorkflow.findById(id);
+    if (!workflow) {
+      return res.status(404).json({
+        success: false,
+        error: 'Workflow not found',
+      });
+    }
+
+    // Apply the edit based on step and target
+    const stepKey = `step${stepNumber}` as keyof typeof workflow;
+    const stepData = (workflow as any)[stepKey];
+
+    if (!stepData) {
+      return res.status(400).json({
+        success: false,
+        error: `Step ${stepNumber} data not found`,
+      });
+    }
+
+    // Log the incoming changes for debugging
+    loggingService.info('Canvas edit newContent', {
+      newContentKeys: Object.keys(newContent || {}),
+      newContentPreview: JSON.stringify(newContent).substring(0, 500),
+    });
+
+    // =====================================================
+    // FLEXIBLE UPDATE SYSTEM - Handle any change to any step
+    // =====================================================
+
+    // Process the new "updates" array format for flexible editing
+    if (newContent.updates && Array.isArray(newContent.updates)) {
+      for (const update of newContent.updates) {
+        const targetStep = update.step || stepNumber;
+        const targetStepKey = `step${targetStep}`;
+        const targetStepData = (workflow as any)[targetStepKey];
+
+        if (!targetStepData) {
+          loggingService.warn('Target step not found', { targetStep });
+          continue;
+        }
+
+        loggingService.info('Processing update', {
+          step: targetStep,
+          path: update.path,
+          action: update.action,
+        });
+
+        // Handle "set" action for direct field updates
+        if (update.action === 'set' && update.path && update.value !== undefined) {
+          (workflow as any)[targetStepKey][update.path] = update.value;
+          workflow.markModified(targetStepKey);
+          loggingService.info('Field set', {
+            step: targetStep,
+            path: update.path,
+            value: update.value,
+          });
+        }
+
+        // Handle array operations (update, add, delete)
+        else if (
+          update.path &&
+          targetStepData[update.path] &&
+          Array.isArray(targetStepData[update.path])
+        ) {
+          const arr = targetStepData[update.path];
+
+          if (update.action === 'update' && update.match) {
+            // Find item by matching any field
+            const itemIdx = arr.findIndex((item: any) => {
+              return Object.keys(update.match).every((key) => {
+                // Case-insensitive string comparison
+                if (typeof item[key] === 'string' && typeof update.match[key] === 'string') {
+                  return (
+                    item[key].toLowerCase().includes(update.match[key].toLowerCase()) ||
+                    update.match[key].toLowerCase().includes(item[key].toLowerCase())
+                  );
+                }
+                return item[key] === update.match[key];
+              });
+            });
+
+            if (itemIdx !== -1) {
+              arr[itemIdx] = { ...arr[itemIdx], ...update.changes };
+              workflow.markModified(targetStepKey);
+              loggingService.info('Item updated in array', {
+                step: targetStep,
+                path: update.path,
+                itemIdx,
+                changes: update.changes,
+              });
+            } else {
+              loggingService.warn('No matching item found for update', { match: update.match });
+            }
+          } else if (update.action === 'add' && update.item) {
+            // Add new item with unique ID if missing
+            if (!update.item.id) {
+              update.item.id = `${update.path}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            }
+            arr.push(update.item);
+            workflow.markModified(targetStepKey);
+            loggingService.info('Item added to array', {
+              step: targetStep,
+              path: update.path,
+              item: update.item,
+            });
+          } else if (update.action === 'delete' && update.match) {
+            const itemIdx = arr.findIndex((item: any) => {
+              return Object.keys(update.match).every((key) => item[key] === update.match[key]);
+            });
+            if (itemIdx !== -1) {
+              arr.splice(itemIdx, 1);
+              workflow.markModified(targetStepKey);
+              loggingService.info('Item deleted from array', {
+                step: targetStep,
+                path: update.path,
+                itemIdx,
+              });
+            }
+          }
+        }
+
+        // Handle NESTED paths like "modules.mlos", "modules.topics", "quizzes.questions"
+        else if (update.path && update.path.includes('.')) {
+          const pathParts = update.path.split('.');
+          const parentArrayName = pathParts[0]; // e.g., "modules"
+          const childArrayName = pathParts[1]; // e.g., "mlos", "topics"
+
+          const parentArray = targetStepData[parentArrayName];
+          if (parentArray && Array.isArray(parentArray)) {
+            // Find the parent item (e.g., module)
+            const parentMatch =
+              update.match?.moduleId || update.match?.quizId || update.match?.caseId;
+            let parentItem: any = null;
+
+            if (parentMatch) {
+              parentItem = parentArray.find((item: any) => item.id === parentMatch);
+            } else if (update.match) {
+              // Try to find by other match criteria
+              parentItem = parentArray.find((item: any) => {
+                return Object.keys(update.match).some(
+                  (key) =>
+                    !['moduleId', 'quizId', 'caseId'].includes(key) &&
+                    item[key] === update.match[key]
+                );
+              });
+            }
+
+            if (
+              parentItem &&
+              parentItem[childArrayName] &&
+              Array.isArray(parentItem[childArrayName])
+            ) {
+              const childArray = parentItem[childArrayName];
+
+              if (update.action === 'update' && update.match) {
+                // Find the child item by matching
+                const childIdx = childArray.findIndex((child: any) => {
+                  const matchCriteria = { ...update.match };
+                  delete matchCriteria.moduleId;
+                  delete matchCriteria.quizId;
+                  delete matchCriteria.caseId;
+                  return Object.keys(matchCriteria).every((key) => {
+                    if (typeof child[key] === 'string' && typeof matchCriteria[key] === 'string') {
+                      return (
+                        child[key].toLowerCase() === matchCriteria[key].toLowerCase() ||
+                        child[key].toLowerCase().includes(matchCriteria[key].toLowerCase())
+                      );
+                    }
+                    return child[key] === matchCriteria[key];
+                  });
+                });
+
+                if (childIdx !== -1) {
+                  childArray[childIdx] = { ...childArray[childIdx], ...update.changes };
+                  workflow.markModified(targetStepKey);
+                  loggingService.info('Nested item updated', {
+                    step: targetStep,
+                    parent: parentArrayName,
+                    child: childArrayName,
+                    childIdx,
+                    changes: update.changes,
+                  });
+                } else {
+                  loggingService.warn('No matching nested item found', { match: update.match });
+                }
+              } else if (update.action === 'add' && update.item) {
+                if (!update.item.id) {
+                  update.item.id = `${childArrayName}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                }
+                childArray.push(update.item);
+                workflow.markModified(targetStepKey);
+                loggingService.info('Nested item added', {
+                  step: targetStep,
+                  parent: parentArrayName,
+                  child: childArrayName,
+                });
+              } else if (update.action === 'delete' && update.match) {
+                const matchCriteria = { ...update.match };
+                delete matchCriteria.moduleId;
+                delete matchCriteria.quizId;
+                delete matchCriteria.caseId;
+                const childIdx = childArray.findIndex((child: any) =>
+                  Object.keys(matchCriteria).every((key) => child[key] === matchCriteria[key])
+                );
+                if (childIdx !== -1) {
+                  childArray.splice(childIdx, 1);
+                  workflow.markModified(targetStepKey);
+                  loggingService.info('Nested item deleted', {
+                    step: targetStep,
+                    parent: parentArrayName,
+                    child: childArrayName,
+                  });
+                }
+              }
+            } else {
+              loggingService.warn('Parent item or child array not found', {
+                parentMatch,
+                parentFound: !!parentItem,
+                childArrayName,
+              });
+            }
+          }
+        }
+
+        // Handle nested object updates (non-array)
+        else if (update.path && update.changes) {
+          if (targetStepData[update.path]) {
+            Object.assign(targetStepData[update.path], update.changes);
+          } else {
+            targetStepData[update.path] = update.changes;
+          }
+          workflow.markModified(targetStepKey);
+          loggingService.info('Object updated', { step: targetStep, path: update.path });
+        }
+      }
+    }
+
+    // =====================================================
+    // LEGACY SUPPORT - Handle old format for backwards compatibility
+    // =====================================================
+
+    // Handle legacy sources array (direct merge)
+    if (newContent.sources && Array.isArray(newContent.sources)) {
+      const existingSources = stepData.sources || [];
+      newContent.sources.forEach((newSrc: any) => {
+        const existingIdx = existingSources.findIndex((s: any) => s.id === newSrc.id);
+        if (existingIdx !== -1) {
+          existingSources[existingIdx] = { ...existingSources[existingIdx], ...newSrc };
+        } else {
+          if (!newSrc.id) {
+            newSrc.id = `src-ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          }
+          existingSources.push(newSrc);
+        }
+      });
+      stepData.sources = existingSources;
+      workflow.markModified(`step${stepNumber}`);
+    }
+
+    // Handle legacy moduleTitleUpdates
+    if (newContent.moduleTitleUpdates && Array.isArray(newContent.moduleTitleUpdates)) {
+      const step4Data = (workflow as any).step4;
+      if (step4Data?.modules) {
+        newContent.moduleTitleUpdates.forEach((update: any) => {
+          const moduleIdx = step4Data.modules.findIndex(
+            (m: any) =>
+              m.id === update.moduleId ||
+              m.title === update.oldTitle ||
+              m.title?.toLowerCase().includes((update.oldTitle || '').toLowerCase())
+          );
+          if (moduleIdx !== -1) {
+            const oldTitle = step4Data.modules[moduleIdx].title;
+            const moduleId = step4Data.modules[moduleIdx].id;
+
+            if (update.newTitle) step4Data.modules[moduleIdx].title = update.newTitle;
+            if (update.newDescription)
+              step4Data.modules[moduleIdx].description = update.newDescription;
+
+            // PROPAGATE TITLE CHANGE TO ALL STEPS
+            propagateModuleTitleChange(workflow, moduleId, oldTitle, update.newTitle);
+
+            loggingService.info('Module title updated and propagated', {
+              moduleId,
+              oldTitle,
+              newTitle: update.newTitle,
+            });
+          }
+        });
+        workflow.markModified('step4');
+      }
+    }
+
+    // =====================================================
+    // PROPAGATE CHANGES ACROSS ALL STEPS
+    // =====================================================
+
+    // If step 4 modules were updated via the updates array, propagate changes
+    if (newContent.updates) {
+      for (const update of newContent.updates) {
+        if (
+          update.step === 4 &&
+          update.path === 'modules' &&
+          update.action === 'update' &&
+          update.changes?.title
+        ) {
+          // Find the module that was updated
+          const step4Data = (workflow as any).step4;
+          if (step4Data?.modules) {
+            const module = step4Data.modules.find((m: any) => {
+              if (update.match) {
+                return Object.keys(update.match).some((key) => {
+                  if (typeof m[key] === 'string' && typeof update.match[key] === 'string') {
+                    return (
+                      m[key].toLowerCase().includes(update.match[key].toLowerCase()) ||
+                      update.match[key].toLowerCase().includes(m[key].toLowerCase())
+                    );
+                  }
+                  return m[key] === update.match[key];
+                });
+              }
+              return false;
+            });
+
+            if (module) {
+              const oldTitle = Object.values(update.match)[0] as string;
+              propagateModuleTitleChange(workflow, module.id, oldTitle, update.changes.title);
+            }
+          }
+        }
+      }
+    }
+
+    // =====================================================
+    // AUTO-RECALCULATE STEP 5 VALIDATION AFTER SOURCE CHANGES
+    // =====================================================
+    const step5Data = (workflow as any).step5;
+    if (step5Data?.sources && Array.isArray(step5Data.sources)) {
+      const sources = step5Data.sources;
+      const totalSources = sources.length;
+      const peerReviewedSources = sources.filter(
+        (s: any) => s.category === 'peer_reviewed_journal'
+      );
+      const academicSources = sources.filter((s: any) => s.type === 'academic');
+      const appliedSources = sources.filter((s: any) => s.type === 'applied');
+
+      // Get all MLO codes from Step 4
+      const step4Data = (workflow as any).step4;
+      const allMLOs: string[] = [];
+      if (step4Data?.modules) {
+        step4Data.modules.forEach((m: any) => {
+          (m.mlos || []).forEach((mlo: any) => {
+            if (mlo.code) allMLOs.push(mlo.code);
+          });
+        });
+      }
+
+      // Get covered MLOs from sources
+      const coveredMLOs = new Set<string>();
+      sources.forEach((src: any) => {
+        (src.linkedMLOs || []).forEach((mlo: string) => coveredMLOs.add(mlo));
+      });
+
+      // Calculate metrics
+      const peerReviewedPercent =
+        totalSources > 0 ? Math.round((peerReviewedSources.length / totalSources) * 100) : 0;
+      const hasBalance = academicSources.length > 0 && appliedSources.length > 0;
+      const allMLOsSupported = allMLOs.length === 0 || allMLOs.every((mlo) => coveredMLOs.has(mlo));
+
+      // Update Step 5 validation data
+      step5Data.totalSources = totalSources;
+      step5Data.totalPeerReviewed = peerReviewedSources.length;
+      step5Data.peerReviewedPercent = peerReviewedPercent;
+      step5Data.academicAppliedBalance = hasBalance;
+
+      // Update validation report
+      if (!step5Data.validationReport) step5Data.validationReport = {};
+      step5Data.validationReport.peerReviewRatio = peerReviewedPercent >= 50;
+      step5Data.validationReport.everyMLOSupported = allMLOsSupported;
+      step5Data.validationReport.academicAppliedBalance = hasBalance;
+
+      // Update compliance issues
+      const issues: string[] = [];
+      if (peerReviewedPercent < 50) issues.push('Peer-reviewed ratio below 50%');
+      if (!hasBalance) issues.push('Missing academic/applied source balance');
+      if (!allMLOsSupported) issues.push('Not all MLOs have supporting sources');
+      step5Data.complianceIssues = issues;
+
+      // Update AGI compliance status
+      step5Data.agiCompliant =
+        issues.length === 0 &&
+        step5Data.validationReport.allSourcesApproved !== false &&
+        step5Data.validationReport.recencyCompliance !== false;
+
+      workflow.markModified('step5');
+      loggingService.info('Step 5 validation recalculated', {
+        totalSources,
+        peerReviewedPercent,
+        allMLOsSupported,
+        hasBalance,
+        issues,
+      });
+    }
+
+    await workflow.save();
+
+    loggingService.info('Canvas edit saved successfully', { workflowId: id, stepNumber });
+
+    res.json({
+      success: true,
+      message: 'Edit applied successfully',
+      updatedStep: (workflow as any)[`step${stepNumber}`],
+    });
+  } catch (error: any) {
+    loggingService.error('Apply edit failed', { error });
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to apply edit',
     });
   }
 });

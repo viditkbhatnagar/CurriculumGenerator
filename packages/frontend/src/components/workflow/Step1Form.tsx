@@ -22,6 +22,7 @@ interface Props {
   workflow: CurriculumWorkflow;
   onComplete: () => void;
   onRefresh: () => void;
+  onOpenCanvas?: (target: any) => void;
 }
 
 // Empty job role template
@@ -431,9 +432,12 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Is Credit Awarding? */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-3">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Is this program credit-awarding? <span className="text-red-400">*</span>
             </label>
+            <p className="text-sm text-cyan-400 mb-3 bg-cyan-500/10 px-3 py-2 rounded-lg border border-cyan-500/20">
+              💡 If your program is benchmarked to a specific credit value, select "Yes."
+            </p>
             <div className="flex gap-4">
               <button
                 type="button"

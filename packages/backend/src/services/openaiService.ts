@@ -226,8 +226,8 @@ export class OpenAIService {
   ): Promise<string> {
     const {
       model = config.openai.chatModel, // Default: gpt-5
-      maxTokens = 16000, // GPT-5 needs more tokens for reasoning + output
-      timeout = this.defaultTimeout,
+      maxTokens = 128000, // MAXIMUM token limit for complex curriculum generation
+      timeout = this.defaultTimeout, // 20 minutes
     } = options;
 
     const startTime = Date.now();
@@ -420,8 +420,8 @@ export class OpenAIService {
   ): Promise<void> {
     const {
       model = config.openai.chatModel, // Default: gpt-5
-      maxTokens = 16000, // GPT-5 needs more tokens for reasoning + output
-      timeout = this.defaultTimeout,
+      maxTokens = 128000, // MAXIMUM token limit for complex curriculum generation
+      timeout = this.defaultTimeout, // 20 minutes
     } = options;
 
     return this.retryWithExponentialBackoff(async () => {
