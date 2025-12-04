@@ -1229,6 +1229,8 @@ export interface Step2FormData {
   benchmarkPrograms?: BenchmarkProgram[];
   industryFrameworks?: string[];
   institutionalFrameworks?: string[];
+  knowledgeBaseSources?: string[];
+  uploadedFrameworks?: { id: string; name: string; fileName: string }[];
 }
 
 export interface Step3FormData {

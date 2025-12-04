@@ -236,12 +236,17 @@ export default function WorkflowDetailPage() {
     }
   };
 
+  // Wrapper for refetch to match expected type signature
+  const handleRefresh = async (): Promise<void> => {
+    await refetch();
+  };
+
   // Render step content
   const renderStepContent = () => {
     const stepProps = {
       workflow,
       onComplete: handleStepComplete,
-      onRefresh: refetch,
+      onRefresh: handleRefresh,
       onOpenCanvas: handleOpenCanvas,
     };
 
@@ -453,7 +458,7 @@ export default function WorkflowDetailPage() {
           currentStep={currentStep}
           editTarget={canvasEditTarget}
           onApplyChanges={handleApplyCanvasChanges}
-          onRefresh={refetch}
+          onRefresh={handleRefresh}
         />
       )}
 

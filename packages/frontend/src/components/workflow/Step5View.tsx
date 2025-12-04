@@ -487,9 +487,7 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
       const response = await api.post('/api/v3/workflow/replace-source', {
         workflowId: workflow._id,
         rejectedSourceId: sourceId,
-        moduleId: (workflow.step5?.sources || workflow.step5?.topicSources || []).find(
-          (s: Source) => s.id === sourceId
-        )?.moduleId,
+        moduleId: (workflow.step5?.sources || []).find((s: Source) => s.id === sourceId)?.moduleId,
       });
 
       if (response.data?.data?.replacementSource) {
