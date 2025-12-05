@@ -3496,14 +3496,18 @@ CRITICAL REQUIREMENTS:
     const caseStudies = workflow.step8?.caseStudies || [];
     const plos = workflow.step3?.outcomes || [];
 
-    loggingService.info('Step 7: Starting PARALLEL assessment generation', {
+    loggingService.info('Step 7: Starting SEQUENTIAL assessment generation', {
       totalModules: modules.length,
       questionsPerModule,
       finalPoolSize,
     });
 
-    // Generate quiz questions for ALL modules in PARALLEL (much faster!)
-    const modulePromises = modules.map(async (mod: any, i: number) => {
+    // Generate quiz questions SEQUENTIALLY to avoid Render proxy timeout and OpenAI rate limits
+    const allQuestions: any[] = [];
+    const allClozeQuestions: any[] = [];
+
+    for (let i = 0; i < modules.length; i++) {
+      const mod = modules[i];
       const modReadings = readings.filter(
         (r: any) => r.moduleId === mod.id && r.category === 'core'
       );
@@ -3529,26 +3533,20 @@ CRITICAL REQUIREMENTS:
           questionsGenerated: moduleQuiz.questions?.length || 0,
         });
 
-        return moduleQuiz;
+        allQuestions.push(...(moduleQuiz.questions || []));
+        if (blueprint.enableCloze) {
+          allClozeQuestions.push(...(moduleQuiz.clozeQuestions || []));
+        }
       } catch (moduleError) {
         loggingService.error(`Step 7: Error generating quiz for module ${mod.id}`, {
           error: moduleError instanceof Error ? moduleError.message : String(moduleError),
         });
-        return { questions: [], clozeQuestions: [] };
+        // Continue with next module even if one fails
       }
-    });
 
-    // Wait for ALL module quizzes in parallel
-    const quizResults = await Promise.all(modulePromises);
-
-    // Combine results
-    const allQuestions: any[] = [];
-    const allClozeQuestions: any[] = [];
-
-    for (const result of quizResults) {
-      allQuestions.push(...(result.questions || []));
-      if (blueprint.enableCloze) {
-        allClozeQuestions.push(...(result.clozeQuestions || []));
+      // Delay between modules to avoid rate limiting
+      if (i < modules.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
 
