@@ -1,253 +1,275 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSubmitStep7, useApproveStep7 } from '@/hooks/useWorkflow';
-import {
-  CurriculumWorkflow,
-  Step7FormData,
-  MCQQuestion,
-  Quiz,
-  BloomLevel,
-  BLOOM_LEVELS,
-  Module,
-  MLO,
-} from '@/types/workflow';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSubmitStep7, useApproveStep7, useClearStep7 } from '@/hooks/useWorkflow';
+import { CurriculumWorkflow } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
-import { EditTarget } from './EditWithAIButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
   onComplete: () => void;
   onRefresh: () => void;
-  onOpenCanvas?: (target: EditTarget) => void;
 }
 
-// Difficulty colors
-const DIFFICULTY_COLORS = {
-  easy: 'bg-green-500/20 text-green-400 border-green-500/30',
-  medium: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  hard: 'bg-red-500/20 text-red-400 border-red-500/30',
-};
-
-// Bloom level colors
-const BLOOM_COLORS: Record<BloomLevel, string> = {
-  remember: 'bg-slate-500/20 text-slate-400',
-  understand: 'bg-blue-500/20 text-blue-400',
-  apply: 'bg-green-500/20 text-green-400',
-  analyze: 'bg-amber-500/20 text-amber-400',
-  evaluate: 'bg-orange-500/20 text-orange-400',
-  create: 'bg-red-500/20 text-red-400',
-};
-
-// MCQ Card Component
-function MCQCard({ question, index }: { question: MCQQuestion; index: number }) {
-  const [showAnswer, setShowAnswer] = useState(false);
-
-  return (
-    <div className="bg-slate-900/50 rounded-lg border border-slate-700 overflow-hidden">
-      <div className="p-4">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-slate-500">Q{index + 1}</span>
-            <span
-              className={`text-xs px-2 py-0.5 rounded ${DIFFICULTY_COLORS[question.difficulty]}`}
-            >
-              {question.difficulty}
-            </span>
-            <span className={`text-xs px-2 py-0.5 rounded ${BLOOM_COLORS[question.bloomLevel]}`}>
-              {question.bloomLevel}
-            </span>
-          </div>
-          <span className="text-xs text-cyan-400">{question.linkedMLO}</span>
-        </div>
-
-        {/* Stem */}
-        <p className="text-white font-medium mb-4">{question.stem}</p>
-
-        {/* Options */}
-        <div className="space-y-2 mb-4">
-          {question.options.map((option, idx) => {
-            const isCorrect = option.isCorrect || option.id === question.correctOption;
-            return (
-              <div
-                key={option.id}
-                className={`p-3 rounded-lg text-sm transition-colors ${
-                  showAnswer && isCorrect
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    : showAnswer && !isCorrect
-                      ? 'bg-slate-800/50 text-slate-400 border border-transparent'
-                      : 'bg-slate-800/50 text-slate-300 border border-transparent hover:border-slate-600'
-                }`}
-              >
-                <div className="flex items-start gap-2">
-                  <span className="font-mono font-bold shrink-0">
-                    {String.fromCharCode(65 + idx)}.
-                  </span>
-                  <span>{option.text}</span>
-                </div>
-                {showAnswer && option.explanation && (
-                  <p className="mt-2 text-xs text-slate-500 pl-6">{option.explanation}</p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Show/Hide Button */}
-        <button
-          onClick={() => setShowAnswer(!showAnswer)}
-          className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
-        >
-          {showAnswer ? '← Hide Answer & Rationale' : 'Show Answer & Rationale →'}
-        </button>
-
-        {/* Rationale */}
-        {showAnswer && question.rationale && (
-          <div className="mt-3 p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
-            <p className="text-xs text-emerald-400 font-medium mb-1">Rationale:</p>
-            <p className="text-sm text-slate-300">{question.rationale}</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+// Assessment preferences form data
+interface AssessmentUserPreferences {
+  assessmentStructure: 'formative_only' | 'summative_only' | 'both_formative_and_summative';
+  assessmentBalance:
+    | 'mostly_knowledge_based'
+    | 'mostly_applied'
+    | 'mostly_scenario_based'
+    | 'blended_mix';
+  certificationStyles: string[];
+  academicTypes: string[];
+  summativeFormat:
+    | 'mcq_exam'
+    | 'written_assignment'
+    | 'case_study_analysis'
+    | 'project_capstone'
+    | 'mixed_format'
+    | 'user_defined';
+  userDefinedSummativeDescription?: string;
+  formativeTypesPerUnit: string[];
+  formativePerModule: number;
+  weightages: {
+    formative?: number;
+    summative?: number;
+    mcqComponents?: number;
+    writtenComponents?: number;
+    practicalComponents?: number;
+    projectCapstone?: number;
+  };
+  higherOrderPloPolicy: 'yes' | 'no' | 'partial';
+  higherOrderPloRules?: string;
+  useRealWorldScenarios: boolean;
+  alignToWorkplacePerformance: boolean;
+  integratedRealWorldSummative: boolean;
 }
 
-// Quiz Summary Card
-function QuizSummaryCard({ quiz }: { quiz: Quiz }) {
-  const [expanded, setExpanded] = useState(false);
+const CERTIFICATION_STYLES = ['SHRM', 'PMI', 'ASCM', 'SCOR', 'CIPS', 'AHLEI', 'CMA', 'None'];
+const ACADEMIC_TYPES = [
+  'Essays',
+  'Case-study reports',
+  'Presentations',
+  'Portfolios',
+  'Research papers',
+  'Short written responses',
+  'None',
+];
+const FORMATIVE_TYPES = [
+  'Short quizzes',
+  'MCQ knowledge checks',
+  'Scenario-based micro-tasks',
+  'Worksheets / problem sets',
+  'Short written reflections',
+  'Mini-case exercises',
+  'Discussion prompts',
+  'Practice simulations',
+  'Coding / technical tasks',
+  'None',
+];
 
-  return (
-    <div className="bg-slate-900/30 rounded-lg border border-slate-700 overflow-hidden">
-      <div
-        className="p-4 cursor-pointer hover:bg-slate-800/30 transition-colors"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <h4 className="text-white font-medium">{quiz.title}</h4>
-            <p className="text-sm text-slate-400">{quiz.moduleTitle}</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-lg font-bold text-cyan-400">{quiz.questionCount}</p>
-              <p className="text-xs text-slate-500">Questions</p>
-            </div>
-            <div className="text-right">
-              <p className="text-lg font-bold text-amber-400">{quiz.weight}%</p>
-              <p className="text-xs text-slate-500">Weight</p>
-            </div>
-            <svg
-              className={`w-5 h-5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </div>
-        </div>
-
-        {/* MLO Coverage */}
-        <div className="mt-3 flex flex-wrap gap-1">
-          {quiz.mlosCovered?.map((mlo) => (
-            <span key={mlo} className="text-xs px-2 py-0.5 bg-slate-700 rounded text-slate-300">
-              {mlo}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* Expanded: Bloom Distribution */}
-      {expanded && quiz.bloomDistribution && (
-        <div className="px-4 pb-4 border-t border-slate-700/50 pt-3">
-          <p className="text-xs text-slate-500 mb-2">Bloom's Distribution:</p>
-          <div className="flex gap-2">
-            {Object.entries(quiz.bloomDistribution).map(
-              ([level, count]) =>
-                count > 0 && (
-                  <span
-                    key={level}
-                    className={`text-xs px-2 py-1 rounded ${BLOOM_COLORS[level as BloomLevel]}`}
-                  >
-                    {level}: {count}
-                  </span>
-                )
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
+export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props) {
+  const queryClient = useQueryClient();
   const submitStep7 = useSubmitStep7();
   const approveStep7 = useApproveStep7();
+  const clearStep7 = useClearStep7();
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'config' | 'modules'>('config');
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  const [activeTab, setActiveTab] = useState<'basic' | 'advanced'>('basic');
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+
+  // Real-time streaming data
+  const [streamingFormatives, setStreamingFormatives] = useState<any[]>([]);
+  const [streamingSummatives, setStreamingSummatives] = useState<any[]>([]);
+  const [streamingSamples, setStreamingSamples] = useState<any>({
+    mcq: [],
+    sjt: [],
+    caseQuestions: [],
+    essayPrompts: [],
+    practicalTasks: [],
+  });
 
   const isCurrentlyGenerating = isGenerating(workflow._id, 7) || submitStep7.isPending;
 
-  const modules = workflow.step4?.modules || [];
-  const moduleCount = modules.length;
-
-  // Form state with defaults per workflow v2.2
-  // Final exam is separate from quizzes with higher limits
-  const [formData, setFormData] = useState<Step7FormData>({
-    finalExamWeight: 40,
-    passMark: 60,
-    questionsPerQuiz: 20,
-    questionsForFinal: 80, // Increased from 60 - separate from quizzes
-    bankMultiplier: 3,
-    randomize: true,
-    enableCloze: false,
-    clozeCountPerModule: 5,
-    timeLimit: 30,
-    finalExamTimeLimit: 120, // Increased from 90 - longer for comprehensive exam
-    openBook: false,
-    calculatorPermitted: false,
-    // All modules get quizzes by default
-    moduleSettings: modules.map((mod: Module) => ({
-      moduleId: mod.id,
-      mlosCovered: mod.mlos?.map((mlo: MLO) => mlo.id) || [],
-      bloomEmphasis: ['apply', 'analyze'] as BloomLevel[],
-      generateQuiz: true, // Ensure all modules get quizzes by default
-    })),
+  // Form state with defaults
+  const [formData, setFormData] = useState<AssessmentUserPreferences>({
+    assessmentStructure: 'both_formative_and_summative',
+    assessmentBalance: 'blended_mix',
+    certificationStyles: ['None'],
+    academicTypes: ['None'],
+    summativeFormat: 'mixed_format',
+    formativeTypesPerUnit: ['Short quizzes', 'MCQ knowledge checks'],
+    formativePerModule: 2,
+    weightages: {
+      formative: 30,
+      summative: 70,
+    },
+    higherOrderPloPolicy: 'yes',
+    useRealWorldScenarios: true,
+    alignToWorkplacePerformance: true,
+    integratedRealWorldSummative: true,
   });
 
-  // Check for completion when data appears
+  // Check for completion when data appears (only if not already generating)
   useEffect(() => {
-    if ((workflow.step7?.quizzes?.length ?? 0) > 0 || (workflow.step7?.totalQuestions ?? 0) > 0) {
+    const hasData =
+      workflow.step7 &&
+      ((workflow.step7.formativeAssessments && workflow.step7.formativeAssessments.length > 0) ||
+        (workflow.step7.summativeAssessments && workflow.step7.summativeAssessments.length > 0));
+
+    if (hasData && isCurrentlyGenerating) {
       completeGeneration(workflow._id, 7);
+      console.log('[Step7Form] Data appeared, marking generation as complete');
     }
-  }, [workflow.step7, workflow._id, completeGeneration]);
 
-  // Calculate quiz weight
-  const quizWeight = 100 - formData.finalExamWeight;
-  const perQuizWeight = moduleCount > 0 ? Math.round((quizWeight / moduleCount) * 10) / 10 : 0;
+    // If we have workflow data after streaming completed, clear streaming data to use canonical source
+    if (hasData && (streamingFormatives.length > 0 || streamingSummatives.length > 0)) {
+      console.log(
+        '[Step7Form] Workflow data loaded, clearing streaming data to use canonical source'
+      );
+      setStreamingFormatives([]);
+      setStreamingSummatives([]);
+      setStreamingSamples({
+        mcq: [],
+        sjt: [],
+        caseQuestions: [],
+        essayPrompts: [],
+        practicalTasks: [],
+      });
+    }
+  }, [
+    workflow.step7,
+    workflow._id,
+    completeGeneration,
+    isCurrentlyGenerating,
+    streamingFormatives.length,
+    streamingSummatives.length,
+  ]);
 
-  // Bank sizes
-  const bankPerModule = formData.questionsPerQuiz * formData.bankMultiplier;
-  const finalBankSize = formData.questionsForFinal * formData.bankMultiplier;
+  // Update weightages when structure changes
+  useEffect(() => {
+    if (formData.assessmentStructure === 'formative_only') {
+      setFormData((prev) => ({ ...prev, weightages: { formative: 100, summative: 0 } }));
+    } else if (formData.assessmentStructure === 'summative_only') {
+      setFormData((prev) => ({ ...prev, weightages: { formative: 0, summative: 100 } }));
+    } else {
+      // Default split
+      setFormData((prev) => ({
+        ...prev,
+        weightages: {
+          formative: prev.weightages.formative || 30,
+          summative: prev.weightages.summative || 70,
+        },
+      }));
+    }
+  }, [formData.assessmentStructure]);
 
   const handleGenerate = async () => {
     setError(null);
-    startGeneration(workflow._id, 7, 120); // 2 minutes estimated
+
+    // Clear previous streaming data
+    setStreamingFormatives([]);
+    setStreamingSummatives([]);
+    setStreamingSamples({
+      mcq: [],
+      sjt: [],
+      caseQuestions: [],
+      essayPrompts: [],
+      practicalTasks: [],
+    });
+
+    // Debug: Log form data being sent
+    console.log('[Step7Form] Using STREAMING endpoint for complete question generation:', {
+      formativePerModule: formData.formativePerModule,
+      formativePerModuleType: typeof formData.formativePerModule,
+      weightages: formData.weightages,
+      structure: formData.assessmentStructure,
+    });
+
+    startGeneration(workflow._id, 7, 2400); // 40 minutes estimated for complete questions (120+ detailed questions)
+
     try {
-      await submitStep7.mutateAsync({
-        id: workflow._id,
-        data: formData,
+      // Use STREAMING endpoint to avoid timeouts with complete question generation
+      const token = localStorage.getItem('auth_token');
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+      const response = await fetch(`${API_BASE_URL}/api/v3/workflow/${workflow._id}/step7/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(formData),
       });
-      completeGeneration(workflow._id, 7);
-      onRefresh();
+
+      if (!response.ok) {
+        throw new Error('Failed to start generation');
+      }
+
+      // Read the SSE stream
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No reader available');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            try {
+              const data = JSON.parse(line.slice(5).trim());
+              console.log('[SSE Event]', data.type, data);
+
+              // Accumulate streaming data for real-time display
+              if (data.type === 'formative_batch' && data.formatives) {
+                setStreamingFormatives((prev) => [...prev, ...data.formatives]);
+              } else if (data.type === 'summative_batch' && data.summatives) {
+                setStreamingSummatives((prev) => [...prev, ...data.summatives]);
+              } else if (data.type === 'sample_batch' && data.samples) {
+                const sampleType = data.sampleType;
+                setStreamingSamples((prev) => ({
+                  ...prev,
+                  [sampleType]: data.samples,
+                }));
+              } else if (data.type === 'complete') {
+                console.log('[Step7Form] ✅ Generation complete!');
+                completeGeneration(workflow._id, 7);
+
+                // Invalidate React Query cache to force refetch with fresh data
+                console.log('[Step7Form] Invalidating workflow cache and refetching...');
+                await queryClient.invalidateQueries({ queryKey: ['workflow', workflow._id] });
+
+                // Force an immediate refetch to ensure we get the latest data
+                await queryClient.refetchQueries({ queryKey: ['workflow', workflow._id] });
+
+                // Also call onRefresh to trigger parent component update
+                await onRefresh();
+
+                console.log(
+                  '[Step7Form] Data refreshed, UI should now show results with Approve button'
+                );
+                return;
+              } else if (data.type === 'error') {
+                throw new Error(data.error);
+              }
+            } catch (e) {
+              console.error('[SSE] Parse error:', e);
+            }
+          }
+        }
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate assessments';
       console.error('Failed to generate assessments:', err);
@@ -268,29 +290,155 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
     }
   };
 
-  const hasStep7Data =
+  const handleRegenerate = async () => {
+    setError(null);
+    setShowRegenerateConfirm(false);
+
+    try {
+      console.log('[Step7Form] Clearing existing Step 7 data...');
+
+      // Set generating state BEFORE clearing to keep UI in generating mode
+      startGeneration(workflow._id, 7, 2400);
+
+      // Clear existing Step 7 data from backend
+      await clearStep7.mutateAsync(workflow._id);
+
+      console.log('[Step7Form] Data cleared, starting regeneration...');
+
+      // Start generation immediately (no refresh needed - will auto-refresh on complete)
+      await handleGenerate();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to clear Step 7 data';
+      console.error('Failed to regenerate:', err);
+      setError(errorMessage);
+      failGeneration(workflow._id, 7, errorMessage);
+    }
+  };
+
+  // Check if we have data either from workflow prop OR from streaming (during/after generation)
+  const hasWorkflowData =
     workflow.step7 &&
-    (workflow.step7.quizzes?.length > 0 || workflow.step7.questionBank?.length > 0);
+    ((workflow.step7.formativeAssessments && workflow.step7.formativeAssessments.length > 0) ||
+      (workflow.step7.summativeAssessments && workflow.step7.summativeAssessments.length > 0));
+  const hasStreamingData = streamingFormatives.length > 0 || streamingSummatives.length > 0;
+  const hasStep7Data = hasWorkflowData || hasStreamingData;
+
+  // DEBUG: Log what we have
+  console.log('[Step7Form] Data check:', {
+    hasWorkflowData,
+    hasStreamingData,
+    hasStep7Data,
+    formativesInWorkflow: workflow.step7?.formativeAssessments?.length || 0,
+    summativesInWorkflow: workflow.step7?.summativeAssessments?.length || 0,
+    streamingFormatives: streamingFormatives.length,
+    streamingSummatives: streamingSummatives.length,
+    step7Exists: !!workflow.step7,
+  });
+
   const isApproved = !!workflow.step7?.approvedAt;
-  const validation = workflow.step7?.validationReport;
+  const validation = workflow.step7?.validation;
+
+  // Toggle array item
+  const toggleArrayItem = (array: string[], item: string) => {
+    if (item === 'None') {
+      return ['None'];
+    }
+    const filtered = array.filter((i) => i !== 'None');
+    if (filtered.includes(item)) {
+      const result = filtered.filter((i) => i !== item);
+      return result.length === 0 ? ['None'] : result;
+    }
+    return [...filtered, item];
+  };
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      {/* Show generating state even when navigating back */}
+      {/* Show generating state */}
       {isCurrentlyGenerating && !hasStep7Data && (
         <div className="mb-6 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 border-3 border-cyan-500 border-t-transparent rounded-full animate-spin" />
             <div>
               <h3 className="text-lg font-semibold text-white">
-                Generating Auto-Gradable Assessments...
+                Generating Comprehensive Assessments...
               </h3>
               <p className="text-sm text-slate-400">
-                This may take 2 minutes. You can navigate away and come back.
+                This may take 30-40 minutes. Streaming results appear below in real-time.
               </p>
             </div>
           </div>
           <GenerationProgressBar workflowId={workflow._id} step={7} />
+
+          {/* Real-time streaming data display */}
+          {(streamingFormatives.length > 0 ||
+            streamingSummatives.length > 0 ||
+            Object.values(streamingSamples).some((arr: any) => arr.length > 0)) && (
+            <div className="mt-6 space-y-4">
+              <h4 className="text-white font-medium">Live Data Stream</h4>
+
+              {/* Streaming counts */}
+              <div className="grid grid-cols-5 gap-4">
+                <div className="bg-slate-900/50 rounded-xl p-4 border border-cyan-500/30 text-center">
+                  <p className="text-3xl font-bold text-cyan-400 animate-pulse">
+                    {streamingFormatives.length}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">Formative</p>
+                </div>
+                <div className="bg-slate-900/50 rounded-xl p-4 border border-amber-500/30 text-center">
+                  <p className="text-3xl font-bold text-amber-400 animate-pulse">
+                    {streamingSummatives.length}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">Summative</p>
+                </div>
+                <div className="bg-slate-900/50 rounded-xl p-4 border border-purple-500/30 text-center">
+                  <p className="text-3xl font-bold text-purple-400 animate-pulse">
+                    {streamingSamples.mcq.length +
+                      streamingSamples.sjt.length +
+                      streamingSamples.caseQuestions.length +
+                      streamingSamples.essayPrompts.length +
+                      streamingSamples.practicalTasks.length}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">Samples</p>
+                </div>
+                <div className="bg-slate-900/50 rounded-xl p-4 border border-green-500/30 text-center">
+                  <p className="text-2xl font-bold text-green-400">
+                    {streamingFormatives.reduce((sum, f) => sum + (f.questions?.length || 0), 0)}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">Questions</p>
+                </div>
+                <div className="bg-slate-900/50 rounded-xl p-4 border border-emerald-500/30 text-center">
+                  <p className="text-lg font-bold text-emerald-400">✓ Saved</p>
+                  <p className="text-xs text-slate-500 mt-1">To Database</p>
+                </div>
+              </div>
+
+              {/* Preview of formatives */}
+              {streamingFormatives.length > 0 && (
+                <div className="bg-slate-900/30 rounded-lg p-4 border border-cyan-500/20">
+                  <h5 className="text-cyan-400 font-medium mb-2">Latest Formative Assessments</h5>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {streamingFormatives
+                      .slice(-3)
+                      .reverse()
+                      .map((formative, idx) => (
+                        <div
+                          key={idx}
+                          className="bg-slate-800/50 p-3 rounded border border-slate-700"
+                        >
+                          <p className="text-white font-medium text-sm">{formative.title}</p>
+                          <p className="text-slate-400 text-xs mt-1">{formative.description}</p>
+                          {formative.questions?.length > 0 && (
+                            <p className="text-cyan-400 text-xs mt-2">
+                              ✓ {formative.questions.length} complete questions generated
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -305,28 +453,21 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
               </svg>
-              Step 7: Auto-Gradable Assessments (MCQ-First)
+              Step 7: Comprehensive Assessment Generation
             </h3>
             <p className="text-sm text-slate-300 mb-4">
-              Create comprehensive <strong className="text-cyan-400">auto-gradable only</strong>{' '}
-              assessment materials including MCQ question banks, module quizzes, and final exam
-              blueprint.
-              <strong className="text-amber-400"> No manual grading required.</strong>
+              Generate a complete assessment system including formative assessments, summative
+              assessments with components, sample question banks (MCQ, SJT, case studies, essays,
+              practical tasks), and LMS-ready packages.
             </p>
-
-            {/* Bank Multiplier Explanation */}
             <div className="bg-slate-900/50 rounded-lg p-3 text-sm">
               <p className="text-slate-400">
-                <strong className="text-white">
-                  Bank Multiplier ({formData.bankMultiplier}×):
-                </strong>{' '}
-                {formData.questionsPerQuiz}-question quiz → Generate {bankPerModule} questions
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                Enables: Different versions, question rotation, resits, quality monitoring
+                <strong className="text-white">Comprehensive Assessment Package:</strong> Formative
+                (low-stakes practice), Summative (graded components), Sample Questions (MCQ, SJT,
+                cases, essays, practicals), and LMS export formats.
               </p>
             </div>
           </div>
@@ -334,365 +475,457 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
           {/* Tab Navigation */}
           <div className="flex gap-2">
             <button
-              onClick={() => setActiveTab('config')}
+              onClick={() => setActiveTab('basic')}
               className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                activeTab === 'config'
+                activeTab === 'basic'
                   ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
                   : 'bg-slate-800 text-slate-400 border border-slate-700'
               }`}
             >
-              Global Settings
+              Basic Settings
             </button>
             <button
-              onClick={() => setActiveTab('modules')}
+              onClick={() => setActiveTab('advanced')}
               className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                activeTab === 'modules'
+                activeTab === 'advanced'
                   ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
                   : 'bg-slate-800 text-slate-400 border border-slate-700'
               }`}
             >
-              Per-Module Settings
+              Advanced Options
             </button>
           </div>
 
-          {activeTab === 'config' ? (
+          {activeTab === 'basic' ? (
             <div className="space-y-6">
-              {/* Required Settings */}
+              {/* Assessment Structure */}
               <div>
-                <h4 className="text-white font-medium mb-4">Required Settings</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div>
+                <h4 className="text-white font-medium mb-3">Assessment Structure</h4>
+                <div className="space-y-2">
+                  {[
+                    {
+                      value: 'both_formative_and_summative',
+                      label: 'Both Formative & Summative',
+                      desc: 'Complete assessment system (recommended)',
+                    },
+                    {
+                      value: 'formative_only',
+                      label: 'Formative Only',
+                      desc: 'Low-stakes practice assessments',
+                    },
+                    {
+                      value: 'summative_only',
+                      label: 'Summative Only',
+                      desc: 'Graded assessments only',
+                    },
+                  ].map((option) => (
+                    <label
+                      key={option.value}
+                      className="flex items-start gap-3 p-3 bg-slate-900/30 rounded-lg border border-slate-700 cursor-pointer hover:border-cyan-500/50 transition-colors"
+                    >
+                      <input
+                        type="radio"
+                        name="assessmentStructure"
+                        value={option.value}
+                        checked={formData.assessmentStructure === option.value}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            assessmentStructure: e.target.value as any,
+                          }))
+                        }
+                        className="mt-1 w-4 h-4 text-cyan-500 focus:ring-cyan-500"
+                      />
+                      <div>
+                        <div className="text-sm text-white font-medium">{option.label}</div>
+                        <div className="text-xs text-slate-400">{option.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Assessment Balance */}
+              <div>
+                <h4 className="text-white font-medium mb-3">Assessment Balance</h4>
+                <div className="space-y-2">
+                  {[
+                    {
+                      value: 'mostly_knowledge_based',
+                      label: 'Mostly Knowledge-Based',
+                      desc: 'Recall, definitions, concepts',
+                    },
+                    {
+                      value: 'mostly_applied',
+                      label: 'Mostly Applied',
+                      desc: 'Problem-solving, calculations, application',
+                    },
+                    {
+                      value: 'mostly_scenario_based',
+                      label: 'Mostly Scenario-Based',
+                      desc: 'Real-world situations, judgment calls',
+                    },
+                    {
+                      value: 'blended_mix',
+                      label: 'Blended Mix',
+                      desc: 'Balanced combination (recommended)',
+                    },
+                  ].map((option) => (
+                    <label
+                      key={option.value}
+                      className="flex items-start gap-3 p-3 bg-slate-900/30 rounded-lg border border-slate-700 cursor-pointer hover:border-cyan-500/50 transition-colors"
+                    >
+                      <input
+                        type="radio"
+                        name="assessmentBalance"
+                        value={option.value}
+                        checked={formData.assessmentBalance === option.value}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            assessmentBalance: e.target.value as any,
+                          }))
+                        }
+                        className="mt-1 w-4 h-4 text-cyan-500 focus:ring-cyan-500"
+                      />
+                      <div>
+                        <div className="text-sm text-white font-medium">{option.label}</div>
+                        <div className="text-xs text-slate-400">{option.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Formative Settings */}
+              {(formData.assessmentStructure === 'both_formative_and_summative' ||
+                formData.assessmentStructure === 'formative_only') && (
+                <div>
+                  <h4 className="text-white font-medium mb-3">Formative Assessment Settings</h4>
+
+                  <div className="mb-4">
                     <label className="block text-sm text-slate-400 mb-2">
-                      Final Exam Weight (%)
+                      Assessments per Module
                     </label>
                     <input
                       type="number"
-                      min={30}
-                      max={50}
-                      value={formData.finalExamWeight}
+                      min={1}
+                      max={5}
+                      value={formData.formativePerModule}
                       onChange={(e) =>
                         setFormData((prev) => ({
                           ...prev,
-                          finalExamWeight: parseInt(e.target.value) || 40,
+                          formativePerModule: parseInt(e.target.value) || 1,
                         }))
                       }
-                      className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-                    />
-                    <p className="text-xs text-slate-500 mt-1">Quizzes: {quizWeight}%</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-2">Pass Mark (%)</label>
-                    <input
-                      type="number"
-                      min={50}
-                      max={80}
-                      value={formData.passMark}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          passMark: parseInt(e.target.value) || 60,
-                        }))
-                      }
-                      className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-2">Questions per Quiz</label>
-                    <input
-                      type="number"
-                      min={10}
-                      max={40}
-                      value={formData.questionsPerQuiz}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          questionsPerQuiz: parseInt(e.target.value) || 20,
-                        }))
-                      }
-                      className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-                    />
-                    <p className="text-xs text-slate-500 mt-1">Bank: {bankPerModule} per module</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-2">
-                      Questions for Final Exam
-                    </label>
-                    <input
-                      type="number"
-                      min={40}
-                      max={150}
-                      value={formData.questionsForFinal}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          questionsForFinal: parseInt(e.target.value) || 80,
-                        }))
-                      }
-                      className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                      className="w-32 px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
                     />
                     <p className="text-xs text-slate-500 mt-1">
-                      Bank: {finalBankSize} | Final exam is generated{' '}
-                      <span className="text-amber-400">separately</span> from module quizzes
+                      1-5 formative assessments per module
                     </p>
                   </div>
 
                   <div>
-                    <label className="block text-sm text-slate-400 mb-2">Bank Multiplier</label>
-                    <select
-                      value={formData.bankMultiplier}
+                    <label className="block text-sm text-slate-400 mb-2">
+                      Formative Types (select multiple)
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {FORMATIVE_TYPES.map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              formativeTypesPerUnit: toggleArrayItem(
+                                prev.formativeTypesPerUnit,
+                                type
+                              ),
+                            }))
+                          }
+                          className={`text-xs px-3 py-1.5 rounded transition-colors ${
+                            formData.formativeTypesPerUnit.includes(type)
+                              ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
+                              : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-600'
+                          }`}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Summative Format */}
+              {(formData.assessmentStructure === 'both_formative_and_summative' ||
+                formData.assessmentStructure === 'summative_only') && (
+                <div>
+                  <h4 className="text-white font-medium mb-3">Summative Assessment Format</h4>
+                  <select
+                    value={formData.summativeFormat}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, summativeFormat: e.target.value as any }))
+                    }
+                    className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  >
+                    <option value="mixed_format">Mixed Format (recommended)</option>
+                    <option value="mcq_exam">MCQ Examination</option>
+                    <option value="written_assignment">Written Assignment</option>
+                    <option value="case_study_analysis">Case Study Analysis</option>
+                    <option value="project_capstone">Project/Capstone</option>
+                    <option value="user_defined">User Defined</option>
+                  </select>
+
+                  {formData.summativeFormat === 'user_defined' && (
+                    <textarea
+                      value={formData.userDefinedSummativeDescription || ''}
                       onChange={(e) =>
                         setFormData((prev) => ({
                           ...prev,
-                          bankMultiplier: parseInt(e.target.value),
+                          userDefinedSummativeDescription: e.target.value,
                         }))
                       }
-                      className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-                    >
-                      <option value={2}>2× (Minimum)</option>
-                      <option value={3}>3× (Recommended)</option>
-                      <option value={4}>4× (Large Bank)</option>
-                      <option value={5}>5× (Maximum)</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-end">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.randomize}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, randomize: e.target.checked }))
-                        }
-                        className="w-4 h-4 rounded border-slate-600 text-cyan-500 focus:ring-cyan-500 bg-slate-800"
-                      />
-                      <span className="text-sm text-slate-300">Randomize questions & options</span>
-                    </label>
-                  </div>
+                      placeholder="Describe your custom summative format..."
+                      className="mt-3 w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                      rows={3}
+                    />
+                  )}
                 </div>
-              </div>
+              )}
 
-              {/* Optional Settings */}
-              <div>
-                <h4 className="text-white font-medium mb-4">Optional Settings</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="flex items-center gap-2 cursor-pointer mb-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.enableCloze}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, enableCloze: e.target.checked }))
-                        }
-                        className="w-4 h-4 rounded border-slate-600 text-cyan-500 focus:ring-cyan-500 bg-slate-800"
-                      />
-                      <span className="text-sm text-slate-300">Enable Cloze (fill-in-blank)</span>
-                    </label>
-                    {formData.enableCloze && (
+              {/* Weightages */}
+              {formData.assessmentStructure === 'both_formative_and_summative' && (
+                <div>
+                  <h4 className="text-white font-medium mb-3">Assessment Weightages</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-2">
+                        Formative Weight (%)
+                      </label>
                       <input
                         type="number"
-                        min={1}
-                        max={10}
-                        value={formData.clozeCountPerModule || 5}
-                        onChange={(e) =>
+                        min={10}
+                        max={50}
+                        value={formData.weightages.formative || 30}
+                        onChange={(e) => {
+                          const formative = parseInt(e.target.value) || 30;
                           setFormData((prev) => ({
                             ...prev,
-                            clozeCountPerModule: parseInt(e.target.value),
-                          }))
-                        }
-                        placeholder="Count per module"
+                            weightages: {
+                              ...prev.weightages,
+                              formative,
+                              summative: 100 - formative,
+                            },
+                          }));
+                        }}
                         className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
                       />
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-2">
-                      Quiz Time Limit (min)
-                    </label>
-                    <input
-                      type="number"
-                      min={15}
-                      max={120}
-                      value={formData.timeLimit || ''}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          timeLimit: parseInt(e.target.value) || undefined,
-                        }))
-                      }
-                      placeholder="No limit"
-                      className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-2">
-                      Final Exam Time (min)
-                    </label>
-                    <input
-                      type="number"
-                      min={30}
-                      max={180}
-                      value={formData.finalExamTimeLimit || ''}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          finalExamTimeLimit: parseInt(e.target.value) || undefined,
-                        }))
-                      }
-                      placeholder="No limit"
-                      className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
-                    />
-                  </div>
-
-                  <div className="flex items-end gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-2">
+                        Summative Weight (%)
+                      </label>
                       <input
-                        type="checkbox"
-                        checked={formData.openBook || false}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, openBook: e.target.checked }))
-                        }
-                        className="w-4 h-4 rounded border-slate-600 text-cyan-500 focus:ring-cyan-500 bg-slate-800"
+                        type="number"
+                        min={50}
+                        max={90}
+                        value={formData.weightages.summative || 70}
+                        onChange={(e) => {
+                          const summative = parseInt(e.target.value) || 70;
+                          setFormData((prev) => ({
+                            ...prev,
+                            weightages: {
+                              ...prev.weightages,
+                              summative,
+                              formative: 100 - summative,
+                            },
+                          }));
+                        }}
+                        className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
                       />
-                      <span className="text-sm text-slate-300">Open Book</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2">
+                    Total:{' '}
+                    {(formData.weightages.formative || 0) + (formData.weightages.summative || 0)}%
+                    {Math.abs(
+                      (formData.weightages.formative || 0) +
+                        (formData.weightages.summative || 0) -
+                        100
+                    ) > 0.1 && <span className="text-red-400 ml-2">⚠ Must sum to 100%</span>}
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            // Advanced Options
+            <div className="space-y-6">
+              {/* Certification Styles */}
+              <div>
+                <h4 className="text-white font-medium mb-3">
+                  Certification Style Influence (optional)
+                </h4>
+                <p className="text-xs text-slate-400 mb-2">
+                  Select certification patterns to emulate:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {CERTIFICATION_STYLES.map((style) => (
+                    <button
+                      key={style}
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          certificationStyles: toggleArrayItem(prev.certificationStyles, style),
+                        }))
+                      }
+                      className={`text-xs px-3 py-1.5 rounded transition-colors ${
+                        formData.certificationStyles.includes(style)
+                          ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
+                          : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-600'
+                      }`}
+                    >
+                      {style}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Academic Types */}
+              <div>
+                <h4 className="text-white font-medium mb-3">
+                  Academic Assessment Types (optional)
+                </h4>
+                <p className="text-xs text-slate-400 mb-2">Select academic formats to include:</p>
+                <div className="flex flex-wrap gap-2">
+                  {ACADEMIC_TYPES.map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          academicTypes: toggleArrayItem(prev.academicTypes, type),
+                        }))
+                      }
+                      className={`text-xs px-3 py-1.5 rounded transition-colors ${
+                        formData.academicTypes.includes(type)
+                          ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
+                          : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-600'
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Higher-Order PLO Policy */}
+              <div>
+                <h4 className="text-white font-medium mb-3">Higher-Order PLO Policy</h4>
+                <div className="space-y-2">
+                  {[
+                    {
+                      value: 'yes',
+                      label: 'Yes',
+                      desc: 'Higher-order PLOs require advanced assessment types',
+                    },
+                    { value: 'no', label: 'No', desc: 'Treat all PLOs equally' },
+                    {
+                      value: 'partial',
+                      label: 'Partial',
+                      desc: 'Custom rules for higher-order PLOs',
+                    },
+                  ].map((option) => (
+                    <label
+                      key={option.value}
+                      className="flex items-start gap-3 p-3 bg-slate-900/30 rounded-lg border border-slate-700 cursor-pointer hover:border-cyan-500/50 transition-colors"
+                    >
                       <input
-                        type="checkbox"
-                        checked={formData.calculatorPermitted || false}
+                        type="radio"
+                        name="higherOrderPloPolicy"
+                        value={option.value}
+                        checked={formData.higherOrderPloPolicy === option.value}
                         onChange={(e) =>
                           setFormData((prev) => ({
                             ...prev,
-                            calculatorPermitted: e.target.checked,
+                            higherOrderPloPolicy: e.target.value as any,
                           }))
                         }
-                        className="w-4 h-4 rounded border-slate-600 text-cyan-500 focus:ring-cyan-500 bg-slate-800"
+                        className="mt-1 w-4 h-4 text-cyan-500 focus:ring-cyan-500"
                       />
-                      <span className="text-sm text-slate-300">Calculator</span>
+                      <div>
+                        <div className="text-sm text-white font-medium">{option.label}</div>
+                        <div className="text-xs text-slate-400">{option.desc}</div>
+                      </div>
                     </label>
-                  </div>
+                  ))}
                 </div>
+
+                {formData.higherOrderPloPolicy === 'partial' && (
+                  <textarea
+                    value={formData.higherOrderPloRules || ''}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, higherOrderPloRules: e.target.value }))
+                    }
+                    placeholder="Describe your custom rules for higher-order PLOs..."
+                    className="mt-3 w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    rows={3}
+                  />
+                )}
               </div>
 
-              {/* Weight Summary */}
-              <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-                <h4 className="text-white font-medium mb-3">Assessment Weight Distribution</h4>
-                <div className="flex items-center gap-2 h-6 rounded-full overflow-hidden bg-slate-800">
-                  <div
-                    className="h-full bg-cyan-500 flex items-center justify-center text-xs text-white font-medium"
-                    style={{ width: `${quizWeight}%` }}
-                  >
-                    Quizzes {quizWeight}%
-                  </div>
-                  <div
-                    className="h-full bg-amber-500 flex items-center justify-center text-xs text-white font-medium"
-                    style={{ width: `${formData.finalExamWeight}%` }}
-                  >
-                    Final {formData.finalExamWeight}%
-                  </div>
-                </div>
-                <p className="text-xs text-slate-500 mt-2">
-                  {moduleCount} modules × {perQuizWeight}% each = {quizWeight}% total quiz weight
-                </p>
+              {/* Toggles */}
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.useRealWorldScenarios}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, useRealWorldScenarios: e.target.checked }))
+                    }
+                    className="w-4 h-4 rounded border-slate-600 text-cyan-500 focus:ring-cyan-500 bg-slate-800"
+                  />
+                  <span className="text-sm text-slate-300">
+                    Use real-world scenarios in assessments
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.alignToWorkplacePerformance}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        alignToWorkplacePerformance: e.target.checked,
+                      }))
+                    }
+                    className="w-4 h-4 rounded border-slate-600 text-cyan-500 focus:ring-cyan-500 bg-slate-800"
+                  />
+                  <span className="text-sm text-slate-300">
+                    Align to workplace performance standards
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.integratedRealWorldSummative}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        integratedRealWorldSummative: e.target.checked,
+                      }))
+                    }
+                    className="w-4 h-4 rounded border-slate-600 text-cyan-500 focus:ring-cyan-500 bg-slate-800"
+                  />
+                  <span className="text-sm text-slate-300">
+                    Integrate real-world elements in summative assessment
+                  </span>
+                </label>
               </div>
-            </div>
-          ) : (
-            // Per-Module Settings
-            <div className="space-y-4">
-              <p className="text-sm text-slate-400">
-                Configure which MLOs to assess and Bloom's emphasis for each module.
-              </p>
-              {modules.map((mod: Module, _idx: number) => {
-                const modSettings = formData.moduleSettings?.find((s) => s.moduleId === mod.id);
-                const mlos = mod.mlos || [];
-
-                return (
-                  <div
-                    key={mod.id}
-                    className="bg-slate-900/30 rounded-lg p-4 border border-slate-700"
-                  >
-                    <h4 className="text-white font-medium mb-3">{mod.title}</h4>
-
-                    {/* MLO Selection */}
-                    <div className="mb-3">
-                      <p className="text-xs text-slate-500 mb-2">MLOs to Assess:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {mlos.map((mlo: MLO) => {
-                          const isSelected = modSettings?.mlosCovered?.includes(mlo.id);
-                          return (
-                            <button
-                              key={mlo.id}
-                              onClick={() => {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  moduleSettings: prev.moduleSettings?.map((s) =>
-                                    s.moduleId === mod.id
-                                      ? {
-                                          ...s,
-                                          mlosCovered: isSelected
-                                            ? s.mlosCovered.filter((id) => id !== mlo.id)
-                                            : [...s.mlosCovered, mlo.id],
-                                        }
-                                      : s
-                                  ),
-                                }));
-                              }}
-                              className={`text-xs px-2 py-1 rounded transition-colors ${
-                                isSelected
-                                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
-                                  : 'bg-slate-800 text-slate-400 border border-slate-700'
-                              }`}
-                            >
-                              {mlo.id}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Bloom's Emphasis */}
-                    <div>
-                      <p className="text-xs text-slate-500 mb-2">Bloom's Emphasis (1-2):</p>
-                      <div className="flex flex-wrap gap-2">
-                        {BLOOM_LEVELS.slice(2).map((level) => {
-                          const isSelected = modSettings?.bloomEmphasis?.includes(level);
-                          return (
-                            <button
-                              key={level}
-                              onClick={() => {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  moduleSettings: prev.moduleSettings?.map((s) =>
-                                    s.moduleId === mod.id
-                                      ? {
-                                          ...s,
-                                          bloomEmphasis: isSelected
-                                            ? s.bloomEmphasis.filter((l) => l !== level)
-                                            : [...(s.bloomEmphasis || []), level].slice(-2),
-                                        }
-                                      : s
-                                  ),
-                                }));
-                              }}
-                              className={`text-xs px-2 py-1 rounded capitalize transition-colors ${
-                                isSelected
-                                  ? `${BLOOM_COLORS[level]} border border-current`
-                                  : 'bg-slate-800 text-slate-400 border border-slate-700'
-                              }`}
-                            >
-                              {level}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           )}
 
@@ -703,175 +936,186 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
             </div>
           )}
 
+          {/* Validation Warnings */}
+          {Math.abs(
+            (formData.weightages.formative || 0) + (formData.weightages.summative || 0) - 100
+          ) > 0.1 && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+              <p className="text-yellow-400 text-sm">⚠️ Weightages must sum to 100%</p>
+            </div>
+          )}
+          {(formData.formativePerModule < 1 || formData.formativePerModule > 5) && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+              <p className="text-yellow-400 text-sm">
+                ⚠️ Formative assessments per module must be between 1 and 5
+              </p>
+            </div>
+          )}
+
           {/* Generate Button */}
           <button
             onClick={handleGenerate}
-            disabled={isCurrentlyGenerating}
-            className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+            disabled={
+              isCurrentlyGenerating ||
+              Math.abs(
+                (formData.weightages.formative || 0) + (formData.weightages.summative || 0) - 100
+              ) > 0.1 ||
+              !formData.formativePerModule ||
+              formData.formativePerModule < 1 ||
+              formData.formativePerModule > 5
+            }
+            className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isCurrentlyGenerating ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Generating MCQ Banks ({bankPerModule * moduleCount + finalBankSize} questions)...
+                Generating Comprehensive Assessments...
               </span>
             ) : (
-              'Generate Auto-Gradable Assessments'
+              'Generate Assessment Package'
             )}
           </button>
         </div>
       ) : (
         // Display Generated Assessments
         <div className="space-y-6">
-          {/* Overall Stats */}
+          {/* Overall Stats - Use workflow data if available, otherwise streaming data */}
           <div className="grid grid-cols-5 gap-4">
             <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
-              <p className="text-3xl font-bold text-white">
-                {workflow.step7?.quizzes?.length || 0}
-              </p>
-              <p className="text-xs text-slate-500 mt-1">Quizzes</p>
-            </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
               <p className="text-3xl font-bold text-cyan-400">
-                {workflow.step7?.totalBankQuestions || workflow.step7?.questionBank?.length || 0}
+                {workflow.step7?.formativeAssessments?.length || streamingFormatives.length}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Bank Questions</p>
+              <p className="text-xs text-slate-500 mt-1">Formative</p>
             </div>
             <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
               <p className="text-3xl font-bold text-amber-400">
-                {workflow.step7?.finalExam?.questionCount || 0}
+                {workflow.step7?.summativeAssessments?.length || streamingSummatives.length}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Final Exam Qs</p>
+              <p className="text-xs text-slate-500 mt-1">Summative</p>
             </div>
             <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
               <p className="text-3xl font-bold text-purple-400">
-                {workflow.step7?.mlosCovered?.length || 0}
+                {workflow.step7?.sampleQuestions
+                  ? (workflow.step7.sampleQuestions.mcq?.length || 0) +
+                    (workflow.step7.sampleQuestions.sjt?.length || 0) +
+                    (workflow.step7.sampleQuestions.caseQuestions?.length || 0) +
+                    (workflow.step7.sampleQuestions.essayPrompts?.length || 0) +
+                    (workflow.step7.sampleQuestions.practicalTasks?.length || 0)
+                  : streamingSamples.mcq.length +
+                    streamingSamples.sjt.length +
+                    streamingSamples.caseQuestions.length +
+                    streamingSamples.essayPrompts.length +
+                    streamingSamples.practicalTasks.length}
               </p>
-              <p className="text-xs text-slate-500 mt-1">MLOs Covered</p>
+              <p className="text-xs text-slate-500 mt-1">Sample Questions</p>
+            </div>
+            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+              <p className="text-3xl font-bold text-green-400">
+                {Object.keys(workflow.step7?.lmsPackages || {}).length}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">LMS Formats</p>
             </div>
             <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
               <p
-                className={`text-3xl font-bold ${workflow.step7?.isValid ? 'text-emerald-400' : 'text-red-400'}`}
+                className={`text-3xl font-bold ${validation?.plosCovered ? 'text-emerald-400' : hasStreamingData ? 'text-amber-400' : 'text-red-400'}`}
               >
-                {workflow.step7?.isValid ? '✓' : '✗'}
+                {validation?.plosCovered ? '✓' : hasStreamingData ? '⟳' : '✗'}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Valid</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {hasStreamingData && !validation ? 'Loading...' : 'Valid'}
+              </p>
             </div>
           </div>
+
+          {/* Loading message if we only have streaming data */}
+          {hasStreamingData && !hasWorkflowData && (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                <p className="text-blue-400">
+                  Generation complete! Finalizing data and validation... This will take just a
+                  moment.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Validation Report */}
           {validation && (
             <div
-              className={`rounded-lg p-4 border ${workflow.step7?.isValid ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}
+              className={`rounded-lg p-4 border ${validation.plosCovered ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}
             >
               <h4
-                className={`font-medium mb-3 ${workflow.step7?.isValid ? 'text-emerald-400' : 'text-amber-400'}`}
+                className={`font-medium mb-3 ${validation.plosCovered ? 'text-emerald-400' : 'text-amber-400'}`}
               >
                 Validation Report
               </h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                <span
+                  className={validation.allFormativesMapped ? 'text-emerald-400' : 'text-red-400'}
+                >
+                  {validation.allFormativesMapped ? '✓' : '✗'} Formatives Mapped
+                </span>
+                <span
+                  className={validation.allSummativesMapped ? 'text-emerald-400' : 'text-red-400'}
+                >
+                  {validation.allSummativesMapped ? '✓' : '✗'} Summatives Mapped
+                </span>
                 <span className={validation.weightsSum100 ? 'text-emerald-400' : 'text-red-400'}>
                   {validation.weightsSum100 ? '✓' : '✗'} Weights = 100%
                 </span>
-                <span className={validation.everyMLOAssessed ? 'text-emerald-400' : 'text-red-400'}>
-                  {validation.everyMLOAssessed ? '✓' : '✗'} Every MLO Assessed
-                </span>
                 <span
                   className={
-                    validation.bloomDistributionMatch ? 'text-emerald-400' : 'text-red-400'
+                    validation.sufficientSampleQuestions ? 'text-emerald-400' : 'text-red-400'
                   }
                 >
-                  {validation.bloomDistributionMatch ? '✓' : '✗'} Bloom Distribution
+                  {validation.sufficientSampleQuestions ? '✓' : '✗'} Sufficient Samples
                 </span>
-                <span
-                  className={validation.allHaveRationales ? 'text-emerald-400' : 'text-red-400'}
-                >
-                  {validation.allHaveRationales ? '✓' : '✗'} All Have Rationales
-                </span>
-                <span className={validation.allAutoGradable ? 'text-emerald-400' : 'text-red-400'}>
-                  {validation.allAutoGradable ? '✓' : '✗'} All Auto-Gradable
-                </span>
-                <span className={validation.noDuplicates ? 'text-emerald-400' : 'text-red-400'}>
-                  {validation.noDuplicates ? '✓' : '✗'} No Duplicates
-                </span>
-                <span
-                  className={validation.finalProportional ? 'text-emerald-400' : 'text-red-400'}
-                >
-                  {validation.finalProportional ? '✓' : '✗'} Final Proportional
-                </span>
-                <span
-                  className={validation.noQuizFinalOverlap ? 'text-emerald-400' : 'text-red-400'}
-                >
-                  {validation.noQuizFinalOverlap ? '✓' : '✗'} No Quiz/Final Overlap
+                <span className={validation.plosCovered ? 'text-emerald-400' : 'text-red-400'}>
+                  {validation.plosCovered ? '✓' : '✗'} All PLOs Covered
                 </span>
               </div>
-
-              {/* Missing MLOs */}
-              {workflow.step7?.missingMLOs && workflow.step7.missingMLOs.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-slate-700/50">
-                  <p className="text-amber-400 text-sm font-medium mb-1">Missing MLO Coverage:</p>
-                  <p className="text-xs text-slate-400">{workflow.step7.missingMLOs.join(', ')}</p>
-                </div>
-              )}
             </div>
           )}
 
-          {/* Blueprint Summary */}
-          {workflow.step7?.blueprint && (
+          {/* Sample Breakdown */}
+          {workflow.step7?.sampleQuestions && (
             <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-              <h4 className="text-white font-medium mb-3">Assessment Blueprint</h4>
-              <div className="grid grid-cols-4 gap-4 text-sm">
+              <h4 className="text-white font-medium mb-3">Sample Question Bank</h4>
+              <div className="grid grid-cols-5 gap-3 text-sm">
                 <div>
-                  <span className="text-slate-400">Final Exam:</span>
+                  <span className="text-slate-400">MCQ:</span>
                   <span className="text-white ml-2">
-                    {workflow.step7.blueprint.finalExamWeight}%
+                    {workflow.step7.sampleQuestions.mcq?.length || 0}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400">Quizzes:</span>
+                  <span className="text-slate-400">SJT:</span>
                   <span className="text-white ml-2">
-                    {workflow.step7.blueprint.totalQuizWeight}%
+                    {workflow.step7.sampleQuestions.sjt?.length || 0}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400">Pass Mark:</span>
-                  <span className="text-white ml-2">{workflow.step7.blueprint.passMark}%</span>
+                  <span className="text-slate-400">Cases:</span>
+                  <span className="text-white ml-2">
+                    {workflow.step7.sampleQuestions.caseQuestions?.length || 0}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-slate-400">Bank Multiplier:</span>
+                  <span className="text-slate-400">Essays:</span>
                   <span className="text-white ml-2">
-                    {workflow.step7.blueprint.bankMultiplier}×
+                    {workflow.step7.sampleQuestions.essayPrompts?.length || 0}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Practical:</span>
+                  <span className="text-white ml-2">
+                    {workflow.step7.sampleQuestions.practicalTasks?.length || 0}
                   </span>
                 </div>
               </div>
             </div>
           )}
-
-          {/* Quizzes */}
-          {workflow.step7?.quizzes && workflow.step7.quizzes.length > 0 && (
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-4">Module Quizzes</h3>
-              <div className="space-y-3">
-                {workflow.step7.quizzes.map((quiz) => (
-                  <QuizSummaryCard key={quiz.id} quiz={quiz} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Sample Questions */}
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-4">Sample Questions</h3>
-            <div className="space-y-4">
-              {workflow.step7?.questionBank?.slice(0, 5).map((question, index) => (
-                <MCQCard key={question.id} question={question} index={index} />
-              ))}
-            </div>
-            {(workflow.step7?.questionBank?.length || 0) > 5 && (
-              <p className="text-sm text-slate-500 mt-4 text-center">
-                +{(workflow.step7?.questionBank?.length || 0) - 5} more questions in bank
-              </p>
-            )}
-          </div>
 
           {/* Error Display */}
           {error && (
@@ -883,29 +1127,39 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-6 border-t border-slate-700">
             <button
-              onClick={handleGenerate}
-              disabled={submitStep7.isPending}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+              onClick={() => setShowRegenerateConfirm(true)}
+              disabled={clearStep7.isPending || submitStep7.isPending}
+              className="px-4 py-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Regenerate
+              {clearStep7.isPending ? 'Clearing...' : 'Regenerate'}
             </button>
             <div className="flex gap-3">
               {!isApproved && (
                 <button
                   onClick={handleApprove}
-                  disabled={approveStep7.isPending || !validation?.everyMLOAssessed}
+                  disabled={
+                    approveStep7.isPending ||
+                    !validation?.plosCovered ||
+                    (hasStreamingData && !hasWorkflowData)
+                  }
                   title={
-                    !validation?.everyMLOAssessed
-                      ? '100% MLO coverage required before approval'
-                      : undefined
+                    hasStreamingData && !hasWorkflowData
+                      ? 'Waiting for data to finalize...'
+                      : !validation?.plosCovered
+                        ? 'All PLOs must be covered before approval'
+                        : undefined
                   }
                   className={`px-6 py-2.5 font-medium rounded-lg transition-all disabled:opacity-50 ${
-                    !validation?.everyMLOAssessed
+                    !validation?.plosCovered || (hasStreamingData && !hasWorkflowData)
                       ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
                       : 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white'
                   }`}
                 >
-                  {approveStep7.isPending ? 'Approving...' : 'Approve & Continue →'}
+                  {approveStep7.isPending
+                    ? 'Approving...'
+                    : hasStreamingData && !hasWorkflowData
+                      ? 'Finalizing...'
+                      : 'Approve & Continue →'}
                 </button>
               )}
               {isApproved && (
@@ -923,48 +1177,38 @@ export default function Step7Form({ workflow, onComplete, onRefresh }: Props) {
               )}
             </div>
           </div>
+        </div>
+      )}
 
-          {/* MLO Coverage Warning - Must be 100% */}
-          {!validation?.everyMLOAssessed && !isApproved && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mt-4">
-              <div className="flex items-start gap-3">
-                <svg
-                  className="w-5 h-5 text-red-400 shrink-0 mt-0.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
-                <div>
-                  <p className="text-red-400 font-medium">100% MLO Coverage Required</p>
-                  <p className="text-sm text-red-400/80 mt-1">
-                    All Module Learning Outcomes must be assessed before approval.
-                    {workflow.step7?.missingMLOs && workflow.step7.missingMLOs.length > 0 && (
-                      <span className="block mt-1">
-                        Missing:{' '}
-                        <span className="font-mono">{workflow.step7.missingMLOs.join(', ')}</span>
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-2">
-                    Click "Regenerate" to create additional questions covering missing MLOs.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!workflow.step7?.isValid && !isApproved && validation?.everyMLOAssessed && (
-            <p className="text-xs text-amber-400 text-center mt-2">
-              Some validation checks did not pass. Review the report above.
+      {/* Regenerate Confirmation Dialog */}
+      {showRegenerateConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-md mx-4 shadow-2xl">
+            <h3 className="text-xl font-semibold text-white mb-3">Regenerate Step 7?</h3>
+            <p className="text-slate-300 mb-6">
+              This will <strong className="text-red-400">delete all existing Step 7 data</strong>{' '}
+              (formative assessments, summative assessments, sample questions) and start fresh
+              generation.
             </p>
-          )}
+            <p className="text-sm text-slate-400 mb-6">
+              This action cannot be undone. The generation will take 30-40 minutes.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowRegenerateConfirm(false)}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRegenerate}
+                disabled={clearStep7.isPending}
+                className="px-4 py-2 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-400 hover:to-orange-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+              >
+                {clearStep7.isPending ? 'Clearing...' : 'Yes, Regenerate'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

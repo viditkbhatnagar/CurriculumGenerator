@@ -857,21 +857,31 @@ export class WordExportService {
     }
 
     // =========================================================================
-    // Section 7: Assessment Blueprint
+    // Section 7: Comprehensive Assessment Package
     // =========================================================================
-    if (workflow.step7?.blueprint || workflow.step7?.quizzes?.length) {
+    if (
+      workflow.step7?.formativeAssessments?.length ||
+      workflow.step7?.summativeAssessments?.length ||
+      workflow.step7?.sampleQuestions
+    ) {
       const step7 = workflow.step7;
       contentChildren.push(
         new Paragraph({ children: [new PageBreak()] }),
         new Paragraph({
-          text: '7. Assessment Blueprint',
+          text: '7. Comprehensive Assessment Package',
           heading: HeadingLevel.HEADING_1,
           spacing: { before: 400, after: 200 },
         })
       );
 
-      const blueprint = step7.blueprint || {};
+      // User Preferences Summary
+      const userPrefs = step7.userPreferences || {};
       contentChildren.push(
+        new Paragraph({
+          text: '7.1 Assessment Strategy',
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 200, after: 100 },
+        }),
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           rows: [
@@ -883,50 +893,52 @@ export class WordExportService {
             }),
             new TableRow({
               children: [
-                this.createTableCell('Final Exam Weight'),
-                this.createTableCell(`${blueprint.finalExamWeight || '-'}%`),
+                this.createTableCell('Assessment Structure'),
+                this.createTableCell(
+                  String(userPrefs.assessmentStructure || 'Both formative and summative')
+                ),
               ],
             }),
             new TableRow({
               children: [
-                this.createTableCell('Total Quiz Weight'),
-                this.createTableCell(`${blueprint.totalQuizWeight || '-'}%`),
+                this.createTableCell('Assessment Balance'),
+                this.createTableCell(String(userPrefs.assessmentBalance || 'Blended mix')),
               ],
             }),
             new TableRow({
               children: [
-                this.createTableCell('Pass Mark'),
-                this.createTableCell(`${blueprint.passMark || '-'}%`),
+                this.createTableCell('Formative Weight'),
+                this.createTableCell(`${userPrefs.weightages?.formative || 0}%`),
               ],
             }),
             new TableRow({
               children: [
-                this.createTableCell('Questions Per Quiz'),
-                this.createTableCell(String(blueprint.questionsPerQuiz || '-')),
+                this.createTableCell('Summative Weight'),
+                this.createTableCell(`${userPrefs.weightages?.summative || 0}%`),
               ],
             }),
             new TableRow({
               children: [
-                this.createTableCell('Questions for Final'),
-                this.createTableCell(String(blueprint.questionsForFinal || '-')),
+                this.createTableCell('Formative Per Module'),
+                this.createTableCell(String(userPrefs.formativePerModule || '-')),
               ],
             }),
             new TableRow({
               children: [
-                this.createTableCell('Bank Multiplier'),
-                this.createTableCell(`${blueprint.bankMultiplier || '-'}x`),
+                this.createTableCell('Summative Format'),
+                this.createTableCell(String(userPrefs.summativeFormat || 'Mixed format')),
               ],
             }),
             new TableRow({
               children: [
-                this.createTableCell('Total Questions'),
-                this.createTableCell(String(step7.totalQuestions || '-')),
+                this.createTableCell('Total Formatives'),
+                this.createTableCell(String(step7.formativeAssessments?.length || 0)),
               ],
             }),
             new TableRow({
               children: [
-                this.createTableCell('Total Bank Questions'),
-                this.createTableCell(String(step7.totalBankQuestions || '-')),
+                this.createTableCell('Total Summatives'),
+                this.createTableCell(String(step7.summativeAssessments?.length || 0)),
               ],
             }),
           ],
@@ -934,129 +946,184 @@ export class WordExportService {
         new Paragraph({ children: [], spacing: { after: 200 } })
       );
 
-      // Quizzes summary
-      if (step7.quizzes?.length) {
+      // Formative Assessments
+      if (step7.formativeAssessments?.length) {
         contentChildren.push(
           new Paragraph({
-            children: [new TextRun({ text: 'Module Quizzes:', bold: true, size: 22 })],
-            spacing: { before: 100, after: 100 },
+            text: '7.2 Formative Assessments',
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 300, after: 100 },
           })
         );
-        step7.quizzes.forEach((quiz: any) => {
+        step7.formativeAssessments.forEach((assessment: any, idx: number) => {
           contentChildren.push(
+            new Paragraph({ children: [new PageBreak()] }),
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `• ${quiz.title || quiz.moduleTitle || 'Quiz'}: `,
+                  text: `Assessment ${idx + 1}: ${assessment.title}`,
                   bold: true,
-                  size: 20,
-                }),
-                new TextRun({
-                  text: `${quiz.questionCount || quiz.questions?.length || 0} questions, ${quiz.weight || '-'}%`,
-                  size: 20,
-                }),
-              ],
-              spacing: { after: 30 },
-            })
-          );
-        });
-      }
-
-      // ALL MCQ Questions - organized by module
-      const allQuestions = step7.questionBank || [];
-      if (allQuestions.length > 0) {
-        contentChildren.push(
-          new Paragraph({
-            children: [
-              new TextRun({ text: 'Question Bank', bold: true, size: 24 }),
-              new TextRun({
-                text: ` (${allQuestions.length} questions)`,
-                size: 20,
-                color: '4a5568',
-              }),
-            ],
-            spacing: { before: 300, after: 150 },
-          })
-        );
-
-        allQuestions.forEach((q: any, idx: number) => {
-          // Question header with metadata
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({ text: `Question ${idx + 1}`, bold: true, size: 22 }),
-                new TextRun({
-                  text: ` [${q.bloomLevel || 'N/A'} | ${q.difficulty || 'Medium'} | MLO: ${q.linkedMLO || 'N/A'}]`,
-                  size: 16,
-                  color: '6b7280',
-                  italics: true,
+                  size: 22,
                 }),
               ],
               spacing: { before: 150, after: 50 },
-            })
-          );
-
-          // Question stem
-          contentChildren.push(
+            }),
             new Paragraph({
-              children: [new TextRun({ text: q.stem || q.question || '', size: 20 })],
+              children: [
+                new TextRun({ text: 'Module: ', bold: true, size: 18 }),
+                new TextRun({ text: assessment.moduleId || '-', size: 18, italics: true }),
+              ],
+              spacing: { after: 20 },
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Type: ', bold: true, size: 18 }),
+                new TextRun({ text: assessment.assessmentType || '-', size: 18 }),
+              ],
+              spacing: { after: 20 },
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Max Marks: ', bold: true, size: 18 }),
+                new TextRun({ text: String(assessment.maxMarks || '-'), size: 18 }),
+              ],
+              spacing: { after: 30 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: 'Description:', bold: true, size: 18 })],
+              spacing: { before: 20, after: 10 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: assessment.description || '', size: 18 })],
+              spacing: { after: 30 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: 'Instructions:', bold: true, size: 18 })],
+              spacing: { before: 20, after: 10 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: assessment.instructions || '', size: 18 })],
               spacing: { after: 50 },
             })
           );
 
-          // Options
-          if (q.options?.length) {
-            q.options.forEach((opt: any, optIdx: number) => {
-              const letter = String.fromCharCode(65 + optIdx);
-              const isCorrect = opt.isCorrect || optIdx === q.correctOption;
+          // Display ALL QUESTIONS in detail
+          if (assessment.questions?.length) {
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({ text: 'Questions:', bold: true, size: 20, underline: {} }),
+                ],
+                spacing: { before: 100, after: 50 },
+              })
+            );
+
+            assessment.questions.forEach((q: any) => {
+              // Question header
               contentChildren.push(
                 new Paragraph({
                   children: [
                     new TextRun({
-                      text: `${letter}. ${opt.text || opt}`,
-                      size: 18,
-                      bold: isCorrect,
-                      color: isCorrect ? '16a34a' : '374151',
+                      text: `Q${q.questionNumber}. `,
+                      bold: true,
+                      size: 19,
                     }),
-                    isCorrect
-                      ? new TextRun({ text: ' ✓ (Correct)', size: 16, color: '16a34a' })
-                      : new TextRun({ text: '' }),
+                    new TextRun({
+                      text: `${q.questionText}`,
+                      size: 19,
+                    }),
+                    new TextRun({
+                      text: ` [${q.bloomLevel || 'N/A'} | ${q.difficulty || 'Medium'} | ${q.points || 1} pt${q.points > 1 ? 's' : ''}]`,
+                      size: 14,
+                      color: '6b7280',
+                      italics: true,
+                    }),
                   ],
-                  spacing: { after: 20 },
+                  spacing: { before: 100, after: 40 },
                 })
               );
-              // Option explanation if available
-              if (opt.explanation) {
+
+              // MCQ Options
+              if (q.questionType === 'mcq' && q.options?.length) {
+                q.options.forEach((option: string, optIdx: number) => {
+                  const letter = String.fromCharCode(65 + optIdx);
+                  const isCorrect = optIdx === q.correctAnswer;
+                  contentChildren.push(
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: `   ${letter}. ${option}`,
+                          size: 18,
+                          bold: isCorrect,
+                          color: isCorrect ? '16a34a' : '374151',
+                        }),
+                        isCorrect
+                          ? new TextRun({
+                              text: ' ✓ (Correct Answer)',
+                              size: 16,
+                              color: '16a34a',
+                              bold: true,
+                            })
+                          : new TextRun({ text: '' }),
+                      ],
+                      spacing: { after: 20 },
+                    })
+                  );
+                });
+              }
+
+              // For non-MCQ, show expected answer
+              if (q.questionType !== 'mcq' && q.correctAnswer) {
                 contentChildren.push(
                   new Paragraph({
                     children: [
                       new TextRun({
-                        text: '   Explanation: ',
-                        size: 16,
-                        italics: true,
-                        color: '6b7280',
+                        text: '   Expected Answer: ',
+                        bold: true,
+                        size: 17,
+                        color: '1e40af',
                       }),
                       new TextRun({
-                        text: opt.explanation,
-                        size: 16,
+                        text: String(q.correctAnswer),
+                        size: 17,
                         italics: true,
-                        color: '6b7280',
+                        color: '1e40af',
                       }),
                     ],
-                    spacing: { after: 10 },
+                    spacing: { before: 20, after: 20 },
+                  })
+                );
+              }
+
+              // Rationale
+              if (q.rationale) {
+                contentChildren.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: '   Rationale: ',
+                        bold: true,
+                        size: 16,
+                        color: '7c3aed',
+                      }),
+                      new TextRun({ text: q.rationale, size: 16, italics: true, color: '7c3aed' }),
+                    ],
+                    spacing: { before: 20, after: 50 },
                   })
                 );
               }
             });
-          }
-
-          // Rationale
-          if (q.rationale) {
+          } else {
+            // No questions generated - show note
             contentChildren.push(
               new Paragraph({
                 children: [
-                  new TextRun({ text: 'Rationale: ', bold: true, size: 18, color: '1e40af' }),
-                  new TextRun({ text: q.rationale, size: 18, italics: true, color: '1e40af' }),
+                  new TextRun({
+                    text: 'Note: Detailed questions not generated for this assessment.',
+                    size: 16,
+                    italics: true,
+                    color: 'dc2626',
+                  }),
                 ],
                 spacing: { before: 50, after: 100 },
               })
@@ -1065,49 +1132,52 @@ export class WordExportService {
         });
       }
 
-      // Final Exam Pool (if separate)
-      const finalExamPool = step7.finalExamPool || [];
-      if (finalExamPool.length > 0) {
+      // Summative Assessments
+      if (step7.summativeAssessments?.length) {
         contentChildren.push(
           new Paragraph({
-            children: [
-              new TextRun({ text: 'Final Exam Question Pool', bold: true, size: 24 }),
-              new TextRun({
-                text: ` (${finalExamPool.length} questions)`,
-                size: 20,
-                color: '4a5568',
-              }),
-            ],
-            spacing: { before: 300, after: 150 },
+            text: '7.3 Summative Assessments',
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 300, after: 100 },
           })
         );
-
-        finalExamPool.forEach((q: any, idx: number) => {
+        step7.summativeAssessments.forEach((assessment: any, idx: number) => {
           contentChildren.push(
             new Paragraph({
               children: [
-                new TextRun({ text: `Final Q${idx + 1}: `, bold: true, size: 20 }),
-                new TextRun({ text: q.stem || q.question || '', size: 20 }),
+                new TextRun({ text: `${idx + 1}. ${assessment.title}`, bold: true, size: 20 }),
               ],
-              spacing: { before: 100, after: 50 },
+              spacing: { before: 150, after: 50 },
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: 'Format: ', size: 18 }),
+                new TextRun({ text: assessment.format || '-', size: 18 }),
+              ],
+              spacing: { after: 30 },
+            }),
+            new Paragraph({
+              children: [new TextRun({ text: assessment.overview || '', size: 18 })],
+              spacing: { after: 50 },
             })
           );
-          if (q.options?.length) {
-            q.options.forEach((opt: any, optIdx: number) => {
-              const letter = String.fromCharCode(65 + optIdx);
-              const isCorrect = opt.isCorrect || optIdx === q.correctOption;
+          if (assessment.components?.length) {
+            contentChildren.push(
+              new Paragraph({
+                children: [new TextRun({ text: 'Components:', bold: true, size: 18 })],
+                spacing: { before: 50, after: 30 },
+              })
+            );
+            assessment.components.forEach((comp: any) => {
               contentChildren.push(
                 new Paragraph({
                   children: [
+                    new TextRun({ text: `• ${comp.name}: `, size: 18 }),
                     new TextRun({
-                      text: `${letter}. ${opt.text || opt}`,
+                      text: `${comp.weight}% - ${comp.description}`,
                       size: 18,
-                      bold: isCorrect,
-                      color: isCorrect ? '16a34a' : '374151',
+                      italics: true,
                     }),
-                    isCorrect
-                      ? new TextRun({ text: ' ✓', size: 16, color: '16a34a' })
-                      : new TextRun({ text: '' }),
                   ],
                   spacing: { after: 20 },
                 })
@@ -1115,6 +1185,150 @@ export class WordExportService {
             });
           }
         });
+      }
+
+      // Sample Questions Summary
+      const sampleQuestions = step7.sampleQuestions || {};
+      const totalSamples =
+        (sampleQuestions.mcq?.length || 0) +
+        (sampleQuestions.sjt?.length || 0) +
+        (sampleQuestions.caseQuestions?.length || 0) +
+        (sampleQuestions.essayPrompts?.length || 0) +
+        (sampleQuestions.practicalTasks?.length || 0);
+
+      if (totalSamples > 0) {
+        contentChildren.push(
+          new Paragraph({
+            text: '7.4 Sample Questions',
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 300, after: 100 },
+          }),
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({
+                children: [
+                  this.createTableCell('Question Type', { bold: true, shading: 'e2e8f0' }),
+                  this.createTableCell('Count', { bold: true, shading: 'e2e8f0' }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  this.createTableCell('MCQ (Multiple Choice)'),
+                  this.createTableCell(String(sampleQuestions.mcq?.length || 0)),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  this.createTableCell('SJT (Situational Judgment)'),
+                  this.createTableCell(String(sampleQuestions.sjt?.length || 0)),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  this.createTableCell('Case Studies'),
+                  this.createTableCell(String(sampleQuestions.caseQuestions?.length || 0)),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  this.createTableCell('Essay Prompts'),
+                  this.createTableCell(String(sampleQuestions.essayPrompts?.length || 0)),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  this.createTableCell('Practical Tasks'),
+                  this.createTableCell(String(sampleQuestions.practicalTasks?.length || 0)),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  this.createTableCell('Total Sample Questions', { bold: true }),
+                  this.createTableCell(String(totalSamples), { bold: true }),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph({ children: [], spacing: { after: 200 } })
+        );
+
+        // Note: Detailed sample questions available in database
+        contentChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Note: ',
+                bold: true,
+                size: 18,
+                italics: true,
+              }),
+              new TextRun({
+                text: 'Detailed sample questions for each type are stored in the database and can be exported separately.',
+                size: 18,
+                italics: true,
+                color: '6b7280',
+              }),
+            ],
+            spacing: { before: 100, after: 200 },
+          })
+        );
+      }
+
+      // Validation Summary
+      if (step7.validation) {
+        const validation = step7.validation;
+        contentChildren.push(
+          new Paragraph({
+            text: '7.5 Validation Summary',
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 300, after: 100 },
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: '✓ ',
+                color: validation.allFormativesMapped ? '16a34a' : 'dc2626',
+              }),
+              new TextRun({ text: 'All formatives mapped to MLOs', size: 18 }),
+            ],
+            spacing: { after: 30 },
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: '✓ ',
+                color: validation.allSummativesMapped ? '16a34a' : 'dc2626',
+              }),
+              new TextRun({ text: 'All summatives mapped to PLOs', size: 18 }),
+            ],
+            spacing: { after: 30 },
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: '✓ ', color: validation.weightsSum100 ? '16a34a' : 'dc2626' }),
+              new TextRun({ text: 'Component weights sum to 100%', size: 18 }),
+            ],
+            spacing: { after: 30 },
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: '✓ ',
+                color: validation.sufficientSampleQuestions ? '16a34a' : 'dc2626',
+              }),
+              new TextRun({ text: 'Sufficient sample questions generated', size: 18 }),
+            ],
+            spacing: { after: 30 },
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: '✓ ', color: validation.plosCovered ? '16a34a' : 'dc2626' }),
+              new TextRun({ text: 'All PLOs covered in assessments', size: 18 }),
+            ],
+            spacing: { after: 200 },
+          })
+        );
       }
     }
 

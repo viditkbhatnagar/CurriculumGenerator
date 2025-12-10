@@ -774,58 +774,173 @@ export interface AssessmentBlueprint {
   calculatorPermitted?: boolean;
 }
 
+// =============================================================================
+// NEW: Assessment Generator Contract Types
+// =============================================================================
+
+export interface AssessmentUserPreferences {
+  assessmentStructure: 'formative_only' | 'summative_only' | 'both_formative_and_summative';
+  assessmentBalance:
+    | 'mostly_knowledge_based'
+    | 'mostly_applied'
+    | 'mostly_scenario_based'
+    | 'blended_mix';
+  certificationStyles: string[];
+  academicTypes: string[];
+  summativeFormat:
+    | 'mcq_exam'
+    | 'written_assignment'
+    | 'case_study_analysis'
+    | 'project_capstone'
+    | 'mixed_format'
+    | 'user_defined';
+  userDefinedSummativeDescription?: string;
+  formativeTypesPerUnit: string[];
+  formativePerModule: number;
+  weightages: {
+    formative?: number;
+    summative?: number;
+    mcqComponents?: number;
+    writtenComponents?: number;
+    practicalComponents?: number;
+    projectCapstone?: number;
+  };
+  higherOrderPloPolicy: 'yes' | 'no' | 'partial';
+  higherOrderPloRules?: string;
+  useRealWorldScenarios: boolean;
+  alignToWorkplacePerformance: boolean;
+  integratedRealWorldSummative: boolean;
+}
+
+export interface FormativeAssessment {
+  id: string;
+  moduleId: string;
+  title: string;
+  assessmentType: string;
+  description: string;
+  instructions: string;
+  alignedPLOs: string[];
+  alignedMLOs: string[];
+  assessmentCriteria: string[];
+  maxMarks?: number;
+}
+
+export interface SummativeAssessment {
+  id: string;
+  scope: 'course_level' | 'module_level';
+  moduleId?: string;
+  title: string;
+  format: string;
+  overview: string;
+  alignmentTable: Array<{
+    ploId: string;
+    componentIds: string[];
+  }>;
+  components: Array<{
+    id: string;
+    name: string;
+    componentType: string;
+    weight: number;
+    description: string;
+  }>;
+  markingModel: {
+    type: 'criteria_only' | 'full_rubric';
+    criteria: Array<{
+      name: string;
+      description: string;
+      weight?: number;
+    }>;
+    rubricLevels?: Array<{
+      levelName: string;
+      levelDescriptor: string;
+      thresholdMarks?: number;
+    }>;
+  };
+}
+
+export interface MCQSample {
+  stem: string;
+  options: string[];
+  correctOptionIndex: number;
+  rationale?: string;
+  alignedPLOs?: string[];
+}
+
+export interface SJTSample {
+  scenario: string;
+  options: Array<{
+    text: string;
+    effectivenessRank?: number;
+    isPreferred?: boolean;
+  }>;
+  guidance?: string;
+  alignedPLOs?: string[];
+}
+
+export interface CaseSample {
+  caseText: string;
+  prompts: string[];
+  alignedPLOs?: string[];
+}
+
+export interface EssaySample {
+  promptText: string;
+  expectedFocus?: string;
+  alignedPLOs?: string[];
+}
+
+export interface PracticalSample {
+  taskDescription: string;
+  evidenceRequired?: string;
+  assessmentCriteria?: string[];
+  alignedPLOs?: string[];
+}
+
 export interface Step7Assessments {
-  // Blueprint (generated first per workflow v2.2)
-  blueprint: AssessmentBlueprint;
+  // User Preferences that drove generation
+  userPreferences: AssessmentUserPreferences;
 
-  // Per-module settings
-  moduleSettings: ModuleAssessmentSettings[];
+  // Formative Assessments
+  formativeAssessments: FormativeAssessment[];
 
-  // Generated content
-  quizzes: Quiz[];
-  finalExam: FinalExam;
+  // Summative Assessments
+  summativeAssessments: SummativeAssessment[];
 
-  // Question banks (3× multiplier per workflow v2.2)
-  questionBanks: Record<string, MCQQuestion[]>; // moduleId -> questions
-  questionBank: MCQQuestion[]; // All questions flat
-  finalExamPool: MCQQuestion[]; // Separate bank for final, no quiz overlap
-
-  // Optional cloze
-  clozeQuestions?: ClozeQuestion[];
-
-  // Validation per workflow v2.2
-  validationReport: {
-    weightsSum100: boolean; // Weights sum to exactly 100%
-    everyMLOAssessed: boolean; // Every selected MLO has ≥1 item
-    bloomDistributionMatch: boolean; // Within ±10% tolerance
-    allHaveRationales: boolean; // All items have complete rationales
-    allAutoGradable: boolean; // MCQ or Cloze only
-    noDuplicates: boolean; // No duplicate questions
-    finalProportional: boolean; // Final pulls proportionally
-    noQuizFinalOverlap: boolean; // No overlap between quiz and final
+  // Sample Questions Bank
+  sampleQuestions: {
+    mcq: MCQSample[];
+    sjt: SJTSample[];
+    caseQuestions: CaseSample[];
+    essayPrompts: EssaySample[];
+    practicalTasks: PracticalSample[];
   };
 
-  // Coverage summary
-  mlosCovered: string[];
-  missingMLOs: string[];
-  totalQuestions: number;
-  totalBankQuestions: number;
-
-  isValid: boolean;
-  validationIssues: string[];
-
-  // LMS configuration
-  lmsConfig?: {
-    randomization: boolean;
-    timeLimits: Record<string, number>;
-    passingCriteria: number;
-    feedbackSettings: 'immediate' | 'delayed' | 'afterDeadline';
+  // LMS Packages (logical structures)
+  lmsPackages: {
+    canvas?: Record<string, any>;
+    moodle?: Record<string, any>;
+    blackboard?: Record<string, any>;
   };
 
+  // Validation
+  validation: {
+    allFormativesMapped: boolean;
+    allSummativesMapped: boolean;
+    weightsSum100: boolean;
+    sufficientSampleQuestions: boolean;
+    plosCovered: boolean;
+  };
+
+  // Metadata
+  generatedAt: string;
   validatedAt?: string;
   approvedAt?: string;
   approvedBy?: string;
 }
+
+// Form data type for Step 7
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface Step7FormData extends AssessmentUserPreferences {}
 
 // =============================================================================
 // =============================================================================
@@ -1249,34 +1364,6 @@ export interface Step3FormData {
 }
 
 // Step 7 Form Data per workflow v2.2
-export interface Step7FormData {
-  // Global Settings (Required)
-  finalExamWeight: number; // %, typically 30-50%
-  passMark: number; // %, typically 50-70%
-  questionsPerQuiz: number; // typically 15-25
-  questionsForFinal: number; // typically 50-80
-  bankMultiplier: number; // default 3×
-  randomize: boolean; // Shuffle items and options
-
-  // Global Settings (Optional)
-  enableCloze: boolean;
-  clozeCountPerModule?: number;
-  timeLimit?: number; // minutes per quiz
-  finalExamTimeLimit?: number; // minutes for final
-  openBook?: boolean;
-  calculatorPermitted?: boolean;
-
-  // Per-Module Settings
-  moduleSettings?: {
-    moduleId: string;
-    mlosCovered: string[]; // Which MLOs to assess
-    bloomEmphasis: BloomLevel[]; // 1-2 bands
-    contextConstraints?: string;
-    preferTerms?: string[];
-    avoidTerms?: string[];
-  }[];
-}
-
 // =============================================================================
 // UI HELPER TYPES
 // =============================================================================

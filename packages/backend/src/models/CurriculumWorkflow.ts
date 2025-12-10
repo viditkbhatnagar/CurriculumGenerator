@@ -318,88 +318,148 @@ export interface ICurriculumWorkflow extends Document {
     approvedBy?: mongoose.Types.ObjectId;
   };
 
-  // Step 7: Auto-Gradable Assessments (MCQ-First)
+  // Step 7: Comprehensive Assessment Generation (Assessment Generator Contract)
   step7?: {
-    blueprint: {
-      finalExamWeight: number;
-      moduleQuizWeights: Array<{
-        moduleId: string;
-        weight: number;
-      }>;
-      passMark: number;
-      questionsPerQuiz: number;
-      questionsForFinal: number;
-      bankMultiplier: number;
-      randomize: boolean;
-      enableCloze: boolean;
-      clozeCountPerModule?: number;
-      timeLimit?: number;
-      openBook: boolean;
-      calculatorPermitted: boolean;
+    // User Preferences that drove generation
+    userPreferences: {
+      assessmentStructure: 'formative_only' | 'summative_only' | 'both_formative_and_summative';
+      assessmentBalance:
+        | 'mostly_knowledge_based'
+        | 'mostly_applied'
+        | 'mostly_scenario_based'
+        | 'blended_mix';
+      certificationStyles: string[];
+      academicTypes: string[];
+      summativeFormat:
+        | 'mcq_exam'
+        | 'written_assignment'
+        | 'case_study_analysis'
+        | 'project_capstone'
+        | 'mixed_format'
+        | 'user_defined';
+      userDefinedSummativeDescription?: string;
+      formativeTypesPerUnit: string[];
+      formativePerModule: number;
+      weightages: {
+        formative?: number;
+        summative?: number;
+        mcqComponents?: number;
+        writtenComponents?: number;
+        practicalComponents?: number;
+        projectCapstone?: number;
+      };
+      assessmentMappingStrategy: 'hybrid';
+      higherOrderPloPolicy: 'yes' | 'no' | 'partial';
+      higherOrderPloRules?: string;
+      useRealWorldScenarios: boolean;
+      alignToWorkplacePerformance: boolean;
+      integratedRealWorldSummative: boolean;
+      generateSampleQuestions: boolean;
     };
 
-    mcqBanks: Array<{
+    // Formative Assessments
+    formativeAssessments: Array<{
+      id: string;
       moduleId: string;
-      questions: Array<{
+      title: string;
+      assessmentType: string;
+      description: string;
+      instructions: string;
+      alignedPLOs: string[];
+      alignedMLOs: string[];
+      assessmentCriteria: string[];
+      maxMarks?: number;
+    }>;
+
+    // Summative Assessments
+    summativeAssessments: Array<{
+      id: string;
+      scope: 'course_level' | 'module_level';
+      moduleId?: string;
+      title: string;
+      format: string;
+      overview: string;
+      alignmentTable: Array<{
+        ploId: string;
+        componentIds: string[];
+      }>;
+      components: Array<{
         id: string;
-        stem: string;
-        options: Array<{
-          label: 'A' | 'B' | 'C' | 'D';
-          text: string;
-          isCorrect: boolean;
+        name: string;
+        componentType: string;
+        weight: number;
+        description: string;
+      }>;
+      markingModel: {
+        type: 'criteria_only' | 'full_rubric';
+        criteria: Array<{
+          name: string;
+          description: string;
+          weight?: number;
         }>;
-        rationale: string;
-        correctExplanation: string;
-        distractorExplanations: Record<string, string>;
-        mloId: string;
-        bloomLevel: string;
-        difficulty: 'easy' | 'medium' | 'hard';
-        topicArea: string;
-        usedInQuiz: boolean;
-        usedInFinal: boolean;
-      }>;
+        rubricLevels?: Array<{
+          levelName: string;
+          levelDescriptor: string;
+          thresholdMarks?: number;
+        }>;
+      };
     }>;
 
-    finalExamPool: Array<{
-      id: string;
-      stem: string;
-      options: Array<{
-        label: 'A' | 'B' | 'C' | 'D';
-        text: string;
-        isCorrect: boolean;
+    // Sample Questions Bank
+    sampleQuestions: {
+      mcq: Array<{
+        stem: string;
+        options: string[];
+        correctOptionIndex: number;
+        rationale?: string;
+        alignedPLOs?: string[];
       }>;
-      rationale: string;
-      correctExplanation: string;
-      distractorExplanations: Record<string, string>;
-      mloId: string;
-      bloomLevel: string;
-      difficulty: 'easy' | 'medium' | 'hard';
-      topicArea: string;
-      moduleId: string;
-    }>;
-
-    clozeItems?: Array<{
-      id: string;
-      moduleId: string;
-      sentence: string;
-      blanks: Array<{
-        position: number;
-        correctAnswer: string;
-        acceptedSynonyms: string[];
+      sjt: Array<{
+        scenario: string;
+        options: Array<{
+          text: string;
+          effectivenessRank?: number;
+          isPreferred?: boolean;
+        }>;
+        guidance?: string;
+        alignedPLOs?: string[];
       }>;
-      mloId: string;
-    }>;
-
-    validation: {
-      weightsSum100: boolean;
-      allMlosCovered: boolean;
-      bloomDistributionValid: boolean;
-      allHaveRationales: boolean;
-      allAutoGradable: boolean;
-      noDuplicates: boolean;
-      finalProportional: boolean;
+      caseQuestions: Array<{
+        caseText: string;
+        prompts: string[];
+        alignedPLOs?: string[];
+      }>;
+      essayPrompts: Array<{
+        promptText: string;
+        expectedFocus?: string;
+        alignedPLOs?: string[];
+      }>;
+      practicalTasks: Array<{
+        taskDescription: string;
+        evidenceRequired?: string;
+        assessmentCriteria?: string[];
+        alignedPLOs?: string[];
+      }>;
     };
 
+    // LMS Packages (logical structures)
+    lmsPackages: {
+      canvas?: Record<string, any>;
+      moodle?: Record<string, any>;
+      blackboard?: Record<string, any>;
+    };
+
+    // Validation
+    validation: {
+      allFormativesMapped: boolean;
+      allSummativesMapped: boolean;
+      weightsSum100: boolean;
+      sufficientSampleQuestions: boolean;
+      plosCovered: boolean;
+    };
+
+    // Metadata
+    generatedAt: Date;
     validatedAt?: Date;
     approvedAt?: Date;
     approvedBy?: mongoose.Types.ObjectId;

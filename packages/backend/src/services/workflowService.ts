@@ -2217,26 +2217,36 @@ CRITICAL VALIDATION:
    * Per workflow v2.2: Create comprehensive auto-gradable MCQ banks,
    * module quizzes, and final exam blueprint
    */
+  /**
+   * Process Step 7: Comprehensive Assessment Generation
+   * Uses Assessment Generator Contract with chunked generation to avoid timeouts
+   */
   async processStep7(
     workflowId: string,
-    blueprint: {
-      finalExamWeight: number;
-      passMark: number;
-      questionsPerQuiz: number;
-      questionsForFinal: number;
-      bankMultiplier: number;
-      randomize: boolean;
-      enableCloze: boolean;
-      clozeCountPerModule?: number;
-      timeLimit?: number;
-      finalExamTimeLimit?: number;
-      openBook?: boolean;
-      calculatorPermitted?: boolean;
-      moduleSettings?: {
-        moduleId: string;
-        mlosCovered: string[];
-        bloomEmphasis: string[];
-      }[];
+    userPreferences: {
+      assessmentStructure: string;
+      assessmentBalance: string;
+      certificationStyles: string[];
+      academicTypes: string[];
+      summativeFormat: string;
+      userDefinedSummativeDescription?: string;
+      formativeTypesPerUnit: string[];
+      formativePerModule: number;
+      weightages: {
+        formative?: number;
+        summative?: number;
+        mcqComponents?: number;
+        writtenComponents?: number;
+        practicalComponents?: number;
+        projectCapstone?: number;
+      };
+      assessmentMappingStrategy: string;
+      higherOrderPloPolicy: string;
+      higherOrderPloRules?: string;
+      useRealWorldScenarios: boolean;
+      alignToWorkplacePerformance: boolean;
+      integratedRealWorldSummative: boolean;
+      generateSampleQuestions: boolean;
     }
   ): Promise<ICurriculumWorkflow> {
     const workflow = await CurriculumWorkflow.findById(workflowId);
@@ -2244,156 +2254,86 @@ CRITICAL VALIDATION:
       throw new Error('Workflow not found or Step 6 not complete');
     }
 
-    loggingService.info('Processing Step 7: Auto-Gradable Assessments (MCQ-First)', { workflowId });
-
-    const assessmentContent = await this.generateStep7Content(workflow, blueprint);
-
-    const modules = workflow.step4?.modules || [];
-    const moduleCount = modules.length;
-    const quizWeight = 100 - blueprint.finalExamWeight;
-    const perQuizWeight = moduleCount > 0 ? Math.round((quizWeight / moduleCount) * 10) / 10 : 0;
-
-    // Build questions from generated content
-    const questionBank =
-      assessmentContent.questionBank ||
-      assessmentContent.mcqBanks?.flatMap((b: any) => b.questions) ||
-      [];
-    const finalExamPool = assessmentContent.finalExamPool || [];
-
-    // Build quizzes from question banks
-    const questionBanks: Record<string, any[]> = {};
-    const quizzes = modules.map((mod: any, idx: number) => {
-      const modQuestions = questionBank.filter(
-        (q: any) => q.moduleId === mod.id || q.linkedMLO?.startsWith(`M${idx + 1}`)
-      );
-      questionBanks[mod.id] = modQuestions;
-
-      // Calculate bloom distribution
-      const bloomDist: Record<string, number> = {};
-      modQuestions.forEach((q: any) => {
-        bloomDist[q.bloomLevel] = (bloomDist[q.bloomLevel] || 0) + 1;
-      });
-
-      return {
-        id: `quiz-${mod.id}`,
-        moduleId: mod.id,
-        moduleTitle: mod.title,
-        title: `${mod.title} Quiz`,
-        questions: modQuestions.slice(0, blueprint.questionsPerQuiz),
-        questionCount: Math.min(modQuestions.length, blueprint.questionsPerQuiz),
-        weight: perQuizWeight,
-        passMark: blueprint.passMark,
-        timeLimit: blueprint.timeLimit,
-        randomized: blueprint.randomize,
-        mlosCovered: [...new Set(modQuestions.map((q: any) => q.linkedMLO))],
-        bloomDistribution: bloomDist,
-      };
+    loggingService.info('Processing Step 7: Comprehensive Assessment Generation', {
+      workflowId,
+      structure: userPreferences.assessmentStructure,
+      formativePerModule: userPreferences.formativePerModule,
     });
 
-    // Build final exam
-    const finalBloomDist: Record<string, number> = {};
-    finalExamPool.forEach((q: any) => {
-      finalBloomDist[q.bloomLevel] = (finalBloomDist[q.bloomLevel] || 0) + 1;
+    // Import and use the assessment generator service
+    const { assessmentGeneratorService } = await import('./assessmentGeneratorService');
+
+    // Generate assessments using chunked strategy
+    const assessmentResponse = await assessmentGeneratorService.generateAssessments(
+      workflow,
+      userPreferences as any, // Type assertion for compatibility
+      (progress) => {
+        loggingService.info('Assessment Generation Progress', {
+          workflowId,
+          stage: progress.stage,
+          currentModule: progress.currentModule,
+          completedSteps: progress.completedSteps,
+          totalSteps: progress.totalSteps,
+        });
+      }
+    );
+
+    // Validation
+    const totalSampleQuestions =
+      assessmentResponse.sampleQuestions.mcq.length +
+      assessmentResponse.sampleQuestions.sjt.length +
+      assessmentResponse.sampleQuestions.caseQuestions.length +
+      assessmentResponse.sampleQuestions.essayPrompts.length +
+      assessmentResponse.sampleQuestions.practicalTasks.length;
+
+    const plos = workflow.step3?.outcomes || [];
+    const ploIds = plos.map((plo: any) => plo.id || plo.code);
+    const coveredPloIds = new Set<string>();
+
+    // Collect PLO coverage from formative assessments
+    assessmentResponse.formativeAssessments.forEach((fa) => {
+      fa.alignedPLOs.forEach((ploId) => coveredPloIds.add(ploId));
     });
 
-    const moduleDistribution: Record<string, number> = {};
-    modules.forEach((mod: any) => {
-      const modHours = mod.totalHours || 15;
-      const totalHours = modules.reduce((sum: number, m: any) => sum + (m.totalHours || 15), 0);
-      moduleDistribution[mod.id] = Math.round(
-        (modHours / totalHours) * blueprint.questionsForFinal
-      );
+    // Collect PLO coverage from summative assessments
+    assessmentResponse.summativeAssessments.forEach((sa) => {
+      sa.alignmentTable.forEach((alignment) => coveredPloIds.add(alignment.ploId));
     });
 
-    const finalExam = {
-      id: 'final-exam',
-      title: 'Final Examination',
-      questions: finalExamPool.slice(0, blueprint.questionsForFinal),
-      questionCount: Math.min(finalExamPool.length, blueprint.questionsForFinal),
-      weight: blueprint.finalExamWeight,
-      passMark: blueprint.passMark,
-      timeLimit: blueprint.finalExamTimeLimit,
-      randomized: blueprint.randomize,
-      moduleDistribution,
-      noQuizOverlap: true,
-      plosCovered: workflow.step3?.outcomes?.map((o: any) => o.id) || [],
-      bloomDistribution: finalBloomDist,
+    const allFormativesMapped = assessmentResponse.formativeAssessments.every(
+      (fa) => fa.alignedMLOs.length > 0
+    );
+
+    const allSummativesMapped = assessmentResponse.summativeAssessments.every(
+      (sa) => sa.alignmentTable.length > 0
+    );
+
+    // Check weightages sum to 100 for summative assessments
+    let weightsSum100 = true;
+    assessmentResponse.summativeAssessments.forEach((sa) => {
+      const totalWeight = sa.components.reduce((sum, comp) => sum + comp.weight, 0);
+      if (Math.abs(totalWeight - 100) > 0.1) {
+        weightsSum100 = false;
+      }
+    });
+
+    const validation = {
+      allFormativesMapped,
+      allSummativesMapped,
+      weightsSum100,
+      sufficientSampleQuestions: totalSampleQuestions >= 20,
+      plosCovered: ploIds.every((ploId: string) => coveredPloIds.has(ploId)),
     };
 
-    // Collect all MLOs
-    const allMLOs = modules.flatMap((mod: any) => mod.mlos?.map((mlo: any) => mlo.id) || []);
-    const coveredMLOs = new Set([
-      ...questionBank.map((q: any) => q.linkedMLO),
-      ...finalExamPool.map((q: any) => q.linkedMLO),
-    ]);
-    const mlosCovered = [...coveredMLOs];
-    const missingMLOs = allMLOs.filter((mlo: string) => !coveredMLOs.has(mlo));
-
-    // Validation report per workflow v2.2
-    const validationReport = {
-      weightsSum100: quizWeight + blueprint.finalExamWeight === 100,
-      everyMLOAssessed: missingMLOs.length === 0,
-      bloomDistributionMatch: true, // Simplified
-      allHaveRationales: questionBank.every((q: any) => q.rationale || q.explanation),
-      allAutoGradable: true, // MCQ/Cloze only
-      noDuplicates: new Set(questionBank.map((q: any) => q.stem)).size === questionBank.length,
-      finalProportional: true,
-      noQuizFinalOverlap: !questionBank.some((q: any) =>
-        finalExamPool.some((fq: any) => fq.id === q.id)
-      ),
-    };
-
-    const validationIssues: string[] = [];
-    if (!validationReport.weightsSum100) validationIssues.push('Weights do not sum to 100%');
-    if (!validationReport.everyMLOAssessed)
-      validationIssues.push(`Missing MLO coverage: ${missingMLOs.join(', ')}`);
-    if (!validationReport.allHaveRationales)
-      validationIssues.push('Some questions missing rationales');
-    if (!validationReport.noDuplicates) validationIssues.push('Duplicate questions detected');
-
-    const isValid = Object.values(validationReport).every((v) => v === true);
-
+    // Store in workflow
     workflow.step7 = {
-      blueprint: {
-        finalExamWeight: blueprint.finalExamWeight,
-        totalQuizWeight: quizWeight,
-        perQuizWeight,
-        passMark: blueprint.passMark,
-        questionsPerQuiz: blueprint.questionsPerQuiz,
-        questionsForFinal: blueprint.questionsForFinal,
-        bankMultiplier: blueprint.bankMultiplier,
-        randomize: blueprint.randomize,
-        enableCloze: blueprint.enableCloze,
-        clozeCountPerModule: blueprint.clozeCountPerModule,
-        timeLimit: blueprint.timeLimit,
-        openBook: blueprint.openBook,
-        calculatorPermitted: blueprint.calculatorPermitted,
-      },
-      moduleSettings: blueprint.moduleSettings || [],
-      quizzes,
-      finalExam,
-      questionBanks,
-      questionBank,
-      finalExamPool,
-      clozeQuestions: assessmentContent.clozeQuestions,
-      validationReport,
-      mlosCovered,
-      missingMLOs,
-      totalQuestions:
-        quizzes.reduce((sum: number, q: any) => sum + q.questionCount, 0) + finalExam.questionCount,
-      totalBankQuestions: questionBank.length + finalExamPool.length,
-      isValid,
-      validationIssues,
-      lmsConfig: {
-        randomization: blueprint.randomize,
-        timeLimits: {
-          quiz: blueprint.timeLimit || 30,
-          final: blueprint.finalExamTimeLimit || 90,
-        },
-        passingCriteria: blueprint.passMark,
-        feedbackSettings: 'afterDeadline',
-      },
-      validatedAt: new Date(),
+      userPreferences: userPreferences as any,
+      formativeAssessments: assessmentResponse.formativeAssessments as any,
+      summativeAssessments: assessmentResponse.summativeAssessments as any,
+      sampleQuestions: assessmentResponse.sampleQuestions as any,
+      lmsPackages: assessmentResponse.lmsPackages,
+      validation,
+      generatedAt: new Date(),
     };
 
     workflow.currentStep = 7;
@@ -2407,12 +2347,335 @@ CRITICAL VALIDATION:
 
     await workflow.save();
 
-    loggingService.info('Step 7 processed', {
+    loggingService.info('Step 7 processed successfully', {
       workflowId,
-      totalQuestions: workflow.step7.totalQuestions,
-      totalBankQuestions: workflow.step7.totalBankQuestions,
-      isValid,
+      formativeCount: assessmentResponse.formativeAssessments.length,
+      summativeCount: assessmentResponse.summativeAssessments.length,
+      totalSampleQuestions,
+      validationPassed: Object.values(validation).every((v) => v === true),
     });
+
+    return workflow;
+  }
+
+  /**
+   * Process Step 7 with Streaming (Incremental Database Saves)
+   * Saves results to database after each batch and sends callbacks
+   */
+  async processStep7Streaming(
+    workflowId: string,
+    userPreferences: any,
+    progressCallback?: (progress: any) => void,
+    dataCallback?: (data: any) => void
+  ): Promise<ICurriculumWorkflow> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow || !workflow.step6) {
+      throw new Error('Workflow not found or Step 6 not complete');
+    }
+
+    loggingService.info('[Step 7 Stream] Starting streaming generation', { workflowId });
+
+    // Initialize step7 with empty arrays
+    workflow.step7 = {
+      userPreferences: userPreferences as any,
+      formativeAssessments: [],
+      summativeAssessments: [],
+      sampleQuestions: {
+        mcq: [],
+        sjt: [],
+        caseQuestions: [],
+        essayPrompts: [],
+        practicalTasks: [],
+      },
+      lmsPackages: {},
+      validation: {
+        allFormativesMapped: false,
+        allSummativesMapped: false,
+        weightsSum100: false,
+        sufficientSampleQuestions: false,
+        plosCovered: false,
+      },
+      generatedAt: new Date(),
+    };
+    await workflow.save();
+
+    const { assessmentGeneratorService } = await import('./assessmentGeneratorService');
+
+    // Save queue to prevent parallel saves
+    let saveInProgress = false;
+    const saveQueue: Array<() => void> = [];
+
+    const queueSave = async (): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        const executeSave = async () => {
+          try {
+            await workflow.save();
+            loggingService.info('[Step 7 Stream] Save completed', {
+              formatives: workflow.step7?.formativeAssessments?.length || 0,
+              summatives: workflow.step7?.summativeAssessments?.length || 0,
+            });
+          } catch (err) {
+            loggingService.error('[Step 7 Stream] Save FAILED - this is a critical error!', {
+              error: err,
+              formatives: workflow.step7?.formativeAssessments?.length || 0,
+              summatives: workflow.step7?.summativeAssessments?.length || 0,
+            });
+            // Don't reject - we want to continue generation even if save fails
+          } finally {
+            saveInProgress = false;
+
+            // Process next save in queue
+            const nextSave = saveQueue.shift();
+            if (nextSave) {
+              saveInProgress = true;
+              nextSave();
+            }
+          }
+        };
+
+        if (saveInProgress) {
+          // Queue this save and wait
+          saveQueue.push(() => {
+            executeSave().then(resolve);
+          });
+        } else {
+          // Execute immediately
+          saveInProgress = true;
+          executeSave().then(resolve);
+        }
+      });
+    };
+
+    // Create custom progress callback that also saves to DB
+    const streamProgressCallback = async (progress: any) => {
+      if (progressCallback) {
+        progressCallback(progress);
+      }
+
+      // If we have new data from a completed stage, save it
+      if (progress.data) {
+        if (progress.stage === 'formative' && progress.data.formatives) {
+          // Add formatives from this module
+          const beforeCount = workflow.step7!.formativeAssessments.length;
+          workflow.step7!.formativeAssessments.push(...progress.data.formatives);
+          const afterCount = workflow.step7!.formativeAssessments.length;
+
+          // CRITICAL: Mark as modified for Mongoose to detect nested array changes
+          workflow.markModified('step7.formativeAssessments');
+          workflow.markModified('step7');
+
+          loggingService.info('[Step 7 Stream] BEFORE SAVE - formatives in memory', {
+            moduleId: progress.currentModule,
+            justAdded: progress.data.formatives.length,
+            beforeCount,
+            afterCount,
+            workflowId: workflow._id.toString(),
+          });
+
+          await queueSave();
+
+          loggingService.info('[Step 7 Stream] AFTER SAVE - queued save for formatives', {
+            moduleId: progress.currentModule,
+            totalNow: workflow.step7!.formativeAssessments.length,
+          });
+
+          // Send data update to frontend
+          if (dataCallback) {
+            dataCallback({
+              type: 'formative_batch',
+              moduleId: progress.currentModule,
+              formatives: progress.data.formatives,
+              totalCount: workflow.step7!.formativeAssessments.length,
+            });
+          }
+        } else if (progress.stage === 'summative' && progress.data.summatives) {
+          // Add summatives
+          workflow.step7!.summativeAssessments.push(...progress.data.summatives);
+
+          // CRITICAL: Mark as modified for Mongoose
+          workflow.markModified('step7.summativeAssessments');
+          workflow.markModified('step7');
+
+          await queueSave();
+          loggingService.info('[Step 7 Stream] Queued save for summatives', {
+            count: progress.data.summatives.length,
+          });
+
+          if (dataCallback) {
+            dataCallback({
+              type: 'summative_batch',
+              summatives: progress.data.summatives,
+              totalCount: workflow.step7!.summativeAssessments.length,
+            });
+          }
+        } else if (progress.stage === 'samples' && progress.data.samples) {
+          // Add samples
+          const sampleType = progress.data.sampleType;
+          if (sampleType === 'mcq') {
+            workflow.step7!.sampleQuestions.mcq = progress.data.samples;
+          } else if (sampleType === 'sjt') {
+            workflow.step7!.sampleQuestions.sjt = progress.data.samples;
+          } else if (sampleType === 'case') {
+            workflow.step7!.sampleQuestions.caseQuestions = progress.data.samples;
+          } else if (sampleType === 'essay') {
+            workflow.step7!.sampleQuestions.essayPrompts = progress.data.samples;
+          } else if (sampleType === 'practical') {
+            workflow.step7!.sampleQuestions.practicalTasks = progress.data.samples;
+          }
+
+          // CRITICAL: Mark as modified for Mongoose
+          workflow.markModified('step7.sampleQuestions');
+          workflow.markModified('step7');
+
+          await queueSave();
+          loggingService.info('[Step 7 Stream] Queued save for samples', {
+            type: sampleType,
+            count: progress.data.samples.length,
+          });
+
+          if (dataCallback) {
+            dataCallback({
+              type: 'sample_batch',
+              sampleType,
+              samples: progress.data.samples,
+            });
+          }
+        } else if (progress.stage === 'lms' && progress.data.lmsPackages) {
+          // Add LMS packages
+          workflow.step7!.lmsPackages = progress.data.lmsPackages;
+          await queueSave();
+          loggingService.info('[Step 7 Stream] Queued save for LMS packages');
+
+          if (dataCallback) {
+            dataCallback({
+              type: 'lms_batch',
+              lmsPackages: progress.data.lmsPackages,
+            });
+          }
+        }
+      }
+    };
+
+    // Generate assessments with streaming callback
+    const assessmentResponse = await assessmentGeneratorService.generateAssessments(
+      workflow,
+      userPreferences as any,
+      streamProgressCallback
+    );
+
+    // DO NOT overwrite incremental saves - they're already in workflow.step7!
+    // The streamProgressCallback already added all data incrementally
+    // Just add LMS packages which aren't streamed incrementally
+    workflow.step7!.lmsPackages = assessmentResponse.lmsPackages;
+
+    loggingService.info('[Step 7 Stream] Using incremental saves (not overwriting)', {
+      formatives: workflow.step7!.formativeAssessments.length,
+      summatives: workflow.step7!.summativeAssessments.length,
+    });
+
+    loggingService.info('[Step 7 Stream] Final data counts', {
+      formatives: workflow.step7!.formativeAssessments.length,
+      summatives: workflow.step7!.summativeAssessments.length,
+      mcq: workflow.step7!.sampleQuestions.mcq.length,
+      sjt: workflow.step7!.sampleQuestions.sjt.length,
+      cases: workflow.step7!.sampleQuestions.caseQuestions.length,
+      essays: workflow.step7!.sampleQuestions.essayPrompts.length,
+      practicals: workflow.step7!.sampleQuestions.practicalTasks.length,
+    });
+
+    // Final validation using workflow.step7 data (not assessmentResponse)
+    const totalSampleQuestions =
+      (workflow.step7!.sampleQuestions.mcq?.length || 0) +
+      (workflow.step7!.sampleQuestions.sjt?.length || 0) +
+      (workflow.step7!.sampleQuestions.caseQuestions?.length || 0) +
+      (workflow.step7!.sampleQuestions.essayPrompts?.length || 0) +
+      (workflow.step7!.sampleQuestions.practicalTasks?.length || 0);
+
+    const plos = workflow.step3?.outcomes || [];
+    const ploIds = plos.map((plo: any) => plo.id || plo.code);
+    const coveredPloIds = new Set<string>();
+
+    workflow.step7!.formativeAssessments.forEach((fa: any) => {
+      fa.alignedPLOs.forEach((ploId: string) => coveredPloIds.add(ploId));
+    });
+
+    workflow.step7!.summativeAssessments.forEach((sa: any) => {
+      sa.alignmentTable.forEach((alignment: any) => coveredPloIds.add(alignment.ploId));
+    });
+
+    const allFormativesMapped = workflow.step7!.formativeAssessments.every(
+      (fa: any) => fa.alignedMLOs.length > 0
+    );
+    const allSummativesMapped = workflow.step7!.summativeAssessments.every(
+      (sa: any) => sa.alignmentTable.length > 0
+    );
+
+    let weightsSum100 = true;
+    workflow.step7!.summativeAssessments.forEach((sa: any) => {
+      const totalWeight = sa.components.reduce((sum: number, comp: any) => sum + comp.weight, 0);
+      if (Math.abs(totalWeight - 100) > 0.1) {
+        weightsSum100 = false;
+      }
+    });
+
+    const validation = {
+      allFormativesMapped,
+      allSummativesMapped,
+      weightsSum100,
+      sufficientSampleQuestions: totalSampleQuestions >= 20,
+      plosCovered: ploIds.every((ploId: string) => coveredPloIds.has(ploId)),
+    };
+
+    // Update validation
+    workflow.step7!.validation = validation;
+    workflow.currentStep = 7;
+    workflow.status = 'step7_complete';
+
+    const step7Progress = workflow.stepProgress.find((p) => p.step === 7);
+    if (step7Progress) {
+      step7Progress.status = 'completed';
+      step7Progress.completedAt = new Date();
+    }
+
+    // Use queued save for final save to prevent parallel save errors
+    loggingService.info('[Step 7 Stream] BEFORE FINAL SAVE - data in memory', {
+      formatives: workflow.step7?.formativeAssessments?.length || 0,
+      summatives: workflow.step7?.summativeAssessments?.length || 0,
+    });
+
+    // CRITICAL: Mark step7 as modified before final save
+    workflow.markModified('step7');
+
+    await queueSave();
+
+    loggingService.info('[Step 7 Stream] AFTER FINAL SAVE - checking what was saved', {
+      formatives: workflow.step7?.formativeAssessments?.length || 0,
+      summatives: workflow.step7?.summativeAssessments?.length || 0,
+    });
+
+    // Verify data persisted - refetch from DB
+    const verifyWorkflow = await CurriculumWorkflow.findById(workflowId);
+    loggingService.info('[Step 7 Stream] DATABASE VERIFICATION', {
+      workflowId,
+      foundInDb: !!verifyWorkflow,
+      step7Exists: !!verifyWorkflow?.step7,
+      formativesInDb: verifyWorkflow?.step7?.formativeAssessments?.length || 0,
+      summativesInDb: verifyWorkflow?.step7?.summativeAssessments?.length || 0,
+      currentStep: verifyWorkflow?.currentStep,
+      status: verifyWorkflow?.status,
+    });
+
+    if (
+      (verifyWorkflow?.step7?.formativeAssessments?.length || 0) === 0 &&
+      (verifyWorkflow?.step7?.summativeAssessments?.length || 0) === 0
+    ) {
+      loggingService.error('[Step 7 Stream] ⚠️ CRITICAL: Data was LOST after save!', {
+        inMemory: workflow.step7?.formativeAssessments?.length || 0,
+        inDatabase: verifyWorkflow?.step7?.formativeAssessments?.length || 0,
+      });
+    }
+
+    loggingService.info('[Step 7 Stream] Streaming generation complete');
 
     return workflow;
   }

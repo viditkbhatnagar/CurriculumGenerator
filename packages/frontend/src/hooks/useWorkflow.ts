@@ -407,6 +407,22 @@ export function useApproveStep7() {
   });
 }
 
+export function useClearStep7() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetchAPI(`${WORKFLOW_BASE}/${id}/step7`, {
+        method: 'DELETE',
+      });
+      return response;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    },
+  });
+}
+
 // =============================================================================
 // STEP 8: CASE STUDIES
 // =============================================================================

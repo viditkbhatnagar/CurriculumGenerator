@@ -36,6 +36,7 @@ import { createTutorBotRouter } from './routes/tutorBot';
 import { createSimulationsRouter } from './routes/simulations';
 import newWorkflowRoutes from './routes/newWorkflowRoutes';
 import workflowRoutes from './routes/workflowRoutes';
+import step7StreamRoutes from './routes/step7StreamRoutes';
 
 dotenv.config();
 
@@ -234,6 +235,9 @@ app.use('/api/v2', newWorkflowRoutes);
 
 // New 9-step workflow routes (v3 API) - Current
 app.use('/api/v3/workflow', workflowRoutes);
+
+// Step 7 Streaming routes (SSE) - For real-time assessment generation
+app.use('/api/v3/workflow', step7StreamRoutes);
 
 // Sentry error handler (must be before other error handlers)
 app.use(errorTrackingService.getErrorHandler());

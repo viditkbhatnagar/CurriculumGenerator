@@ -972,43 +972,80 @@ router.post('/:id/step6/approve', validateJWT, loadUser, async (req: Request, re
 
 /**
  * POST /api/v3/workflow/:id/step7
- * Submit Step 7: Generate Assessments
+ * Submit Step 7: Comprehensive Assessment Generation (Assessment Generator Contract)
  */
 router.post(
   '/:id/step7',
   validateJWT,
   loadUser,
-  extendTimeout(600000),
+  extendTimeout(1800000), // 30 minutes for comprehensive assessment generation (can take 30-40 min for large curricula)
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const {
-        finalExamWeight = 40,
-        passMark = 60,
-        questionsPerQuiz = 20,
-        questionsForFinal = 60,
-        bankMultiplier = 3,
-        randomize = true,
-        enableCloze = false,
-      } = req.body;
+
+      // Extract user preferences from request body with defaults
+      const userPreferences = {
+        assessmentStructure: req.body.assessmentStructure || 'both_formative_and_summative',
+        assessmentBalance: req.body.assessmentBalance || 'blended_mix',
+        certificationStyles: req.body.certificationStyles || ['None'],
+        academicTypes: req.body.academicTypes || ['None'],
+        summativeFormat: req.body.summativeFormat || 'mixed_format',
+        userDefinedSummativeDescription: req.body.userDefinedSummativeDescription,
+        formativeTypesPerUnit: req.body.formativeTypesPerUnit || [
+          'Short quizzes',
+          'MCQ knowledge checks',
+        ],
+        formativePerModule: Number(req.body.formativePerModule) || 2,
+        weightages: {
+          formative: req.body.weightages?.formative ? Number(req.body.weightages.formative) : 30,
+          summative: req.body.weightages?.summative ? Number(req.body.weightages.summative) : 70,
+        },
+        assessmentMappingStrategy: 'hybrid',
+        higherOrderPloPolicy: req.body.higherOrderPloPolicy || 'yes',
+        higherOrderPloRules: req.body.higherOrderPloRules,
+        useRealWorldScenarios: req.body.useRealWorldScenarios !== false, // default true
+        alignToWorkplacePerformance: req.body.alignToWorkplacePerformance !== false, // default true
+        integratedRealWorldSummative: req.body.integratedRealWorldSummative !== false, // default true
+        generateSampleQuestions: true, // Always true per contract
+      };
+
+      loggingService.info('[Step 7] Received preferences', {
+        formativePerModule: userPreferences.formativePerModule,
+        type: typeof userPreferences.formativePerModule,
+        raw: req.body.formativePerModule,
+      });
 
       // Validation
-      if (finalExamWeight < 30 || finalExamWeight > 50) {
+      if (
+        isNaN(userPreferences.formativePerModule) ||
+        userPreferences.formativePerModule < 1 ||
+        userPreferences.formativePerModule > 5
+      ) {
         return res.status(400).json({
           success: false,
-          error: 'Final exam weight must be between 30% and 50%',
+          error: 'Formative assessments per module must be between 1 and 5',
         });
       }
 
-      const workflow = await workflowService.processStep7(id, {
-        finalExamWeight,
-        passMark,
-        questionsPerQuiz,
-        questionsForFinal,
-        bankMultiplier,
-        randomize,
-        enableCloze,
+      // Validate weightages sum to 100 if both formative and summative
+      if (userPreferences.assessmentStructure === 'both_formative_and_summative') {
+        const totalWeight =
+          (userPreferences.weightages.formative || 0) + (userPreferences.weightages.summative || 0);
+        if (Math.abs(totalWeight - 100) > 0.1) {
+          return res.status(400).json({
+            success: false,
+            error: 'Formative and summative weightages must sum to 100%',
+          });
+        }
+      }
+
+      loggingService.info('Starting Step 7 comprehensive assessment generation', {
+        workflowId: id,
+        structure: userPreferences.assessmentStructure,
+        formativePerModule: userPreferences.formativePerModule,
       });
+
+      const workflow = await workflowService.processStep7(id, userPreferences);
 
       res.json({
         success: true,
@@ -1016,18 +1053,148 @@ router.post(
           step7: workflow.step7,
           currentStep: workflow.currentStep,
           status: workflow.status,
+          summary: {
+            formativeCount: workflow.step7?.formativeAssessments?.length || 0,
+            summativeCount: workflow.step7?.summativeAssessments?.length || 0,
+            sampleQuestionsTotal:
+              (workflow.step7?.sampleQuestions?.mcq?.length || 0) +
+              (workflow.step7?.sampleQuestions?.sjt?.length || 0) +
+              (workflow.step7?.sampleQuestions?.caseQuestions?.length || 0) +
+              (workflow.step7?.sampleQuestions?.essayPrompts?.length || 0) +
+              (workflow.step7?.sampleQuestions?.practicalTasks?.length || 0),
+          },
         },
-        message: 'Step 7 complete. MCQ banks generated. Ready for Step 8: Case Studies.',
+        message:
+          'Step 7 complete. Comprehensive assessments generated. Ready for Step 8: Case Studies.',
       });
     } catch (error) {
       loggingService.error('Error processing Step 7', { error, workflowId: req.params.id });
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to process Step 7',
+        details: error instanceof Error ? error.stack : undefined,
       });
     }
   }
 );
+
+/**
+ * DELETE /api/v3/workflow/:id/step7
+ * Clear Step 7 data to allow regeneration
+ */
+router.delete('/:id/step7', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+
+    if (!workflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+
+    if (!workflow.step7) {
+      return res.status(404).json({ success: false, error: 'Step 7 not found' });
+    }
+
+    // Clear Step 7 data
+    workflow.step7 = {
+      userPreferences: {
+        assessmentStructure: 'both_formative_and_summative',
+        assessmentBalance: 'blended_mix',
+        certificationStyles: ['None'],
+        academicTypes: ['None'],
+        summativeFormat: 'mixed_format',
+        formativeTypesPerUnit: ['Short quizzes', 'MCQ knowledge checks'],
+        formativePerModule: 2,
+        weightages: { formative: 30, summative: 70 },
+        assessmentMappingStrategy: 'hybrid',
+        higherOrderPloPolicy: 'yes',
+        useRealWorldScenarios: true,
+        alignToWorkplacePerformance: true,
+        integratedRealWorldSummative: true,
+        generateSampleQuestions: true,
+      },
+      formativeAssessments: [],
+      summativeAssessments: [],
+      sampleQuestions: {
+        mcq: [],
+        sjt: [],
+        caseQuestions: [],
+        essayPrompts: [],
+        practicalTasks: [],
+      },
+      lmsPackages: {},
+      validation: {
+        allFormativesMapped: false,
+        allSummativesMapped: false,
+        weightsSum100: false,
+        sufficientSampleQuestions: false,
+        plosCovered: false,
+      },
+      generatedAt: new Date(),
+    };
+
+    // Reset step progress
+    const step7Progress = workflow.stepProgress.find((p) => p.step === 7);
+    if (step7Progress) {
+      step7Progress.status = 'pending';
+      step7Progress.completedAt = undefined;
+    }
+
+    // Don't change currentStep or status - keep user at Step 7
+    await workflow.save();
+
+    loggingService.info('Step 7 data cleared for regeneration', { workflowId: req.params.id });
+
+    res.json({
+      success: true,
+      message: 'Step 7 data cleared. You can now regenerate.',
+    });
+  } catch (error) {
+    loggingService.error('Error clearing Step 7', { error });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to clear Step 7',
+    });
+  }
+});
+
+/**
+ * GET /api/v3/workflow/:id/step7/debug
+ * Debug endpoint to check Step 7 data in database
+ */
+router.get('/:id/step7/debug', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+
+    if (!workflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+
+    res.json({
+      success: true,
+      debug: {
+        step7Exists: !!workflow.step7,
+        formativeCount: workflow.step7?.formativeAssessments?.length || 0,
+        summativeCount: workflow.step7?.summativeAssessments?.length || 0,
+        sampleQuestions: {
+          mcq: workflow.step7?.sampleQuestions?.mcq?.length || 0,
+          sjt: workflow.step7?.sampleQuestions?.sjt?.length || 0,
+          caseQuestions: workflow.step7?.sampleQuestions?.caseQuestions?.length || 0,
+          essayPrompts: workflow.step7?.sampleQuestions?.essayPrompts?.length || 0,
+          practicalTasks: workflow.step7?.sampleQuestions?.practicalTasks?.length || 0,
+        },
+        validation: workflow.step7?.validation,
+        currentStep: workflow.currentStep,
+        status: workflow.status,
+      },
+    });
+  } catch (error) {
+    loggingService.error('Error debugging Step 7', { error });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to debug Step 7',
+    });
+  }
+});
 
 /**
  * POST /api/v3/workflow/:id/step7/approve
@@ -1044,8 +1211,8 @@ router.post('/:id/step7/approve', validateJWT, loadUser, async (req: Request, re
 
     // Validation is informational only - no longer blocks approval
     const warnings: string[] = [];
-    if (!workflow.step7.validation?.allAutoGradable) {
-      warnings.push('Some assessments may not be fully auto-gradable');
+    if (!workflow.step7.validation?.plosCovered) {
+      warnings.push('Some PLOs may not be fully covered');
       loggingService.warn('Step 7 approved with validation warnings', {
         workflowId: req.params.id,
         validation: workflow.step7.validation,
