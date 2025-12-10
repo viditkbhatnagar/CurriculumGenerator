@@ -111,7 +111,8 @@ export function useStep7Streaming() {
           const decoder = new TextDecoder();
 
           function readStream() {
-            reader
+            // reader is guaranteed to exist due to check above
+            reader!
               .read()
               .then(({ done, value }) => {
                 if (done) {
