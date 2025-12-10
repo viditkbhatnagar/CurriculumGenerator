@@ -823,6 +823,16 @@ export interface FormativeAssessment {
   alignedMLOs: string[];
   assessmentCriteria: string[];
   maxMarks?: number;
+  questions?: Array<{
+    questionNumber: number;
+    questionText: string;
+    questionType: 'mcq' | 'short_answer' | 'scenario' | 'calculation' | 'essay';
+    options?: string[];
+    correctAnswer?: string | number;
+    points: number;
+    bloomLevel?: string;
+    rationale?: string;
+  }>;
 }
 
 export interface SummativeAssessment {

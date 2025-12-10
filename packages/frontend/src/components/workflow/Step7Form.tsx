@@ -3,7 +3,16 @@
 import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSubmitStep7, useApproveStep7, useClearStep7 } from '@/hooks/useWorkflow';
-import { CurriculumWorkflow } from '@/types/workflow';
+import {
+  CurriculumWorkflow,
+  FormativeAssessment,
+  SummativeAssessment,
+  MCQSample,
+  SJTSample,
+  CaseSample,
+  EssaySample,
+  PracticalSample,
+} from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 
 interface Props {
@@ -70,6 +79,15 @@ const FORMATIVE_TYPES = [
   'None',
 ];
 
+// Type for streaming samples state
+interface StreamingSamplesState {
+  mcq: MCQSample[];
+  sjt: SJTSample[];
+  caseQuestions: CaseSample[];
+  essayPrompts: EssaySample[];
+  practicalTasks: PracticalSample[];
+}
+
 export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props) {
   const queryClient = useQueryClient();
   const submitStep7 = useSubmitStep7();
@@ -81,9 +99,9 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
 
   // Real-time streaming data
-  const [streamingFormatives, setStreamingFormatives] = useState<any[]>([]);
-  const [streamingSummatives, setStreamingSummatives] = useState<any[]>([]);
-  const [streamingSamples, setStreamingSamples] = useState<any>({
+  const [streamingFormatives, setStreamingFormatives] = useState<FormativeAssessment[]>([]);
+  const [streamingSummatives, setStreamingSummatives] = useState<SummativeAssessment[]>([]);
+  const [streamingSamples, setStreamingSamples] = useState<StreamingSamplesState>({
     mcq: [],
     sjt: [],
     caseQuestions: [],
@@ -372,7 +390,10 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
           {/* Real-time streaming data display */}
           {(streamingFormatives.length > 0 ||
             streamingSummatives.length > 0 ||
-            Object.values(streamingSamples).some((arr: any) => arr.length > 0)) && (
+            Object.values(streamingSamples).some(
+              (arr: MCQSample[] | SJTSample[] | CaseSample[] | EssaySample[] | PracticalSample[]) =>
+                arr.length > 0
+            )) && (
             <div className="mt-6 space-y-4">
               <h4 className="text-white font-medium">Live Data Stream</h4>
 
@@ -531,7 +552,10 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                         onChange={(e) =>
                           setFormData((prev) => ({
                             ...prev,
-                            assessmentStructure: e.target.value as any,
+                            assessmentStructure: e.target.value as
+                              | 'formative_only'
+                              | 'summative_only'
+                              | 'both_formative_and_summative',
                           }))
                         }
                         className="mt-1 w-4 h-4 text-cyan-500 focus:ring-cyan-500"
@@ -583,7 +607,11 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                         onChange={(e) =>
                           setFormData((prev) => ({
                             ...prev,
-                            assessmentBalance: e.target.value as any,
+                            assessmentBalance: e.target.value as
+                              | 'mostly_knowledge_based'
+                              | 'mostly_applied'
+                              | 'mostly_scenario_based'
+                              | 'blended_mix',
                           }))
                         }
                         className="mt-1 w-4 h-4 text-cyan-500 focus:ring-cyan-500"
@@ -665,7 +693,16 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                   <select
                     value={formData.summativeFormat}
                     onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, summativeFormat: e.target.value as any }))
+                      setFormData((prev) => ({
+                        ...prev,
+                        summativeFormat: e.target.value as
+                          | 'mcq_exam'
+                          | 'written_assignment'
+                          | 'case_study_analysis'
+                          | 'project_capstone'
+                          | 'mixed_format'
+                          | 'user_defined',
+                      }))
                     }
                     className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
                   >
@@ -850,7 +887,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                         onChange={(e) =>
                           setFormData((prev) => ({
                             ...prev,
-                            higherOrderPloPolicy: e.target.value as any,
+                            higherOrderPloPolicy: e.target.value as 'yes' | 'no' | 'partial',
                           }))
                         }
                         className="mt-1 w-4 h-4 text-cyan-500 focus:ring-cyan-500"
