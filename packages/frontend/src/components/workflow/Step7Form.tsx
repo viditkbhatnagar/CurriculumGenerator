@@ -448,7 +448,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                         >
                           <p className="text-white font-medium text-sm">{formative.title}</p>
                           <p className="text-slate-400 text-xs mt-1">{formative.description}</p>
-                          {formative.questions?.length > 0 && (
+                          {formative.questions && formative.questions.length > 0 && (
                             <p className="text-cyan-400 text-xs mt-2">
                               ✓ {formative.questions.length} complete questions generated
                             </p>
