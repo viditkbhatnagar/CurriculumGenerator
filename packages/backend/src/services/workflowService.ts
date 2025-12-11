@@ -1894,9 +1894,9 @@ CRITICAL VALIDATION:
         totalHours,
         suggestedModules,
         plosCount: plos.length,
-        kscKnowledgeCount: kscKnowledge.length,
-        kscSkillsCount: kscSkills.length,
-        kscCompetenciesCount: kscCompetencies.length,
+        knowledgeItemsCount: knowledgeItems.length,
+        skillItemsCount: skillItems.length,
+        competencyItemsCount: competencyItems.length,
         userPromptLength: userPrompt.length,
         systemPromptLength: systemPrompt.length,
       });
