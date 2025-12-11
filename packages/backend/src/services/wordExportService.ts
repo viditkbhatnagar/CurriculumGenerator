@@ -865,14 +865,21 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           );
         }
 
-        // Add competency links if available
+        // Add competency links with full statements if available
         const competencyLinks = plo.competencyLinks || plo.linkedKSCs;
         if (competencyLinks && competencyLinks.length > 0) {
+          const kscDetails = competencyLinks
+            .map((kscId: string) => {
+              const statement = kscMap.get(kscId);
+              return statement ? `${kscId}: ${statement}` : kscId;
+            })
+            .join('; ');
+
           contentChildren.push(
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `Linked Competencies: ${competencyLinks.join(', ')}`,
+                  text: `Linked Competencies: ${kscDetails}`,
                   size: FONT_SIZES.BODY,
                   font: FONT_FAMILY,
                   italics: true,
@@ -991,9 +998,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
           module.mlos.forEach((mlo: any) => {
             // Map KSC IDs to their actual statements
-            // Check multiple possible property names for linked competencies
+            // Check multiple possible property names (competencyLinks is the primary one in schema)
             const linkedKSCs =
-              mlo.linkedKSCs || mlo.competencyLinks || mlo.linkedKSC || mlo.kscLinks || [];
+              mlo.competencyLinks || mlo.linkedKSCs || mlo.linkedKSC || mlo.kscLinks || [];
 
             let kscStatements = '';
             if (Array.isArray(linkedKSCs) && linkedKSCs.length > 0) {
@@ -1010,6 +1017,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                 })
                 .join('\n\n');
             } else {
+              // If no competency links found, show "-"
               kscStatements = '-';
             }
 

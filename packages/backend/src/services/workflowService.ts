@@ -1448,7 +1448,7 @@ IMPORTANT:
           bloomLevel: mlo.bloomLevel,
           verb: mlo.verb || mlo.statement?.split(' ')[0] || '',
           linkedPLOs: mlo.linkedPLOs || [],
-          linkedKSCs: mlo.competencyLinks || [],
+          competencyLinks: mlo.competencyLinks || mlo.linkedKSCs || [],
         })),
         topics: m.topics || [],
         phase,
