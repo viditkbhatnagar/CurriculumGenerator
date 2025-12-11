@@ -3,17 +3,16 @@ import {
   Packer,
   Paragraph,
   TextRun,
-  HeadingLevel,
   Table,
   TableRow,
   TableCell,
   WidthType,
   AlignmentType,
   PageBreak,
-  Header,
-  Footer,
-  PageNumber,
+  BorderStyle,
 } from 'docx';
+import OpenAI from 'openai';
+import { loggingService } from './loggingService';
 
 interface WorkflowData {
   projectName: string;
@@ -30,7 +29,150 @@ interface WorkflowData {
   updatedAt?: string;
 }
 
+// Progress callback for real-time updates
+export interface DocumentGenerationProgress {
+  stage: string;
+  currentSection: string;
+  sectionsCompleted: number;
+  totalSections: number;
+  message: string;
+}
+
+export type ProgressCallback = (progress: DocumentGenerationProgress) => void;
+
+// Font specifications - Times New Roman throughout
+const FONT_FAMILY = 'Times New Roman';
+const FONT_SIZES = {
+  H1: 32, // 16pt in half-points
+  H2: 28, // 14pt
+  H3: 24, // 12pt
+  BODY: 22, // 11pt
+  TABLE: 21, // 10.5pt
+};
+
+// Line spacing: 1.15
+const LINE_SPACING = 276; // 240 * 1.15
+
+// Paragraph spacing: 6pt before and after
+const PARA_SPACING = {
+  before: 120, // 6pt in twentieths of a point
+  after: 120,
+};
+
 export class WordExportService {
+  private openai: OpenAI;
+
+  constructor() {
+    this.openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+
+  /**
+   * Intelligently format text using OpenAI
+   * - Breaks long paragraphs into 4-7 line chunks
+   * - Detects and converts appropriate content to bullet lists
+   * - Removes duplicates and improves readability
+   */
+  private async formatTextIntelligently(
+    text: string,
+    context: string
+  ): Promise<{ paragraphs: string[]; bullets: string[] }> {
+    if (!text || text.trim().length === 0) {
+      return { paragraphs: [], bullets: [] };
+    }
+
+    try {
+      const prompt = `You are formatting curriculum content for a professional academic document.
+
+Context: ${context}
+
+Content to format:
+${text}
+
+Rules:
+1. Break long blocks of text into logical academic paragraphs (4-7 lines each)
+2. Identify content that should be bullet points (lists, competencies, aims, pathways, etc.)
+3. Remove duplicate sentences
+4. Maintain academic tone and meaning
+5. DO NOT add new content
+
+Return ONLY a JSON object with this structure:
+{
+  "paragraphs": ["paragraph 1", "paragraph 2", ...],
+  "bullets": ["bullet 1", "bullet 2", ...] or []
+}
+
+If the content is better as paragraphs, put it all in paragraphs array and leave bullets empty.
+If the content is better as bullets, put it in bullets array and leave paragraphs empty.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a curriculum formatting expert. Return only valid JSON, no markdown formatting.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.3,
+        response_format: { type: 'json_object' },
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('No response from OpenAI');
+      }
+
+      const result = JSON.parse(content);
+      return {
+        paragraphs: result.paragraphs || [],
+        bullets: result.bullets || [],
+      };
+    } catch (error) {
+      // Fallback: return original text as single paragraph
+      loggingService.error('OpenAI formatting failed, using fallback', { error, context });
+      return {
+        paragraphs: [text],
+        bullets: [],
+      };
+    }
+  }
+
+  /**
+   * Create formatted paragraphs with Times New Roman font and proper spacing
+   */
+  private createFormattedParagraphs(
+    texts: string[],
+    options: { isBullet?: boolean; size?: number; isNumbered?: boolean } = {}
+  ): Paragraph[] {
+    const size = options.size || FONT_SIZES.BODY;
+    return texts.map(
+      (text, index) =>
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: options.isBullet
+                ? `• ${text}`
+                : options.isNumbered
+                  ? `${index + 1}. ${text}`
+                  : text,
+              font: FONT_FAMILY,
+              size,
+            }),
+          ],
+          spacing: {
+            line: LINE_SPACING,
+            ...PARA_SPACING,
+          },
+        })
+    );
+  }
+
+  /**
+   * Create table cell with Times New Roman font
+   */
   private createTableCell(
     text: string,
     options: { bold?: boolean; shading?: string; width?: number } = {}
@@ -42,9 +184,13 @@ export class WordExportService {
             new TextRun({
               text,
               bold: options.bold ?? false,
-              size: 20,
+              size: FONT_SIZES.TABLE,
+              font: FONT_FAMILY,
             }),
           ],
+          spacing: {
+            line: LINE_SPACING,
+          },
         }),
       ],
       shading: options.shading ? { fill: options.shading } : undefined,
@@ -52,11 +198,117 @@ export class WordExportService {
     });
   }
 
-  async generateDocument(workflow: WorkflowData): Promise<Buffer> {
+  /**
+   * Create H1 heading - Times New Roman 16pt Bold
+   */
+  private createH1(text: string): Paragraph {
+    return new Paragraph({
+      children: [
+        new TextRun({
+          text,
+          bold: true,
+          size: FONT_SIZES.H1,
+          font: FONT_FAMILY,
+        }),
+      ],
+      spacing: {
+        before: 400,
+        after: 200,
+        line: LINE_SPACING,
+      },
+    });
+  }
+
+  /**
+   * Create H2 heading - Times New Roman 14pt Bold
+   */
+  private createH2(text: string): Paragraph {
+    return new Paragraph({
+      children: [
+        new TextRun({
+          text,
+          bold: true,
+          size: FONT_SIZES.H2,
+          font: FONT_FAMILY,
+        }),
+      ],
+      spacing: {
+        before: 200,
+        after: 100,
+        line: LINE_SPACING,
+      },
+    });
+  }
+
+  /**
+   * Create H3 heading - Times New Roman 12pt Bold
+   */
+  private createH3(text: string): Paragraph {
+    return new Paragraph({
+      children: [
+        new TextRun({
+          text,
+          bold: true,
+          size: FONT_SIZES.H3,
+          font: FONT_FAMILY,
+        }),
+      ],
+      spacing: {
+        before: 150,
+        after: 80,
+        line: LINE_SPACING,
+      },
+    });
+  }
+
+  /**
+   * Generate the complete Word document with intelligent formatting and progress tracking
+   */
+  async generateDocument(
+    workflow: WorkflowData,
+    progressCallback?: ProgressCallback
+  ): Promise<Buffer> {
     const sections: any[] = [];
     const step1 = workflow.step1 || {};
 
-    // Title Page
+    // Count total sections for progress tracking
+    const totalSections = [
+      workflow.step1,
+      workflow.step2,
+      workflow.step3,
+      workflow.step4,
+      workflow.step5,
+      workflow.step6,
+      workflow.step7,
+      workflow.step8,
+      workflow.step9,
+    ].filter(Boolean).length;
+
+    let sectionsCompleted = 0;
+
+    const reportProgress = (currentSection: string, message: string) => {
+      if (progressCallback) {
+        progressCallback({
+          stage: 'formatting',
+          currentSection,
+          sectionsCompleted,
+          totalSections,
+          message,
+        });
+      }
+      loggingService.info('[Word Export] Progress', {
+        currentSection,
+        sectionsCompleted,
+        totalSections,
+        message,
+      });
+    };
+
+    reportProgress('Title Page', 'Creating title page...');
+
+    // =========================================================================
+    // TITLE PAGE
+    // =========================================================================
     sections.push({
       properties: {},
       children: [
@@ -66,6 +318,7 @@ export class WordExportService {
               text: step1.programTitle || workflow.projectName || 'Curriculum Package',
               bold: true,
               size: 56,
+              font: FONT_FAMILY,
               color: '1a365d',
             }),
           ],
@@ -77,6 +330,7 @@ export class WordExportService {
             new TextRun({
               text: 'Curriculum Design Document',
               size: 32,
+              font: FONT_FAMILY,
               color: '4a5568',
             }),
           ],
@@ -88,6 +342,7 @@ export class WordExportService {
             new TextRun({
               text: `Level: ${step1.academicLevel || 'N/A'}`,
               size: 24,
+              font: FONT_FAMILY,
             }),
           ],
           alignment: AlignmentType.CENTER,
@@ -98,6 +353,7 @@ export class WordExportService {
             new TextRun({
               text: `Credits: ${step1.creditFramework?.credits || 'N/A'} | Total Hours: ${step1.creditFramework?.totalHours || 'N/A'}`,
               size: 24,
+              font: FONT_FAMILY,
             }),
           ],
           alignment: AlignmentType.CENTER,
@@ -108,6 +364,7 @@ export class WordExportService {
             new TextRun({
               text: `Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
               size: 20,
+              font: FONT_FAMILY,
               color: '718096',
             }),
           ],
@@ -121,52 +378,58 @@ export class WordExportService {
     const contentChildren: any[] = [];
 
     // =========================================================================
-    // Section 1: Program Foundation
+    // SECTION 1: PROGRAM FOUNDATION
     // =========================================================================
     if (workflow.step1) {
-      contentChildren.push(
-        new Paragraph({
-          text: '1. Program Foundation',
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 400, after: 200 },
-        })
+      reportProgress(
+        'Step 1: Program Foundation',
+        `Formatting program foundation (${sectionsCompleted + 1}/${totalSections})...`
       );
 
-      // Program Description
+      contentChildren.push(this.createH1('1. Program Foundation'));
+
+      // Program Description with intelligent formatting
       if (step1.programDescription) {
-        contentChildren.push(
-          new Paragraph({
-            children: [new TextRun({ text: 'Program Description', bold: true, size: 26 })],
-            spacing: { after: 100 },
-          }),
-          new Paragraph({
-            children: [new TextRun({ text: step1.programDescription, size: 22 })],
-            spacing: { after: 300 },
-          })
+        contentChildren.push(this.createH2('Program Description'));
+
+        const formatted = await this.formatTextIntelligently(
+          step1.programDescription,
+          'Program Description'
         );
+
+        if (formatted.paragraphs.length > 0) {
+          contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+        }
+        if (formatted.bullets.length > 0) {
+          contentChildren.push(
+            ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
+          );
+        }
       }
 
-      // Executive Summary
+      // Executive Summary with intelligent formatting
       if (step1.executiveSummary) {
-        contentChildren.push(
-          new Paragraph({
-            children: [new TextRun({ text: 'Executive Summary', bold: true, size: 26 })],
-            spacing: { before: 200, after: 100 },
-          }),
-          new Paragraph({
-            children: [new TextRun({ text: step1.executiveSummary, size: 22 })],
-            spacing: { after: 300 },
-          })
+        contentChildren.push(this.createH2('Executive Summary'));
+
+        const formatted = await this.formatTextIntelligently(
+          step1.executiveSummary,
+          'Executive Summary'
         );
+
+        if (formatted.paragraphs.length > 0) {
+          contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+        }
+        if (formatted.bullets.length > 0) {
+          contentChildren.push(
+            ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
+          );
+        }
       }
 
       // Credit Framework Table
       if (step1.creditFramework) {
         contentChildren.push(
-          new Paragraph({
-            children: [new TextRun({ text: 'Credit Framework', bold: true, size: 26 })],
-            spacing: { before: 200, after: 100 },
-          }),
+          this.createH2('Credit Framework'),
           new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
             rows: [
@@ -204,295 +467,195 @@ export class WordExportService {
         );
       }
 
-      // Program Aims
+      // Program Aims - intelligent formatting for list
       if (step1.programAims?.length) {
-        contentChildren.push(
-          new Paragraph({
-            children: [new TextRun({ text: 'Program Aims', bold: true, size: 26 })],
-            spacing: { before: 200, after: 100 },
-          })
-        );
-        step1.programAims.forEach((aim: string, index: number) => {
+        contentChildren.push(this.createH2('Program Aims'));
+
+        const aimsText = step1.programAims.join('; ');
+        const formatted = await this.formatTextIntelligently(aimsText, 'Program Aims List');
+
+        if (formatted.bullets.length > 0) {
           contentChildren.push(
-            new Paragraph({
-              children: [new TextRun({ text: `${index + 1}. ${aim}`, size: 22 })],
-              spacing: { after: 80 },
-            })
+            ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
           );
-        });
+        } else {
+          // Fallback: use numbered list
+          contentChildren.push(
+            ...this.createFormattedParagraphs(step1.programAims, { isNumbered: true })
+          );
+        }
       }
 
       // Entry Requirements
       if (step1.entryRequirements) {
-        contentChildren.push(
-          new Paragraph({
-            children: [new TextRun({ text: 'Entry Requirements', bold: true, size: 26 })],
-            spacing: { before: 200, after: 100 },
-          }),
-          new Paragraph({
-            children: [new TextRun({ text: step1.entryRequirements, size: 22 })],
-            spacing: { after: 300 },
-          })
+        contentChildren.push(this.createH2('Entry Requirements'));
+        const formatted = await this.formatTextIntelligently(
+          step1.entryRequirements,
+          'Entry Requirements'
         );
+        if (formatted.paragraphs.length > 0) {
+          contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+        }
+        if (formatted.bullets.length > 0) {
+          contentChildren.push(
+            ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
+          );
+        }
       }
 
       // Career Pathways
       if (step1.careerPathways?.length) {
+        contentChildren.push(this.createH2('Career Pathways'));
         contentChildren.push(
-          new Paragraph({
-            children: [new TextRun({ text: 'Career Pathways', bold: true, size: 26 })],
-            spacing: { before: 200, after: 100 },
-          })
+          ...this.createFormattedParagraphs(step1.careerPathways, { isBullet: true })
         );
-        step1.careerPathways.forEach((path: string) => {
-          contentChildren.push(
-            new Paragraph({
-              children: [new TextRun({ text: `• ${path}`, size: 22 })],
-              spacing: { after: 50 },
-            })
-          );
-        });
       }
 
       // Job Roles
       if (step1.jobRoles?.length) {
-        contentChildren.push(
-          new Paragraph({
-            children: [new TextRun({ text: 'Target Job Roles', bold: true, size: 26 })],
-            spacing: { before: 200, after: 100 },
-          })
+        contentChildren.push(this.createH2('Target Job Roles'));
+        const roleTexts = step1.jobRoles.map((role: string | { title: string }) =>
+          typeof role === 'string' ? role : role.title
         );
-        step1.jobRoles.forEach((role: string | { title: string }) => {
-          const roleText = typeof role === 'string' ? role : role.title;
-          contentChildren.push(
-            new Paragraph({
-              children: [new TextRun({ text: `• ${roleText}`, size: 22 })],
-              spacing: { after: 50 },
-            })
-          );
-        });
+        contentChildren.push(...this.createFormattedParagraphs(roleTexts, { isBullet: true }));
       }
+
+      sectionsCompleted++;
+      reportProgress(
+        'Step 1: Program Foundation',
+        `✓ Step 1 formatted (${sectionsCompleted}/${totalSections})`
+      );
     }
 
     // =========================================================================
-    // Section 2: Competency Framework (KSC)
+    // SECTION 2: COMPETENCY FRAMEWORK (KSC)
     // =========================================================================
     if (workflow.step2) {
+      reportProgress(
+        'Step 2: Competency Framework',
+        `Formatting competency framework (${sectionsCompleted + 1}/${totalSections})...`
+      );
+
       const step2 = workflow.step2;
       contentChildren.push(
         new Paragraph({ children: [new PageBreak()] }),
-        new Paragraph({
-          text: '2. Competency Framework (KSC)',
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 400, after: 200 },
-        })
+        this.createH1('2. Competency Framework (KSC)')
       );
 
-      // Knowledge Items
+      // Knowledge Items - with intelligent formatting
       if (step2.knowledgeItems?.length) {
-        contentChildren.push(
-          new Paragraph({
-            text: 'Knowledge',
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 200, after: 100 },
-          })
-        );
-        step2.knowledgeItems.forEach((item: any) => {
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({ text: `${item.id || '•'}: `, bold: true, size: 22 }),
-                new TextRun({ text: item.statement || '', size: 22 }),
-              ],
-              spacing: { after: 50 },
-            })
-          );
-          if (item.description) {
+        contentChildren.push(this.createH2('Knowledge'));
+
+        for (const item of step2.knowledgeItems) {
+          const itemText = `${item.id || ''}: ${item.title || item.description || ''}`;
+          const formatted = await this.formatTextIntelligently(itemText, 'Knowledge Item');
+
+          if (formatted.paragraphs.length > 0) {
+            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+          } else if (formatted.bullets.length > 0) {
             contentChildren.push(
-              new Paragraph({
-                children: [new TextRun({ text: item.description, size: 20, color: '4a5568' })],
-                spacing: { after: 100 },
-              })
+              ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
             );
           }
-        });
-      }
-
-      // Skill Items
-      if (step2.skillItems?.length) {
-        contentChildren.push(
-          new Paragraph({
-            text: 'Skills',
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 200, after: 100 },
-          })
-        );
-        step2.skillItems.forEach((item: any) => {
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({ text: `${item.id || '•'}: `, bold: true, size: 22 }),
-                new TextRun({ text: item.statement || '', size: 22 }),
-              ],
-              spacing: { after: 50 },
-            })
-          );
-          if (item.description) {
-            contentChildren.push(
-              new Paragraph({
-                children: [new TextRun({ text: item.description, size: 20, color: '4a5568' })],
-                spacing: { after: 100 },
-              })
-            );
-          }
-        });
-      }
-
-      // Competency Items (was Attitude Items - now KSC)
-      const competencyItems = step2.competencyItems || step2.attitudeItems;
-      if (competencyItems?.length) {
-        contentChildren.push(
-          new Paragraph({
-            text: 'Competencies',
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 200, after: 100 },
-          })
-        );
-        competencyItems.forEach((item: any) => {
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({ text: `${item.id || '•'}: `, bold: true, size: 22 }),
-                new TextRun({ text: item.statement || '', size: 22 }),
-              ],
-              spacing: { after: 50 },
-            })
-          );
-          if (item.description) {
-            contentChildren.push(
-              new Paragraph({
-                children: [new TextRun({ text: item.description, size: 20, color: '4a5568' })],
-                spacing: { after: 100 },
-              })
-            );
-          }
-        });
-      }
-
-      // Benchmarking Report
-      if (step2.benchmarkingReport) {
-        contentChildren.push(
-          new Paragraph({
-            text: 'Benchmarking Report',
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 200, after: 100 },
-          })
-        );
-        if (step2.benchmarkingReport.keyFindings?.length) {
-          contentChildren.push(
-            new Paragraph({
-              children: [new TextRun({ text: 'Key Findings:', bold: true, size: 22 })],
-              spacing: { after: 50 },
-            })
-          );
-          step2.benchmarkingReport.keyFindings.forEach((finding: string) => {
-            contentChildren.push(
-              new Paragraph({
-                children: [new TextRun({ text: `• ${finding}`, size: 20 })],
-                spacing: { after: 50 },
-              })
-            );
-          });
         }
       }
+
+      // Skills Items
+      if (step2.skillItems?.length) {
+        contentChildren.push(this.createH2('Skills'));
+
+        for (const item of step2.skillItems) {
+          const itemText = `${item.id || ''}: ${item.title || item.description || ''}`;
+          const formatted = await this.formatTextIntelligently(itemText, 'Skill Item');
+
+          if (formatted.paragraphs.length > 0) {
+            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+          } else if (formatted.bullets.length > 0) {
+            contentChildren.push(
+              ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
+            );
+          }
+        }
+      }
+
+      // Competency Items
+      if (step2.competencyItems?.length) {
+        contentChildren.push(this.createH2('Competencies'));
+
+        for (const item of step2.competencyItems) {
+          const itemText = `${item.id || ''}: ${item.title || item.description || ''}`;
+          const formatted = await this.formatTextIntelligently(itemText, 'Competency Item');
+
+          if (formatted.paragraphs.length > 0) {
+            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+          } else if (formatted.bullets.length > 0) {
+            contentChildren.push(
+              ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
+            );
+          }
+        }
+      }
+
+      sectionsCompleted++;
+      reportProgress(
+        'Step 2: Competency Framework',
+        `✓ Step 2 formatted (${sectionsCompleted}/${totalSections})`
+      );
     }
 
     // =========================================================================
-    // Section 3: Program Learning Outcomes
+    // SECTION 3: PROGRAM LEARNING OUTCOMES (PLOs)
     // =========================================================================
-    if (workflow.step3?.outcomes?.length) {
+    if (workflow.step3?.plos?.length) {
+      reportProgress(
+        'Step 3: Program Learning Outcomes',
+        `Formatting PLOs (${sectionsCompleted + 1}/${totalSections})...`
+      );
+
       const step3 = workflow.step3;
       contentChildren.push(
         new Paragraph({ children: [new PageBreak()] }),
-        new Paragraph({
-          text: '3. Program Learning Outcomes (PLOs)',
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 400, after: 200 },
-        })
+        this.createH1('3. Program Learning Outcomes (PLOs)')
       );
 
-      step3.outcomes.forEach((plo: any, index: number) => {
+      step3.plos.forEach((plo: any) => {
         contentChildren.push(
+          this.createH3(`${plo.id || 'PLO'}: ${plo.description || ''}`),
           new Paragraph({
             children: [
               new TextRun({
-                text: `${plo.id || `PLO${index + 1}`}: `,
-                bold: true,
-                size: 24,
-                color: '1a365d',
-              }),
-            ],
-            spacing: { before: 150, after: 50 },
-          }),
-          new Paragraph({
-            children: [new TextRun({ text: plo.statement || '', size: 22 })],
-            spacing: { after: 50 },
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `Bloom Level: ${plo.bloomLevel || 'N/A'}`,
-                size: 20,
-                color: '718096',
+                text: `Bloom Level: ${plo.bloomLevel || 'N/A'} | Category: ${plo.category || 'N/A'}`,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
                 italics: true,
+                color: '4a5568',
               }),
             ],
-            spacing: { after: 50 },
+            spacing: { after: 200, line: LINE_SPACING },
           })
         );
-        if (plo.competencyLinks?.length) {
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `Linked Competencies: ${plo.competencyLinks.join(', ')}`,
-                  size: 18,
-                  color: '4a5568',
-                }),
-              ],
-              spacing: { after: 50 },
-            })
-          );
-        }
-        if (plo.assessmentAlignment) {
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `Assessment: ${plo.assessmentAlignment}`,
-                  size: 18,
-                  color: '4a5568',
-                }),
-              ],
-              spacing: { after: 150 },
-            })
-          );
-        }
       });
+
+      sectionsCompleted++;
+      reportProgress(
+        'Step 3: Program Learning Outcomes',
+        `✓ Step 3 formatted (${sectionsCompleted}/${totalSections})`
+      );
     }
 
     // =========================================================================
-    // Section 4: Course Structure & MLOs
+    // SECTION 4: COURSE STRUCTURE & MODULE LEARNING OUTCOMES
     // =========================================================================
     if (workflow.step4?.modules?.length) {
+      reportProgress(
+        'Step 4: Course Structure & MLOs',
+        `Formatting modules (${sectionsCompleted + 1}/${totalSections})...`
+      );
+
       const step4 = workflow.step4;
       contentChildren.push(
         new Paragraph({ children: [new PageBreak()] }),
-        new Paragraph({
-          text: '4. Course Structure & Module Learning Outcomes',
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 400, after: 200 },
-        })
+        this.createH1('4. Course Structure & Module Learning Outcomes')
       );
 
       // Summary
@@ -501,387 +664,344 @@ export class WordExportService {
           children: [
             new TextRun({
               text: `Total Program Hours: ${step4.totalProgramHours || '-'} | Contact: ${step4.totalContactHours || '-'} | Independent: ${step4.totalIndependentHours || '-'}`,
-              size: 20,
+              size: FONT_SIZES.BODY,
+              font: FONT_FAMILY,
               color: '4a5568',
             }),
           ],
-          spacing: { after: 200 },
+          spacing: { after: 200, line: LINE_SPACING },
         })
       );
 
-      step4.modules.forEach((module: any) => {
+      // Module formatting template as specified
+      for (const module of step4.modules) {
+        // Module Title (H3)
+        // Hours: X (Contact: X, Independent: X)
         contentChildren.push(
-          new Paragraph({
-            text: `${module.moduleCode || 'Module'}: ${module.title || 'Untitled'}`,
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 300, after: 100 },
-          }),
+          this.createH3(
+            module.moduleCode
+              ? `${module.moduleCode}: ${module.title || 'Untitled'}`
+              : module.title || 'Untitled'
+          ),
           new Paragraph({
             children: [
               new TextRun({
                 text: `Hours: ${module.totalHours || '-'} (Contact: ${module.contactHours || '-'}, Independent: ${module.independentHours || '-'})`,
-                size: 20,
-                color: '4a5568',
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
               }),
             ],
-            spacing: { after: 100 },
+            spacing: { after: 100, line: LINE_SPACING },
           })
         );
 
+        // Module Learning Outcomes:
         if (module.mlos?.length) {
           contentChildren.push(
             new Paragraph({
-              children: [new TextRun({ text: 'Module Learning Outcomes:', bold: true, size: 22 })],
-              spacing: { after: 50 },
+              children: [
+                new TextRun({
+                  text: 'Module Learning Outcomes:',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { before: 100, after: 80, line: LINE_SPACING },
             })
           );
+
           module.mlos.forEach((mlo: any) => {
             contentChildren.push(
               new Paragraph({
                 children: [
-                  new TextRun({ text: `${mlo.id || '•'}: `, bold: true, size: 20 }),
-                  new TextRun({ text: mlo.statement || '', size: 20 }),
                   new TextRun({
-                    text: mlo.bloomLevel ? ` [${mlo.bloomLevel}]` : '',
-                    size: 18,
-                    color: '718096',
+                    text: `${mlo.id || 'M-LO'}: ${mlo.description || ''} [${mlo.bloomLevel || 'N/A'}]`,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
                   }),
                 ],
-                spacing: { after: 50 },
+                spacing: { after: 50, line: LINE_SPACING },
               })
             );
           });
         }
 
-        if (module.contactActivities?.length) {
-          // Format activities properly - handle both string arrays and object arrays
-          const formattedContactActivities = module.contactActivities
-            .map((activity: any) => {
-              if (typeof activity === 'string') return activity;
-              // Format object: "Type: Title (Xh)" or just "Title (Xh)"
-              const type = activity.type
-                ? `${activity.type.charAt(0).toUpperCase()}${activity.type.slice(1)}`
-                : '';
-              const title = activity.title || activity.description || '';
-              const hours = activity.hours ? `(${activity.hours}h)` : '';
-              return type ? `${type}: ${title} ${hours}`.trim() : `${title} ${hours}`.trim();
-            })
-            .filter(Boolean);
-
+        // Contact Activities:
+        if (module.contactActivities && Object.keys(module.contactActivities).length > 0) {
           contentChildren.push(
             new Paragraph({
               children: [
-                new TextRun({ text: 'Contact Activities: ', bold: true, size: 20 }),
-                new TextRun({ text: formattedContactActivities.join(', '), size: 20 }),
+                new TextRun({
+                  text: 'Contact Activities:',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
               ],
-              spacing: { after: 50 },
+              spacing: { before: 100, after: 50, line: LINE_SPACING },
             })
           );
+
+          Object.entries(module.contactActivities).forEach(([key, value]) => {
+            if (value) {
+              const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `${label}: ${value}`,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                    }),
+                  ],
+                  spacing: { after: 30, line: LINE_SPACING },
+                })
+              );
+            }
+          });
         }
 
-        if (module.independentActivities?.length) {
-          // Format activities properly - handle both string arrays and object arrays
-          const formattedIndependentActivities = module.independentActivities
-            .map((activity: any) => {
-              if (typeof activity === 'string') return activity;
-              // Format object: "Type: Title (Xh)" or just "Title (Xh)"
-              const type = activity.type
-                ? `${activity.type.charAt(0).toUpperCase()}${activity.type.slice(1)}`
-                : '';
-              const title = activity.title || activity.description || '';
-              const hours = activity.hours ? `(${activity.hours}h)` : '';
-              return type ? `${type}: ${title} ${hours}`.trim() : `${title} ${hours}`.trim();
-            })
-            .filter(Boolean);
-
+        // Independent Activities:
+        if (module.independentActivities && Object.keys(module.independentActivities).length > 0) {
           contentChildren.push(
             new Paragraph({
               children: [
-                new TextRun({ text: 'Independent Activities: ', bold: true, size: 20 }),
-                new TextRun({ text: formattedIndependentActivities.join(', '), size: 20 }),
+                new TextRun({
+                  text: 'Independent Activities:',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
               ],
-              spacing: { after: 150 },
+              spacing: { before: 100, after: 50, line: LINE_SPACING },
             })
           );
+
+          Object.entries(module.independentActivities).forEach(([key, value]) => {
+            if (value) {
+              const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `${label}: ${value}`,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                    }),
+                  ],
+                  spacing: { after: 30, line: LINE_SPACING },
+                })
+              );
+            }
+          });
         }
-      });
+
+        // Add spacing between modules
+        contentChildren.push(
+          new Paragraph({
+            children: [],
+            spacing: { after: 300 },
+          })
+        );
+      }
+
+      sectionsCompleted++;
+      reportProgress(
+        'Step 4: Course Structure & MLOs',
+        `✓ Step 4 formatted (${sectionsCompleted}/${totalSections})`
+      );
     }
 
     // =========================================================================
-    // Section 5: Academic Sources
+    // SECTION 5: ACADEMIC SOURCES
     // =========================================================================
-    const step5Sources = workflow.step5?.sources || workflow.step5?.topicSources;
-    if (step5Sources?.length) {
+    if (workflow.step5?.sources?.length) {
+      reportProgress(
+        'Step 5: Academic Sources',
+        `Formatting academic sources (${sectionsCompleted + 1}/${totalSections})...`
+      );
+
       const step5 = workflow.step5;
       contentChildren.push(
         new Paragraph({ children: [new PageBreak()] }),
-        new Paragraph({
-          text: '5. Academic Sources (AGI Standards)',
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 400, after: 200 },
-        })
+        this.createH1('5. Academic Sources')
       );
 
-      // Summary stats
-      contentChildren.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: `Total Sources: ${step5.totalSources || step5Sources.length || '-'} | Peer-Reviewed: ${step5.totalPeerReviewed || '-'}% | Recent (<5yr): ${step5.recentSourcesPercent || '-'}%`,
-              size: 20,
-              color: '4a5568',
-            }),
-          ],
-          spacing: { after: 200 },
-        })
-      );
+      // Group by module if moduleId exists, otherwise list all
+      const sourcesByModule: { [key: string]: any[] } = {};
+      const sourcesWithoutModule: any[] = [];
 
-      // Group sources by module if available
-      if (step5.sourcesByModule && Object.keys(step5.sourcesByModule).length > 0) {
-        Object.entries(step5.sourcesByModule).forEach(([moduleId, sources]: [string, any]) => {
+      step5.sources.forEach((source: any) => {
+        if (source.moduleId) {
+          if (!sourcesByModule[source.moduleId]) {
+            sourcesByModule[source.moduleId] = [];
+          }
+          sourcesByModule[source.moduleId].push(source);
+        } else {
+          sourcesWithoutModule.push(source);
+        }
+      });
+
+      // General sources first
+      if (sourcesWithoutModule.length > 0) {
+        contentChildren.push(this.createH2('General Sources'));
+        sourcesWithoutModule.forEach((source: any) => {
           contentChildren.push(
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `Module: ${moduleId}`,
-                  bold: true,
-                  size: 22,
-                  color: '1a365d',
+                  text: `• ${source.citation || source.title || 'Untitled'}`,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
                 }),
               ],
-              spacing: { before: 150, after: 100 },
-            })
-          );
-          sources?.forEach((source: any, idx: number) => {
-            contentChildren.push(
-              new Paragraph({
-                children: [
-                  new TextRun({ text: `[${idx + 1}] `, bold: true, size: 20 }),
-                  new TextRun({ text: source.citation || source.title || '', size: 20 }),
-                ],
-                spacing: { after: 30 },
-              }),
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: `Type: ${source.sourceType || source.source_type || '-'} | Category: ${source.category || '-'}`,
-                    size: 18,
-                    color: '718096',
-                  }),
-                ],
-                spacing: { after: 80 },
-              })
-            );
-          });
-        });
-      } else {
-        // Flat list of sources
-        step5Sources.forEach((source: any, idx: number) => {
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({ text: `[${idx + 1}] `, bold: true, size: 20 }),
-                new TextRun({ text: source.citation || source.title || '', size: 20 }),
-              ],
-              spacing: { after: 30 },
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `Type: ${source.sourceType || source.source_type || '-'} | Category: ${source.category || '-'}`,
-                  size: 18,
-                  color: '718096',
-                }),
-              ],
-              spacing: { after: 80 },
+              spacing: { after: 80, line: LINE_SPACING },
             })
           );
         });
       }
+
+      // Module-specific sources
+      Object.entries(sourcesByModule).forEach(([moduleId, sources]) => {
+        contentChildren.push(this.createH2(`Module ${moduleId} Sources`));
+        sources.forEach((source: any) => {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `• ${source.citation || source.title || 'Untitled'}`,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { after: 80, line: LINE_SPACING },
+            })
+          );
+        });
+      });
+
+      sectionsCompleted++;
+      reportProgress(
+        'Step 5: Academic Sources',
+        `✓ Step 5 formatted (${sectionsCompleted}/${totalSections})`
+      );
     }
 
     // =========================================================================
-    // Section 6: Reading Lists
+    // SECTION 6: READING LISTS
     // =========================================================================
-    const step6Readings = workflow.step6?.readings || workflow.step6?.moduleReadingLists;
-    if (
-      step6Readings?.length ||
-      (workflow.step6?.moduleReadings && Object.keys(workflow.step6.moduleReadings).length > 0)
-    ) {
+    if (workflow.step6) {
+      reportProgress(
+        'Step 6: Reading Lists',
+        `Formatting reading lists (${sectionsCompleted + 1}/${totalSections})...`
+      );
+
       const step6 = workflow.step6;
       contentChildren.push(
         new Paragraph({ children: [new PageBreak()] }),
-        new Paragraph({
-          text: '6. Reading Lists',
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 400, after: 200 },
-        })
+        this.createH1('6. Reading Lists')
       );
 
-      // Summary stats
-      contentChildren.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: `Total Readings: ${step6.totalReadings || step6Readings?.length || '-'} | Core: ${step6.coreCount || '-'} | Supplementary: ${step6.supplementaryCount || '-'}`,
-              size: 20,
-              color: '4a5568',
-            }),
-          ],
-          spacing: { after: 200 },
-        })
-      );
-
-      // If we have moduleReadings (grouped by module)
-      if (step6.moduleReadings && Object.keys(step6.moduleReadings).length > 0) {
-        Object.entries(step6.moduleReadings).forEach(([moduleId, readings]: [string, any]) => {
+      // Core Readings
+      if (step6.coreReadings?.length) {
+        contentChildren.push(this.createH2('Core Readings'));
+        step6.coreReadings.forEach((reading: any) => {
+          const readingText =
+            typeof reading === 'string' ? reading : reading.citation || reading.title || 'Untitled';
           contentChildren.push(
             new Paragraph({
-              text: moduleId,
-              heading: HeadingLevel.HEADING_2,
-              spacing: { before: 200, after: 100 },
+              children: [
+                new TextRun({
+                  text: `• ${readingText}`,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { after: 80, line: LINE_SPACING },
             })
           );
+        });
+      }
 
-          const coreReadings = readings?.filter((r: any) => r.category === 'core') || [];
-          const suppReadings = readings?.filter((r: any) => r.category === 'supplementary') || [];
+      // Supplementary Readings
+      if (step6.supplementaryReadings?.length) {
+        contentChildren.push(this.createH2('Supplementary Readings'));
+        step6.supplementaryReadings.forEach((reading: any) => {
+          const readingText =
+            typeof reading === 'string' ? reading : reading.citation || reading.title || 'Untitled';
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `• ${readingText}`,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { after: 80, line: LINE_SPACING },
+            })
+          );
+        });
+      }
 
-          if (coreReadings.length) {
-            contentChildren.push(
-              new Paragraph({
-                children: [new TextRun({ text: 'Core Readings:', bold: true, size: 22 })],
-                spacing: { after: 50 },
-              })
-            );
-            coreReadings.forEach((item: any) => {
+      // Module-specific readings
+      if (step6.moduleReadings && typeof step6.moduleReadings === 'object') {
+        Object.entries(step6.moduleReadings).forEach(([moduleId, readings]: [string, any]) => {
+          if (Array.isArray(readings) && readings.length > 0) {
+            contentChildren.push(this.createH2(`Module ${moduleId} Readings`));
+            readings.forEach((reading: any) => {
+              const readingText =
+                typeof reading === 'string'
+                  ? reading
+                  : reading.citation || reading.title || 'Untitled';
               contentChildren.push(
                 new Paragraph({
                   children: [
-                    new TextRun({ text: `• ${item.title || 'Untitled'}`, size: 20 }),
                     new TextRun({
-                      text: item.authors?.length ? ` - ${item.authors.join(', ')}` : '',
-                      size: 20,
-                      color: '718096',
-                    }),
-                    new TextRun({
-                      text: item.estimatedReadingMinutes
-                        ? ` (${item.estimatedReadingMinutes} min)`
-                        : '',
-                      size: 18,
-                      color: '4a5568',
+                      text: `• ${readingText}`,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
                     }),
                   ],
-                  spacing: { after: 30 },
-                })
-              );
-            });
-          }
-
-          if (suppReadings.length) {
-            contentChildren.push(
-              new Paragraph({
-                children: [new TextRun({ text: 'Supplementary Readings:', bold: true, size: 22 })],
-                spacing: { before: 100, after: 50 },
-              })
-            );
-            suppReadings.forEach((item: any) => {
-              contentChildren.push(
-                new Paragraph({
-                  children: [
-                    new TextRun({ text: `• ${item.title || 'Untitled'}`, size: 20 }),
-                    new TextRun({
-                      text: item.authors?.length ? ` - ${item.authors.join(', ')}` : '',
-                      size: 20,
-                      color: '718096',
-                    }),
-                  ],
-                  spacing: { after: 30 },
+                  spacing: { after: 80, line: LINE_SPACING },
                 })
               );
             });
           }
         });
-      } else if (step6Readings?.length) {
-        // Flat list - separate core and supplementary
-        const coreReadings = step6Readings.filter((r: any) => r.category === 'core');
-        const suppReadings = step6Readings.filter((r: any) => r.category === 'supplementary');
-
-        if (coreReadings.length) {
-          contentChildren.push(
-            new Paragraph({
-              children: [new TextRun({ text: 'Core Readings:', bold: true, size: 22 })],
-              spacing: { after: 50 },
-            })
-          );
-          coreReadings.forEach((item: any) => {
-            contentChildren.push(
-              new Paragraph({
-                children: [
-                  new TextRun({ text: `• ${item.title || 'Untitled'}`, size: 20 }),
-                  new TextRun({
-                    text: item.authors?.length ? ` - ${item.authors.join(', ')}` : '',
-                    size: 20,
-                    color: '718096',
-                  }),
-                ],
-                spacing: { after: 30 },
-              })
-            );
-          });
-        }
-
-        if (suppReadings.length) {
-          contentChildren.push(
-            new Paragraph({
-              children: [new TextRun({ text: 'Supplementary Readings:', bold: true, size: 22 })],
-              spacing: { before: 100, after: 50 },
-            })
-          );
-          suppReadings.forEach((item: any) => {
-            contentChildren.push(
-              new Paragraph({
-                children: [
-                  new TextRun({ text: `• ${item.title || 'Untitled'}`, size: 20 }),
-                  new TextRun({
-                    text: item.authors?.length ? ` - ${item.authors.join(', ')}` : '',
-                    size: 20,
-                    color: '718096',
-                  }),
-                ],
-                spacing: { after: 30 },
-              })
-            );
-          });
-        }
       }
+
+      sectionsCompleted++;
+      reportProgress(
+        'Step 6: Reading Lists',
+        `✓ Step 6 formatted (${sectionsCompleted}/${totalSections})`
+      );
     }
 
     // =========================================================================
-    // Section 7: Comprehensive Assessment Package
+    // SECTION 7: COMPREHENSIVE ASSESSMENT PACKAGE
     // =========================================================================
     if (
       workflow.step7?.formativeAssessments?.length ||
       workflow.step7?.summativeAssessments?.length ||
       workflow.step7?.sampleQuestions
     ) {
+      reportProgress(
+        'Step 7: Assessment Package',
+        `Formatting assessments (${sectionsCompleted + 1}/${totalSections})...`
+      );
+
       const step7 = workflow.step7;
       contentChildren.push(
         new Paragraph({ children: [new PageBreak()] }),
-        new Paragraph({
-          text: '7. Comprehensive Assessment Package',
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 400, after: 200 },
-        })
+        this.createH1('7. Comprehensive Assessment Package')
       );
 
-      // User Preferences Summary
+      // Assessment Strategy Summary
       const userPrefs = step7.userPreferences || {};
       contentChildren.push(
-        new Paragraph({
-          text: '7.1 Assessment Strategy',
-          heading: HeadingLevel.HEADING_2,
-          spacing: { before: 200, after: 100 },
-        }),
+        this.createH2('7.1 Assessment Strategy'),
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           rows: [
@@ -919,18 +1039,6 @@ export class WordExportService {
             }),
             new TableRow({
               children: [
-                this.createTableCell('Formative Per Module'),
-                this.createTableCell(String(userPrefs.formativePerModule || '-')),
-              ],
-            }),
-            new TableRow({
-              children: [
-                this.createTableCell('Summative Format'),
-                this.createTableCell(String(userPrefs.summativeFormat || 'Mixed format')),
-              ],
-            }),
-            new TableRow({
-              children: [
                 this.createTableCell('Total Formatives'),
                 this.createTableCell(String(step7.formativeAssessments?.length || 0)),
               ],
@@ -946,656 +1054,390 @@ export class WordExportService {
         new Paragraph({ children: [], spacing: { after: 200 } })
       );
 
-      // Formative Assessments
+      // Formative Assessments Section
       if (step7.formativeAssessments?.length) {
-        contentChildren.push(
-          new Paragraph({
-            text: '7.2 Formative Assessments',
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 300, after: 100 },
-          })
-        );
-        step7.formativeAssessments.forEach((assessment: any, idx: number) => {
+        contentChildren.push(this.createH2('7.2 Formative Assessments'));
+
+        for (const assessment of step7.formativeAssessments) {
           contentChildren.push(
-            new Paragraph({ children: [new PageBreak()] }),
+            this.createH3(`${assessment.title || 'Untitled Assessment'}`),
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `Assessment ${idx + 1}: ${assessment.title}`,
-                  bold: true,
-                  size: 22,
+                  text: `Module: ${assessment.moduleId || 'N/A'} | Type: ${assessment.assessmentType || 'N/A'} | Max Marks: ${assessment.maxMarks || 'N/A'}`,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                  italics: true,
+                  color: '4a5568',
                 }),
               ],
-              spacing: { before: 150, after: 50 },
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({ text: 'Module: ', bold: true, size: 18 }),
-                new TextRun({ text: assessment.moduleId || '-', size: 18, italics: true }),
-              ],
-              spacing: { after: 20 },
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({ text: 'Type: ', bold: true, size: 18 }),
-                new TextRun({ text: assessment.assessmentType || '-', size: 18 }),
-              ],
-              spacing: { after: 20 },
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({ text: 'Max Marks: ', bold: true, size: 18 }),
-                new TextRun({ text: String(assessment.maxMarks || '-'), size: 18 }),
-              ],
-              spacing: { after: 30 },
-            }),
-            new Paragraph({
-              children: [new TextRun({ text: 'Description:', bold: true, size: 18 })],
-              spacing: { before: 20, after: 10 },
-            }),
-            new Paragraph({
-              children: [new TextRun({ text: assessment.description || '', size: 18 })],
-              spacing: { after: 30 },
-            }),
-            new Paragraph({
-              children: [new TextRun({ text: 'Instructions:', bold: true, size: 18 })],
-              spacing: { before: 20, after: 10 },
-            }),
-            new Paragraph({
-              children: [new TextRun({ text: assessment.instructions || '', size: 18 })],
-              spacing: { after: 50 },
+              spacing: { after: 100, line: LINE_SPACING },
             })
           );
 
-          // Display ALL QUESTIONS in detail
+          // Description
+          if (assessment.description) {
+            const formatted = await this.formatTextIntelligently(
+              assessment.description,
+              'Assessment Description'
+            );
+            if (formatted.paragraphs.length > 0) {
+              contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+            }
+          }
+
+          // Instructions
+          if (assessment.instructions) {
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: 'Instructions:',
+                    bold: true,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
+                  }),
+                ],
+                spacing: { before: 100, after: 50, line: LINE_SPACING },
+              })
+            );
+
+            const formatted = await this.formatTextIntelligently(
+              assessment.instructions,
+              'Assessment Instructions'
+            );
+            if (formatted.paragraphs.length > 0) {
+              contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+            }
+            if (formatted.bullets.length > 0) {
+              contentChildren.push(
+                ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
+              );
+            }
+          }
+
+          // Questions (if available)
           if (assessment.questions?.length) {
             contentChildren.push(
               new Paragraph({
                 children: [
-                  new TextRun({ text: 'Questions:', bold: true, size: 20, underline: {} }),
+                  new TextRun({
+                    text: 'Questions:',
+                    bold: true,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
+                  }),
                 ],
-                spacing: { before: 100, after: 50 },
+                spacing: { before: 100, after: 50, line: LINE_SPACING },
               })
             );
 
-            assessment.questions.forEach((q: any) => {
-              // Question header
+            assessment.questions.forEach((q: any, idx: number) => {
+              // Question text
               contentChildren.push(
                 new Paragraph({
                   children: [
                     new TextRun({
-                      text: `Q${q.questionNumber}. `,
+                      text: `${idx + 1}. ${q.questionText || q.text || ''}`,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
                       bold: true,
-                      size: 19,
-                    }),
-                    new TextRun({
-                      text: `${q.questionText}`,
-                      size: 19,
-                    }),
-                    new TextRun({
-                      text: ` [${q.bloomLevel || 'N/A'} | ${q.difficulty || 'Medium'} | ${q.points || 1} pt${q.points > 1 ? 's' : ''}]`,
-                      size: 14,
-                      color: '6b7280',
-                      italics: true,
                     }),
                   ],
-                  spacing: { before: 100, after: 40 },
+                  spacing: { before: 80, after: 40, line: LINE_SPACING },
                 })
               );
 
-              // MCQ Options
+              // MCQ options (indented)
               if (q.questionType === 'mcq' && q.options?.length) {
                 q.options.forEach((option: string, optIdx: number) => {
-                  const letter = String.fromCharCode(65 + optIdx);
-                  const isCorrect = optIdx === q.correctAnswer;
+                  const letter = String.fromCharCode(65 + optIdx); // A, B, C, D
+                  const isCorrect = q.correctOptionIndex === optIdx || q.correctAnswer === optIdx;
                   contentChildren.push(
                     new Paragraph({
                       children: [
                         new TextRun({
-                          text: `   ${letter}. ${option}`,
-                          size: 18,
+                          text: `    ${letter}. ${option}${isCorrect ? ' ✓' : ''}`,
+                          size: FONT_SIZES.BODY,
+                          font: FONT_FAMILY,
                           bold: isCorrect,
-                          color: isCorrect ? '16a34a' : '374151',
                         }),
-                        isCorrect
-                          ? new TextRun({
-                              text: ' ✓ (Correct Answer)',
-                              size: 16,
-                              color: '16a34a',
-                              bold: true,
-                            })
-                          : new TextRun({ text: '' }),
                       ],
-                      spacing: { after: 20 },
+                      spacing: { after: 30, line: LINE_SPACING },
                     })
                   );
                 });
               }
 
-              // For non-MCQ, show expected answer
-              if (q.questionType !== 'mcq' && q.correctAnswer) {
-                contentChildren.push(
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: '   Expected Answer: ',
-                        bold: true,
-                        size: 17,
-                        color: '1e40af',
-                      }),
-                      new TextRun({
-                        text: String(q.correctAnswer),
-                        size: 17,
-                        italics: true,
-                        color: '1e40af',
-                      }),
-                    ],
-                    spacing: { before: 20, after: 20 },
-                  })
-                );
-              }
-
-              // Rationale
+              // Rationale if available
               if (q.rationale) {
                 contentChildren.push(
                   new Paragraph({
                     children: [
                       new TextRun({
-                        text: '   Rationale: ',
-                        bold: true,
-                        size: 16,
-                        color: '7c3aed',
+                        text: `Rationale: ${q.rationale}`,
+                        size: FONT_SIZES.BODY,
+                        font: FONT_FAMILY,
+                        italics: true,
+                        color: '4a5568',
                       }),
-                      new TextRun({ text: q.rationale, size: 16, italics: true, color: '7c3aed' }),
                     ],
-                    spacing: { before: 20, after: 50 },
+                    spacing: { after: 60, line: LINE_SPACING },
                   })
                 );
               }
             });
-          } else {
-            // No questions generated - show note
+          }
+
+          // Spacing between assessments
+          contentChildren.push(
+            new Paragraph({
+              children: [],
+              spacing: { after: 300 },
+            })
+          );
+        }
+      }
+
+      // Summative Assessments Section
+      if (step7.summativeAssessments?.length) {
+        contentChildren.push(this.createH2('7.3 Summative Assessments'));
+
+        for (const assessment of step7.summativeAssessments) {
+          contentChildren.push(
+            this.createH3(`${assessment.title || 'Untitled Assessment'}`),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Scope: ${assessment.scope || 'N/A'} | Format: ${assessment.format || 'N/A'}`,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                  italics: true,
+                  color: '4a5568',
+                }),
+              ],
+              spacing: { after: 100, line: LINE_SPACING },
+            })
+          );
+
+          // Description
+          if (assessment.description) {
+            const formatted = await this.formatTextIntelligently(
+              assessment.description,
+              'Summative Assessment Description'
+            );
+            if (formatted.paragraphs.length > 0) {
+              contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+            }
+          }
+
+          // Components (if any)
+          if (assessment.components?.length) {
             contentChildren.push(
               new Paragraph({
                 children: [
                   new TextRun({
-                    text: 'Note: Detailed questions not generated for this assessment.',
-                    size: 16,
-                    italics: true,
-                    color: 'dc2626',
+                    text: 'Components:',
+                    bold: true,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
                   }),
                 ],
-                spacing: { before: 50, after: 100 },
+                spacing: { before: 100, after: 50, line: LINE_SPACING },
               })
             );
-          }
-        });
-      }
 
-      // Summative Assessments
-      if (step7.summativeAssessments?.length) {
-        contentChildren.push(
-          new Paragraph({
-            text: '7.3 Summative Assessments',
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 300, after: 100 },
-          })
-        );
-        step7.summativeAssessments.forEach((assessment: any, idx: number) => {
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({ text: `${idx + 1}. ${assessment.title}`, bold: true, size: 20 }),
-              ],
-              spacing: { before: 150, after: 50 },
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({ text: 'Format: ', size: 18 }),
-                new TextRun({ text: assessment.format || '-', size: 18 }),
-              ],
-              spacing: { after: 30 },
-            }),
-            new Paragraph({
-              children: [new TextRun({ text: assessment.overview || '', size: 18 })],
-              spacing: { after: 50 },
-            })
-          );
-          if (assessment.components?.length) {
-            contentChildren.push(
-              new Paragraph({
-                children: [new TextRun({ text: 'Components:', bold: true, size: 18 })],
-                spacing: { before: 50, after: 30 },
-              })
-            );
             assessment.components.forEach((comp: any) => {
               contentChildren.push(
                 new Paragraph({
                   children: [
-                    new TextRun({ text: `• ${comp.name}: `, size: 18 }),
                     new TextRun({
-                      text: `${comp.weight}% - ${comp.description}`,
-                      size: 18,
-                      italics: true,
+                      text: `• ${comp.name || comp.componentType || 'Component'} - ${comp.weight || 0}% (${comp.description || ''})`,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
                     }),
                   ],
-                  spacing: { after: 20 },
+                  spacing: { after: 40, line: LINE_SPACING },
                 })
               );
             });
           }
-        });
+
+          // Spacing between assessments
+          contentChildren.push(
+            new Paragraph({
+              children: [],
+              spacing: { after: 300 },
+            })
+          );
+        }
       }
 
-      // Sample Questions Summary
-      const sampleQuestions = step7.sampleQuestions || {};
-      const totalSamples =
-        (sampleQuestions.mcq?.length || 0) +
-        (sampleQuestions.sjt?.length || 0) +
-        (sampleQuestions.caseQuestions?.length || 0) +
-        (sampleQuestions.essayPrompts?.length || 0) +
-        (sampleQuestions.practicalTasks?.length || 0);
-
-      if (totalSamples > 0) {
-        contentChildren.push(
-          new Paragraph({
-            text: '7.4 Sample Questions',
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 300, after: 100 },
-          }),
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            rows: [
-              new TableRow({
-                children: [
-                  this.createTableCell('Question Type', { bold: true, shading: 'e2e8f0' }),
-                  this.createTableCell('Count', { bold: true, shading: 'e2e8f0' }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  this.createTableCell('MCQ (Multiple Choice)'),
-                  this.createTableCell(String(sampleQuestions.mcq?.length || 0)),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  this.createTableCell('SJT (Situational Judgment)'),
-                  this.createTableCell(String(sampleQuestions.sjt?.length || 0)),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  this.createTableCell('Case Studies'),
-                  this.createTableCell(String(sampleQuestions.caseQuestions?.length || 0)),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  this.createTableCell('Essay Prompts'),
-                  this.createTableCell(String(sampleQuestions.essayPrompts?.length || 0)),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  this.createTableCell('Practical Tasks'),
-                  this.createTableCell(String(sampleQuestions.practicalTasks?.length || 0)),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  this.createTableCell('Total Sample Questions', { bold: true }),
-                  this.createTableCell(String(totalSamples), { bold: true }),
-                ],
-              }),
-            ],
-          }),
-          new Paragraph({ children: [], spacing: { after: 200 } })
-        );
-
-        // Note: Detailed sample questions available in database
-        contentChildren.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: 'Note: ',
-                bold: true,
-                size: 18,
-                italics: true,
-              }),
-              new TextRun({
-                text: 'Detailed sample questions for each type are stored in the database and can be exported separately.',
-                size: 18,
-                italics: true,
-                color: '6b7280',
-              }),
-            ],
-            spacing: { before: 100, after: 200 },
-          })
-        );
-      }
-
-      // Validation Summary
-      if (step7.validation) {
-        const validation = step7.validation;
-        contentChildren.push(
-          new Paragraph({
-            text: '7.5 Validation Summary',
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 300, after: 100 },
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: '✓ ',
-                color: validation.allFormativesMapped ? '16a34a' : 'dc2626',
-              }),
-              new TextRun({ text: 'All formatives mapped to MLOs', size: 18 }),
-            ],
-            spacing: { after: 30 },
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: '✓ ',
-                color: validation.allSummativesMapped ? '16a34a' : 'dc2626',
-              }),
-              new TextRun({ text: 'All summatives mapped to PLOs', size: 18 }),
-            ],
-            spacing: { after: 30 },
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: '✓ ', color: validation.weightsSum100 ? '16a34a' : 'dc2626' }),
-              new TextRun({ text: 'Component weights sum to 100%', size: 18 }),
-            ],
-            spacing: { after: 30 },
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: '✓ ',
-                color: validation.sufficientSampleQuestions ? '16a34a' : 'dc2626',
-              }),
-              new TextRun({ text: 'Sufficient sample questions generated', size: 18 }),
-            ],
-            spacing: { after: 30 },
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ text: '✓ ', color: validation.plosCovered ? '16a34a' : 'dc2626' }),
-              new TextRun({ text: 'All PLOs covered in assessments', size: 18 }),
-            ],
-            spacing: { after: 200 },
-          })
-        );
-      }
+      sectionsCompleted++;
+      reportProgress(
+        'Step 7: Assessment Package',
+        `✓ Step 7 formatted (${sectionsCompleted}/${totalSections})`
+      );
     }
 
     // =========================================================================
-    // Section 8: Case Studies
+    // SECTION 8: CASE STUDIES
     // =========================================================================
     if (workflow.step8?.caseStudies?.length) {
+      reportProgress(
+        'Step 8: Case Studies',
+        `Formatting case studies (${sectionsCompleted + 1}/${totalSections})...`
+      );
+
       const step8 = workflow.step8;
       contentChildren.push(
         new Paragraph({ children: [new PageBreak()] }),
-        new Paragraph({
-          text: '8. Case Studies',
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 400, after: 200 },
-        })
+        this.createH1('8. Case Studies')
       );
 
-      step8.caseStudies.forEach((cs: any, index: number) => {
+      for (const caseStudy of step8.caseStudies) {
+        contentChildren.push(this.createH3(caseStudy.title || 'Untitled Case Study'));
+
+        if (caseStudy.scenario || caseStudy.description) {
+          const formatted = await this.formatTextIntelligently(
+            caseStudy.scenario || caseStudy.description,
+            'Case Study Scenario'
+          );
+          if (formatted.paragraphs.length > 0) {
+            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+          }
+        }
+
+        // Learning objectives
+        if (caseStudy.learningObjectives?.length) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Learning Objectives:',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { before: 100, after: 50, line: LINE_SPACING },
+            })
+          );
+          contentChildren.push(
+            ...this.createFormattedParagraphs(caseStudy.learningObjectives, { isBullet: true })
+          );
+        }
+
+        // Questions/prompts
+        if (caseStudy.questions?.length || caseStudy.prompts?.length) {
+          const questions = caseStudy.questions || caseStudy.prompts;
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Discussion Questions:',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { before: 100, after: 50, line: LINE_SPACING },
+            })
+          );
+          contentChildren.push(...this.createFormattedParagraphs(questions, { isNumbered: true }));
+        }
+
         contentChildren.push(
           new Paragraph({
-            text: `Case Study ${index + 1}: ${cs.title || 'Untitled'}`,
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 200, after: 100 },
+            children: [],
+            spacing: { after: 300 },
           })
         );
+      }
 
-        if (cs.module) {
-          contentChildren.push(
-            new Paragraph({
-              children: [new TextRun({ text: `Module: ${cs.module}`, size: 20, color: '4a5568' })],
-              spacing: { after: 100 },
-            })
-          );
-        }
-
-        if (cs.scenario) {
-          contentChildren.push(
-            new Paragraph({
-              children: [new TextRun({ text: 'Scenario:', bold: true, size: 22 })],
-              spacing: { after: 50 },
-            }),
-            new Paragraph({
-              children: [new TextRun({ text: cs.scenario, size: 20 })],
-              spacing: { after: 150 },
-            })
-          );
-        }
-
-        if (cs.keyFacts?.length) {
-          contentChildren.push(
-            new Paragraph({
-              children: [new TextRun({ text: 'Key Facts:', bold: true, size: 22 })],
-              spacing: { after: 50 },
-            })
-          );
-          cs.keyFacts.forEach((fact: string) => {
-            contentChildren.push(
-              new Paragraph({
-                children: [new TextRun({ text: `• ${fact}`, size: 20 })],
-                spacing: { after: 30 },
-              })
-            );
-          });
-        }
-
-        if (cs.decisionPoints?.length) {
-          contentChildren.push(
-            new Paragraph({
-              children: [new TextRun({ text: 'Decision Points:', bold: true, size: 22 })],
-              spacing: { before: 100, after: 50 },
-            })
-          );
-          cs.decisionPoints.forEach((point: string, idx: number) => {
-            contentChildren.push(
-              new Paragraph({
-                children: [new TextRun({ text: `${idx + 1}. ${point}`, size: 20 })],
-                spacing: { after: 30 },
-              })
-            );
-          });
-        }
-
-        if (cs.terminology && Object.keys(cs.terminology).length > 0) {
-          contentChildren.push(
-            new Paragraph({
-              children: [new TextRun({ text: 'Key Terminology:', bold: true, size: 22 })],
-              spacing: { before: 100, after: 50 },
-            })
-          );
-          Object.entries(cs.terminology).forEach(([term, def]) => {
-            contentChildren.push(
-              new Paragraph({
-                children: [
-                  new TextRun({ text: `${term}: `, bold: true, size: 20 }),
-                  new TextRun({ text: String(def), size: 20 }),
-                ],
-                spacing: { after: 30 },
-              })
-            );
-          });
-        }
-      });
+      sectionsCompleted++;
+      reportProgress(
+        'Step 8: Case Studies',
+        `✓ Step 8 formatted (${sectionsCompleted}/${totalSections})`
+      );
     }
 
     // =========================================================================
-    // Section 9: Glossary
+    // SECTION 9: GLOSSARY
     // =========================================================================
-    const step9Terms = workflow.step9?.terms || workflow.step9?.entries;
-    if (step9Terms?.length) {
-      const step9 = workflow.step9;
-      contentChildren.push(
-        new Paragraph({ children: [new PageBreak()] }),
-        new Paragraph({
-          text: '9. Glossary',
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 400, after: 200 },
-        })
+    if (workflow.step9?.terms?.length || workflow.step9?.glossaryTerms?.length) {
+      reportProgress(
+        'Step 9: Glossary',
+        `Formatting glossary (${sectionsCompleted + 1}/${totalSections})...`
       );
 
-      // Statistics
+      const step9 = workflow.step9;
+      const terms = step9.terms || step9.glossaryTerms || [];
+
       contentChildren.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: `Total Terms: ${step9.totalTerms || step9Terms.length || '-'} | Categories: ${step9.categories?.length || '-'} | Acronyms: ${step9.acronymCount || '-'}`,
-              size: 20,
-              color: '4a5568',
-            }),
-          ],
-          spacing: { after: 200 },
-        })
+        new Paragraph({ children: [new PageBreak()] }),
+        this.createH1('9. Glossary')
       );
 
       // Sort alphabetically
-      const sortedTerms = [...step9Terms].sort((a: any, b: any) =>
-        (a.term || '').localeCompare(b.term || '')
-      );
+      const sortedTerms = [...terms].sort((a, b) => {
+        const termA = (a.term || a.title || '').toLowerCase();
+        const termB = (b.term || b.title || '').toLowerCase();
+        return termA.localeCompare(termB);
+      });
 
-      sortedTerms.forEach((entry: any) => {
+      for (const term of sortedTerms) {
         contentChildren.push(
           new Paragraph({
             children: [
-              new TextRun({ text: entry.term || '', bold: true, size: 22 }),
-              entry.isAcronym
-                ? new TextRun({ text: ' (Acronym)', size: 18, color: '718096', italics: true })
-                : new TextRun({ text: '' }),
+              new TextRun({
+                text: term.term || term.title || 'Term',
+                bold: true,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+              }),
             ],
-            spacing: { before: 100, after: 30 },
-          }),
-          new Paragraph({
-            children: [new TextRun({ text: entry.definition || '', size: 20 })],
-            spacing: { after: 30 },
+            spacing: { before: 100, after: 40, line: LINE_SPACING },
           })
         );
 
-        if (entry.acronymExpansion) {
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({ text: 'Stands for: ', italics: true, size: 18, color: '4a5568' }),
-                new TextRun({ text: entry.acronymExpansion, size: 18, color: '4a5568' }),
-              ],
-              spacing: { after: 30 },
-            })
+        if (term.definition || term.description) {
+          const formatted = await this.formatTextIntelligently(
+            term.definition || term.description,
+            'Glossary Term Definition'
           );
+          if (formatted.paragraphs.length > 0) {
+            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+          }
         }
+      }
 
-        if (entry.exampleSentence) {
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({ text: 'Example: ', italics: true, size: 18, color: '4a5568' }),
-                new TextRun({
-                  text: entry.exampleSentence,
-                  italics: true,
-                  size: 18,
-                  color: '4a5568',
-                }),
-              ],
-              spacing: { after: 100 },
-            })
-          );
-        }
-      });
+      sectionsCompleted++;
+      reportProgress(
+        'Step 9: Glossary',
+        `✓ Step 9 formatted (${sectionsCompleted}/${totalSections})`
+      );
     }
 
-    // Add main content section
+    // =========================================================================
+    // FINALIZE DOCUMENT
+    // =========================================================================
+    reportProgress('Finalizing', 'Creating final document...');
+
     sections.push({
       properties: {},
-      headers: {
-        default: new Header({
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: step1.programTitle || workflow.projectName || 'Curriculum',
-                  size: 18,
-                  color: '718096',
-                }),
-              ],
-              alignment: AlignmentType.RIGHT,
-            }),
-          ],
-        }),
-      },
-      footers: {
-        default: new Footer({
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  children: ['Page ', PageNumber.CURRENT, ' of ', PageNumber.TOTAL_PAGES],
-                  size: 18,
-                  color: '718096',
-                }),
-              ],
-              alignment: AlignmentType.CENTER,
-            }),
-          ],
-        }),
-      },
       children: contentChildren,
     });
 
     const doc = new Document({
-      creator: 'AI Curriculum Generator',
-      title: step1.programTitle || workflow.projectName || 'Curriculum Package',
-      description: 'Auto-generated curriculum design document',
-      styles: {
-        paragraphStyles: [
-          {
-            id: 'Heading1',
-            name: 'Heading 1',
-            basedOn: 'Normal',
-            next: 'Normal',
-            quickFormat: true,
-            run: {
-              size: 36,
-              bold: true,
-              color: '1a365d',
-            },
-            paragraph: {
-              spacing: { before: 400, after: 200 },
-            },
-          },
-          {
-            id: 'Heading2',
-            name: 'Heading 2',
-            basedOn: 'Normal',
-            next: 'Normal',
-            quickFormat: true,
-            run: {
-              size: 28,
-              bold: true,
-              color: '2d3748',
-            },
-            paragraph: {
-              spacing: { before: 300, after: 150 },
-            },
-          },
-        ],
-      },
       sections,
     });
+
+    reportProgress(
+      'Complete',
+      `✓ Document generation complete! (${sectionsCompleted}/${totalSections} sections)`
+    );
 
     return await Packer.toBuffer(doc);
   }
 }
-
-export const wordExportService = new WordExportService();
