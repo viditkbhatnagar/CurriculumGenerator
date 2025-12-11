@@ -1441,3 +1441,6 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     return await Packer.toBuffer(doc);
   }
 }
+
+// Export singleton instance
+export const wordExportService = new WordExportService();
