@@ -606,7 +606,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     // =========================================================================
     // SECTION 3: PROGRAM LEARNING OUTCOMES (PLOs)
     // =========================================================================
-    if (workflow.step3?.plos?.length) {
+    if (workflow.step3?.outcomes?.length) {
       reportProgress(
         'Step 3: Program Learning Outcomes',
         `Formatting PLOs (${sectionsCompleted + 1}/${totalSections})...`
@@ -618,13 +618,13 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         this.createH1('3. Program Learning Outcomes (PLOs)')
       );
 
-      step3.plos.forEach((plo: any) => {
+      step3.outcomes.forEach((plo: any) => {
         contentChildren.push(
-          this.createH3(`${plo.id || 'PLO'}: ${plo.description || ''}`),
+          this.createH3(`${plo.id || 'PLO'}: ${plo.statement || ''}`),
           new Paragraph({
             children: [
               new TextRun({
-                text: `Bloom Level: ${plo.bloomLevel || 'N/A'} | Category: ${plo.category || 'N/A'}`,
+                text: `Bloom Level: ${plo.bloomLevel || 'N/A'}`,
                 size: FONT_SIZES.BODY,
                 font: FONT_FAMILY,
                 italics: true,
@@ -716,7 +716,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
               new Paragraph({
                 children: [
                   new TextRun({
-                    text: `${mlo.id || 'M-LO'}: ${mlo.description || ''} [${mlo.bloomLevel || 'N/A'}]`,
+                    text: `${mlo.id || 'M-LO'}: ${mlo.statement || ''} [${mlo.bloomLevel || 'N/A'}]`,
                     size: FONT_SIZES.BODY,
                     font: FONT_FAMILY,
                   }),
@@ -728,7 +728,11 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         }
 
         // Contact Activities:
-        if (module.contactActivities && Object.keys(module.contactActivities).length > 0) {
+        if (
+          module.contactActivities &&
+          Array.isArray(module.contactActivities) &&
+          module.contactActivities.length > 0
+        ) {
           contentChildren.push(
             new Paragraph({
               children: [
@@ -743,19 +747,19 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             })
           );
 
-          Object.entries(module.contactActivities).forEach(([key, value]) => {
-            if (value) {
-              const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+          module.contactActivities.forEach((activity: string) => {
+            if (activity) {
               contentChildren.push(
                 new Paragraph({
                   children: [
                     new TextRun({
-                      text: `${label}: ${value}`,
+                      text: `• ${activity}`,
                       size: FONT_SIZES.BODY,
                       font: FONT_FAMILY,
                     }),
                   ],
                   spacing: { after: 30, line: LINE_SPACING },
+                  indent: { left: 360 },
                 })
               );
             }
@@ -763,7 +767,11 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         }
 
         // Independent Activities:
-        if (module.independentActivities && Object.keys(module.independentActivities).length > 0) {
+        if (
+          module.independentActivities &&
+          Array.isArray(module.independentActivities) &&
+          module.independentActivities.length > 0
+        ) {
           contentChildren.push(
             new Paragraph({
               children: [
@@ -778,19 +786,19 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             })
           );
 
-          Object.entries(module.independentActivities).forEach(([key, value]) => {
-            if (value) {
-              const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+          module.independentActivities.forEach((activity: string) => {
+            if (activity) {
               contentChildren.push(
                 new Paragraph({
                   children: [
                     new TextRun({
-                      text: `${label}: ${value}`,
+                      text: `• ${activity}`,
                       size: FONT_SIZES.BODY,
                       font: FONT_FAMILY,
                     }),
                   ],
                   spacing: { after: 30, line: LINE_SPACING },
+                  indent: { left: 360 },
                 })
               );
             }
