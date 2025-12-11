@@ -1518,6 +1518,49 @@ router.get('/:id/export/word', async (req: Request, res: Response) => {
 });
 
 // ============================================================================
+// DELETE WORKFLOW
+// ============================================================================
+
+/**
+ * DELETE /api/v3/workflow/:id
+ * Delete a workflow and all its associated data
+ */
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const workflowId = req.params.id;
+
+    // Find the workflow first
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+
+    if (!workflow) {
+      return res.status(404).json({
+        success: false,
+        error: 'Workflow not found',
+      });
+    }
+
+    // Delete the workflow
+    await CurriculumWorkflow.findByIdAndDelete(workflowId);
+
+    loggingService.info('Workflow deleted', {
+      workflowId,
+      projectName: workflow.projectName,
+    });
+
+    res.json({
+      success: true,
+      message: 'Workflow deleted successfully',
+    });
+  } catch (error) {
+    loggingService.error('Error deleting workflow', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete workflow',
+    });
+  }
+});
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 

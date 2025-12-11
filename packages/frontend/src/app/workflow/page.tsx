@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useWorkflows, useCreateWorkflow } from '@/hooks/useWorkflow';
+import { useWorkflows, useCreateWorkflow, useDeleteWorkflow } from '@/hooks/useWorkflow';
 import { CurriculumWorkflow, WorkflowStep, STEP_NAMES, WorkflowStatus } from '@/types/workflow';
 
 // Status badge colors
@@ -44,9 +44,14 @@ export default function WorkflowListPage() {
   const router = useRouter();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+    show: boolean;
+    workflow?: CurriculumWorkflow;
+  }>({ show: false });
 
   const { data: workflows, isLoading, error } = useWorkflows();
   const createWorkflow = useCreateWorkflow();
+  const deleteWorkflow = useDeleteWorkflow();
 
   const handleCreateWorkflow = async () => {
     if (!newProjectName.trim()) return;
@@ -58,6 +63,17 @@ export default function WorkflowListPage() {
       router.push(`/workflow/${workflow._id}`);
     } catch (err) {
       console.error('Failed to create workflow:', err);
+    }
+  };
+
+  const handleDeleteWorkflow = async () => {
+    if (!deleteConfirmModal.workflow) return;
+
+    try {
+      await deleteWorkflow.mutateAsync(deleteConfirmModal.workflow._id);
+      setDeleteConfirmModal({ show: false });
+    } catch (err) {
+      console.error('Failed to delete workflow:', err);
     }
   };
 
@@ -157,80 +173,104 @@ export default function WorkflowListPage() {
             {workflows.map((workflow) => (
               <div
                 key={workflow._id}
-                onClick={() => router.push(`/workflow/${workflow._id}`)}
-                className="bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-cyan-500/50 transition-all cursor-pointer group overflow-hidden"
+                className="bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-cyan-500/50 transition-all group overflow-hidden relative"
               >
-                {/* Progress bar at top */}
-                <div className="h-1 bg-slate-700">
-                  <div
-                    className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all"
-                    style={{ width: `${getProgressPercent(workflow)}%` }}
-                  />
-                </div>
+                {/* Delete button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteConfirmModal({ show: true, workflow });
+                  }}
+                  className="absolute top-3 right-3 z-10 p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Delete workflow"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                </button>
 
-                <div className="p-5">
-                  <div className="flex items-start justify-between mb-3">
-                    <h3 className="font-semibold text-white group-hover:text-cyan-400 transition-colors">
-                      {workflow.projectName}
-                    </h3>
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full ${
-                        STATUS_COLORS[workflow.status] || 'bg-slate-700 text-slate-300'
-                      }`}
-                    >
-                      {formatStatus(workflow.status)}
-                    </span>
+                <div
+                  onClick={() => router.push(`/workflow/${workflow._id}`)}
+                  className="cursor-pointer"
+                >
+                  {/* Progress bar at top */}
+                  <div className="h-1 bg-slate-700">
+                    <div
+                      className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all"
+                      style={{ width: `${getProgressPercent(workflow)}%` }}
+                    />
                   </div>
 
-                  {/* Current Step */}
-                  <div className="mb-4">
-                    <p className="text-slate-400 text-sm">Current Step</p>
-                    <p className="text-cyan-400 font-medium">
-                      {workflow.currentStep}. {STEP_NAMES[workflow.currentStep as WorkflowStep]}
-                    </p>
-                  </div>
-
-                  {/* Progress */}
-                  <div className="mb-4">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-slate-400">Progress</span>
-                      <span className="text-white">{getProgressPercent(workflow)}%</span>
+                  <div className="p-5">
+                    <div className="flex items-start justify-between mb-3">
+                      <h3 className="font-semibold text-white group-hover:text-cyan-400 transition-colors pr-8">
+                        {workflow.projectName}
+                      </h3>
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full ${
+                          STATUS_COLORS[workflow.status] || 'bg-slate-700 text-slate-300'
+                        }`}
+                      >
+                        {formatStatus(workflow.status)}
+                      </span>
                     </div>
-                    <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all"
-                        style={{ width: `${getProgressPercent(workflow)}%` }}
-                      />
+
+                    {/* Current Step */}
+                    <div className="mb-4">
+                      <p className="text-slate-400 text-sm">Current Step</p>
+                      <p className="text-cyan-400 font-medium">
+                        {workflow.currentStep}. {STEP_NAMES[workflow.currentStep as WorkflowStep]}
+                      </p>
                     </div>
-                  </div>
 
-                  {/* Step indicators */}
-                  <div className="flex gap-1 mb-4">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((step) => {
-                      const stepProgress = workflow.stepProgress.find((p) => p.step === step);
-                      const isComplete =
-                        stepProgress?.status === 'completed' || stepProgress?.status === 'approved';
-                      const isCurrent = workflow.currentStep === step;
-
-                      return (
+                    {/* Progress */}
+                    <div className="mb-4">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-slate-400">Progress</span>
+                        <span className="text-white">{getProgressPercent(workflow)}%</span>
+                      </div>
+                      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
                         <div
-                          key={step}
-                          className={`h-2 flex-1 rounded-full ${
-                            isComplete
-                              ? 'bg-emerald-500'
-                              : isCurrent
-                                ? 'bg-cyan-500'
-                                : 'bg-slate-700'
-                          }`}
+                          className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all"
+                          style={{ width: `${getProgressPercent(workflow)}%` }}
                         />
-                      );
-                    })}
-                  </div>
+                      </div>
+                    </div>
 
-                  {/* Metadata */}
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>Created {new Date(workflow.createdAt).toLocaleDateString()}</span>
-                    <span>Updated {new Date(workflow.updatedAt).toLocaleDateString()}</span>
+                    {/* Step indicators */}
+                    <div className="flex gap-1 mb-4">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((step) => {
+                        const stepProgress = workflow.stepProgress.find((p) => p.step === step);
+                        const isComplete =
+                          stepProgress?.status === 'completed' ||
+                          stepProgress?.status === 'approved';
+                        const isCurrent = workflow.currentStep === step;
+
+                        return (
+                          <div
+                            key={step}
+                            className={`h-2 flex-1 rounded-full ${
+                              isComplete
+                                ? 'bg-emerald-500'
+                                : isCurrent
+                                  ? 'bg-cyan-500'
+                                  : 'bg-slate-700'
+                            }`}
+                          />
+                        );
+                      })}
+                    </div>
+
+                    {/* Metadata */}
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>Created {new Date(workflow.createdAt).toLocaleDateString()}</span>
+                      <span>Updated {new Date(workflow.updatedAt).toLocaleDateString()}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -304,6 +344,61 @@ export default function WorkflowListPage() {
                 className="flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {createWorkflow.isPending ? 'Creating...' : 'Create Workflow'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmModal.show && deleteConfirmModal.workflow && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-md border border-slate-700 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                <svg
+                  className="w-6 h-6 text-red-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-white">Delete Curriculum?</h2>
+            </div>
+
+            <p className="text-slate-300 mb-2">
+              Are you sure you want to delete{' '}
+              <span className="font-semibold text-white">
+                "{deleteConfirmModal.workflow.projectName}"
+              </span>
+              ?
+            </p>
+            <p className="text-slate-400 text-sm mb-6">
+              This action cannot be undone. All workflow data, including all 9 steps, will be
+              permanently deleted from the database.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmModal({ show: false })}
+                disabled={deleteWorkflow.isPending}
+                className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteWorkflow}
+                disabled={deleteWorkflow.isPending}
+                className="flex-1 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleteWorkflow.isPending ? 'Deleting...' : 'Delete Permanently'}
               </button>
             </div>
           </div>

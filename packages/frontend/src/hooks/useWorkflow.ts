@@ -92,6 +92,25 @@ export function useCreateWorkflow() {
   });
 }
 
+/**
+ * Delete a workflow
+ */
+export function useDeleteWorkflow() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetchAPI(`${WORKFLOW_BASE}/${id}`, {
+        method: 'DELETE',
+      });
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workflows'] });
+    },
+  });
+}
+
 // =============================================================================
 // STEP 1: PROGRAM FOUNDATION
 // =============================================================================
