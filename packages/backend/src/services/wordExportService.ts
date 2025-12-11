@@ -587,7 +587,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         this.createH1('2. Competency Framework (KSC)')
       );
 
-      // Knowledge Items - in tabular format
+      // Knowledge Items - in tabular format with detailed descriptions
       if (step2.knowledgeItems?.length) {
         contentChildren.push(this.createH2('Knowledge'));
 
@@ -617,9 +617,49 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             rows: knowledgeRows,
           })
         );
+
+        // Add detailed descriptions below table
+        contentChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Detailed Knowledge Requirements:',
+                bold: true,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+              }),
+            ],
+            spacing: { before: 200, after: 100, line: LINE_SPACING },
+          })
+        );
+
+        step2.knowledgeItems.forEach((item: any) => {
+          const statement = item.statement || item.description || item.title || '';
+          const detailedDesc =
+            item.description && item.statement !== item.description ? item.description : statement;
+
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `${item.id || ''}: `,
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+                new TextRun({
+                  text: detailedDesc,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { after: 100, line: LINE_SPACING },
+            })
+          );
+        });
       }
 
-      // Skills Items - in tabular format
+      // Skills Items - in tabular format with detailed descriptions
       if (step2.skillItems?.length) {
         contentChildren.push(this.createH2('Skills'));
 
@@ -649,9 +689,49 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             rows: skillRows,
           })
         );
+
+        // Add detailed descriptions below table
+        contentChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Detailed Skill Requirements:',
+                bold: true,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+              }),
+            ],
+            spacing: { before: 200, after: 100, line: LINE_SPACING },
+          })
+        );
+
+        step2.skillItems.forEach((item: any) => {
+          const statement = item.statement || item.description || item.title || '';
+          const detailedDesc =
+            item.description && item.statement !== item.description ? item.description : statement;
+
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `${item.id || ''}: `,
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+                new TextRun({
+                  text: detailedDesc,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { after: 100, line: LINE_SPACING },
+            })
+          );
+        });
       }
 
-      // Competency Items - in tabular format
+      // Competency Items - in tabular format with detailed descriptions
       if (step2.competencyItems?.length) {
         contentChildren.push(this.createH2('Competencies'));
 
@@ -681,6 +761,46 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             rows: competencyRows,
           })
         );
+
+        // Add detailed descriptions below table
+        contentChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Detailed Competency Requirements:',
+                bold: true,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+              }),
+            ],
+            spacing: { before: 200, after: 100, line: LINE_SPACING },
+          })
+        );
+
+        step2.competencyItems.forEach((item: any) => {
+          const statement = item.statement || item.description || item.title || '';
+          const detailedDesc =
+            item.description && item.statement !== item.description ? item.description : statement;
+
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `${item.id || ''}: `,
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+                new TextRun({
+                  text: detailedDesc,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { after: 100, line: LINE_SPACING },
+            })
+          );
+        });
       }
 
       sectionsCompleted++;
@@ -718,9 +838,57 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                 color: '4a5568',
               }),
             ],
-            spacing: { after: 200, line: LINE_SPACING },
+            spacing: { after: 100, line: LINE_SPACING },
           })
         );
+
+        // Add detailed explanation/description if available
+        const explanation = plo.explanation || plo.description || plo.rationale;
+        if (explanation && explanation !== plo.statement) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Explanation: ',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+                new TextRun({
+                  text: explanation,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { after: 100, line: LINE_SPACING },
+            })
+          );
+        }
+
+        // Add competency links if available
+        const competencyLinks = plo.competencyLinks || plo.linkedKSCs;
+        if (competencyLinks && competencyLinks.length > 0) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Linked Competencies: ${competencyLinks.join(', ')}`,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                  italics: true,
+                }),
+              ],
+              spacing: { after: 200, line: LINE_SPACING },
+            })
+          );
+        } else {
+          contentChildren.push(
+            new Paragraph({
+              children: [],
+              spacing: { after: 100 },
+            })
+          );
+        }
       });
 
       sectionsCompleted++;
@@ -823,13 +991,27 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
           module.mlos.forEach((mlo: any) => {
             // Map KSC IDs to their actual statements
-            const linkedKSCs = mlo.linkedKSCs || mlo.competencyLinks || [];
-            const kscStatements = linkedKSCs
-              .map((kscId: string) => {
-                const statement = kscMap.get(kscId);
-                return statement ? `${kscId}: ${statement}` : kscId;
-              })
-              .join('\n');
+            // Check multiple possible property names for linked competencies
+            const linkedKSCs =
+              mlo.linkedKSCs || mlo.competencyLinks || mlo.linkedKSC || mlo.kscLinks || [];
+
+            let kscStatements = '';
+            if (Array.isArray(linkedKSCs) && linkedKSCs.length > 0) {
+              kscStatements = linkedKSCs
+                .map((kscId: string) => {
+                  const statement = kscMap.get(kscId);
+                  if (statement) {
+                    // Truncate long statements for table readability
+                    const truncatedStatement =
+                      statement.length > 80 ? statement.substring(0, 80) + '...' : statement;
+                    return `${kscId}: ${truncatedStatement}`;
+                  }
+                  return kscId;
+                })
+                .join('\n\n');
+            } else {
+              kscStatements = '-';
+            }
 
             mloRows.push(
               new TableRow({
@@ -837,7 +1019,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                   this.createTableCell(mlo.id || '-'),
                   this.createTableCell(mlo.statement || '-'),
                   this.createTableCell(mlo.bloomLevel || '-'),
-                  this.createTableCell(kscStatements || '-'),
+                  this.createTableCell(kscStatements),
                 ],
               })
             );
@@ -1059,71 +1241,100 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         this.createH1('6. Reading Lists')
       );
 
-      // Core Readings
+      // Helper function to get reading text
+      const getReadingText = (reading: any): string => {
+        return typeof reading === 'string'
+          ? reading
+          : reading.citation || reading.title || 'Untitled';
+      };
+
+      // Collect all readings with de-duplication
+      const allReadings = new Set<string>();
+
+      // Core Readings - with de-duplication
       if (step6.coreReadings?.length) {
         contentChildren.push(this.createH2('Core Readings'));
         step6.coreReadings.forEach((reading: any) => {
-          const readingText =
-            typeof reading === 'string' ? reading : reading.citation || reading.title || 'Untitled';
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `• ${readingText}`,
-                  size: FONT_SIZES.BODY,
-                  font: FONT_FAMILY,
-                }),
-              ],
-              spacing: { after: 80, line: LINE_SPACING },
-            })
-          );
+          const readingText = getReadingText(reading);
+          if (!allReadings.has(readingText)) {
+            allReadings.add(readingText);
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `• ${readingText}`,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
+                  }),
+                ],
+                spacing: { after: 80, line: LINE_SPACING },
+              })
+            );
+          }
         });
       }
 
-      // Supplementary Readings
+      // Supplementary Readings - with de-duplication
       if (step6.supplementaryReadings?.length) {
         contentChildren.push(this.createH2('Supplementary Readings'));
+        const suppReadingsSet = new Set<string>();
         step6.supplementaryReadings.forEach((reading: any) => {
-          const readingText =
-            typeof reading === 'string' ? reading : reading.citation || reading.title || 'Untitled';
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `• ${readingText}`,
-                  size: FONT_SIZES.BODY,
-                  font: FONT_FAMILY,
-                }),
-              ],
-              spacing: { after: 80, line: LINE_SPACING },
-            })
-          );
+          const readingText = getReadingText(reading);
+          // Check against all readings and supplementary set
+          if (!allReadings.has(readingText) && !suppReadingsSet.has(readingText)) {
+            allReadings.add(readingText);
+            suppReadingsSet.add(readingText);
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `• ${readingText}`,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
+                  }),
+                ],
+                spacing: { after: 80, line: LINE_SPACING },
+              })
+            );
+          }
         });
       }
 
-      // Module-specific readings
+      // Module-specific readings - with de-duplication
       if (step6.moduleReadings && typeof step6.moduleReadings === 'object') {
         Object.entries(step6.moduleReadings).forEach(([moduleId, readings]: [string, any]) => {
           if (Array.isArray(readings) && readings.length > 0) {
-            contentChildren.push(this.createH2(`Module ${moduleId} Readings`));
+            const moduleReadingsSet = new Set<string>();
+            const uniqueModuleReadings: string[] = [];
+
+            // First pass: collect unique readings for this module
             readings.forEach((reading: any) => {
-              const readingText =
-                typeof reading === 'string'
-                  ? reading
-                  : reading.citation || reading.title || 'Untitled';
-              contentChildren.push(
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: `• ${readingText}`,
-                      size: FONT_SIZES.BODY,
-                      font: FONT_FAMILY,
-                    }),
-                  ],
-                  spacing: { after: 80, line: LINE_SPACING },
-                })
-              );
+              const readingText = getReadingText(reading);
+              if (!allReadings.has(readingText) && !moduleReadingsSet.has(readingText)) {
+                allReadings.add(readingText);
+                moduleReadingsSet.add(readingText);
+                uniqueModuleReadings.push(readingText);
+              }
             });
+
+            // Only add section if there are unique readings
+            if (uniqueModuleReadings.length > 0) {
+              contentChildren.push(this.createH2(`Module ${moduleId} Readings`));
+              uniqueModuleReadings.forEach((readingText) => {
+                contentChildren.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: `• ${readingText}`,
+                        size: FONT_SIZES.BODY,
+                        font: FONT_FAMILY,
+                      }),
+                    ],
+                    spacing: { after: 80, line: LINE_SPACING },
+                  })
+                );
+              });
+            }
           }
         });
       }
