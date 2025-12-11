@@ -1530,9 +1530,19 @@ IMPORTANT:
     workflow.currentStep = 4;
     workflow.status = 'step4_complete';
 
+    loggingService.info('Saving Step 4 data to database', {
+      workflowId,
+      moduleCount: modules.length,
+      totalMLOs: modules.reduce((sum: number, m: any) => sum + (m.mlos?.length || 0), 0),
+      hoursIntegrity,
+      totalModuleHours,
+      totalProgramHours,
+      validationReport,
+    });
+
     await workflow.save();
 
-    loggingService.info('Step 4 processed', {
+    loggingService.info('Step 4 successfully saved to database', {
       workflowId,
       moduleCount: modules.length,
       hoursIntegrity,
@@ -1880,15 +1890,54 @@ CRITICAL VALIDATION:
 ✓ All hours are mathematically consistent`;
 
     try {
-      const response = await openaiService.generateContent(userPrompt, systemPrompt, {
-        maxTokens: 128000, // MAXIMUM
-        timeout: 1200000, // 20 minutes
+      loggingService.info('Starting Step 4 OpenAI generation', {
+        totalHours,
+        suggestedModules,
+        plosCount: plos.length,
+        kscKnowledgeCount: kscKnowledge.length,
+        kscSkillsCount: kscSkills.length,
+        kscCompetenciesCount: kscCompetencies.length,
+        userPromptLength: userPrompt.length,
+        systemPromptLength: systemPrompt.length,
       });
 
-      return this.parseJSON(response, 'step4');
+      const response = await openaiService.generateContent(userPrompt, systemPrompt, {
+        maxTokens: 128000, // MAXIMUM
+        timeout: 1800000, // 30 minutes (user said cost is not an issue)
+      });
+
+      loggingService.info('Received Step 4 OpenAI response', {
+        responseLength: response.length,
+        responsePreview: response.substring(0, 300),
+      });
+
+      const parsed = this.parseJSON(response, 'step4');
+
+      loggingService.info('Successfully parsed Step 4 JSON', {
+        moduleCount: parsed.modules?.length || 0,
+        hasModules: Array.isArray(parsed.modules),
+      });
+
+      if (!parsed.modules || parsed.modules.length === 0) {
+        loggingService.error('Step 4 generation returned empty modules array', {
+          parsed,
+          responsePreview: response.substring(0, 500),
+        });
+        throw new Error(
+          'OpenAI returned empty modules array. Response may not have matched expected JSON format.'
+        );
+      }
+
+      return parsed;
     } catch (error) {
-      loggingService.error('Error generating Step 4 content', { error });
-      return { modules: [] };
+      loggingService.error('CRITICAL ERROR in Step 4 generation', {
+        error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined,
+        errorName: error instanceof Error ? error.name : undefined,
+      });
+      // DO NOT return empty array - throw the error so it propagates properly
+      throw error;
     }
   }
 
@@ -5461,10 +5510,13 @@ Return ONLY valid JSON:
         }
       }
 
-      loggingService.error(`All JSON parsing failed for ${context}`, {
+      loggingService.error(`All JSON parsing attempts failed for ${context}`, {
         responsePreview: response?.substring(0, 500) || 'empty',
+        responseLength: response?.length || 0,
       });
-      return {};
+      throw new Error(
+        `Failed to parse JSON response for ${context}. Response may not be valid JSON. Preview: ${response?.substring(0, 200) || 'empty'}`
+      );
     }
   }
 
