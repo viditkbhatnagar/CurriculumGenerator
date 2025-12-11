@@ -40,8 +40,8 @@ export interface DocumentGenerationProgress {
 
 export type ProgressCallback = (progress: DocumentGenerationProgress) => void;
 
-// Font specifications - Times New Roman throughout
-const FONT_FAMILY = 'Times New Roman';
+// Font specifications - Arial throughout
+const FONT_FAMILY = 'Arial';
 const FONT_SIZES = {
   H1: 32, // 16pt in half-points
   H2: 28, // 14pt
@@ -171,7 +171,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   }
 
   /**
-   * Create table cell with Times New Roman font
+   * Create table cell with Arial font
    */
   private createTableCell(
     text: string,
@@ -199,7 +199,49 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   }
 
   /**
-   * Create H1 heading - Times New Roman 16pt Bold
+   * Build a KSC lookup map from Step 2 data for Step 4 references
+   */
+  private buildKSCMap(step2: any): Map<string, string> {
+    const kscMap = new Map<string, string>();
+
+    if (step2.knowledgeItems) {
+      step2.knowledgeItems.forEach((item: any) => {
+        if (item.id) {
+          kscMap.set(item.id, item.statement || item.description || item.title || '');
+        }
+      });
+    }
+
+    if (step2.skillItems) {
+      step2.skillItems.forEach((item: any) => {
+        if (item.id) {
+          kscMap.set(item.id, item.statement || item.description || item.title || '');
+        }
+      });
+    }
+
+    if (step2.competencyItems) {
+      step2.competencyItems.forEach((item: any) => {
+        if (item.id) {
+          kscMap.set(item.id, item.statement || item.description || item.title || '');
+        }
+      });
+    }
+
+    // Also check for attitudeItems as fallback
+    if (step2.attitudeItems) {
+      step2.attitudeItems.forEach((item: any) => {
+        if (item.id) {
+          kscMap.set(item.id, item.statement || item.description || item.title || '');
+        }
+      });
+    }
+
+    return kscMap;
+  }
+
+  /**
+   * Create H1 heading - Arial 16pt Bold
    */
   private createH1(text: string): Paragraph {
     return new Paragraph({
@@ -220,7 +262,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   }
 
   /**
-   * Create H2 heading - Times New Roman 14pt Bold
+   * Create H2 heading - Arial 14pt Bold
    */
   private createH2(text: string): Paragraph {
     return new Paragraph({
@@ -241,7 +283,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   }
 
   /**
-   * Create H3 heading - Times New Roman 12pt Bold
+   * Create H3 heading - Arial 12pt Bold
    */
   private createH3(text: string): Paragraph {
     return new Paragraph({
@@ -270,6 +312,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   ): Promise<Buffer> {
     const sections: any[] = [];
     const step1 = workflow.step1 || {};
+
+    // Build KSC lookup map from Step 2 for later use in Step 4
+    const kscMap = workflow.step2 ? this.buildKSCMap(workflow.step2) : new Map<string, string>();
 
     // Count total sections for progress tracking
     const totalSections = [
@@ -542,58 +587,100 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         this.createH1('2. Competency Framework (KSC)')
       );
 
-      // Knowledge Items - with intelligent formatting
+      // Knowledge Items - in tabular format
       if (step2.knowledgeItems?.length) {
         contentChildren.push(this.createH2('Knowledge'));
 
-        for (const item of step2.knowledgeItems) {
-          const itemText = `${item.id || ''}: ${item.title || item.description || ''}`;
-          const formatted = await this.formatTextIntelligently(itemText, 'Knowledge Item');
+        const knowledgeRows = [
+          new TableRow({
+            children: [
+              this.createTableCell('ID', { bold: true, shading: 'e2e8f0', width: 15 }),
+              this.createTableCell('Statement', { bold: true, shading: 'e2e8f0', width: 85 }),
+            ],
+          }),
+        ];
 
-          if (formatted.paragraphs.length > 0) {
-            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
-          } else if (formatted.bullets.length > 0) {
-            contentChildren.push(
-              ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
-            );
-          }
-        }
+        step2.knowledgeItems.forEach((item: any) => {
+          knowledgeRows.push(
+            new TableRow({
+              children: [
+                this.createTableCell(item.id || '-'),
+                this.createTableCell(item.statement || item.description || item.title || '-'),
+              ],
+            })
+          );
+        });
+
+        contentChildren.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: knowledgeRows,
+          })
+        );
       }
 
-      // Skills Items
+      // Skills Items - in tabular format
       if (step2.skillItems?.length) {
         contentChildren.push(this.createH2('Skills'));
 
-        for (const item of step2.skillItems) {
-          const itemText = `${item.id || ''}: ${item.title || item.description || ''}`;
-          const formatted = await this.formatTextIntelligently(itemText, 'Skill Item');
+        const skillRows = [
+          new TableRow({
+            children: [
+              this.createTableCell('ID', { bold: true, shading: 'e2e8f0', width: 15 }),
+              this.createTableCell('Statement', { bold: true, shading: 'e2e8f0', width: 85 }),
+            ],
+          }),
+        ];
 
-          if (formatted.paragraphs.length > 0) {
-            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
-          } else if (formatted.bullets.length > 0) {
-            contentChildren.push(
-              ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
-            );
-          }
-        }
+        step2.skillItems.forEach((item: any) => {
+          skillRows.push(
+            new TableRow({
+              children: [
+                this.createTableCell(item.id || '-'),
+                this.createTableCell(item.statement || item.description || item.title || '-'),
+              ],
+            })
+          );
+        });
+
+        contentChildren.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: skillRows,
+          })
+        );
       }
 
-      // Competency Items
+      // Competency Items - in tabular format
       if (step2.competencyItems?.length) {
         contentChildren.push(this.createH2('Competencies'));
 
-        for (const item of step2.competencyItems) {
-          const itemText = `${item.id || ''}: ${item.title || item.description || ''}`;
-          const formatted = await this.formatTextIntelligently(itemText, 'Competency Item');
+        const competencyRows = [
+          new TableRow({
+            children: [
+              this.createTableCell('ID', { bold: true, shading: 'e2e8f0', width: 15 }),
+              this.createTableCell('Statement', { bold: true, shading: 'e2e8f0', width: 85 }),
+            ],
+          }),
+        ];
 
-          if (formatted.paragraphs.length > 0) {
-            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
-          } else if (formatted.bullets.length > 0) {
-            contentChildren.push(
-              ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
-            );
-          }
-        }
+        step2.competencyItems.forEach((item: any) => {
+          competencyRows.push(
+            new TableRow({
+              children: [
+                this.createTableCell(item.id || '-'),
+                this.createTableCell(item.statement || item.description || item.title || '-'),
+              ],
+            })
+          );
+        });
+
+        contentChildren.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: competencyRows,
+          })
+        );
       }
 
       sectionsCompleted++;
@@ -703,7 +790,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           })
         );
 
-        // Module Learning Outcomes:
+        // Module Learning Outcomes - in tabular format with KSC mappings
         if (module.mlos?.length) {
           contentChildren.push(
             new Paragraph({
@@ -719,20 +806,49 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             })
           );
 
+          const mloRows = [
+            new TableRow({
+              children: [
+                this.createTableCell('ID', { bold: true, shading: 'e2e8f0', width: 10 }),
+                this.createTableCell('Learning Outcome', {
+                  bold: true,
+                  shading: 'e2e8f0',
+                  width: 50,
+                }),
+                this.createTableCell('Bloom Level', { bold: true, shading: 'e2e8f0', width: 15 }),
+                this.createTableCell('Linked KSCs', { bold: true, shading: 'e2e8f0', width: 25 }),
+              ],
+            }),
+          ];
+
           module.mlos.forEach((mlo: any) => {
-            contentChildren.push(
-              new Paragraph({
+            // Map KSC IDs to their actual statements
+            const linkedKSCs = mlo.linkedKSCs || mlo.competencyLinks || [];
+            const kscStatements = linkedKSCs
+              .map((kscId: string) => {
+                const statement = kscMap.get(kscId);
+                return statement ? `${kscId}: ${statement}` : kscId;
+              })
+              .join('\n');
+
+            mloRows.push(
+              new TableRow({
                 children: [
-                  new TextRun({
-                    text: `${mlo.id || 'M-LO'}: ${mlo.statement || ''} [${mlo.bloomLevel || 'N/A'}]`,
-                    size: FONT_SIZES.BODY,
-                    font: FONT_FAMILY,
-                  }),
+                  this.createTableCell(mlo.id || '-'),
+                  this.createTableCell(mlo.statement || '-'),
+                  this.createTableCell(mlo.bloomLevel || '-'),
+                  this.createTableCell(kscStatements || '-'),
                 ],
-                spacing: { after: 50, line: LINE_SPACING },
               })
             );
           });
+
+          contentChildren.push(
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: mloRows,
+            })
+          );
         }
 
         // Contact Activities:
