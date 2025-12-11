@@ -677,6 +677,14 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       for (const module of step4.modules) {
         // Module Title (H3)
         // Hours: X (Contact: X, Independent: X)
+        // Calculate independent hours if not provided
+        const independentHours =
+          module.independentHours !== undefined && module.independentHours !== null
+            ? module.independentHours
+            : module.totalHours && module.contactHours
+              ? module.totalHours - module.contactHours
+              : '-';
+
         contentChildren.push(
           this.createH3(
             module.moduleCode
@@ -686,7 +694,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           new Paragraph({
             children: [
               new TextRun({
-                text: `Hours: ${module.totalHours || '-'} (Contact: ${module.contactHours || '-'}, Independent: ${module.independentHours || '-'})`,
+                text: `Hours: ${module.totalHours || '-'} (Contact: ${module.contactHours || '-'}, Independent: ${independentHours})`,
                 size: FONT_SIZES.BODY,
                 font: FONT_FAMILY,
               }),
@@ -747,21 +755,33 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             })
           );
 
-          module.contactActivities.forEach((activity: string) => {
+          module.contactActivities.forEach((activity: any) => {
             if (activity) {
-              contentChildren.push(
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: `• ${activity}`,
-                      size: FONT_SIZES.BODY,
-                      font: FONT_FAMILY,
-                    }),
-                  ],
-                  spacing: { after: 30, line: LINE_SPACING },
-                  indent: { left: 360 },
-                })
-              );
+              // Handle both object format { type, title, hours } and string format
+              let activityText = '';
+              if (typeof activity === 'object' && activity.type && activity.title) {
+                const hours = activity.hours ? ` (${activity.hours}h)` : '';
+                const type = activity.type.charAt(0).toUpperCase() + activity.type.slice(1);
+                activityText = `${type}: ${activity.title}${hours}`;
+              } else if (typeof activity === 'string') {
+                activityText = activity;
+              }
+
+              if (activityText) {
+                contentChildren.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: `• ${activityText}`,
+                        size: FONT_SIZES.BODY,
+                        font: FONT_FAMILY,
+                      }),
+                    ],
+                    spacing: { after: 30, line: LINE_SPACING },
+                    indent: { left: 360 },
+                  })
+                );
+              }
             }
           });
         }
@@ -786,21 +806,33 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             })
           );
 
-          module.independentActivities.forEach((activity: string) => {
+          module.independentActivities.forEach((activity: any) => {
             if (activity) {
-              contentChildren.push(
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: `• ${activity}`,
-                      size: FONT_SIZES.BODY,
-                      font: FONT_FAMILY,
-                    }),
-                  ],
-                  spacing: { after: 30, line: LINE_SPACING },
-                  indent: { left: 360 },
-                })
-              );
+              // Handle both object format { type, title, hours } and string format
+              let activityText = '';
+              if (typeof activity === 'object' && activity.type && activity.title) {
+                const hours = activity.hours ? ` (${activity.hours}h)` : '';
+                const type = activity.type.charAt(0).toUpperCase() + activity.type.slice(1);
+                activityText = `${type}: ${activity.title}${hours}`;
+              } else if (typeof activity === 'string') {
+                activityText = activity;
+              }
+
+              if (activityText) {
+                contentChildren.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: `• ${activityText}`,
+                        size: FONT_SIZES.BODY,
+                        font: FONT_FAMILY,
+                      }),
+                    ],
+                    spacing: { after: 30, line: LINE_SPACING },
+                    indent: { left: 360 },
+                  })
+                );
+              }
             }
           });
         }
