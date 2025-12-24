@@ -1420,7 +1420,26 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
     }
 
     // Import queue functions
-    const { queueAllRemainingModules, getAllStep10Jobs } = await import('../queues/step10Queue');
+    const { queueAllRemainingModules, getAllStep10Jobs, step10Queue } = await import(
+      '../queues/step10Queue'
+    );
+
+    // Check if Redis/queue is available
+    if (!step10Queue) {
+      // Fallback to synchronous generation if queue is not available
+      loggingService.warn('Step 10 queue not available, using synchronous generation', {
+        workflowId: id,
+      });
+
+      // Generate all modules synchronously
+      const result = await workflowService.processStep10(id);
+
+      return res.json({
+        success: true,
+        data: result.step10,
+        message: 'Step 10 lesson plans generated successfully (synchronous mode)',
+      });
+    }
 
     // Check if there are already jobs running
     const existingJobs = await getAllStep10Jobs(id);

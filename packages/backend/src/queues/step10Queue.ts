@@ -34,177 +34,207 @@ export interface Step10JobResult {
   totalContactHours: number;
 }
 
-// Create the queue
-export const step10Queue: Queue<Step10JobData> = new Bull('step10-generation', {
-  redis: {
-    host: config.redis.host,
-    port: config.redis.port,
-    password: config.redis.password,
-  },
-  defaultJobOptions: {
-    attempts: 3, // Retry up to 3 times on failure
-    backoff: {
-      type: 'exponential',
-      delay: 60000, // Start with 1 minute delay
-    },
-    removeOnComplete: 100, // Keep last 100 completed jobs
-    removeOnFail: 200, // Keep last 200 failed jobs
-  },
-});
+// Create the queue only if Redis is configured
+let step10Queue: Queue<Step10JobData> | null = null;
 
-// Process jobs
-step10Queue.process(async (job: Job<Step10JobData>) => {
-  const { workflowId, moduleIndex } = job.data;
-
-  loggingService.info('Processing Step 10 job', {
-    jobId: job.id,
-    workflowId,
-    moduleIndex,
-    attempt: job.attemptsMade + 1,
-  });
-
+if (config.redis.host && config.redis.port) {
   try {
-    // Update job progress
-    await job.progress(0);
+    step10Queue = new Bull('step10-generation', {
+      redis: {
+        host: config.redis.host,
+        port: config.redis.port,
+        password: config.redis.password,
+        maxRetriesPerRequest: 3, // Reduce retries to fail faster
+        enableReadyCheck: false,
+        connectTimeout: 10000,
+      },
+      defaultJobOptions: {
+        attempts: 3, // Retry up to 3 times on failure
+        backoff: {
+          type: 'exponential',
+          delay: 60000, // Start with 1 minute delay
+        },
+        removeOnComplete: 100, // Keep last 100 completed jobs
+        removeOnFail: 200, // Keep last 200 failed jobs
+      },
+    });
 
-    // Get workflow
-    const workflow = await CurriculumWorkflow.findById(workflowId);
-    if (!workflow) {
-      throw new Error('Workflow not found');
-    }
+    loggingService.info('Step 10 queue initialized with Redis');
+  } catch (error) {
+    loggingService.warn('Failed to initialize Step 10 queue, background jobs disabled', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    step10Queue = null;
+  }
+} else {
+  loggingService.warn('Redis not configured, Step 10 background jobs disabled');
+}
 
-    const totalModules = workflow.step4?.modules?.length || 0;
-    const existingModules = workflow.step10?.moduleLessonPlans?.length || 0;
+export { step10Queue };
 
-    // Check if this module is already generated
-    if (existingModules > moduleIndex) {
-      loggingService.info('Module already generated, skipping', {
+// Process jobs only if queue is available
+if (step10Queue) {
+  step10Queue.process(async (job: Job<Step10JobData>) => {
+    const { workflowId, moduleIndex } = job.data;
+
+    loggingService.info('Processing Step 10 job', {
+      jobId: job.id,
+      workflowId,
+      moduleIndex,
+      attempt: job.attemptsMade + 1,
+    });
+
+    try {
+      // Update job progress
+      await job.progress(0);
+
+      // Get workflow
+      const workflow = await CurriculumWorkflow.findById(workflowId);
+      if (!workflow) {
+        throw new Error('Workflow not found');
+      }
+
+      const totalModules = workflow.step4?.modules?.length || 0;
+      const existingModules = workflow.step10?.moduleLessonPlans?.length || 0;
+
+      // Check if this module is already generated
+      if (existingModules > moduleIndex) {
+        loggingService.info('Module already generated, skipping', {
+          workflowId,
+          moduleIndex,
+          existingModules,
+        });
+
+        return {
+          workflowId,
+          moduleIndex,
+          modulesGenerated: existingModules,
+          totalModules,
+          allComplete: existingModules >= totalModules,
+          totalLessons: workflow.step10?.summary?.totalLessons || 0,
+          totalContactHours: workflow.step10?.summary?.totalContactHours || 0,
+        };
+      }
+
+      // Check if we should generate this module
+      if (moduleIndex !== existingModules) {
+        throw new Error(
+          `Cannot generate module ${moduleIndex + 1}. Expected module ${existingModules + 1}`
+        );
+      }
+
+      await job.progress(10);
+
+      // Generate the next module
+      loggingService.info('Generating module', {
+        workflowId,
+        moduleNumber: moduleIndex + 1,
+        totalModules,
+      });
+
+      const updatedWorkflow = await workflowService.processStep10NextModule(workflowId);
+
+      await job.progress(90);
+
+      const newModulesCount = updatedWorkflow.step10?.moduleLessonPlans?.length || 0;
+      const allComplete = newModulesCount >= totalModules;
+
+      loggingService.info('Module generation complete', {
+        jobId: job.id,
         workflowId,
         moduleIndex,
-        existingModules,
+        modulesGenerated: newModulesCount,
+        totalModules,
+        allComplete,
       });
+
+      await job.progress(100);
+
+      // If not all complete, queue the next module
+      if (!allComplete) {
+        await addStep10Job(workflowId, moduleIndex + 1, job.data.userId);
+        loggingService.info('Queued next module', {
+          workflowId,
+          nextModuleIndex: moduleIndex + 1,
+        });
+      }
 
       return {
         workflowId,
         moduleIndex,
-        modulesGenerated: existingModules,
+        modulesGenerated: newModulesCount,
         totalModules,
-        allComplete: existingModules >= totalModules,
-        totalLessons: workflow.step10?.summary?.totalLessons || 0,
-        totalContactHours: workflow.step10?.summary?.totalContactHours || 0,
+        allComplete,
+        totalLessons: updatedWorkflow.step10?.summary?.totalLessons || 0,
+        totalContactHours: updatedWorkflow.step10?.summary?.totalContactHours || 0,
       };
-    }
-
-    // Check if we should generate this module
-    if (moduleIndex !== existingModules) {
-      throw new Error(
-        `Cannot generate module ${moduleIndex + 1}. Expected module ${existingModules + 1}`
-      );
-    }
-
-    await job.progress(10);
-
-    // Generate the next module
-    loggingService.info('Generating module', {
-      workflowId,
-      moduleNumber: moduleIndex + 1,
-      totalModules,
-    });
-
-    const updatedWorkflow = await workflowService.processStep10NextModule(workflowId);
-
-    await job.progress(90);
-
-    const newModulesCount = updatedWorkflow.step10?.moduleLessonPlans?.length || 0;
-    const allComplete = newModulesCount >= totalModules;
-
-    loggingService.info('Module generation complete', {
-      jobId: job.id,
-      workflowId,
-      moduleIndex,
-      modulesGenerated: newModulesCount,
-      totalModules,
-      allComplete,
-    });
-
-    await job.progress(100);
-
-    // If not all complete, queue the next module
-    if (!allComplete) {
-      await addStep10Job(workflowId, moduleIndex + 1, job.data.userId);
-      loggingService.info('Queued next module', {
+    } catch (error) {
+      loggingService.error('Step 10 job failed', {
+        jobId: job.id,
         workflowId,
-        nextModuleIndex: moduleIndex + 1,
+        moduleIndex,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       });
+      throw error;
     }
+  });
 
-    return {
-      workflowId,
-      moduleIndex,
-      modulesGenerated: newModulesCount,
-      totalModules,
-      allComplete,
-      totalLessons: updatedWorkflow.step10?.summary?.totalLessons || 0,
-      totalContactHours: updatedWorkflow.step10?.summary?.totalContactHours || 0,
-    };
-  } catch (error) {
+  // Event handlers
+  step10Queue.on('completed', (job: Job<Step10JobData>, result: Step10JobResult) => {
+    loggingService.info('Step 10 job completed', {
+      jobId: job.id,
+      workflowId: job.data.workflowId,
+      moduleIndex: job.data.moduleIndex,
+      modulesGenerated: result.modulesGenerated,
+      totalModules: result.totalModules,
+      allComplete: result.allComplete,
+    });
+  });
+
+  step10Queue.on('failed', (job: Job<Step10JobData>, error: Error) => {
     loggingService.error('Step 10 job failed', {
       jobId: job.id,
-      workflowId,
-      moduleIndex,
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+      workflowId: job.data.workflowId,
+      moduleIndex: job.data.moduleIndex,
+      error: error.message,
+      attempts: job.attemptsMade,
+      maxAttempts: job.opts.attempts,
     });
-    throw error;
-  }
-});
-
-// Event handlers
-step10Queue.on('completed', (job: Job<Step10JobData>, result: Step10JobResult) => {
-  loggingService.info('Step 10 job completed', {
-    jobId: job.id,
-    workflowId: job.data.workflowId,
-    moduleIndex: job.data.moduleIndex,
-    modulesGenerated: result.modulesGenerated,
-    totalModules: result.totalModules,
-    allComplete: result.allComplete,
   });
-});
 
-step10Queue.on('failed', (job: Job<Step10JobData>, error: Error) => {
-  loggingService.error('Step 10 job failed', {
-    jobId: job.id,
-    workflowId: job.data.workflowId,
-    moduleIndex: job.data.moduleIndex,
-    error: error.message,
-    attempts: job.attemptsMade,
-    maxAttempts: job.opts.attempts,
+  step10Queue.on('stalled', (job: Job<Step10JobData>) => {
+    loggingService.warn('Step 10 job stalled', {
+      jobId: job.id,
+      workflowId: job.data.workflowId,
+      moduleIndex: job.data.moduleIndex,
+    });
   });
-});
 
-step10Queue.on('stalled', (job: Job<Step10JobData>) => {
-  loggingService.warn('Step 10 job stalled', {
-    jobId: job.id,
-    workflowId: job.data.workflowId,
-    moduleIndex: job.data.moduleIndex,
+  step10Queue.on('progress', (job: Job<Step10JobData>, progress: number) => {
+    loggingService.debug('Step 10 job progress', {
+      jobId: job.id,
+      workflowId: job.data.workflowId,
+      moduleIndex: job.data.moduleIndex,
+      progress,
+    });
   });
-});
-
-step10Queue.on('progress', (job: Job<Step10JobData>, progress: number) => {
-  loggingService.debug('Step 10 job progress', {
-    jobId: job.id,
-    workflowId: job.data.workflowId,
-    moduleIndex: job.data.moduleIndex,
-    progress,
-  });
-});
+}
 
 // Helper function to add a job
 export async function addStep10Job(
   workflowId: string,
   moduleIndex: number,
   userId?: string
-): Promise<Job<Step10JobData>> {
+): Promise<Job<Step10JobData> | null> {
+  if (!step10Queue) {
+    loggingService.warn('Step 10 queue not available, cannot add job', {
+      workflowId,
+      moduleIndex,
+    });
+    return null;
+  }
+
   const job = await step10Queue.add(
     {
       workflowId,
@@ -231,6 +261,13 @@ export async function queueAllRemainingModules(
   workflowId: string,
   userId?: string
 ): Promise<Job<Step10JobData>[]> {
+  if (!step10Queue) {
+    loggingService.warn('Step 10 queue not available, cannot queue modules', {
+      workflowId,
+    });
+    return [];
+  }
+
   const workflow = await CurriculumWorkflow.findById(workflowId);
   if (!workflow) {
     throw new Error('Workflow not found');
@@ -245,7 +282,9 @@ export async function queueAllRemainingModules(
   // The job processor will automatically queue the next one after completion
   if (existingModules < totalModules) {
     const job = await addStep10Job(workflowId, existingModules, userId);
-    jobs.push(job);
+    if (job) {
+      jobs.push(job);
+    }
   }
 
   return jobs;
@@ -253,6 +292,10 @@ export async function queueAllRemainingModules(
 
 // Helper function to get job status
 export async function getStep10JobStatus(workflowId: string, moduleIndex: number) {
+  if (!step10Queue) {
+    return null;
+  }
+
   const jobId = `step10-${workflowId}-module-${moduleIndex}`;
   const job = await step10Queue.getJob(jobId);
 
@@ -277,14 +320,18 @@ export async function getStep10JobStatus(workflowId: string, moduleIndex: number
 
 // Helper function to get all jobs for a workflow
 export async function getAllStep10Jobs(workflowId: string) {
+  if (!step10Queue) {
+    return [];
+  }
+
   const jobs = await step10Queue.getJobs(['waiting', 'active', 'completed', 'failed', 'delayed']);
   return jobs.filter((job) => job.data.workflowId === workflowId);
 }
 
 // Graceful shutdown
 export async function closeStep10Queue() {
-  await step10Queue.close();
-  loggingService.info('Step 10 queue closed');
+  if (step10Queue) {
+    await step10Queue.close();
+    loggingService.info('Step 10 queue closed');
+  }
 }
-
-loggingService.info('Step 10 queue initialized');
