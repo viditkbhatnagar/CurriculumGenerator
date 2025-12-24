@@ -1403,7 +1403,7 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
 
     loggingService.info('Step 10 generation requested', { workflowId: id });
 
-    // Validate workflow exists and step 9 is complete
+    // Validate workflow exists and step 9 is complete AND approved
     const existingWorkflow = await CurriculumWorkflow.findById(id);
     if (!existingWorkflow) {
       return res.status(404).json({
@@ -1416,6 +1416,21 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
       return res.status(400).json({
         success: false,
         error: 'Step 9 must be completed before generating lesson plans',
+      });
+    }
+
+    // Check if Step 9 is approved (status must be step9_complete or later)
+    const validStatuses = [
+      'step9_complete',
+      'step10_pending',
+      'step10_complete',
+      'review_pending',
+      'published',
+    ];
+    if (!validStatuses.includes(existingWorkflow.status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Step 9 must be approved before proceeding to Step 10. Please approve Step 9 first.',
       });
     }
 
