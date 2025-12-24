@@ -278,7 +278,12 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
   };
 
   const hasStep9Data = workflow.step9 && workflow.step9.terms?.length > 0;
-  const isApproved = !!workflow.step9?.approvedAt;
+  const isApproved =
+    workflow.status === 'step9_complete' ||
+    workflow.status === 'step10_pending' ||
+    workflow.status === 'step10_complete' ||
+    workflow.status === 'review_pending' ||
+    workflow.status === 'published';
   const validation = workflow.step9?.validationReport;
 
   // Filter terms
