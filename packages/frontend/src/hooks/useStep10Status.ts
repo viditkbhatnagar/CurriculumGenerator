@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { api } from '../services/api';
+import { api } from '../lib/api';
 
 export interface Step10Status {
   workflowId: string;
