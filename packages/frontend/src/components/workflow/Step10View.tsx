@@ -63,7 +63,7 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
     setError(null);
     startGeneration(workflow._id, 10, 180); // 3 minutes estimated per module
     try {
-      const response = await submitStep10.mutateAsync(workflow._id);
+      const response: any = await submitStep10.mutateAsync(workflow._id);
 
       // Check if generation started in background
       if (response?.data?.generationStarted) {
