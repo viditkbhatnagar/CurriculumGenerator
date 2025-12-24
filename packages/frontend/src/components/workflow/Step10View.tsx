@@ -61,12 +61,24 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
 
   const handleGenerate = async () => {
     setError(null);
-    startGeneration(workflow._id, 10, 90); // 90 seconds estimated
+    startGeneration(workflow._id, 10, 180); // 3 minutes estimated per module
     try {
-      await submitStep10.mutateAsync(workflow._id);
-      completeGeneration(workflow._id, 10);
-      await onRefresh();
-      setJustGenerated(true);
+      const response = await submitStep10.mutateAsync(workflow._id);
+
+      // Check if generation started in background
+      if (response?.data?.generationStarted) {
+        // Auto-refresh after 3 minutes to check progress
+        setTimeout(async () => {
+          await onRefresh();
+          completeGeneration(workflow._id, 10);
+        }, 180000); // 3 minutes
+
+        setJustGenerated(true);
+      } else {
+        completeGeneration(workflow._id, 10);
+        await onRefresh();
+        setJustGenerated(true);
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate lesson plans';
       console.error('Failed to generate lesson plans:', err);
@@ -108,7 +120,8 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
                 Generating Lesson Plans & PPTs...
               </h3>
               <p className="text-sm text-slate-400">
-                This may take 20-40 minutes for all modules. Progress updates every 5 seconds.
+                Module generation takes 2-5 minutes. The page will auto-refresh when complete, or
+                you can manually refresh to check progress.
               </p>
             </div>
           </div>

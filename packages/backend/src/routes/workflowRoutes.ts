@@ -1443,23 +1443,42 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
         });
       }
 
-      // Generate the next module only
-      const result = await workflowService.processStep10NextModule(id);
+      // Generate the next module only (with immediate response and background processing)
+      loggingService.info('Starting Step 10 next module generation', {
+        workflowId: id,
+        moduleNumber: existingModules + 1,
+        totalModules,
+      });
 
-      const newModulesCount = result.step10?.moduleLessonPlans?.length || 0;
-      const allComplete = newModulesCount >= totalModules;
+      // Start generation in background (don't await)
+      workflowService
+        .processStep10NextModule(id)
+        .then((result) => {
+          loggingService.info('Step 10 module generation completed', {
+            workflowId: id,
+            modulesGenerated: result.step10?.moduleLessonPlans?.length || 0,
+            totalModules,
+          });
+        })
+        .catch((err) => {
+          loggingService.error('Step 10 module generation failed', {
+            workflowId: id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
 
+      // Return immediately with status
       return res.json({
         success: true,
         data: {
-          modulesGenerated: newModulesCount,
+          modulesGenerated: existingModules,
           totalModules,
-          allComplete,
-          step10: result.step10,
+          allComplete: false,
+          generationStarted: true,
+          message:
+            'Generation started in background. Refresh the page in 2-3 minutes to see progress.',
         },
-        message: allComplete
-          ? 'All lesson plans generated successfully!'
-          : `Module ${newModulesCount}/${totalModules} generated. Click "Generate Lesson Plans & PowerPoints" again to continue.`,
+        message: `Module ${existingModules + 1}/${totalModules} generation started. This will take 2-5 minutes. Refresh the page to see progress.`,
       });
     }
 
