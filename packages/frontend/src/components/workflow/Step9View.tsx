@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSubmitStep9 } from '@/hooks/useWorkflow';
+import { useSubmitStep9, useApproveStep9 } from '@/hooks/useWorkflow';
 import { CurriculumWorkflow, GlossaryTerm, ModuleTermList, TermPriority } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import { EditTarget } from './EditWithAIButton';
@@ -231,6 +231,7 @@ function ModuleTermListCard({ moduleList }: { moduleList: ModuleTermList }) {
 
 export default function Step9View({ workflow, onComplete: _onComplete, onRefresh }: Props) {
   const submitStep9 = useSubmitStep9();
+  const approveStep9 = useApproveStep9();
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -263,7 +264,21 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
     }
   };
 
+  const handleApprove = async () => {
+    setError(null);
+    try {
+      await approveStep9.mutateAsync(workflow._id);
+      await onRefresh();
+      _onComplete();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to approve Step 9';
+      console.error('Failed to approve Step 9:', err);
+      setError(errorMessage);
+    }
+  };
+
   const hasStep9Data = workflow.step9 && workflow.step9.terms?.length > 0;
+  const isApproved = !!workflow.step9?.approvedAt;
   const validation = workflow.step9?.validationReport;
 
   // Filter terms
@@ -432,16 +447,29 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
               </svg>
             </div>
             <h3 className="text-xl font-bold text-emerald-400 mb-2">
-              {justGenerated ? '🎉 Glossary Generated!' : 'Workflow Complete! 🎉'}
+              {justGenerated
+                ? '🎉 Glossary Generated!'
+                : isApproved
+                  ? 'Step 9 Approved!'
+                  : 'Glossary Complete!'}
             </h3>
             <p className="text-slate-300 mb-4">
-              {justGenerated
-                ? 'Your glossary has been generated. Click "Complete & Review" in the header to finalize your curriculum.'
-                : 'Your curriculum has been generated successfully. You can now export or publish.'}
+              {isApproved
+                ? 'Step 9 is approved. You can now proceed to Step 10: Lesson Plans & PPT Generation.'
+                : 'Review your glossary below and approve to continue to Step 10.'}
             </p>
-            {justGenerated && (
+            {!isApproved && (
+              <button
+                onClick={handleApprove}
+                disabled={approveStep9.isPending}
+                className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 shadow-lg shadow-emerald-500/20"
+              >
+                {approveStep9.isPending ? 'Approving...' : 'Approve & Continue to Step 10 →'}
+              </button>
+            )}
+            {isApproved && (
               <p className="text-cyan-400 text-sm animate-pulse">
-                ↑ Click "Complete & Review" button above to finalize
+                ✓ Approved - Navigate to Step 10 using the sidebar
               </p>
             )}
           </div>

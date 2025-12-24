@@ -7,6 +7,7 @@ export { default as Step6View } from './Step6View';
 export { default as Step7Form } from './Step7Form';
 export { default as Step8View } from './Step8View';
 export { default as Step9View } from './Step9View';
+export { default as Step10View } from './Step10View';
 export { default as CanvasChatbot } from './CanvasChatbot';
 export { default as EditWithAIButton } from './EditWithAIButton';
 export type { EditTarget } from './EditWithAIButton';

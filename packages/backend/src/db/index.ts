@@ -26,11 +26,13 @@ class Database {
       const options = {
         maxPoolSize: 20, // Maximum number of connections in the pool
         minPoolSize: 5, // Minimum number of connections in the pool
-        socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
-        serverSelectionTimeoutMS: 5000, // Timeout for server selection
+        socketTimeoutMS: 7200000, // 2 hours socket timeout for long-running Step 10 generation
+        serverSelectionTimeoutMS: 10000, // 10 seconds for server selection
+        connectTimeoutMS: 30000, // 30 seconds connection timeout
         heartbeatFrequencyMS: 10000, // Heartbeat frequency
         retryWrites: true, // Retry writes on network errors
         retryReads: true, // Retry reads on network errors
+        maxIdleTimeMS: 7200000, // 2 hours max idle time
       };
 
       this.connection = await mongoose.connect(config.database.mongoUri, options);
@@ -63,7 +65,6 @@ class Database {
         await this.disconnect();
         process.exit(0);
       });
-
     } catch (error) {
       console.error('Failed to connect to MongoDB:', error);
       this.isConnecting = false;
@@ -118,9 +119,7 @@ class Database {
    * @param callback Function to execute within the transaction
    * @returns Result of the callback function
    */
-  async transaction<T>(
-    callback: (session: mongoose.ClientSession) => Promise<T>
-  ): Promise<T> {
+  async transaction<T>(callback: (session: mongoose.ClientSession) => Promise<T>): Promise<T> {
     const session = await mongoose.startSession();
     session.startTransaction();
 

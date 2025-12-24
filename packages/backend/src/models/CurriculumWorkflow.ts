@@ -1,6 +1,6 @@
 /**
  * CurriculumWorkflow Model
- * Implements the 9-Step AI-Integrated Curriculum Generator Workflow v2.2
+ * Implements the 10-Step AI-Integrated Curriculum Generator Workflow v2.2
  *
  * Steps:
  * 1. Program Foundation (15-20 min)
@@ -12,11 +12,199 @@
  * 7. Auto-Gradable Assessments - MCQ-First (15-20 min)
  * 8. Case Studies (10-15 min)
  * 9. Glossary - Auto-Generated (5 min)
+ * 10. Lesson Plans & PPT Generation (20-30 min)
  *
  * Total: 2-3 hours of SME time
  */
 
 import mongoose, { Schema, Document } from 'mongoose';
+
+// ============================================================================
+// STEP 10 INTERFACES - Lesson Plans & PPT Generation
+// ============================================================================
+
+export interface ReadingReference {
+  sourceId: string;
+  citation: string;
+  estimatedMinutes: number;
+}
+
+export interface ReadingAssignment {
+  sourceId: string;
+  citation: string;
+  estimatedMinutes: number;
+  complexityLevel: 'introductory' | 'intermediate' | 'advanced';
+}
+
+export interface CharacterBrief {
+  characterName: string;
+  role: string;
+  background: string;
+  objectives: string[];
+}
+
+export interface LessonActivity {
+  activityId: string;
+  sequenceOrder: number;
+  type:
+    | 'mini_lecture'
+    | 'discussion'
+    | 'demonstration'
+    | 'practice'
+    | 'role_play'
+    | 'case_analysis'
+    | 'group_work'
+    | 'assessment'
+    | 'break';
+  title: string;
+  description: string;
+  duration: number; // minutes
+  teachingMethod: string;
+  resources: string[];
+  instructorActions: string[];
+  studentActions: string[];
+}
+
+export interface CaseStudyActivity {
+  caseStudyId: string;
+  caseTitle: string;
+  activityType: 'practice' | 'discussion' | 'assessment_ready';
+  duration: number;
+  learningPurpose: string;
+  linkedMLOs: string[];
+  linkedPLOs: string[];
+
+  instructorInstructions: string;
+  studentOutputExpectations: string[];
+
+  assessmentHooks: {
+    keyFacts: string[];
+    misconceptions: string[];
+    decisionPoints: string[];
+  };
+
+  // Role-play components (if applicable)
+  rolePlay?: {
+    characterBriefs: CharacterBrief[];
+    decisionPrompts: string[];
+    debriefQuestions: string[];
+  };
+
+  isFirstAppearance: boolean;
+  previousAppearanceRef?: string;
+}
+
+export interface FormativeCheck {
+  checkId: string;
+  type: 'mcq' | 'quick_poll' | 'discussion_question' | 'reflection';
+  question: string;
+  options?: string[];
+  correctAnswer?: string;
+  explanation?: string;
+  linkedMLO: string;
+  duration: number; // minutes
+}
+
+export interface LessonPlan {
+  // Metadata
+  lessonId: string;
+  lessonNumber: number;
+  lessonTitle: string;
+  duration: number; // minutes (60-180)
+
+  // Learning alignment
+  linkedMLOs: string[];
+  linkedPLOs: string[];
+  bloomLevel: string;
+
+  // Objectives
+  objectives: string[];
+
+  // Activity sequence
+  activities: LessonActivity[];
+
+  // Materials
+  materials: {
+    pptDeckRef: string;
+    caseFiles: string[];
+    readingReferences: ReadingReference[];
+  };
+
+  // Instructor guidance
+  instructorNotes: {
+    pedagogicalGuidance: string;
+    pacingSuggestions: string;
+    adaptationOptions: string[];
+    commonMisconceptions: string[];
+    discussionPrompts: string[];
+  };
+
+  // Independent study
+  independentStudy: {
+    coreReadings: ReadingAssignment[];
+    supplementaryReadings: ReadingAssignment[];
+    estimatedEffort: number; // minutes
+  };
+
+  // Integrated case study (if applicable)
+  caseStudyActivity?: CaseStudyActivity;
+
+  // Formative checks
+  formativeChecks: FormativeCheck[];
+}
+
+export interface PPTDeckReference {
+  deckId: string;
+  lessonId: string;
+  lessonNumber: number;
+  slideCount: number;
+  pptxPath?: string;
+  pdfPath?: string;
+  imagesPath?: string;
+}
+
+export interface ModuleLessonPlan {
+  moduleId: string;
+  moduleCode: string;
+  moduleTitle: string;
+  totalContactHours: number;
+  totalLessons: number;
+
+  lessons: LessonPlan[];
+
+  // PPT references
+  pptDecks: PPTDeckReference[];
+}
+
+export interface Step10LessonPlans {
+  // Module lesson plans
+  moduleLessonPlans: ModuleLessonPlan[];
+
+  // Validation results
+  validation: {
+    allModulesHaveLessonPlans: boolean;
+    allLessonDurationsValid: boolean;
+    totalHoursMatch: boolean;
+    allMLOsCovered: boolean;
+    caseStudiesIntegrated: boolean;
+    assessmentsIntegrated: boolean;
+  };
+
+  // Summary statistics
+  summary: {
+    totalLessons: number;
+    totalContactHours: number;
+    averageLessonDuration: number;
+    caseStudiesIncluded: number;
+    formativeChecksIncluded: number;
+  };
+
+  // Metadata
+  generatedAt: Date;
+  validatedAt?: Date;
+  approvedAt?: Date;
+  approvedBy?: string;
+}
 
 // ============================================================================
 // INTERFACES
@@ -28,7 +216,7 @@ export interface ICurriculumWorkflow extends Document {
   createdBy: mongoose.Types.ObjectId;
 
   // Current State
-  currentStep: number; // 1-9
+  currentStep: number; // 1-10
   status: string;
 
   // Step 1: Program Foundation
@@ -548,6 +736,9 @@ export interface ICurriculumWorkflow extends Document {
     generatedAt: Date;
   };
 
+  // Step 10: Lesson Plans & PPT Generation
+  step10?: Step10LessonPlans;
+
   // Step Progress Tracking
   stepProgress: Array<{
     step: number;
@@ -598,7 +789,7 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
     currentStep: {
       type: Number,
       min: 1,
-      max: 9,
+      max: 10,
       default: 1,
       required: true,
       index: true,
@@ -626,6 +817,8 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
         'step8_complete',
         'step9_pending',
         'step9_complete',
+        'step10_pending',
+        'step10_complete',
         'review_pending',
         'published',
       ],
@@ -688,6 +881,12 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
       default: undefined,
     },
 
+    // Step 10: Lesson Plans & PPT Generation
+    step10: {
+      type: Schema.Types.Mixed,
+      default: undefined,
+    },
+
     // Step Progress
     stepProgress: [
       {
@@ -741,6 +940,7 @@ CurriculumWorkflowSchema.pre('save', function (next) {
       { step: 7, status: 'pending' },
       { step: 8, status: 'pending' },
       { step: 9, status: 'pending' },
+      { step: 10, status: 'pending' },
     ];
   }
   next();
@@ -748,7 +948,7 @@ CurriculumWorkflowSchema.pre('save', function (next) {
 
 // Advance to next step
 CurriculumWorkflowSchema.methods.advanceStep = async function (): Promise<void> {
-  if (this.currentStep >= 9) {
+  if (this.currentStep >= 10) {
     throw new Error('Already at final step');
   }
 
@@ -801,7 +1001,7 @@ CurriculumWorkflowSchema.methods.calculateProgress = function (): number {
   const completedSteps = this.stepProgress.filter(
     (p: any) => p.status === 'completed' || p.status === 'approved'
   ).length;
-  return Math.round((completedSteps / 9) * 100);
+  return Math.round((completedSteps / 10) * 100);
 };
 
 // Virtual for duration

@@ -12,7 +12,7 @@ export interface IAnalyticsMetric extends Document {
   // Token usage metrics
   tokensUsed?: number;
   provider?: string; // 'openai', 'anthropic', etc.
-  model?: string; // 'gpt-4', 'gpt-3.5-turbo', etc.
+  modelName?: string; // 'gpt-4', 'gpt-3.5-turbo', etc.
 
   // Cost metrics
   cost?: number;
@@ -63,7 +63,7 @@ const AnalyticsMetricSchema = new Schema<IAnalyticsMetric>(
       trim: true,
     },
 
-    model: {
+    modelName: {
       type: String,
       trim: true,
     },

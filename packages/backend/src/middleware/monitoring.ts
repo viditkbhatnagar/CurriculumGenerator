@@ -5,6 +5,7 @@ import { errorTrackingService } from '../services/errorTrackingService';
 
 // Extend Express Request type to include user
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: {
@@ -28,12 +29,7 @@ export function requestLoggingMiddleware(req: Request, res: Response, next: Next
     loggingService.logRequest(req, res, duration);
 
     // Record metrics
-    monitoringService.recordResponseTime(
-      req.path,
-      req.method,
-      duration,
-      res.statusCode
-    );
+    monitoringService.recordResponseTime(req.path, req.method, duration, res.statusCode);
 
     // Track active users
     if (req.user?.id) {
@@ -103,15 +99,11 @@ export function performanceMonitoringMiddleware(
   }
 
   // Add breadcrumb
-  errorTrackingService.addBreadcrumb(
-    `${req.method} ${req.path}`,
-    'http',
-    {
-      method: req.method,
-      url: req.url,
-      statusCode: res.statusCode,
-    }
-  );
+  errorTrackingService.addBreadcrumb(`${req.method} ${req.path}`, 'http', {
+    method: req.method,
+    url: req.url,
+    statusCode: res.statusCode,
+  });
 
   next();
 }
@@ -119,11 +111,7 @@ export function performanceMonitoringMiddleware(
 // User context middleware
 export function userContextMiddleware(req: Request, res: Response, next: NextFunction): void {
   if (req.user?.id) {
-    errorTrackingService.setUser(
-      req.user.id,
-      req.user.email,
-      req.user.username
-    );
+    errorTrackingService.setUser(req.user.id, req.user.email, req.user.username);
   }
 
   res.on('finish', () => {

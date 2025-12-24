@@ -498,6 +498,58 @@ export function useSubmitStep9() {
   });
 }
 
+export function useApproveStep9() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetchAPI(`${WORKFLOW_BASE}/${id}/step9/approve`, {
+        method: 'POST',
+      });
+      return response;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    },
+  });
+}
+
+// =============================================================================
+// STEP 10: LESSON PLANS & PPT GENERATION
+// =============================================================================
+
+export function useSubmitStep10() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response: WorkflowResponse = await fetchAPI(`${WORKFLOW_BASE}/${id}/step10`, {
+        method: 'POST',
+      });
+      return response;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    },
+  });
+}
+
+export function useApproveStep10() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetchAPI(`${WORKFLOW_BASE}/${id}/step10/approve`, {
+        method: 'POST',
+      });
+      return response;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    },
+  });
+}
+
 // =============================================================================
 // WORKFLOW COMPLETION & EXPORT
 // =============================================================================
@@ -550,7 +602,7 @@ export function useNextWorkflowAction(workflow?: CurriculumWorkflow) {
   // Check if step is approved
   const stepProgress = workflow.stepProgress.find((p) => p.step === step);
   if (stepProgress?.status === 'approved') {
-    if (step < 9) {
+    if (step < 10) {
       return { type: 'generate', step: step + 1 };
     }
     return { type: 'complete' };
@@ -573,10 +625,11 @@ export function useRemainingTime(currentStep: number): string {
     7: 20,
     8: 15,
     9: 5,
+    10: 15,
   };
 
   let remaining = 0;
-  for (let i = currentStep; i <= 9; i++) {
+  for (let i = currentStep; i <= 10; i++) {
     remaining += stepTimes[i] || 0;
   }
 

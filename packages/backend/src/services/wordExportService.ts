@@ -9,7 +9,6 @@ import {
   WidthType,
   AlignmentType,
   PageBreak,
-  BorderStyle,
 } from 'docx';
 import OpenAI from 'openai';
 import { loggingService } from './loggingService';
@@ -25,6 +24,7 @@ interface WorkflowData {
   step7?: any;
   step8?: any;
   step9?: any;
+  step10?: any;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -304,6 +304,549 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   }
 
   /**
+   * Generate Step 10 (Lesson Plans) section
+   */
+  private async generateStep10Section(step10: any, contentChildren: any[]): Promise<void> {
+    if (!step10) return;
+
+    contentChildren.push(
+      new Paragraph({ children: [new PageBreak()] }),
+      this.createH1('10. Lesson Plans & PPT Generation')
+    );
+
+    // Validation Summary
+    if (step10.validation) {
+      contentChildren.push(this.createH2('10.1 Validation Summary'));
+
+      const validationRows = [
+        new TableRow({
+          children: [
+            this.createTableCell('Validation Check', { bold: true, shading: 'e2e8f0' }),
+            this.createTableCell('Status', { bold: true, shading: 'e2e8f0' }),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('All Modules Have Lesson Plans'),
+            this.createTableCell(step10.validation.allModulesHaveLessonPlans ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('All Lesson Durations Valid (60-180 min)'),
+            this.createTableCell(step10.validation.allLessonDurationsValid ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Total Hours Match Module Contact Hours'),
+            this.createTableCell(step10.validation.totalHoursMatch ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('All MLOs Covered'),
+            this.createTableCell(step10.validation.allMLOsCovered ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Case Studies Integrated'),
+            this.createTableCell(step10.validation.caseStudiesIntegrated ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Assessments Integrated'),
+            this.createTableCell(step10.validation.assessmentsIntegrated ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+      ];
+
+      contentChildren.push(
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: validationRows,
+        }),
+        new Paragraph({ children: [], spacing: { after: 300 } })
+      );
+    }
+
+    // Summary Statistics
+    if (step10.summary) {
+      contentChildren.push(this.createH2('10.2 Summary Statistics'));
+
+      const summaryRows = [
+        new TableRow({
+          children: [
+            this.createTableCell('Metric', { bold: true, shading: 'e2e8f0' }),
+            this.createTableCell('Value', { bold: true, shading: 'e2e8f0' }),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Total Lessons'),
+            this.createTableCell(String(step10.summary.totalLessons || 0)),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Total Contact Hours'),
+            this.createTableCell(String(step10.summary.totalContactHours || 0)),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Average Lesson Duration (minutes)'),
+            this.createTableCell(String(Math.round(step10.summary.averageLessonDuration || 0))),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Case Studies Included'),
+            this.createTableCell(String(step10.summary.caseStudiesIncluded || 0)),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Formative Checks Included'),
+            this.createTableCell(String(step10.summary.formativeChecksIncluded || 0)),
+          ],
+        }),
+      ];
+
+      contentChildren.push(
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: summaryRows,
+        }),
+        new Paragraph({ children: [], spacing: { after: 300 } })
+      );
+    }
+
+    // Module Lesson Plans
+    if (step10.moduleLessonPlans?.length) {
+      contentChildren.push(this.createH2('10.3 Module Lesson Plans'));
+
+      for (const modulePlan of step10.moduleLessonPlans) {
+        // Module header
+        contentChildren.push(
+          this.createH3(`${modulePlan.moduleCode}: ${modulePlan.moduleTitle || 'Untitled Module'}`),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Total Contact Hours: ${modulePlan.totalContactHours || 0} | Total Lessons: ${modulePlan.totalLessons || 0}`,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+                italics: true,
+                color: '4a5568',
+              }),
+            ],
+            spacing: { after: 150, line: LINE_SPACING },
+          })
+        );
+
+        // Lessons for this module
+        if (modulePlan.lessons?.length) {
+          for (const lesson of modulePlan.lessons) {
+            // Lesson title and metadata
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `Lesson ${lesson.lessonNumber}: ${lesson.lessonTitle || 'Untitled Lesson'}`,
+                    bold: true,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
+                  }),
+                ],
+                spacing: { before: 150, after: 80, line: LINE_SPACING },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `Duration: ${lesson.duration} minutes | Bloom Level: ${lesson.bloomLevel || 'N/A'}`,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
+                    italics: true,
+                    color: '4a5568',
+                  }),
+                ],
+                spacing: { after: 80, line: LINE_SPACING },
+              })
+            );
+
+            // Linked MLOs and PLOs
+            if (lesson.linkedMLOs?.length || lesson.linkedPLOs?.length) {
+              const mloText = lesson.linkedMLOs?.length
+                ? `MLOs: ${lesson.linkedMLOs.join(', ')}`
+                : '';
+              const ploText = lesson.linkedPLOs?.length
+                ? `PLOs: ${lesson.linkedPLOs.join(', ')}`
+                : '';
+              const alignmentText = [mloText, ploText].filter(Boolean).join(' | ');
+
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: alignmentText,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                      italics: true,
+                    }),
+                  ],
+                  spacing: { after: 100, line: LINE_SPACING },
+                })
+              );
+            }
+
+            // Learning Objectives
+            if (lesson.objectives?.length) {
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: 'Learning Objectives:',
+                      bold: true,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                    }),
+                  ],
+                  spacing: { before: 80, after: 50, line: LINE_SPACING },
+                })
+              );
+              contentChildren.push(
+                ...this.createFormattedParagraphs(lesson.objectives, { isBullet: true })
+              );
+            }
+
+            // Activity Sequence
+            if (lesson.activities?.length) {
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: 'Activity Sequence:',
+                      bold: true,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                    }),
+                  ],
+                  spacing: { before: 100, after: 50, line: LINE_SPACING },
+                })
+              );
+
+              const activityRows = [
+                new TableRow({
+                  children: [
+                    this.createTableCell('#', { bold: true, shading: 'e2e8f0', width: 5 }),
+                    this.createTableCell('Activity', { bold: true, shading: 'e2e8f0', width: 30 }),
+                    this.createTableCell('Type', { bold: true, shading: 'e2e8f0', width: 15 }),
+                    this.createTableCell('Duration', {
+                      bold: true,
+                      shading: 'e2e8f0',
+                      width: 10,
+                    }),
+                    this.createTableCell('Description', {
+                      bold: true,
+                      shading: 'e2e8f0',
+                      width: 40,
+                    }),
+                  ],
+                }),
+              ];
+
+              lesson.activities.forEach((activity: any) => {
+                activityRows.push(
+                  new TableRow({
+                    children: [
+                      this.createTableCell(String(activity.sequenceOrder || '')),
+                      this.createTableCell(activity.title || '-'),
+                      this.createTableCell(activity.type || '-'),
+                      this.createTableCell(`${activity.duration || 0} min`),
+                      this.createTableCell(activity.description || '-'),
+                    ],
+                  })
+                );
+              });
+
+              contentChildren.push(
+                new Table({
+                  width: { size: 100, type: WidthType.PERCENTAGE },
+                  rows: activityRows,
+                }),
+                new Paragraph({ children: [], spacing: { after: 100 } })
+              );
+            }
+
+            // Materials List
+            if (lesson.materials) {
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: 'Required Materials:',
+                      bold: true,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                    }),
+                  ],
+                  spacing: { before: 100, after: 50, line: LINE_SPACING },
+                })
+              );
+
+              const materials: string[] = [];
+              if (lesson.materials.pptDeckRef) {
+                materials.push(`PPT Deck: ${lesson.materials.pptDeckRef}`);
+              }
+              if (lesson.materials.caseFiles?.length) {
+                materials.push(`Case Files: ${lesson.materials.caseFiles.join(', ')}`);
+              }
+              if (lesson.materials.readingReferences?.length) {
+                lesson.materials.readingReferences.forEach((ref: any) => {
+                  materials.push(`Reading: ${ref.citation} (${ref.estimatedMinutes || 0} min)`);
+                });
+              }
+
+              if (materials.length > 0) {
+                contentChildren.push(
+                  ...this.createFormattedParagraphs(materials, { isBullet: true })
+                );
+              }
+            }
+
+            // Instructor Notes
+            if (lesson.instructorNotes) {
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: 'Instructor Notes:',
+                      bold: true,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                    }),
+                  ],
+                  spacing: { before: 100, after: 50, line: LINE_SPACING },
+                })
+              );
+
+              if (lesson.instructorNotes.pedagogicalGuidance) {
+                const formatted = await this.formatTextIntelligently(
+                  lesson.instructorNotes.pedagogicalGuidance,
+                  'Pedagogical Guidance'
+                );
+                if (formatted.paragraphs.length > 0) {
+                  contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+                }
+              }
+
+              if (lesson.instructorNotes.adaptationOptions?.length) {
+                contentChildren.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: 'Adaptation Options:',
+                        bold: true,
+                        size: FONT_SIZES.BODY,
+                        font: FONT_FAMILY,
+                      }),
+                    ],
+                    spacing: { before: 80, after: 40, line: LINE_SPACING },
+                  }),
+                  ...this.createFormattedParagraphs(lesson.instructorNotes.adaptationOptions, {
+                    isBullet: true,
+                  })
+                );
+              }
+            }
+
+            // Case Study Activity (if present)
+            if (lesson.caseStudyActivity) {
+              const caseStudy = lesson.caseStudyActivity;
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `Case Study: ${caseStudy.caseTitle}`,
+                      bold: true,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                    }),
+                  ],
+                  spacing: { before: 100, after: 50, line: LINE_SPACING },
+                }),
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `Type: ${caseStudy.activityType} | Duration: ${caseStudy.duration} min`,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                      italics: true,
+                    }),
+                  ],
+                  spacing: { after: 80, line: LINE_SPACING },
+                })
+              );
+
+              if (caseStudy.learningPurpose) {
+                contentChildren.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: `Purpose: ${caseStudy.learningPurpose}`,
+                        size: FONT_SIZES.BODY,
+                        font: FONT_FAMILY,
+                      }),
+                    ],
+                    spacing: { after: 80, line: LINE_SPACING },
+                  })
+                );
+              }
+            }
+
+            // Independent Study
+            if (lesson.independentStudy) {
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `Independent Study (${lesson.independentStudy.estimatedEffort || 0} minutes):`,
+                      bold: true,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                    }),
+                  ],
+                  spacing: { before: 100, after: 50, line: LINE_SPACING },
+                })
+              );
+
+              if (lesson.independentStudy.coreReadings?.length) {
+                contentChildren.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: 'Core Readings:',
+                        bold: true,
+                        size: FONT_SIZES.BODY,
+                        font: FONT_FAMILY,
+                      }),
+                    ],
+                    spacing: { before: 60, after: 40, line: LINE_SPACING },
+                  })
+                );
+
+                const coreReadings = lesson.independentStudy.coreReadings.map(
+                  (reading: any) =>
+                    `${reading.citation} (${reading.estimatedMinutes || 0} min, ${reading.complexityLevel || 'N/A'})`
+                );
+                contentChildren.push(
+                  ...this.createFormattedParagraphs(coreReadings, { isBullet: true })
+                );
+              }
+
+              if (lesson.independentStudy.supplementaryReadings?.length) {
+                contentChildren.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: 'Supplementary Readings:',
+                        bold: true,
+                        size: FONT_SIZES.BODY,
+                        font: FONT_FAMILY,
+                      }),
+                    ],
+                    spacing: { before: 60, after: 40, line: LINE_SPACING },
+                  })
+                );
+
+                const suppReadings = lesson.independentStudy.supplementaryReadings.map(
+                  (reading: any) =>
+                    `${reading.citation} (${reading.estimatedMinutes || 0} min, ${reading.complexityLevel || 'N/A'})`
+                );
+                contentChildren.push(
+                  ...this.createFormattedParagraphs(suppReadings, { isBullet: true })
+                );
+              }
+            }
+
+            // Spacing between lessons
+            contentChildren.push(
+              new Paragraph({
+                children: [],
+                spacing: { after: 300 },
+              })
+            );
+          }
+        }
+
+        // PPT Deck References
+        if (modulePlan.pptDecks?.length) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'PowerPoint Decks:',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { before: 150, after: 80, line: LINE_SPACING },
+            })
+          );
+
+          const pptRows = [
+            new TableRow({
+              children: [
+                this.createTableCell('Lesson', { bold: true, shading: 'e2e8f0', width: 10 }),
+                this.createTableCell('Deck ID', { bold: true, shading: 'e2e8f0', width: 30 }),
+                this.createTableCell('Slides', { bold: true, shading: 'e2e8f0', width: 10 }),
+                this.createTableCell('Formats', { bold: true, shading: 'e2e8f0', width: 50 }),
+              ],
+            }),
+          ];
+
+          modulePlan.pptDecks.forEach((deck: any) => {
+            const formats: string[] = [];
+            if (deck.pptxPath) formats.push('PPTX');
+            if (deck.pdfPath) formats.push('PDF');
+            if (deck.imagesPath) formats.push('Images');
+
+            pptRows.push(
+              new TableRow({
+                children: [
+                  this.createTableCell(String(deck.lessonNumber || '-')),
+                  this.createTableCell(deck.deckId || '-'),
+                  this.createTableCell(String(deck.slideCount || 0)),
+                  this.createTableCell(formats.join(', ') || 'Not exported'),
+                ],
+              })
+            );
+          });
+
+          contentChildren.push(
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: pptRows,
+            }),
+            new Paragraph({ children: [], spacing: { after: 300 } })
+          );
+        }
+
+        // Spacing between modules
+        contentChildren.push(
+          new Paragraph({
+            children: [],
+            spacing: { after: 400 },
+          })
+        );
+      }
+    }
+  }
+
+  /**
    * Generate the complete Word document with intelligent formatting and progress tracking
    */
   async generateDocument(
@@ -327,6 +870,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       workflow.step7,
       workflow.step8,
       workflow.step9,
+      workflow.step10,
     ].filter(Boolean).length;
 
     let sectionsCompleted = 0;
@@ -1791,6 +2335,24 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       reportProgress(
         'Step 9: Glossary',
         `✓ Step 9 formatted (${sectionsCompleted}/${totalSections})`
+      );
+    }
+
+    // =========================================================================
+    // SECTION 10: LESSON PLANS & PPT GENERATION
+    // =========================================================================
+    if (workflow.step10) {
+      reportProgress(
+        'Step 10: Lesson Plans',
+        `Formatting lesson plans (${sectionsCompleted + 1}/${totalSections})...`
+      );
+
+      await this.generateStep10Section(workflow.step10, contentChildren);
+
+      sectionsCompleted++;
+      reportProgress(
+        'Step 10: Lesson Plans',
+        `✓ Step 10 formatted (${sectionsCompleted}/${totalSections})`
       );
     }
 

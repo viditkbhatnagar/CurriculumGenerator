@@ -3011,6 +3011,250 @@ CRITICAL VALIDATION:
   }
 
   // ==========================================================================
+  // STEP 10: LESSON PLANS & PPT GENERATION
+  // ==========================================================================
+
+  /**
+   * Process Step 10: Lesson Plans & PPT Generation
+   * Generate detailed lesson plans for each module using context from all previous 9 steps
+   *
+   * Requirements:
+   * - 1.1: Enable Step 10 after Step 9 completion
+   * - 1.2: Use context from all previous 9 steps
+   *
+   * @param workflowId - ID of the workflow to process
+   * @returns Updated workflow with step10 data
+   */
+  async processStep10(workflowId: string): Promise<ICurriculumWorkflow> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow || !workflow.step9) {
+      throw new Error('Workflow not found or Step 9 not complete');
+    }
+
+    loggingService.info('Processing Step 10: Lesson Plans & PPT Generation', { workflowId });
+
+    // Generate Step 10 content (lesson plans and PPTs)
+    const step10Content = await this.generateStep10Content(workflow);
+
+    // Store step10 data in workflow
+    workflow.step10 = step10Content;
+
+    // Update workflow status
+    workflow.currentStep = 10;
+    workflow.status = 'step10_complete';
+
+    // Update step progress
+    const step10Progress = workflow.stepProgress.find((p) => p.step === 10);
+    if (step10Progress) {
+      step10Progress.status = 'completed';
+      step10Progress.startedAt = step10Progress.startedAt || new Date();
+      step10Progress.completedAt = new Date();
+    }
+
+    await workflow.save();
+
+    loggingService.info('Step 10 processed', {
+      workflowId,
+      totalLessons: step10Content.summary.totalLessons,
+      totalContactHours: step10Content.summary.totalContactHours,
+      caseStudiesIncluded: step10Content.summary.caseStudiesIncluded,
+      formativeChecksIncluded: step10Content.summary.formativeChecksIncluded,
+    });
+
+    return workflow;
+  }
+
+  /**
+   * Process Step 10: Generate lesson plans for the NEXT module only
+   * This method generates one module at a time to avoid timeouts
+   * @param workflowId - Workflow ID
+   * @returns Updated workflow with the new module added to step10
+   */
+  async processStep10NextModule(workflowId: string): Promise<ICurriculumWorkflow> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow || !workflow.step9) {
+      throw new Error('Workflow not found or Step 9 not complete');
+    }
+
+    const existingModules = workflow.step10?.moduleLessonPlans?.length || 0;
+    const totalModules = workflow.step4?.modules?.length || 0;
+
+    if (existingModules >= totalModules) {
+      loggingService.info('All modules already generated', {
+        workflowId,
+        existingModules,
+        totalModules,
+      });
+      return workflow;
+    }
+
+    loggingService.info('Processing Step 10: Next Module', {
+      workflowId,
+      moduleNumber: existingModules + 1,
+      totalModules,
+    });
+
+    // Import services
+    const { LessonPlanService } = await import('./lessonPlanService');
+    const { PPTGenerationService } = await import('./pptGenerationService');
+
+    const lessonPlanService = new LessonPlanService();
+    const pptGenerationService = new PPTGenerationService();
+
+    // Build context
+    const context = this.buildWorkflowContext(workflow);
+
+    // Get the next module to generate
+    const nextModuleIndex = existingModules;
+    const module = context.modules[nextModuleIndex];
+
+    if (!module) {
+      throw new Error(`Module ${nextModuleIndex + 1} not found`);
+    }
+
+    loggingService.info('Generating lesson plans for next module', {
+      workflowId,
+      moduleIndex: nextModuleIndex,
+      moduleId: module.id,
+      moduleTitle: module.title,
+      contactHours: module.contactHours,
+    });
+
+    // Generate lesson plans for this module
+    const startTime = Date.now();
+    const modulePlan = await lessonPlanService.generateModuleLessonPlans(module, context);
+    const duration = Date.now() - startTime;
+
+    loggingService.info('Lesson plans generated for module', {
+      workflowId,
+      moduleId: module.id,
+      lessonsGenerated: modulePlan.totalLessons,
+      durationMs: duration,
+      durationMin: Math.round(duration / 60000),
+    });
+
+    // Generate PPT decks for this module
+    loggingService.info('Generating PPTs for module', {
+      workflowId,
+      moduleId: module.id,
+      lessonsCount: modulePlan.lessons.length,
+    });
+
+    const pptContext = {
+      programTitle: context.programTitle,
+      moduleCode: modulePlan.moduleCode,
+      moduleTitle: modulePlan.moduleTitle,
+      deliveryMode: context.deliveryMode,
+      glossaryEntries: context.glossaryEntries,
+      sources: context.topicSources,
+      readingLists: context.moduleReadingLists,
+    };
+
+    const pptStartTime = Date.now();
+    const pptDecks = await pptGenerationService.generateModulePPTs(modulePlan, pptContext);
+    const pptDuration = Date.now() - pptStartTime;
+
+    // Store PPT deck references
+    modulePlan.pptDecks = pptDecks.map((deck) => ({
+      deckId: deck.deckId,
+      lessonId: deck.lessonId,
+      lessonNumber: deck.lessonNumber,
+      slideCount: deck.slideCount,
+      pptxPath: undefined,
+      pdfPath: undefined,
+      imagesPath: undefined,
+    }));
+
+    loggingService.info('PPTs generated for module', {
+      workflowId,
+      moduleId: module.id,
+      pptDecksGenerated: pptDecks.length,
+      durationMs: pptDuration,
+      durationSec: Math.round(pptDuration / 1000),
+    });
+
+    // Initialize step10 if it doesn't exist
+    if (!workflow.step10) {
+      workflow.step10 = {
+        moduleLessonPlans: [],
+        validation: {
+          allModulesHaveLessonPlans: false,
+          allLessonDurationsValid: false,
+          totalHoursMatch: false,
+          allMLOsCovered: false,
+          caseStudiesIntegrated: false,
+          assessmentsIntegrated: false,
+        },
+        summary: {
+          totalLessons: 0,
+          totalContactHours: 0,
+          averageLessonDuration: 0,
+          caseStudiesIncluded: 0,
+          formativeChecksIncluded: 0,
+        },
+        generatedAt: new Date(),
+      };
+    }
+
+    // Add the new module to the workflow
+    workflow.step10.moduleLessonPlans.push(modulePlan);
+
+    // Update summary
+    const allLessons = workflow.step10.moduleLessonPlans.flatMap((m) => m.lessons);
+    workflow.step10.summary = {
+      totalLessons: allLessons.length,
+      totalContactHours: workflow.step10.moduleLessonPlans.reduce(
+        (sum, m) => sum + m.totalContactHours,
+        0
+      ),
+      averageLessonDuration:
+        allLessons.length > 0
+          ? allLessons.reduce((sum, l) => sum + l.duration, 0) / allLessons.length
+          : 0,
+      caseStudiesIncluded: allLessons.filter((l) => l.caseStudyActivity).length,
+      formativeChecksIncluded: allLessons.reduce(
+        (sum, l) => sum + (l.formativeChecks?.length || 0),
+        0
+      ),
+    };
+
+    // Update validation
+    const lessonPlanService2 = new LessonPlanService();
+    workflow.step10.validation = (lessonPlanService2 as any).validateLessonPlans(
+      workflow.step10.moduleLessonPlans,
+      context.modules
+    );
+
+    // Update workflow status if all modules are complete
+    const newModulesCount = workflow.step10.moduleLessonPlans.length;
+    if (newModulesCount >= totalModules) {
+      workflow.currentStep = 10;
+      workflow.status = 'step10_complete';
+
+      const step10Progress = workflow.stepProgress.find((p) => p.step === 10);
+      if (step10Progress) {
+        step10Progress.status = 'completed';
+        step10Progress.startedAt = step10Progress.startedAt || new Date();
+        step10Progress.completedAt = new Date();
+      }
+    }
+
+    // Save workflow
+    workflow.markModified('step10');
+    await workflow.save();
+
+    loggingService.info('Next module saved to workflow', {
+      workflowId,
+      modulesGenerated: newModulesCount,
+      totalModules,
+      totalLessons: workflow.step10.summary.totalLessons,
+      totalContactHours: workflow.step10.summary.totalContactHours,
+    });
+
+    return workflow;
+  }
+
+  // ==========================================================================
   // CONTENT GENERATION HELPERS
   // ==========================================================================
 
@@ -5284,6 +5528,245 @@ Begin output now.`;
     });
 
     return { terms: uniqueTerms };
+  }
+
+  /**
+   * Generate Step 10 content: Lesson Plans & PPT Generation
+   * Build context from steps 1-9 and orchestrate lesson plan generation for all modules
+   *
+   * Requirements:
+   * - 1.2: Build context from steps 1-9
+   * - 1.2: Orchestrate lesson plan generation for all modules
+   * - 1.2: Orchestrate PPT generation for all lessons
+   *
+   * @param workflow - Complete workflow with steps 1-9
+   * @returns Step10LessonPlans with all module lesson plans and PPTs
+   */
+  private async generateStep10Content(workflow: ICurriculumWorkflow): Promise<any> {
+    loggingService.info('🎯 Generating Step 10 content: Lesson Plans & PPT Generation', {
+      workflowId: workflow._id,
+      programTitle: workflow.step1?.programTitle,
+    });
+
+    // Import LessonPlanService and PPTGenerationService
+    loggingService.info('  📦 Loading services');
+    const { LessonPlanService } = await import('./lessonPlanService');
+    const { PPTGenerationService } = await import('./pptGenerationService');
+
+    // Progress callback to save intermediate results
+    const progressCallback = async (progress: any) => {
+      loggingService.info('💾 Saving intermediate progress', progress);
+      // Save current progress to database
+      workflow.step10 = {
+        ...workflow.step10,
+        moduleLessonPlans: progress.moduleLessonPlans || workflow.step10?.moduleLessonPlans || [],
+        summary: {
+          totalLessons: progress.lessonsGenerated || 0,
+          totalContactHours: progress.contactHoursProcessed || 0,
+          averageLessonDuration: 0,
+          caseStudiesIncluded: 0,
+          formativeChecksIncluded: 0,
+        },
+        generatedAt: new Date(),
+      };
+      await workflow.save();
+    };
+
+    const lessonPlanService = new LessonPlanService(undefined, progressCallback);
+    const pptGenerationService = new PPTGenerationService();
+    loggingService.info('  ✓ Services loaded');
+
+    // Build comprehensive context from all 9 previous steps
+    loggingService.info('  🔧 Building workflow context from steps 1-9');
+    const context = this.buildWorkflowContext(workflow);
+    loggingService.info('  ✓ Context built', {
+      moduleCount: context.modules.length,
+      totalContactHours: context.totalContactHours,
+      caseStudiesCount: context.caseStudies?.length || 0,
+      glossaryTermsCount: context.glossaryEntries?.length || 0,
+    });
+
+    // Generate lesson plans for all modules (or continue from existing)
+    loggingService.info('  📚 Starting lesson plan generation for all modules');
+    const existingModulePlans = workflow.step10?.moduleLessonPlans || [];
+    if (existingModulePlans.length > 0) {
+      loggingService.info(
+        `  📦 Found ${existingModulePlans.length} existing module plans, will continue from there`
+      );
+    }
+
+    const lessonPlanStartTime = Date.now();
+    const step10Data = await lessonPlanService.generateLessonPlans(context, existingModulePlans);
+    const lessonPlanDuration = Date.now() - lessonPlanStartTime;
+    loggingService.info('  ✅ Lesson plans generated', {
+      totalLessons: step10Data.summary.totalLessons,
+      totalContactHours: step10Data.summary.totalContactHours,
+      durationMs: lessonPlanDuration,
+      durationMin: Math.round(lessonPlanDuration / 60000),
+    });
+
+    // Generate PPT decks for all lessons
+    loggingService.info('  🎨 Starting PPT generation for all lessons', {
+      totalModules: step10Data.moduleLessonPlans.length,
+      totalLessons: step10Data.summary.totalLessons,
+    });
+
+    const pptStartTime = Date.now();
+    for (let i = 0; i < step10Data.moduleLessonPlans.length; i++) {
+      const modulePlan = step10Data.moduleLessonPlans[i];
+      loggingService.info(
+        `    🎨 Generating PPTs for module ${i + 1}/${step10Data.moduleLessonPlans.length}`,
+        {
+          moduleCode: modulePlan.moduleCode,
+          lessonsCount: modulePlan.lessons.length,
+        }
+      );
+
+      const pptContext = {
+        programTitle: context.programTitle,
+        moduleCode: modulePlan.moduleCode,
+        moduleTitle: modulePlan.moduleTitle,
+        deliveryMode: context.deliveryMode,
+        glossaryEntries: context.glossaryEntries,
+        sources: context.topicSources,
+        readingLists: context.moduleReadingLists,
+      };
+
+      const moduleStartTime = Date.now();
+      const pptDecks = await pptGenerationService.generateModulePPTs(modulePlan, pptContext);
+      const moduleDuration = Date.now() - moduleStartTime;
+
+      // Store PPT deck references
+      modulePlan.pptDecks = pptDecks.map((deck) => ({
+        deckId: deck.deckId,
+        lessonId: deck.lessonId,
+        lessonNumber: deck.lessonNumber,
+        slideCount: deck.slideCount,
+        // PPT export paths will be set when exporting
+        pptxPath: undefined,
+        pdfPath: undefined,
+        imagesPath: undefined,
+      }));
+
+      loggingService.info(
+        `    ✓ Module ${i + 1}/${step10Data.moduleLessonPlans.length} PPTs complete`,
+        {
+          moduleCode: modulePlan.moduleCode,
+          pptDecksGenerated: pptDecks.length,
+          durationMs: moduleDuration,
+          durationSec: Math.round(moduleDuration / 1000),
+        }
+      );
+    }
+    const pptDuration = Date.now() - pptStartTime;
+
+    loggingService.info('🎉 Step 10 content generation complete', {
+      totalLessons: step10Data.summary.totalLessons,
+      totalContactHours: step10Data.summary.totalContactHours,
+      totalPPTDecks: step10Data.moduleLessonPlans.reduce((sum, m) => sum + m.pptDecks.length, 0),
+      lessonPlanDurationMin: Math.round(lessonPlanDuration / 60000),
+      pptDurationMin: Math.round(pptDuration / 60000),
+      totalDurationMin: Math.round((lessonPlanDuration + pptDuration) / 60000),
+    });
+
+    return step10Data;
+  }
+
+  /**
+   * Build comprehensive workflow context from all 9 previous steps
+   *
+   * @param workflow - Complete workflow with steps 1-9
+   * @returns WorkflowContext with all necessary data for lesson plan generation
+   */
+  private buildWorkflowContext(workflow: ICurriculumWorkflow): any {
+    // Extract data from Step 1: Program Foundation
+    const step1 = workflow.step1;
+    const creditFramework = step1?.creditFramework;
+
+    // Extract data from Step 2: KSC Framework
+    const step2 = workflow.step2;
+
+    // Extract data from Step 3: PLOs
+    const step3 = workflow.step3;
+
+    // Extract data from Step 4: Course Framework
+    const step4 = workflow.step4;
+
+    // Extract data from Step 5: Sources
+    const step5 = workflow.step5;
+
+    // Extract data from Step 6: Reading Lists
+    const step6 = workflow.step6;
+
+    // Extract data from Step 7: Assessments
+    const step7 = workflow.step7;
+
+    // Extract data from Step 8: Case Studies
+    const step8 = workflow.step8;
+
+    // Extract data from Step 9: Glossary
+    const step9 = workflow.step9;
+
+    // Build context object
+    const context = {
+      // Step 1: Program Foundation
+      programTitle: step1?.programTitle || '',
+      programDescription: step1?.programDescription || '',
+      academicLevel: step1?.academicLevel || 'certificate',
+      deliveryMode: step1?.delivery?.mode || 'hybrid_blended',
+      totalContactHours: creditFramework?.contactHours || 0,
+      totalIndependentHours: creditFramework?.independentHours || 0,
+
+      // Step 2: KSC Framework
+      knowledgeItems: step2?.knowledgeItems || [],
+      skillItems: step2?.skillItems || [],
+      competencyItems: step2?.competencyItems || step2?.attitudeItems || [],
+
+      // Step 3: PLOs
+      programLearningOutcomes: step3?.outcomes || [],
+
+      // Step 4: Course Framework (modules with MLOs)
+      modules: (step4?.modules || []).map((mod: any) => ({
+        id: mod.id,
+        moduleCode: mod.moduleCode,
+        title: mod.title,
+        sequenceOrder: mod.sequenceOrder,
+        totalHours: mod.totalHours,
+        contactHours: mod.contactHours,
+        independentHours: mod.independentHours,
+        isCore: mod.isCore,
+        prerequisites: mod.prerequisites || [],
+        mlos: (mod.mlos || []).map((mlo: any) => ({
+          id: mlo.id,
+          outcomeNumber: mlo.outcomeNumber,
+          statement: mlo.statement,
+          bloomLevel: mlo.bloomLevel,
+          linkedPLOs: mlo.linkedPLOs || [],
+          competencyLinks: mlo.competencyLinks || [],
+        })),
+        contactActivities: mod.contactActivities || [],
+        independentActivities: mod.independentActivities || [],
+      })),
+
+      // Step 5: Sources
+      topicSources: step5?.topicSources || [],
+
+      // Step 6: Reading Lists
+      moduleReadingLists: step6?.moduleReadingLists || [],
+
+      // Step 7: Assessments
+      formativeAssessments: step7?.formativeAssessments || [],
+      summativeAssessments: step7?.summativeAssessments || [],
+      sampleQuestions: step7?.sampleQuestions || {},
+
+      // Step 8: Case Studies
+      caseStudies: step8?.caseStudies || [],
+
+      // Step 9: Glossary
+      glossaryEntries: step9?.entries || step9?.terms || [],
+    };
+
+    return context;
   }
 
   /**

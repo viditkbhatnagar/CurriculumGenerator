@@ -23,6 +23,8 @@ import Step6View from '@/components/workflow/Step6View';
 import Step7Form from '@/components/workflow/Step7Form';
 import Step8View from '@/components/workflow/Step8View';
 import Step9View from '@/components/workflow/Step9View';
+import Step10View from '@/components/workflow/Step10View';
+import FinalReviewView from '@/components/workflow/FinalReviewView';
 import CanvasChatbot from '@/components/workflow/CanvasChatbot';
 import { EditTarget } from '@/components/workflow/EditWithAIButton';
 
@@ -118,6 +120,16 @@ const STEP_ICONS: Record<WorkflowStep, React.ReactNode> = {
       />
     </svg>
   ),
+  10: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+      />
+    </svg>
+  ),
 };
 
 function getStepStatusColor(status?: StepStatus, isCurrent: boolean = false): string {
@@ -142,6 +154,7 @@ export default function WorkflowDetailPage() {
   // All hooks MUST be declared before any conditional returns
   const [activeStep, setActiveStep] = useState<WorkflowStep | null>(null);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [showFinalReview, setShowFinalReview] = useState(false);
 
   // Canvas chatbot state - GLOBAL for entire workflow
   const [isCanvasOpen, setIsCanvasOpen] = useState(false);
@@ -217,10 +230,58 @@ export default function WorkflowDetailPage() {
   // Set active step to current step if not set
   const currentStep = activeStep || (workflow.currentStep as WorkflowStep);
 
+  // If showing final review, render that instead
+  if (showFinalReview) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        {/* Header */}
+        <header className="border-b border-slate-700/50 backdrop-blur-sm bg-slate-900/50 sticky top-0 z-10">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setShowFinalReview(false)}
+                  className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
+                >
+                  <svg
+                    className="w-5 h-5 text-slate-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 19l-7-7 7-7"
+                    />
+                  </svg>
+                </button>
+                <div>
+                  <h1 className="text-xl font-bold text-white">Final Review & Download</h1>
+                  <p className="text-slate-400 text-sm">{workflow.projectName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => router.push('/workflow')}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+              >
+                Back to Workflows
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Final Review Content */}
+        <FinalReviewView workflow={workflow} />
+      </div>
+    );
+  }
+
   const handleStepComplete = () => {
     refetch();
     // If we just completed a step, move to next
-    if (currentStep < 9) {
+    if (currentStep < 10) {
       setActiveStep((currentStep + 1) as WorkflowStep);
     }
   };
@@ -229,7 +290,7 @@ export default function WorkflowDetailPage() {
     try {
       await completeWorkflow.mutateAsync(id);
       await refetch();
-      setShowCompletionModal(true);
+      setShowFinalReview(true);
     } catch (err) {
       console.error('Failed to complete workflow:', err);
       alert('Failed to complete workflow. Please try again.');
@@ -269,6 +330,8 @@ export default function WorkflowDetailPage() {
         return <Step8View {...stepProps} />;
       case 9:
         return <Step9View {...stepProps} />;
+      case 10:
+        return <Step10View {...stepProps} />;
       default:
         return null;
     }
@@ -310,19 +373,37 @@ export default function WorkflowDetailPage() {
               <div>
                 <h1 className="text-xl font-bold text-white">{workflow.projectName}</h1>
                 <p className="text-slate-400 text-sm">
-                  Step {workflow.currentStep} of 9 •{' '}
+                  Step {workflow.currentStep} of 10 •{' '}
                   {progress?.estimatedTimeRemaining || '~2 hours'} remaining
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {workflow.currentStep === 9 && workflow.step9 && (
+              {workflow.currentStep === 10 &&
+                workflow.step10?.moduleLessonPlans &&
+                workflow.step10.moduleLessonPlans.length > 0 && (
+                  <button
+                    onClick={handleCompleteWorkflow}
+                    disabled={completeWorkflow.isPending}
+                    className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all shadow-lg shadow-emerald-500/20"
+                  >
+                    {completeWorkflow.isPending ? 'Completing...' : 'Complete & Review'}
+                  </button>
+                )}
+              {workflow.currentStep >= 9 && workflow.step9 && (
                 <button
-                  onClick={handleCompleteWorkflow}
-                  disabled={completeWorkflow.isPending}
-                  className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all shadow-lg shadow-emerald-500/20"
+                  onClick={() => router.push(`/workflow/${id}/ppt`)}
+                  className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white rounded-lg transition-all flex items-center gap-2"
                 >
-                  {completeWorkflow.isPending ? 'Completing...' : 'Complete & Review'}
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                    />
+                  </svg>
+                  PowerPoints
                 </button>
               )}
               <button
@@ -354,7 +435,7 @@ export default function WorkflowDetailPage() {
               <h2 className="font-semibold text-white">Workflow Steps</h2>
             </div>
             <nav className="p-2">
-              {([1, 2, 3, 4, 5, 6, 7, 8, 9] as WorkflowStep[]).map((step) => {
+              {([1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as WorkflowStep[]).map((step) => {
                 const stepProgress = workflow.stepProgress.find((p) => p.step === step);
                 const isAccessible = isStepAccessible(step);
                 const isCurrent = workflow.currentStep === step;
@@ -501,20 +582,37 @@ export default function WorkflowDetailPage() {
             </div>
             <h2 className="text-2xl font-bold text-white mb-2">🎉 Curriculum Complete!</h2>
             <p className="text-slate-400 mb-6">
-              Your curriculum has been successfully generated and is ready for export.
+              Your curriculum has been successfully generated and is ready for export or PowerPoint
+              generation.
             </p>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCompletionModal(false)}
+                  className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                >
+                  Continue Editing
+                </button>
+                <button
+                  onClick={() => router.push(`/workflow/${id}/export`)}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all"
+                >
+                  Export Document
+                </button>
+              </div>
               <button
-                onClick={() => setShowCompletionModal(false)}
-                className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                onClick={() => router.push(`/workflow/${id}/ppt`)}
+                className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2"
               >
-                Continue Editing
-              </button>
-              <button
-                onClick={() => router.push(`/workflow/${id}/export`)}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all"
-              >
-                Export Now
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                  />
+                </svg>
+                Generate PowerPoints
               </button>
             </div>
           </div>

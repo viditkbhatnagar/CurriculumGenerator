@@ -4,7 +4,7 @@
  */
 
 // Workflow step identifiers
-export type WorkflowStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type WorkflowStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 // Step statuses
 export type StepStatus = 'pending' | 'in_progress' | 'completed' | 'approved' | 'revision_needed';
@@ -29,6 +29,8 @@ export type WorkflowStatus =
   | 'step8_complete'
   | 'step9_pending'
   | 'step9_complete'
+  | 'step10_pending'
+  | 'step10_complete'
   | 'review_pending'
   | 'published';
 
@@ -1246,6 +1248,167 @@ export interface Step9Glossary {
 }
 
 // =============================================================================
+// STEP 10: LESSON PLANS & PPT GENERATION
+// =============================================================================
+
+export interface LessonActivity {
+  activityId: string;
+  sequenceOrder: number;
+  type:
+    | 'mini_lecture'
+    | 'discussion'
+    | 'demonstration'
+    | 'practice'
+    | 'role_play'
+    | 'case_analysis'
+    | 'group_work'
+    | 'assessment'
+    | 'break';
+  title: string;
+  description: string;
+  duration: number; // minutes
+  teachingMethod: string;
+  resources: string[];
+  instructorActions: string[];
+  studentActions: string[];
+}
+
+export interface FormativeCheck {
+  checkId: string;
+  type: 'mcq' | 'quick_poll' | 'discussion_question' | 'reflection';
+  question: string;
+  options?: string[];
+  correctAnswer?: string;
+  explanation?: string;
+  linkedMLO: string;
+  duration: number; // minutes
+}
+
+export interface ReadingAssignment {
+  title: string;
+  authors: string[];
+  year: number;
+  citation: string;
+  estimatedMinutes: number;
+}
+
+export interface CaseStudyActivity {
+  caseStudyId: string;
+  caseTitle: string;
+  activityType: 'practice' | 'discussion' | 'assessment_ready';
+  duration: number;
+  learningPurpose: string;
+  linkedMLOs: string[];
+  linkedPLOs: string[];
+  instructorInstructions: string;
+  studentOutputExpectations: string[];
+  assessmentHooks: {
+    keyFacts: string[];
+    misconceptions: string[];
+    decisionPoints: string[];
+  };
+  rolePlay?: {
+    characterBriefs: any[];
+    decisionPrompts: string[];
+    debriefQuestions: string[];
+  };
+  isFirstAppearance: boolean;
+  previousAppearanceRef?: string;
+}
+
+export interface LessonPlan {
+  lessonId: string;
+  lessonNumber: number;
+  lessonTitle: string;
+  duration: number; // minutes (60-180)
+
+  // Learning alignment
+  linkedMLOs: string[];
+  linkedPLOs: string[];
+  bloomLevel: string;
+
+  // Objectives
+  objectives: string[];
+
+  // Activity sequence
+  activities: LessonActivity[];
+
+  // Materials
+  materials: {
+    pptDeckRef: string;
+    caseFiles: string[];
+    readingReferences: ReadingAssignment[];
+  };
+
+  // Instructor guidance
+  instructorNotes: {
+    pedagogicalGuidance: string;
+    pacingSuggestions: string;
+    adaptationOptions: string[];
+    commonMisconceptions: string[];
+    discussionPrompts: string[];
+  };
+
+  // Independent study
+  independentStudy: {
+    coreReadings: ReadingAssignment[];
+    supplementaryReadings: ReadingAssignment[];
+    estimatedEffort: number; // minutes
+  };
+
+  // Integrated case study (if applicable)
+  caseStudyActivity?: CaseStudyActivity;
+
+  // Formative checks
+  formativeChecks: FormativeCheck[];
+}
+
+export interface PPTDeckReference {
+  deckId: string;
+  lessonId: string;
+  slideCount: number;
+  pptxPath?: string;
+  pdfPath?: string;
+  imagesPath?: string;
+}
+
+export interface ModuleLessonPlan {
+  moduleId: string;
+  moduleCode: string;
+  moduleTitle: string;
+  totalContactHours: number;
+  totalLessons: number;
+  lessons: LessonPlan[];
+  pptDecks: PPTDeckReference[];
+}
+
+export interface Step10LessonPlans {
+  moduleLessonPlans: ModuleLessonPlan[];
+
+  validation: {
+    allModulesHaveLessonPlans: boolean;
+    allLessonDurationsValid: boolean;
+    totalHoursMatch: boolean;
+    allMLOsCovered: boolean;
+    caseStudiesIntegrated: boolean;
+    assessmentsIntegrated: boolean;
+  };
+
+  summary: {
+    totalLessons: number;
+    totalContactHours: number;
+    averageLessonDuration: number;
+    caseStudiesIncluded: number;
+    formativeChecksIncluded: number;
+  };
+
+  generatedAt: Date;
+  validatedAt?: Date;
+  approvedAt?: Date;
+  approvedBy?: string;
+}
+
+// =============================================================================
 // WORKFLOW PROGRESS
 // =============================================================================
 export interface StepProgress {
@@ -1279,6 +1442,7 @@ export interface CurriculumWorkflow {
   step7?: Step7Assessments;
   step8?: Step8CaseStudies;
   step9?: Step9Glossary;
+  step10?: Step10LessonPlans;
 
   // Metadata
   createdAt: string;
@@ -1387,6 +1551,7 @@ export const STEP_NAMES: Record<WorkflowStep, string> = {
   7: 'Auto-Gradable Assessments',
   8: 'Case Studies',
   9: 'Glossary',
+  10: 'Lesson Plans & PPT',
 };
 
 export const STEP_DESCRIPTIONS: Record<WorkflowStep, string> = {
@@ -1399,6 +1564,7 @@ export const STEP_DESCRIPTIONS: Record<WorkflowStep, string> = {
   7: 'Generate MCQ-first auto-gradable assessments and quizzes',
   8: 'Create engagement hooks and case study scenarios',
   9: 'Auto-generate glossary from all curriculum content',
+  10: 'Generate detailed lesson plans and PowerPoint decks',
 };
 
 export const ESTIMATED_TIMES: Record<WorkflowStep, string> = {
@@ -1411,6 +1577,7 @@ export const ESTIMATED_TIMES: Record<WorkflowStep, string> = {
   7: '15-20 min',
   8: '10-15 min',
   9: '5 min (auto)',
+  10: '10-15 min',
 };
 
 export const BLOOM_LEVELS: BloomLevel[] = [

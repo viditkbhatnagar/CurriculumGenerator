@@ -37,6 +37,7 @@ import { createSimulationsRouter } from './routes/simulations';
 import newWorkflowRoutes from './routes/newWorkflowRoutes';
 import workflowRoutes from './routes/workflowRoutes';
 import step7StreamRoutes from './routes/step7StreamRoutes';
+import pptRoutes from './routes/pptRoutes';
 
 dotenv.config();
 
@@ -239,6 +240,9 @@ app.use('/api/v3/workflow', workflowRoutes);
 // Step 7 Streaming routes (SSE) - For real-time assessment generation
 app.use('/api/v3/workflow', step7StreamRoutes);
 
+// PPT Generation routes (Phase 2) - PowerPoint generation for modules
+app.use('/api/v3/ppt', pptRoutes);
+
 // Sentry error handler (must be before other error handlers)
 app.use(errorTrackingService.getErrorHandler());
 
@@ -381,6 +385,14 @@ async function startServer() {
       loggingService.warn('Failed to start curriculum worker', { error: String(error) });
     }
 
+    // Initialize Step 10 background job queue
+    try {
+      await import('./queues/step10Queue');
+      loggingService.info('Step 10 background job queue initialized');
+    } catch (error) {
+      loggingService.warn('Failed to initialize Step 10 queue', { error: String(error) });
+    }
+
     // Start HTTP server
     httpServer.listen(PORT, () => {
       loggingService.info('Server started successfully', {
@@ -484,6 +496,16 @@ async function gracefulShutdown(signal: string) {
       loggingService.info('Redis client closed');
     } catch (error) {
       loggingService.error('Error closing Redis client', error);
+      exitCode = 1;
+    }
+
+    // Close Step 10 queue
+    try {
+      const { closeStep10Queue } = await import('./queues/step10Queue');
+      await closeStep10Queue();
+      loggingService.info('Step 10 queue closed');
+    } catch (error) {
+      loggingService.error('Error closing Step 10 queue', error);
       exitCode = 1;
     }
 

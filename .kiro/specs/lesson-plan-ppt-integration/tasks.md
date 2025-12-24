@@ -1,0 +1,291 @@
+# Implementation Plan
+
+- [x] 1. Update CurriculumWorkflow Model for 10 Steps
+  - [x] 1.1 Add step10 field to CurriculumWorkflow schema
+    - Add step10 field with Step10LessonPlans type definition
+    - Update TypeScript interface ICurriculumWorkflow
+    - _Requirements: 10.1_
+  - [x] 1.2 Update currentStep constraints and status enum
+    - Change currentStep max from 9 to 10
+    - Add 'step10_pending' and 'step10_complete' to status enum
+    - Update stepProgress initialization to include step 10
+    - _Requirements: 10.2, 10.3, 10.4_
+  - [x] 1.3 Write property test for workflow model updates
+    - **Property 12: Document Export Completeness**
+    - **Validates: Requirements 10.1, 10.2, 10.3, 10.4**
+
+- [x] 2. Create LessonPlanService
+  - [x] 2.1 Create lessonPlanService.ts file with base structure
+    - Create LessonPlanService class
+    - Define interfaces for LessonPlan, LessonActivity, CaseStudyActivity
+    - Implement constructor with OpenAI service dependency
+    - _Requirements: 1.1, 1.2_
+  - [x] 2.2 Implement calculateLessonBlocks function
+    - Calculate number of lessons based on contact hours (60-180 min blocks)
+    - Distribute MLOs across lessons (1-2 per lesson)
+    - Ensure sum of durations equals total contact hours
+    - _Requirements: 1.3, 1.4, 1.5_
+  - [x] 2.3 Write property test for lesson duration bounds
+    - **Property 1: Lesson Duration Bounds**
+    - **Validates: Requirements 1.3**
+  - [x] 2.4 Write property test for contact hours integrity
+    - **Property 2: Contact Hours Integrity**
+    - **Validates: Requirements 1.4**
+  - [x] 2.5 Write property test for MLO alignment coverage
+    - **Property 3: MLO Alignment Coverage**
+    - **Validates: Requirements 1.5**
+  - [x] 2.6 Implement Bloom's taxonomy progression logic
+    - Order lessons by Bloom level (foundational first, complex later)
+    - Map MLO Bloom levels to lesson sequence
+    - _Requirements: 1.6_
+  - [x] 2.7 Write property test for Bloom's taxonomy progression
+    - **Property 4: Bloom's Taxonomy Progression**
+    - **Validates: Requirements 1.6**
+
+- [x] 3. Implement Lesson Plan Content Generation
+  - [x] 3.1 Implement generateLessonContent function
+    - Build OpenAI prompt with context from all 9 previous steps
+    - Generate lesson objectives from MLOs
+    - Generate activity sequence with timings
+    - Generate instructor notes with pedagogical guidance
+    - _Requirements: 2.1, 2.2, 2.5_
+  - [x] 3.2 Implement teaching method selection based on delivery mode
+    - Map delivery modes to appropriate teaching methods
+    - Select methods appropriate for online, in-person, hybrid
+    - _Requirements: 2.3_
+  - [x] 3.3 Implement materials list generation
+    - Reference reading materials from Steps 5-6
+    - Reference case files from Step 8
+    - Include PPT deck reference placeholder
+    - _Requirements: 2.4_
+  - [x] 3.4 Implement independent study assignment generation
+    - Include Core readings with estimated effort
+    - Include Supplementary readings
+    - Calculate total independent study time
+    - _Requirements: 2.6_
+  - [x] 3.5 Write property test for lesson plan completeness
+    - **Property 5: Lesson Plan Completeness**
+    - **Validates: Requirements 2.1, 2.2, 2.4, 2.5, 2.6, 5.1-5.6**
+
+- [x] 4. Implement Case Study Integration
+  - [x] 4.1 Implement integrateCaseStudies function
+    - Match case studies to lessons by MLO alignment
+    - Consider difficulty progression for placement
+    - Handle multi-module case studies (first vs subsequent appearance)
+    - _Requirements: 3.1, 3.2, 3.4_
+  - [x] 4.2 Write property test for case study placement
+    - **Property 6: Case Study Placement Correctness**
+    - **Validates: Requirements 3.1**
+  - [x] 4.3 Implement role-play component generation
+    - Generate character briefs for role-play suitable cases
+    - Generate decision prompts
+    - Generate structured debrief questions
+    - _Requirements: 3.3_
+  - [x] 4.4 Write property test for role-play component completeness
+    - **Property 7: Role-Play Component Completeness**
+    - **Validates: Requirements 3.3**
+  - [x] 4.5 Implement case study activity embedding
+    - Include activity type, duration, learning purpose
+    - Include instructor instructions and student expectations
+    - Include assessment hooks (key facts, misconceptions, decision points)
+    - _Requirements: 3.5_
+
+- [x] 5. Implement Formative Assessment Integration
+  - [x] 5.1 Implement integrateAssessments function
+    - Pull formative assessments from Step 7
+    - Align assessments with lesson MLOs
+    - Include assessment type and duration
+    - _Requirements: 4.1, 4.2, 4.3_
+  - [x] 5.2 Write unit tests for assessment integration
+    - Test MLO alignment matching
+    - Test assessment type handling
+    - _Requirements: 4.1, 4.2, 4.3_
+
+- [ ] 6. Checkpoint - Verify Lesson Plan Generation
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 7. Enhance PPT Generation Service
+  - [x] 7.1 Update PPTGenerationService for lesson-based generation
+    - Refactor to accept LessonPlan as input
+    - Update generatePPTStructure to use lesson data
+    - _Requirements: 6.1_
+  - [x] 7.2 Write property test for lesson-PPT correspondence
+    - **Property 8: Lesson-PPT Correspondence**
+    - **Validates: Requirements 6.1, 9.1**
+  - [x] 7.3 Implement title slide generation
+    - Include module number/title, lesson number/title
+    - Include program title and session duration
+    - _Requirements: 6.2_
+  - [x] 7.4 Implement learning objectives slide generation
+    - Derive objectives from MLO alignment
+    - Include optional PLO connection
+    - _Requirements: 6.3_
+  - [x] 7.5 Implement key concepts slides generation
+    - Use MLO-based summaries
+    - Extract definitions from Step 9 Glossary
+    - Include reading-based insights from validated sources
+    - _Requirements: 6.4_
+  - [x] 7.6 Implement instructional content slides generation
+    - Align with activity flow from lesson plan
+    - Include mini-lecture visuals, concept diagrams
+    - Include examples and explanations
+    - _Requirements: 6.5_
+  - [x] 7.7 Implement case study slides generation
+    - Include scenario overview and key facts
+    - Include discussion/decision prompts
+    - Include role-play instructions if applicable
+    - Include data tables/visuals if provided
+    - _Requirements: 6.6_
+
+- [x] 8. Implement PPT Assessment and Summary Slides
+  - [x] 8.1 Implement formative check slides generation
+    - Pull 1-3 MCQs from Step 7 assessment banks
+    - Include answer explanations
+    - _Requirements: 7.1_
+  - [x] 8.2 Implement summary slide generation
+    - Include key ideas recap
+    - Include reflection prompts and wrap-up questions
+    - _Requirements: 7.2_
+  - [x] 8.3 Implement independent study slide generation
+    - List required Core readings
+    - List optional Supplementary readings
+    - Include estimated study time
+    - _Requirements: 7.3_
+  - [x] 8.4 Implement reference slide generation
+    - Generate APA-formatted citations
+    - Include all materials used in the lesson
+    - _Requirements: 7.4_
+
+- [x] 9. Implement Delivery Mode Adaptation
+  - [x] 9.1 Implement adaptForDeliveryMode function
+    - Create adaptation rules for each delivery mode
+    - _Requirements: 8.1, 8.2, 8.3, 8.4_
+  - [x] 9.2 Implement in-person mode adaptations
+    - More diagrams and facilitation cues
+    - Reduced text density
+    - Prioritized role-play and group-activity prompts
+    - _Requirements: 8.1_
+  - [x] 9.3 Implement online facilitated mode adaptations
+    - Clearer step-by-step instructions
+    - Breakout room prompts
+    - Polling and chat-based engagement elements
+    - _Requirements: 8.2_
+  - [x] 9.4 Implement online self-study mode adaptations
+    - Additional explanatory text
+    - Embedded knowledge checks
+    - Simplified case studies for solo analysis
+    - _Requirements: 8.3_
+  - [x] 9.5 Implement hybrid mode adaptations
+    - Balanced text-to-visual ratio
+    - Design for both synchronous and asynchronous segments
+    - _Requirements: 8.4_
+
+- [x] 10. Implement PPT Validation
+  - [x] 10.1 Implement validatePPTDeck function
+    - Verify lesson-PPT correspondence
+    - Verify MLO coverage in slides
+    - Verify case study placement
+    - Verify citation validity against Steps 5-6
+    - Verify slide count (15-35)
+    - Verify glossary terms are defined in Step 9
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
+  - [x] 10.2 Write property test for PPT slide count bounds
+    - **Property 9: PPT Slide Count Bounds**
+    - **Validates: Requirements 9.5**
+  - [x] 10.3 Write property test for PPT MLO coverage
+    - **Property 10: PPT MLO Coverage**
+    - **Validates: Requirements 9.2**
+  - [x] 10.4 Write property test for citation validity
+    - **Property 11: Citation Validity**
+    - **Validates: Requirements 9.4**
+
+- [ ] 11. Checkpoint - Verify PPT Generation
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 12. Implement Step 10 Processing in WorkflowService
+  - [x] 12.1 Add processStep10 method to WorkflowService
+    - Fetch workflow with all 9 previous steps
+    - Call LessonPlanService.generateLessonPlans
+    - Store step10 data in workflow
+    - Update workflow status to step10_complete
+    - _Requirements: 1.1, 1.2_
+  - [x] 12.2 Add generateStep10Content helper method
+    - Build context from steps 1-9
+    - Orchestrate lesson plan generation for all modules
+    - Orchestrate PPT generation for all lessons
+    - _Requirements: 1.2_
+  - [x] 12.3 Write integration tests for Step 10 processing
+    - Test full workflow from step 9 to step 10
+    - Test context passing from previous steps
+    - _Requirements: 1.1, 1.2_
+
+- [x] 13. Add Step 10 API Endpoint
+  - [x] 13.1 Add POST /api/workflow/:id/step10 endpoint
+    - Validate workflow exists and step 9 is complete
+    - Call workflowService.processStep10
+    - Return updated workflow with step10 data
+    - _Requirements: 1.1_
+  - [x] 13.2 Add GET /api/workflow/:id/step10 endpoint
+    - Return step10 data for a workflow
+    - Include lesson plans and PPT references
+    - _Requirements: 1.1_
+  - [x] 13.3 Write API endpoint tests
+    - Test step 10 generation endpoint
+    - Test step 10 retrieval endpoint
+    - _Requirements: 1.1_
+
+- [x] 14. Update Word Export Service for 10 Steps
+  - [x] 14.1 Add generateStep10Section method
+    - Format lesson plans with module grouping
+    - Include lesson details, activity sequences, materials lists
+    - Include validation summary
+    - _Requirements: 11.2, 11.3, 11.4_
+  - [x] 14.2 Update generateDocument to include Step 10
+    - Add Step 10 section after Step 9
+    - Update total sections count
+    - Maintain consistent formatting
+    - _Requirements: 11.1, 11.5_
+  - [x] 14.3 Write property test for document export completeness
+    - **Property 12: Document Export Completeness**
+    - **Validates: Requirements 11.1, 11.2**
+
+- [x] 15. Implement PPT Export Formats
+  - [x] 15.1 Implement PPTX export (already exists, verify)
+    - Ensure editable PPTX format works correctly
+    - _Requirements: 12.1_
+  - [x] 15.2 Implement PDF export for PPT
+    - Convert PPTX to PDF format
+    - Ensure read-only format
+    - _Requirements: 12.2_
+  - [x] 15.3 Implement PNG/JPEG slide image export
+    - Generate individual slide images
+    - Support LMS compatibility
+    - _Requirements: 12.3_
+  - [x] 15.4 Write unit tests for PPT export formats
+    - Test PPTX export
+    - Test PDF export
+    - Test image export
+    - _Requirements: 12.1, 12.2, 12.3_
+
+- [x] 16. Update Frontend for Step 10
+  - [x] 16.1 Update workflow step navigation
+    - Add Step 10 to step navigation component
+    - Update progress indicators for 10 steps
+    - _Requirements: 10.1_
+  - [x] 16.2 Create Step 10 generation UI
+    - Add "Generate Lesson Plans" button
+    - Show generation progress
+    - Display generated lesson plans
+    - _Requirements: 1.1_
+  - [x] 16.3 Create lesson plan review interface
+    - Display lesson plans grouped by module
+    - Show activity sequences with timings
+    - Show materials and instructor notes
+    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
+  - [x] 16.4 Add PPT preview and download
+    - Preview PPT slides
+    - Download in PPTX, PDF, or image formats
+    - _Requirements: 12.1, 12.2, 12.3_
+
+- [ ] 17. Final Checkpoint - Verify Complete Integration
+  - Ensure all tests pass, ask the user if questions arise.

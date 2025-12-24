@@ -4,8 +4,9 @@ import { loggingService } from './loggingService';
 // Conditionally import profiling integration
 let ProfilingIntegration: any;
 try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   ProfilingIntegration = require('@sentry/profiling-node').ProfilingIntegration;
-} catch (error) {
+} catch {
   // Profiling integration not available, will skip it
   ProfilingIntegration = null;
 }
@@ -85,7 +86,11 @@ class ErrorTrackingService {
   }
 
   // Capture a message
-  captureMessage(message: string, level: Sentry.SeverityLevel = 'info', context?: ErrorContext): string | undefined {
+  captureMessage(
+    message: string,
+    level: Sentry.SeverityLevel = 'info',
+    context?: ErrorContext
+  ): string | undefined {
     if (!this.isInitialized) {
       loggingService.info(`Message (Sentry not initialized): ${message}`, context);
       return undefined;

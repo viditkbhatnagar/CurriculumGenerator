@@ -17,12 +17,16 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
+import { promisify } from 'util';
+import libreofficeConvert from 'libreoffice-convert';
+import JSZip from 'jszip';
 import { validateJWT, loadUser } from '../middleware/auth';
 import { workflowService } from '../services/workflowService';
 import { loggingService } from '../services/loggingService';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { wordExportService } from '../services/wordExportService';
 import { analyticsStorageService } from '../services/analyticsStorageService';
+import { lessonPlanService } from '../services/lessonPlanService';
 
 const router = Router();
 
@@ -1349,6 +1353,353 @@ router.post(
 );
 
 /**
+ * POST /api/v3/workflow/:id/step9/approve
+ * Approve Step 9 and advance to Step 10
+ */
+router.post('/:id/step9/approve', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id || (req as any).user?.userId;
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+
+    if (!workflow || !workflow.step9) {
+      return res.status(404).json({ success: false, error: 'Workflow or Step 9 not found' });
+    }
+
+    if (!workflow.step9.terms || workflow.step9.terms.length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'At least 10 glossary terms are required',
+      });
+    }
+
+    workflow.step9.approvedAt = new Date();
+    workflow.step9.approvedBy = userId;
+
+    await workflow.advanceStep();
+
+    res.json({
+      success: true,
+      data: { currentStep: workflow.currentStep, status: workflow.status },
+      message: 'Step 9 approved. Now at Step 10: Lesson Plans & PPT Generation.',
+    });
+  } catch (error) {
+    loggingService.error('Error approving Step 9', { error });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to approve Step 9',
+    });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/step10
+ * Submit Step 10: Generate Lesson Plans and PPT Decks
+ * This endpoint queues the generation as a background job
+ */
+router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
+
+    loggingService.info('Step 10 generation requested', { workflowId: id });
+
+    // Validate workflow exists and step 9 is complete
+    const existingWorkflow = await CurriculumWorkflow.findById(id);
+    if (!existingWorkflow) {
+      return res.status(404).json({
+        success: false,
+        error: 'Workflow not found',
+      });
+    }
+
+    if (!existingWorkflow.step9 || existingWorkflow.currentStep < 9) {
+      return res.status(400).json({
+        success: false,
+        error: 'Step 9 must be completed before generating lesson plans',
+      });
+    }
+
+    // Import queue functions
+    const { queueAllRemainingModules, getAllStep10Jobs } = await import('../queues/step10Queue');
+
+    // Check if there are already jobs running
+    const existingJobs = await getAllStep10Jobs(id);
+    const activeJobs = existingJobs.filter(
+      (job) => job && ['waiting', 'active', 'delayed'].includes(job.getState() as any)
+    );
+
+    if (activeJobs.length > 0) {
+      return res.json({
+        success: true,
+        data: {
+          message: 'Generation already in progress',
+          jobsQueued: activeJobs.length,
+          modulesGenerated: existingWorkflow.step10?.moduleLessonPlans?.length || 0,
+          totalModules: existingWorkflow.step4?.modules?.length || 0,
+        },
+        message: 'Step 10 generation is already in progress. Check status for updates.',
+      });
+    }
+
+    // Queue the remaining modules
+    const jobs = await queueAllRemainingModules(id, userId);
+
+    const modulesGenerated = existingWorkflow.step10?.moduleLessonPlans?.length || 0;
+    const totalModules = existingWorkflow.step4?.modules?.length || 0;
+
+    loggingService.info('Step 10 jobs queued', {
+      workflowId: id,
+      jobsQueued: jobs.length,
+      modulesGenerated,
+      totalModules,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        jobsQueued: jobs.length,
+        modulesGenerated,
+        totalModules,
+        estimatedTimeMinutes: (totalModules - modulesGenerated) * 15,
+      },
+      message: `Step 10 generation started. ${totalModules - modulesGenerated} module(s) will be generated in the background.`,
+    });
+  } catch (error) {
+    loggingService.error('Error queueing Step 10', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      workflowId: req.params.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to queue Step 10 generation',
+    });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/step10/next-module
+ * Generate the next module in Step 10 (one module at a time)
+ * This endpoint generates only the next incomplete module, saves it, and returns immediately
+ */
+router.post(
+  '/:id/step10/next-module',
+  validateJWT,
+  loadUser,
+  extendTimeout(600000), // 10 minutes for a single module
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      loggingService.info('Step 10 next module generation requested', { workflowId: id });
+
+      // Get workflow
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow) {
+        return res.status(404).json({
+          success: false,
+          error: 'Workflow not found',
+        });
+      }
+
+      if (!workflow.step9 || workflow.currentStep < 9) {
+        return res.status(400).json({
+          success: false,
+          error: 'Step 9 must be completed before generating lesson plans',
+        });
+      }
+
+      // Check how many modules are already generated
+      const existingModules = workflow.step10?.moduleLessonPlans?.length || 0;
+      const totalModules = workflow.step4?.modules?.length || 0;
+
+      if (existingModules >= totalModules) {
+        return res.json({
+          success: true,
+          data: {
+            step10: workflow.step10,
+            currentStep: workflow.currentStep,
+            status: workflow.status,
+            allModulesComplete: true,
+          },
+          message: 'All modules already generated!',
+        });
+      }
+
+      loggingService.info('Generating next module', {
+        workflowId: id,
+        moduleNumber: existingModules + 1,
+        totalModules,
+      });
+
+      // Generate the next module
+      const updatedWorkflow = await workflowService.processStep10NextModule(id);
+
+      const newModulesCount = updatedWorkflow.step10?.moduleLessonPlans?.length || 0;
+      const allComplete = newModulesCount >= totalModules;
+
+      loggingService.info('Next module generation complete', {
+        workflowId: id,
+        modulesGenerated: newModulesCount,
+        totalModules,
+        allComplete,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          step10: updatedWorkflow.step10,
+          currentStep: updatedWorkflow.currentStep,
+          status: updatedWorkflow.status,
+          modulesGenerated: newModulesCount,
+          totalModules,
+          allModulesComplete: allComplete,
+        },
+        message: allComplete
+          ? 'All modules complete!'
+          : `Module ${newModulesCount}/${totalModules} generated successfully`,
+      });
+    } catch (error) {
+      loggingService.error('Error generating next module', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        workflowId: req.params.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate next module',
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/v3/workflow/:id/step10/status
+ * Get Step 10 generation status (job queue status)
+ */
+router.get('/:id/step10/status', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Get workflow
+    const workflow = await CurriculumWorkflow.findById(id);
+    if (!workflow) {
+      return res.status(404).json({
+        success: false,
+        error: 'Workflow not found',
+      });
+    }
+
+    // Import queue functions
+    const { getAllStep10Jobs } = await import('../queues/step10Queue');
+
+    // Get all jobs for this workflow
+    const jobs = await getAllStep10Jobs(id);
+
+    const jobStatuses = await Promise.all(
+      jobs.map(async (job) => {
+        const state = await job.getState();
+        return {
+          jobId: job.id,
+          moduleIndex: job.data.moduleIndex,
+          state,
+          progress: job.progress(),
+          attemptsMade: job.attemptsMade,
+          processedOn: job.processedOn,
+          finishedOn: job.finishedOn,
+          failedReason: job.failedReason,
+        };
+      })
+    );
+
+    const modulesGenerated = workflow.step10?.moduleLessonPlans?.length || 0;
+    const totalModules = workflow.step4?.modules?.length || 0;
+    const allComplete = modulesGenerated >= totalModules;
+
+    const activeJobs = jobStatuses.filter((j) =>
+      ['waiting', 'active', 'delayed'].includes(j.state)
+    );
+    const completedJobs = jobStatuses.filter((j) => j.state === 'completed');
+    const failedJobs = jobStatuses.filter((j) => j.state === 'failed');
+
+    res.json({
+      success: true,
+      data: {
+        workflowId: id,
+        modulesGenerated,
+        totalModules,
+        allComplete,
+        totalLessons: workflow.step10?.summary?.totalLessons || 0,
+        totalContactHours: workflow.step10?.summary?.totalContactHours || 0,
+        jobs: {
+          total: jobStatuses.length,
+          active: activeJobs.length,
+          completed: completedJobs.length,
+          failed: failedJobs.length,
+          details: jobStatuses,
+        },
+        status: allComplete
+          ? 'complete'
+          : activeJobs.length > 0
+            ? 'in_progress'
+            : failedJobs.length > 0
+              ? 'failed'
+              : 'pending',
+      },
+    });
+  } catch (error) {
+    loggingService.error('Error getting Step 10 status', {
+      error: error instanceof Error ? error.message : String(error),
+      workflowId: req.params.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get Step 10 status',
+    });
+  }
+});
+
+/**
+ * GET /api/v3/workflow/:id/step10
+ * Retrieve Step 10 data (lesson plans and PPT references)
+ */
+router.get('/:id/step10', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const workflow = await CurriculumWorkflow.findById(id);
+    if (!workflow) {
+      return res.status(404).json({
+        success: false,
+        error: 'Workflow not found',
+      });
+    }
+
+    if (!workflow.step10) {
+      return res.status(404).json({
+        success: false,
+        error: 'Step 10 data not found. Please generate lesson plans first.',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        step10: workflow.step10,
+        currentStep: workflow.currentStep,
+        status: workflow.status,
+      },
+    });
+  } catch (error) {
+    loggingService.error('Error retrieving Step 10', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to retrieve Step 10',
+    });
+  }
+});
+
+/**
  * POST /api/v3/workflow/:id/complete
  * Mark workflow as complete and ready for final review
  */
@@ -1361,10 +1712,16 @@ router.post('/:id/complete', validateJWT, loadUser, async (req: Request, res: Re
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
 
-    if (workflow.currentStep < 9 || !workflow.step9) {
+    if (
+      workflow.currentStep < 10 ||
+      !workflow.step9 ||
+      !workflow.step10 ||
+      !workflow.step10.moduleLessonPlans ||
+      workflow.step10.moduleLessonPlans.length === 0
+    ) {
       return res.status(400).json({
         success: false,
-        error: 'All 9 steps must be completed first',
+        error: 'All 10 steps must be completed first, including lesson plans generation',
       });
     }
 
@@ -1486,6 +1843,7 @@ router.get('/:id/export/word', async (req: Request, res: Response) => {
       step7: workflow.step7,
       step8: workflow.step8,
       step9: workflow.step9,
+      step10: workflow.step10,
       createdAt: workflow.createdAt?.toISOString(),
       updatedAt: workflow.updatedAt?.toISOString(),
     };
@@ -1513,6 +1871,437 @@ router.get('/:id/export/word', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: 'Failed to export Word document',
+    });
+  }
+});
+
+/**
+ * GET /api/v3/workflow/:id/export/pdf
+ * Export curriculum as PDF document
+ */
+router.get('/:id/export/pdf', async (req: Request, res: Response) => {
+  try {
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+
+    if (!workflow) {
+      return res.status(404).json({
+        success: false,
+        error: 'Workflow not found',
+      });
+    }
+
+    loggingService.info('Generating PDF export', {
+      workflowId: workflow._id,
+      projectName: workflow.projectName,
+    });
+
+    // First generate Word document
+    const workflowData = {
+      projectName: workflow.projectName,
+      step1: workflow.step1,
+      step2: workflow.step2,
+      step3: workflow.step3,
+      step4: workflow.step4,
+      step5: workflow.step5,
+      step6: workflow.step6,
+      step7: workflow.step7,
+      step8: workflow.step8,
+      step9: workflow.step9,
+      step10: workflow.step10,
+      createdAt: workflow.createdAt?.toISOString(),
+      updatedAt: workflow.updatedAt?.toISOString(),
+    };
+
+    const wordBuffer = await wordExportService.generateDocument(workflowData);
+
+    // Convert Word to PDF using libre-office or similar
+    // For now, we'll use a simple approach: convert via docx-pdf library
+    const convertAsync = promisify(libreofficeConvert.convert);
+
+    const pdfBuffer = await convertAsync(wordBuffer, '.pdf', undefined);
+
+    // Generate filename
+    const filename = `${workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}-${new Date().toISOString().split('T')[0]}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    res.send(pdfBuffer);
+
+    loggingService.info('PDF document exported', {
+      workflowId: workflow._id,
+      filename,
+    });
+  } catch (error) {
+    loggingService.error('Error exporting PDF document', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to export PDF document. LibreOffice conversion may not be available.',
+      fallback:
+        'Please use Word export and convert manually, or install LibreOffice for PDF conversion.',
+    });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/export/scorm
+ * Export curriculum as SCORM package
+ */
+router.post('/:id/export/scorm', async (req: Request, res: Response) => {
+  try {
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+
+    if (!workflow) {
+      return res.status(404).json({
+        success: false,
+        error: 'Workflow not found',
+      });
+    }
+
+    loggingService.info('Generating SCORM package', {
+      workflowId: workflow._id,
+      projectName: workflow.projectName,
+    });
+
+    const zip = new JSZip();
+
+    // SCORM 1.2 manifest
+    const manifest = `<?xml version="1.0" encoding="UTF-8"?>
+<manifest identifier="curriculum_${workflow._id}" version="1.0"
+          xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
+          xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://www.imsproject.org/xsd/imscp_rootv1p1p2 imscp_rootv1p1p2.xsd
+                              http://www.imsglobal.org/xsd/imsmd_rootv1p2p1 imsmd_rootv1p2p1.xsd
+                              http://www.adlnet.org/xsd/adlcp_rootv1p2 adlcp_rootv1p2.xsd">
+  <metadata>
+    <schema>ADL SCORM</schema>
+    <schemaversion>1.2</schemaversion>
+  </metadata>
+  <organizations default="curriculum_org">
+    <organization identifier="curriculum_org">
+      <title>${workflow.projectName || 'Curriculum'}</title>
+      ${
+        workflow.step4?.modules
+          ?.map(
+            (module: any, idx: number) => `
+      <item identifier="module_${idx + 1}" identifierref="resource_module_${idx + 1}">
+        <title>${module.moduleCode}: ${module.title}</title>
+      </item>`
+          )
+          .join('') || ''
+      }
+    </organization>
+  </organizations>
+  <resources>
+    ${
+      workflow.step4?.modules
+        ?.map(
+          (module: any, idx: number) => `
+    <resource identifier="resource_module_${idx + 1}" type="webcontent" adlcp:scormtype="sco" href="module_${idx + 1}/index.html">
+      <file href="module_${idx + 1}/index.html"/>
+    </resource>`
+        )
+        .join('') || ''
+    }
+  </resources>
+</manifest>`;
+
+    zip.file('imsmanifest.xml', manifest);
+
+    // Create HTML content for each module
+    if (workflow.step4?.modules) {
+      for (let i = 0; i < workflow.step4.modules.length; i++) {
+        const module = workflow.step4.modules[i];
+        const moduleLessonPlan = workflow.step10?.moduleLessonPlans?.find(
+          (mlp: any) => mlp.moduleId === module.id
+        );
+
+        const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${module.moduleCode}: ${module.title}</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1F4788; }
+    h2 { color: #4A90E2; margin-top: 30px; }
+    .lesson { background: #f5f5f5; padding: 15px; margin: 15px 0; border-radius: 8px; }
+    .objective { margin: 10px 0; padding-left: 20px; }
+  </style>
+</head>
+<body>
+  <h1>${module.moduleCode}: ${module.title}</h1>
+  <p>${module.description || ''}</p>
+  
+  <h2>Module Learning Outcomes</h2>
+  <ul>
+    ${module.mlos?.map((mlo: any) => `<li>${mlo.statement} [${mlo.bloomLevel}]</li>`).join('') || ''}
+  </ul>
+  
+  ${
+    moduleLessonPlan
+      ? `
+  <h2>Lessons</h2>
+  ${
+    moduleLessonPlan.lessons
+      ?.map(
+        (lesson: any) => `
+    <div class="lesson">
+      <h3>Lesson ${lesson.lessonNumber}: ${lesson.lessonTitle}</h3>
+      <p><strong>Duration:</strong> ${lesson.duration} minutes | <strong>Bloom Level:</strong> ${lesson.bloomLevel}</p>
+      <h4>Learning Objectives:</h4>
+      <ul>
+        ${lesson.objectives?.map((obj: string) => `<li>${obj}</li>`).join('') || ''}
+      </ul>
+      <h4>Activities:</h4>
+      <ul>
+        ${lesson.activities?.map((act: any) => `<li><strong>${act.title}</strong> (${act.duration} min): ${act.description}</li>`).join('') || ''}
+      </ul>
+    </div>
+  `
+      )
+      .join('') || ''
+  }
+  `
+      : ''
+  }
+  
+  <script src="../scorm_api.js"></script>
+  <script>
+    // SCORM API initialization
+    if (typeof API !== 'undefined') {
+      API.LMSInitialize("");
+      API.LMSSetValue("cmi.core.lesson_status", "completed");
+      API.LMSCommit("");
+      API.LMSFinish("");
+    }
+  </script>
+</body>
+</html>`;
+
+        zip.folder(`module_${i + 1}`)?.file('index.html', html);
+      }
+    }
+
+    // Add SCORM API wrapper
+    const scormAPI = `
+var API = {
+  LMSInitialize: function(param) { return "true"; },
+  LMSFinish: function(param) { return "true"; },
+  LMSGetValue: function(element) { return ""; },
+  LMSSetValue: function(element, value) { return "true"; },
+  LMSCommit: function(param) { return "true"; },
+  LMSGetLastError: function() { return "0"; },
+  LMSGetErrorString: function(errorCode) { return "No error"; },
+  LMSGetDiagnostic: function(errorCode) { return "No error"; }
+};`;
+
+    zip.file('scorm_api.js', scormAPI);
+
+    // Generate ZIP buffer
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+    // Generate filename
+    const filename = `${workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}-SCORM-${new Date().toISOString().split('T')[0]}.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', zipBuffer.length);
+
+    res.send(zipBuffer);
+
+    loggingService.info('SCORM package exported', {
+      workflowId: workflow._id,
+      filename,
+      moduleCount: workflow.step4?.modules?.length || 0,
+    });
+  } catch (error) {
+    loggingService.error('Error exporting SCORM package', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to export SCORM package',
+    });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/regenerate-lesson
+ * Regenerate a specific lesson
+ */
+router.post(
+  '/:id/regenerate-lesson',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { moduleId, lessonId } = req.body;
+
+      if (!moduleId || !lessonId) {
+        return res.status(400).json({
+          success: false,
+          error: 'moduleId and lessonId are required',
+        });
+      }
+
+      const workflow = await CurriculumWorkflow.findById(req.params.id);
+      if (!workflow || !workflow.step10) {
+        return res.status(404).json({
+          success: false,
+          error: 'Workflow or Step 10 data not found',
+        });
+      }
+
+      // Find the module and lesson
+      const moduleIndex = workflow.step10.moduleLessonPlans?.findIndex(
+        (m) => m.moduleId === moduleId
+      );
+      if (moduleIndex === undefined || moduleIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          error: 'Module not found',
+        });
+      }
+
+      const module = workflow.step10.moduleLessonPlans[moduleIndex];
+      const lessonIndex = module.lessons.findIndex((l) => l.lessonId === lessonId);
+      if (lessonIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          error: 'Lesson not found',
+        });
+      }
+
+      const oldLesson = module.lessons[lessonIndex];
+
+      loggingService.info('🔄 Regenerating lesson', {
+        workflowId: req.params.id,
+        moduleId,
+        lessonId,
+        lessonNumber: oldLesson.lessonNumber,
+        lessonTitle: oldLesson.lessonTitle,
+      });
+
+      // Get module data from step4
+      const step4Module = workflow.step4?.modules?.find((m: any) => m.id === moduleId);
+      if (!step4Module) {
+        return res.status(404).json({
+          success: false,
+          error: 'Module not found in Step 4',
+        });
+      }
+
+      // Regenerate the lesson using the lesson plan service
+      const newLesson = await lessonPlanService.generateSingleLesson(
+        step4Module,
+        oldLesson.lessonNumber,
+        {
+          programTitle: workflow.step1?.programTitle || '',
+          deliveryMode: workflow.step1?.delivery?.mode || 'hybrid_blended',
+          plos: workflow.step3?.outcomes || [],
+          sources: workflow.step5?.sourcesByModule?.[moduleId] || [],
+          readings:
+            workflow.step6?.moduleReadingLists?.find((r: any) => r.moduleId === moduleId)
+              ?.readings || [],
+          assessments: workflow.step7?.quizzes?.filter((q: any) => q.moduleId === moduleId) || [],
+          caseStudies:
+            workflow.step8?.caseStudies?.filter((cs: any) => cs.moduleId === moduleId) || [],
+          glossary: workflow.step9?.entries || [],
+        }
+      );
+
+      // Replace the old lesson with the new one
+      module.lessons[lessonIndex] = newLesson;
+
+      // Recalculate module totals
+      module.totalLessons = module.lessons.length;
+      module.totalContactHours = module.lessons.reduce((sum, l) => sum + l.duration / 60, 0);
+
+      // Recalculate summary
+      if (workflow.step10.summary) {
+        workflow.step10.summary.totalLessons = workflow.step10.moduleLessonPlans.reduce(
+          (sum, m) => sum + m.totalLessons,
+          0
+        );
+        workflow.step10.summary.totalContactHours = workflow.step10.moduleLessonPlans.reduce(
+          (sum, m) => sum + m.totalContactHours,
+          0
+        );
+      }
+
+      // Mark as modified and save
+      workflow.markModified('step10');
+      await workflow.save();
+
+      loggingService.info('✅ Lesson regenerated successfully', {
+        workflowId: req.params.id,
+        moduleId,
+        lessonId,
+        newLessonTitle: newLesson.lessonTitle,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          lesson: newLesson,
+          module: module,
+          summary: workflow.step10.summary,
+        },
+        message: 'Lesson regenerated successfully',
+      });
+    } catch (error) {
+      loggingService.error('Error regenerating lesson', { error });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to regenerate lesson',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/v3/workflow/:id/approve
+ * Approve workflow and mark as ready for final download
+ */
+router.post('/:id/approve', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    if (!workflow) {
+      return res.status(404).json({
+        success: false,
+        error: 'Workflow not found',
+      });
+    }
+
+    if (!workflow.step10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Step 10 must be completed before approval',
+      });
+    }
+
+    // Update workflow status
+    workflow.status = 'approved';
+    workflow.updatedAt = new Date();
+    await workflow.save();
+
+    loggingService.info('Workflow approved', {
+      workflowId: workflow._id,
+      projectName: workflow.projectName,
+    });
+
+    res.json({
+      success: true,
+      data: workflow,
+      message: 'Workflow approved successfully',
+    });
+  } catch (error) {
+    loggingService.error('Error approving workflow', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to approve workflow',
     });
   }
 });

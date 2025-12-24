@@ -28,7 +28,7 @@ export type StreamCallback = (chunk: StreamChunk) => void;
 
 export class OpenAIService {
   private client: OpenAI;
-  private readonly defaultTimeout = 1200000; // 1200 seconds (20 minutes) for complex curriculum generation with large prompts
+  private readonly defaultTimeout = 1200000; // 20 minutes for complex curriculum generation with GPT-5
   private readonly maxRetries = 5; // Increased retries for curriculum generation
   private readonly baseDelay = 2000; // 2 seconds for exponential backoff
   private initialized = false;
@@ -50,7 +50,7 @@ export class OpenAIService {
 
     this.client = new OpenAI({
       apiKey: apiKey || 'missing-key',
-      timeout: 1200000, // 1200 seconds (20 minutes) for complex curriculum generation with large prompts
+      timeout: 1200000, // 20 minutes for complex curriculum generation with GPT-5
       maxRetries: 0, // We handle retries manually for better control
     });
   }
@@ -226,8 +226,9 @@ export class OpenAIService {
   ): Promise<string> {
     const {
       model = config.openai.chatModel, // Default: gpt-5
-      maxTokens = 128000, // MAXIMUM token limit for complex curriculum generation
+      maxTokens = 128000, // GPT-5 supports large token outputs
       timeout = this.defaultTimeout, // 20 minutes
+      responseFormat = 'text', // Default to text, can be 'json_object'
     } = options;
 
     const startTime = Date.now();
@@ -237,20 +238,24 @@ export class OpenAIService {
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
       try {
-        const response = await this.client.chat.completions.create(
-          {
-            model,
-            messages: [
-              ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
-              { role: 'user' as const, content: prompt },
-            ],
-            max_completion_tokens: maxTokens,
-          },
-          {
-            signal: controller.signal as any,
-            timeout: timeout, // Pass timeout to each request
-          }
-        );
+        const requestBody: any = {
+          model,
+          messages: [
+            ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
+            { role: 'user' as const, content: prompt },
+          ],
+          max_completion_tokens: maxTokens,
+        };
+
+        // Add response_format if JSON is requested
+        if (responseFormat === 'json_object') {
+          requestBody.response_format = { type: 'json_object' };
+        }
+
+        const response = await this.client.chat.completions.create(requestBody, {
+          signal: controller.signal as any,
+          timeout: timeout, // Pass timeout to each request
+        });
 
         clearTimeout(timeoutId);
 
@@ -420,7 +425,7 @@ export class OpenAIService {
   ): Promise<void> {
     const {
       model = config.openai.chatModel, // Default: gpt-5
-      maxTokens = 128000, // MAXIMUM token limit for complex curriculum generation
+      maxTokens = 128000, // GPT-5 supports large token outputs
       timeout = this.defaultTimeout, // 20 minutes
     } = options;
 

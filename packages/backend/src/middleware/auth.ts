@@ -8,6 +8,7 @@ import { createAuditLog } from '../services/auditService';
 
 // Extend Express Request type to include auth
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       auth?: {
@@ -63,11 +64,7 @@ export const validateJWT = (req: Request, res: Response, next: NextFunction): vo
 /**
  * Middleware to load user from database and attach to request
  */
-export const loadUser = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
+export const loadUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     if (!req.auth?.sub) {
       res.status(401).json({
