@@ -3071,6 +3071,7 @@ CRITICAL VALIDATION:
    * @returns Updated workflow with the new module added to step10
    */
   async processStep10NextModule(workflowId: string): Promise<ICurriculumWorkflow> {
+    // Always fetch fresh workflow data to avoid stale state
     const workflow = await CurriculumWorkflow.findById(workflowId);
     if (!workflow || !workflow.step9) {
       throw new Error('Workflow not found or Step 9 not complete');
@@ -3078,6 +3079,13 @@ CRITICAL VALIDATION:
 
     const existingModules = workflow.step10?.moduleLessonPlans?.length || 0;
     const totalModules = workflow.step4?.modules?.length || 0;
+
+    loggingService.info('Processing Step 10: Next Module - Initial Check', {
+      workflowId,
+      existingModules,
+      totalModules,
+      nextModuleIndex: existingModules,
+    });
 
     if (existingModules >= totalModules) {
       loggingService.info('All modules already generated', {
@@ -3109,7 +3117,16 @@ CRITICAL VALIDATION:
     const module = context.modules[nextModuleIndex];
 
     if (!module) {
-      throw new Error(`Module ${nextModuleIndex + 1} not found`);
+      loggingService.error('Module not found in context', {
+        workflowId,
+        nextModuleIndex,
+        totalModulesInContext: context.modules.length,
+        totalModulesInStep4: totalModules,
+        existingModules,
+      });
+      throw new Error(
+        `Module ${nextModuleIndex + 1} not found. Context has ${context.modules.length} modules, Step4 has ${totalModules} modules.`
+      );
     }
 
     loggingService.info('Generating lesson plans for next module', {

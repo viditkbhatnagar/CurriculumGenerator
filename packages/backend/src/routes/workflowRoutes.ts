@@ -1454,16 +1454,20 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
       workflowService
         .processStep10NextModule(id)
         .then((result) => {
-          loggingService.info('Step 10 module generation completed', {
+          loggingService.info('Step 10 module generation completed successfully', {
             workflowId: id,
             modulesGenerated: result.step10?.moduleLessonPlans?.length || 0,
             totalModules,
+            moduleJustCompleted: existingModules + 1,
           });
         })
         .catch((err) => {
-          loggingService.error('Step 10 module generation failed', {
+          loggingService.error('Step 10 module generation failed in background', {
             workflowId: id,
+            moduleNumber: existingModules + 1,
+            totalModules,
             error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
           });
         });
 
