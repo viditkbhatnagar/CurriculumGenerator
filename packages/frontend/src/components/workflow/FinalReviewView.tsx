@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { CurriculumWorkflow } from '@/types/workflow';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
 interface Props {
   workflow: CurriculumWorkflow;
 }
@@ -14,12 +16,9 @@ export default function FinalReviewView({ workflow }: Props) {
   const handleDownloadPPTs = async () => {
     setDownloadingPPT(true);
     try {
-      const response = await fetch(
-        `http://localhost:4000/api/v3/ppt/generate/all/${workflow._id}`,
-        {
-          method: 'POST',
-        }
-      );
+      const response = await fetch(`${API_BASE}/api/v3/ppt/generate/all/${workflow._id}`, {
+        method: 'POST',
+      });
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -44,12 +43,9 @@ export default function FinalReviewView({ workflow }: Props) {
   const handleDownloadSCORM = async () => {
     setDownloadingSCORM(true);
     try {
-      const response = await fetch(
-        `http://localhost:4000/api/v3/workflow/${workflow._id}/export/scorm`,
-        {
-          method: 'POST',
-        }
-      );
+      const response = await fetch(`${API_BASE}/api/v3/workflow/${workflow._id}/export/scorm`, {
+        method: 'POST',
+      });
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -152,7 +148,7 @@ export default function FinalReviewView({ workflow }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Word Document */}
           <a
-            href={`http://localhost:4000/api/v3/workflow/${workflow._id}/export/word`}
+            href={`${API_BASE}/api/v3/workflow/${workflow._id}/export/word`}
             download
             className="flex items-center gap-3 px-5 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors group"
           >
@@ -182,7 +178,7 @@ export default function FinalReviewView({ workflow }: Props) {
 
           {/* PDF Document */}
           <a
-            href={`http://localhost:4000/api/v3/workflow/${workflow._id}/export/pdf`}
+            href={`${API_BASE}/api/v3/workflow/${workflow._id}/export/pdf`}
             download
             className="flex items-center gap-3 px-5 py-4 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors group"
           >
