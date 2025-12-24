@@ -3106,7 +3106,104 @@ CRITICAL VALIDATION:
     const { LessonPlanService } = await import('./lessonPlanService');
     const { PPTGenerationService } = await import('./pptGenerationService');
 
-    const lessonPlanService = new LessonPlanService();
+    // Create progress callback to save after each lesson
+    const lessonProgressCallback = async (progress: any) => {
+      try {
+        loggingService.info('Saving lesson progress', {
+          workflowId,
+          moduleId: progress.moduleId,
+          lessonsGenerated: progress.lessonsGenerated,
+          totalLessons: progress.totalLessons,
+        });
+
+        // Initialize step10 if it doesn't exist
+        if (!workflow.step10) {
+          workflow.step10 = {
+            moduleLessonPlans: [],
+            validation: {
+              allModulesHaveLessonPlans: false,
+              allLessonDurationsValid: false,
+              totalHoursMatch: false,
+              allMLOsCovered: false,
+              caseStudiesIntegrated: false,
+              assessmentsIntegrated: false,
+            },
+            summary: {
+              totalLessons: 0,
+              totalContactHours: 0,
+              averageLessonDuration: 0,
+              caseStudiesIncluded: 0,
+              formativeChecksIncluded: 0,
+            },
+            generatedAt: new Date(),
+          };
+        }
+
+        // Find or create module plan
+        let modulePlan = workflow.step10.moduleLessonPlans.find(
+          (m) => m.moduleId === progress.moduleId
+        );
+
+        if (!modulePlan) {
+          // Create new module plan
+          modulePlan = {
+            moduleId: progress.moduleId,
+            moduleCode: progress.moduleCode,
+            moduleTitle: progress.moduleTitle,
+            totalContactHours: 0,
+            totalLessons: progress.totalLessons,
+            lessons: [],
+            pptDecks: [],
+          };
+          workflow.step10.moduleLessonPlans.push(modulePlan);
+        }
+
+        // Update lessons (replace with latest)
+        modulePlan.lessons = progress.lessons;
+        modulePlan.totalLessons = progress.lessons.length;
+        modulePlan.totalContactHours = progress.lessons.reduce(
+          (sum: number, l: any) => sum + l.duration / 60,
+          0
+        );
+
+        // Update summary
+        const allLessons = workflow.step10.moduleLessonPlans.flatMap((m) => m.lessons);
+        workflow.step10.summary = {
+          totalLessons: allLessons.length,
+          totalContactHours: workflow.step10.moduleLessonPlans.reduce(
+            (sum, m) => sum + m.totalContactHours,
+            0
+          ),
+          averageLessonDuration:
+            allLessons.length > 0
+              ? allLessons.reduce((sum, l) => sum + l.duration, 0) / allLessons.length
+              : 0,
+          caseStudiesIncluded: allLessons.filter((l) => l.caseStudyActivity).length,
+          formativeChecksIncluded: allLessons.reduce(
+            (sum, l) => sum + (l.formativeChecks?.length || 0),
+            0
+          ),
+        };
+
+        // Save to database
+        workflow.markModified('step10');
+        await workflow.save();
+
+        loggingService.info('Lesson progress saved', {
+          workflowId,
+          moduleId: progress.moduleId,
+          lessonsInDB: modulePlan.lessons.length,
+        });
+      } catch (err) {
+        loggingService.error('Failed to save lesson progress', {
+          workflowId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        // Don't throw - let generation continue
+      }
+    };
+
+    const lessonPlanService = new LessonPlanService(undefined, lessonProgressCallback);
     const pptGenerationService = new PPTGenerationService();
 
     // Build context

@@ -335,6 +335,25 @@ export class LessonPlanService {
         durationMs: lessonDuration,
         durationSec: Math.round(lessonDuration / 1000),
       });
+
+      // Call progress callback after each lesson (for real-time updates)
+      if (this.onProgressCallback) {
+        try {
+          await this.onProgressCallback({
+            moduleId: module.id,
+            moduleCode: module.moduleCode,
+            moduleTitle: module.title,
+            lessonsGenerated: i + 1,
+            totalLessons: orderedBlocks.length,
+            currentLesson: lesson,
+            lessons: [...lessons], // Send all lessons generated so far
+          });
+        } catch (err) {
+          loggingService.warn('Progress callback failed, continuing generation', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
     }
 
     // Step 4: Integrate case studies
