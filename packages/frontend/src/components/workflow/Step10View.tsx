@@ -78,6 +78,11 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
   const hasStep10Data = workflow.step10 && workflow.step10.moduleLessonPlans?.length > 0;
   const validation = workflow.step10?.validation;
 
+  // Check if generation is incomplete
+  const totalModules = workflow.step4?.modules?.length || 0;
+  const completedModules = workflow.step10?.moduleLessonPlans?.length || 0;
+  const isIncomplete = hasStep10Data && completedModules < totalModules;
+
   // Auto-select first module if none selected
   useEffect(() => {
     if (hasStep10Data && !selectedModule && workflow.step10?.moduleLessonPlans?.length) {
@@ -270,7 +275,7 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
         // Display Generated Lesson Plans
         <div className="space-y-6">
           {/* Completion Banner */}
-          {justGenerated && (
+          {justGenerated && !isIncomplete && (
             <div className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-xl p-6 text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cyan-500/20 flex items-center justify-center">
                 <svg
@@ -297,6 +302,52 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
               <p className="text-cyan-400 text-sm animate-pulse">
                 ↑ Click "Complete & Review" button above to finalize
               </p>
+            </div>
+          )}
+
+          {/* Incomplete Generation Banner */}
+          {isIncomplete && (
+            <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl p-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                  <svg
+                    className="w-6 h-6 text-amber-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-amber-400 mb-1">
+                    Generation In Progress
+                  </h3>
+                  <p className="text-slate-300 text-sm">
+                    {completedModules} of {totalModules} modules completed. Click the button below
+                    to continue generating the remaining modules.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleGenerate}
+                disabled={isCurrentlyGenerating}
+                className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+              >
+                {isCurrentlyGenerating ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Generating Next Module...
+                  </span>
+                ) : (
+                  `📚 Continue Generation (${totalModules - completedModules} modules remaining)`
+                )}
+              </button>
             </div>
           )}
 
