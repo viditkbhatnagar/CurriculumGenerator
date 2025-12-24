@@ -159,30 +159,90 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
                 </span>
               </div>
 
-              {/* Module list */}
-              <div className="mt-4 space-y-2">
-                <p className="text-xs text-slate-400 font-medium">Completed Modules:</p>
-                {workflow.step10.moduleLessonPlans.map((module, idx) => (
-                  <div key={module.moduleId} className="flex items-center gap-2 text-sm">
-                    <svg
-                      className="w-4 h-4 text-green-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                    <span className="text-slate-300">
-                      {module.moduleCode}: {module.moduleTitle}
-                    </span>
-                    <span className="text-slate-500 text-xs">({module.totalLessons} lessons)</span>
-                  </div>
-                ))}
+              {/* Module list with lesson-level detail */}
+              <div className="mt-4 space-y-3">
+                <p className="text-xs text-slate-400 font-medium">Progress by Module:</p>
+                {workflow.step10.moduleLessonPlans.map((module, idx) => {
+                  const step4Module = workflow.step4?.modules?.find(
+                    (m) => m.id === module.moduleId
+                  );
+                  const expectedLessons = step4Module
+                    ? Math.ceil((step4Module.contactHours * 60) / 90)
+                    : module.totalLessons;
+                  const isComplete = module.lessons.length >= expectedLessons;
+
+                  return (
+                    <div key={module.moduleId} className="bg-slate-800/50 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <svg
+                          className={`w-4 h-4 ${isComplete ? 'text-green-400' : 'text-amber-400'}`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          {isComplete ? (
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          ) : (
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          )}
+                        </svg>
+                        <span className="text-slate-300 font-medium text-sm">
+                          {module.moduleCode}: {module.moduleTitle}
+                        </span>
+                      </div>
+                      <div className="ml-6 space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-400">Lessons:</span>
+                          <span
+                            className={`font-semibold ${isComplete ? 'text-green-400' : 'text-amber-400'}`}
+                          >
+                            {module.lessons.length} / {expectedLessons}
+                            {!isComplete && ' (generating...)'}
+                          </span>
+                        </div>
+                        {/* Show individual lessons */}
+                        {module.lessons.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {module.lessons.map((lesson, lessonIdx) => (
+                              <div
+                                key={lesson.lessonId}
+                                className="flex items-center gap-2 text-xs text-slate-400"
+                              >
+                                <svg
+                                  className="w-3 h-3 text-green-400"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M5 13l4 4L19 7"
+                                  />
+                                </svg>
+                                <span>
+                                  Lesson {lessonIdx + 1}: {lesson.lessonTitle} ({lesson.duration}
+                                  min)
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
