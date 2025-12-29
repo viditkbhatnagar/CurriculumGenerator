@@ -24,94 +24,37 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
   const [error, setError] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
-  const [justGenerated, setJustGenerated] = useState(false);
   const [generatingModuleId, setGeneratingModuleId] = useState<string | null>(null);
-  const [pollIntervalId, setPollIntervalId] = useState<NodeJS.Timeout | null>(null);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
 
   const isCurrentlyGenerating = isGenerating(workflow._id, 10) || submitStep10.isPending;
 
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollIntervalId) {
-        clearInterval(pollIntervalId);
-      }
-    };
-  }, [pollIntervalId]);
-
   const handleGenerate = async () => {
     setError(null);
 
-    // Clear any existing polling interval first
-    if (pollIntervalId) {
-      clearInterval(pollIntervalId);
-      setPollIntervalId(null);
+    const nextModuleIndex = workflow.step10?.moduleLessonPlans?.length || 0;
+    const nextModule = workflow.step4?.modules?.[nextModuleIndex];
+
+    if (!nextModule) {
+      setError('No more modules to generate');
+      return;
     }
 
-    const currentCompletedModules = workflow.step10?.moduleLessonPlans?.length || 0;
-    setGeneratingModuleId('next'); // Indicate we're generating the next module
+    setGeneratingModuleId(nextModule.id);
     startGeneration(workflow._id, 10, 300); // 5 minutes estimated per module
 
     try {
-      const response: any = await submitStep10.mutateAsync(workflow._id);
+      await submitStep10.mutateAsync(workflow._id);
 
-      // Check if generation started in background
-      if (response?.data?.generationStarted) {
-        // Keep the generating state active
-        // Don't call completeGeneration yet - wait for actual completion
-        setJustGenerated(false);
-
-        // Start polling to check for completion
-        const interval = setInterval(async () => {
-          try {
-            await onRefresh();
-
-            // Check if the module is now complete
-            const newCompleted = workflow.step10?.moduleLessonPlans?.length || 0;
-            if (newCompleted > currentCompletedModules) {
-              // Module completed!
-              clearInterval(interval);
-              setPollIntervalId(null);
-              completeGeneration(workflow._id, 10);
-              setGeneratingModuleId(null);
-              setJustGenerated(true);
-            }
-          } catch (err) {
-            console.error('Polling error:', err);
-          }
-        }, 10000); // Poll every 10 seconds
-
-        setPollIntervalId(interval);
-
-        // Stop polling after 10 minutes (safety timeout)
-        setTimeout(() => {
-          if (interval) {
-            clearInterval(interval);
-            setPollIntervalId(null);
-            completeGeneration(workflow._id, 10);
-            setGeneratingModuleId(null);
-          }
-        }, 600000); // 10 minutes
-      } else {
-        // Synchronous generation completed
-        await onRefresh();
-        completeGeneration(workflow._id, 10);
-        setJustGenerated(true);
-        setGeneratingModuleId(null);
-      }
+      // Generation started in background - user will manually refresh to check progress
+      completeGeneration(workflow._id, 10);
+      setGeneratingModuleId(null);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate lesson plans';
       console.error('Failed to generate lesson plans:', err);
       failGeneration(workflow._id, 10, errorMessage);
       setError(errorMessage);
       setGeneratingModuleId(null);
-
-      // Clear polling on error
-      if (pollIntervalId) {
-        clearInterval(pollIntervalId);
-        setPollIntervalId(null);
-      }
     }
   };
 
@@ -440,20 +383,26 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
               })}
             </div>
 
-            {/* Manual Refresh Button */}
-            {isIncomplete && !isCurrentlyGenerating && (
-              <div className="mt-6 pt-6 border-t border-slate-700">
-                <button
-                  onClick={onRefresh}
-                  className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors text-sm font-medium"
-                >
-                  🔄 Refresh to Check Progress
-                </button>
-                <p className="text-xs text-slate-500 text-center mt-2">
-                  Click to manually check if generation has completed
-                </p>
-              </div>
-            )}
+            {/* Manual Refresh Button - Always visible when generation is in progress */}
+            <div className="mt-6 pt-6 border-t border-slate-700">
+              <button
+                onClick={onRefresh}
+                className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                Refresh to Check Progress
+              </button>
+              <p className="text-xs text-slate-500 text-center mt-2">
+                Click after starting generation to check if the module has completed
+              </p>
+            </div>
           </div>
 
           {/* Completion Banner */}

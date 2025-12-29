@@ -15,6 +15,7 @@
 
 import { OpenAIService, openaiService } from './openaiService';
 import { loggingService } from './loggingService';
+import { PPTGenerationService } from './pptGenerationService';
 import {
   LessonPlan,
   LessonActivity,
@@ -25,6 +26,7 @@ import {
   ReadingReference,
   ReadingAssignment,
   CharacterBrief,
+  PPTDeck,
 } from '../models/CurriculumWorkflow';
 
 // ============================================================================
@@ -146,11 +148,17 @@ export function getBloomLevelOrder(level: string): number {
 
 export class LessonPlanService {
   private openaiService: OpenAIService;
+  private pptGenerationService?: PPTGenerationService;
   private onProgressCallback?: (progress: any) => void;
 
-  constructor(openaiServiceInstance?: OpenAIService, progressCallback?: (progress: any) => void) {
+  constructor(
+    openaiServiceInstance?: OpenAIService,
+    progressCallback?: (progress: any) => void,
+    pptGenerationServiceInstance?: PPTGenerationService
+  ) {
     this.openaiService = openaiServiceInstance || openaiService;
     this.onProgressCallback = progressCallback;
+    this.pptGenerationService = pptGenerationServiceInstance;
   }
 
   // ==========================================================================
@@ -366,6 +374,61 @@ export class LessonPlanService {
       module.id
     );
 
+    // Step 6: Generate PPT decks for each lesson immediately
+    loggingService.info('  📊 Step 4: Generating PPT decks for lessons', {
+      moduleCode: module.moduleCode,
+      lessonCount: finalLessons.length,
+    });
+
+    const pptDecks: PPTDeck[] = [];
+
+    if (this.pptGenerationService) {
+      for (let i = 0; i < finalLessons.length; i++) {
+        const lesson = finalLessons[i];
+
+        try {
+          loggingService.info(`    → Generating PPT for lesson ${i + 1}/${finalLessons.length}`, {
+            moduleCode: module.moduleCode,
+            lessonId: lesson.lessonId,
+          });
+
+          const pptStartTime = Date.now();
+
+          // Build PPT context
+          const pptContext = {
+            programTitle: context.programTitle,
+            moduleCode: module.moduleCode,
+            moduleTitle: module.title,
+            deliveryMode: context.deliveryMode,
+            glossaryTerms: context.glossaryEntries || [],
+          };
+
+          const pptDeck = await this.pptGenerationService.generateLessonPPT(lesson, pptContext);
+          pptDecks.push(pptDeck);
+
+          const pptDuration = Date.now() - pptStartTime;
+          loggingService.info(`    ✓ PPT generated for lesson ${i + 1}/${finalLessons.length}`, {
+            moduleCode: module.moduleCode,
+            lessonId: lesson.lessonId,
+            slideCount: pptDeck.slideCount,
+            durationMs: pptDuration,
+            durationSec: Math.round(pptDuration / 1000),
+          });
+        } catch (err) {
+          loggingService.error(`    ✗ Failed to generate PPT for lesson ${i + 1}`, {
+            moduleCode: module.moduleCode,
+            lessonId: lesson.lessonId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          // Continue with other lessons even if one PPT fails
+        }
+      }
+    } else {
+      loggingService.warn('  ⚠️  PPT generation service not available, skipping PPT generation', {
+        moduleCode: module.moduleCode,
+      });
+    }
+
     return {
       moduleId: module.id,
       moduleCode: module.moduleCode,
@@ -373,7 +436,7 @@ export class LessonPlanService {
       totalContactHours: module.contactHours,
       totalLessons: finalLessons.length,
       lessons: finalLessons,
-      pptDecks: [], // PPT decks will be generated separately
+      pptDecks, // PPT decks generated immediately after lessons
     };
   }
 

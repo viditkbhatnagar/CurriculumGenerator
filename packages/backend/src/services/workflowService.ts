@@ -3203,8 +3203,12 @@ CRITICAL VALIDATION:
       }
     };
 
-    const lessonPlanService = new LessonPlanService(undefined, lessonProgressCallback);
     const pptGenerationService = new PPTGenerationService();
+    const lessonPlanService = new LessonPlanService(
+      undefined,
+      lessonProgressCallback,
+      pptGenerationService
+    );
 
     // Build context
     const context = this.buildWorkflowContext(workflow);
@@ -3234,57 +3238,18 @@ CRITICAL VALIDATION:
       contactHours: module.contactHours,
     });
 
-    // Generate lesson plans for this module
+    // Generate lesson plans for this module (PPTs are generated automatically per lesson)
     const startTime = Date.now();
     const modulePlan = await lessonPlanService.generateModuleLessonPlans(module, context);
     const duration = Date.now() - startTime;
 
-    loggingService.info('Lesson plans generated for module', {
+    loggingService.info('Lesson plans and PPTs generated for module', {
       workflowId,
       moduleId: module.id,
       lessonsGenerated: modulePlan.totalLessons,
+      pptDecksGenerated: modulePlan.pptDecks.length,
       durationMs: duration,
       durationMin: Math.round(duration / 60000),
-    });
-
-    // Generate PPT decks for this module
-    loggingService.info('Generating PPTs for module', {
-      workflowId,
-      moduleId: module.id,
-      lessonsCount: modulePlan.lessons.length,
-    });
-
-    const pptContext = {
-      programTitle: context.programTitle,
-      moduleCode: modulePlan.moduleCode,
-      moduleTitle: modulePlan.moduleTitle,
-      deliveryMode: context.deliveryMode,
-      glossaryEntries: context.glossaryEntries,
-      sources: context.topicSources,
-      readingLists: context.moduleReadingLists,
-    };
-
-    const pptStartTime = Date.now();
-    const pptDecks = await pptGenerationService.generateModulePPTs(modulePlan, pptContext);
-    const pptDuration = Date.now() - pptStartTime;
-
-    // Store PPT deck references
-    modulePlan.pptDecks = pptDecks.map((deck) => ({
-      deckId: deck.deckId,
-      lessonId: deck.lessonId,
-      lessonNumber: deck.lessonNumber,
-      slideCount: deck.slideCount,
-      pptxPath: undefined,
-      pdfPath: undefined,
-      imagesPath: undefined,
-    }));
-
-    loggingService.info('PPTs generated for module', {
-      workflowId,
-      moduleId: module.id,
-      pptDecksGenerated: pptDecks.length,
-      durationMs: pptDuration,
-      durationSec: Math.round(pptDuration / 1000),
     });
 
     // Initialize step10 if it doesn't exist
@@ -5686,8 +5651,12 @@ Begin output now.`;
       await workflow.save();
     };
 
-    const lessonPlanService = new LessonPlanService(undefined, progressCallback);
     const pptGenerationService = new PPTGenerationService();
+    const lessonPlanService = new LessonPlanService(
+      undefined,
+      progressCallback,
+      pptGenerationService
+    );
     loggingService.info('  ✓ Services loaded');
 
     // Build comprehensive context from all 9 previous steps
@@ -5712,75 +5681,19 @@ Begin output now.`;
     const lessonPlanStartTime = Date.now();
     const step10Data = await lessonPlanService.generateLessonPlans(context, existingModulePlans);
     const lessonPlanDuration = Date.now() - lessonPlanStartTime;
-    loggingService.info('  ✅ Lesson plans generated', {
+    loggingService.info('  ✅ Lesson plans and PPTs generated', {
       totalLessons: step10Data.summary.totalLessons,
       totalContactHours: step10Data.summary.totalContactHours,
+      totalPPTDecks: step10Data.moduleLessonPlans.reduce((sum, m) => sum + m.pptDecks.length, 0),
       durationMs: lessonPlanDuration,
       durationMin: Math.round(lessonPlanDuration / 60000),
     });
-
-    // Generate PPT decks for all lessons
-    loggingService.info('  🎨 Starting PPT generation for all lessons', {
-      totalModules: step10Data.moduleLessonPlans.length,
-      totalLessons: step10Data.summary.totalLessons,
-    });
-
-    const pptStartTime = Date.now();
-    for (let i = 0; i < step10Data.moduleLessonPlans.length; i++) {
-      const modulePlan = step10Data.moduleLessonPlans[i];
-      loggingService.info(
-        `    🎨 Generating PPTs for module ${i + 1}/${step10Data.moduleLessonPlans.length}`,
-        {
-          moduleCode: modulePlan.moduleCode,
-          lessonsCount: modulePlan.lessons.length,
-        }
-      );
-
-      const pptContext = {
-        programTitle: context.programTitle,
-        moduleCode: modulePlan.moduleCode,
-        moduleTitle: modulePlan.moduleTitle,
-        deliveryMode: context.deliveryMode,
-        glossaryEntries: context.glossaryEntries,
-        sources: context.topicSources,
-        readingLists: context.moduleReadingLists,
-      };
-
-      const moduleStartTime = Date.now();
-      const pptDecks = await pptGenerationService.generateModulePPTs(modulePlan, pptContext);
-      const moduleDuration = Date.now() - moduleStartTime;
-
-      // Store PPT deck references
-      modulePlan.pptDecks = pptDecks.map((deck) => ({
-        deckId: deck.deckId,
-        lessonId: deck.lessonId,
-        lessonNumber: deck.lessonNumber,
-        slideCount: deck.slideCount,
-        // PPT export paths will be set when exporting
-        pptxPath: undefined,
-        pdfPath: undefined,
-        imagesPath: undefined,
-      }));
-
-      loggingService.info(
-        `    ✓ Module ${i + 1}/${step10Data.moduleLessonPlans.length} PPTs complete`,
-        {
-          moduleCode: modulePlan.moduleCode,
-          pptDecksGenerated: pptDecks.length,
-          durationMs: moduleDuration,
-          durationSec: Math.round(moduleDuration / 1000),
-        }
-      );
-    }
-    const pptDuration = Date.now() - pptStartTime;
 
     loggingService.info('🎉 Step 10 content generation complete', {
       totalLessons: step10Data.summary.totalLessons,
       totalContactHours: step10Data.summary.totalContactHours,
       totalPPTDecks: step10Data.moduleLessonPlans.reduce((sum, m) => sum + m.pptDecks.length, 0),
-      lessonPlanDurationMin: Math.round(lessonPlanDuration / 60000),
-      pptDurationMin: Math.round(pptDuration / 60000),
-      totalDurationMin: Math.round((lessonPlanDuration + pptDuration) / 60000),
+      totalDurationMin: Math.round(lessonPlanDuration / 60000),
     });
 
     return step10Data;
