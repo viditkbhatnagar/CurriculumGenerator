@@ -25,65 +25,31 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
   const [justGenerated, setJustGenerated] = useState(false);
-  const [isPolling, setIsPolling] = useState(false);
+  const [generatingModuleId, setGeneratingModuleId] = useState<string | null>(null);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
 
   const isCurrentlyGenerating = isGenerating(workflow._id, 10) || submitStep10.isPending;
 
-  // Real-time polling for Step 10 progress
-  useEffect(() => {
-    if (!isCurrentlyGenerating || hasStep10Data) {
-      setIsPolling(false);
-      return;
-    }
-
-    setIsPolling(true);
-    const pollInterval = setInterval(async () => {
-      try {
-        await onRefresh(); // Refresh workflow data to get latest step10 progress
-      } catch (err) {
-        console.error('Polling error:', err);
-      }
-    }, 5000); // Poll every 5 seconds
-
-    return () => {
-      clearInterval(pollInterval);
-      setIsPolling(false);
-    };
-  }, [isCurrentlyGenerating, onRefresh]);
-
-  // Check for completion when data appears
-  useEffect(() => {
-    if ((workflow.step10?.moduleLessonPlans?.length ?? 0) > 0) {
-      completeGeneration(workflow._id, 10);
-    }
-  }, [workflow.step10, workflow._id, completeGeneration]);
-
   const handleGenerate = async () => {
     setError(null);
-    startGeneration(workflow._id, 10, 180); // 3 minutes estimated per module
+    setGeneratingModuleId('next'); // Indicate we're generating the next module
+    startGeneration(workflow._id, 10, 300); // 5 minutes estimated per module
+
     try {
       const response: any = await submitStep10.mutateAsync(workflow._id);
 
-      // Check if generation started in background
-      if (response?.data?.generationStarted) {
-        // Auto-refresh after 3 minutes to check progress
-        setTimeout(async () => {
-          await onRefresh();
-          completeGeneration(workflow._id, 10);
-        }, 180000); // 3 minutes
+      // Refresh to get the latest data
+      await onRefresh();
 
-        setJustGenerated(true);
-      } else {
-        completeGeneration(workflow._id, 10);
-        await onRefresh();
-        setJustGenerated(true);
-      }
+      completeGeneration(workflow._id, 10);
+      setJustGenerated(true);
+      setGeneratingModuleId(null);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate lesson plans';
       console.error('Failed to generate lesson plans:', err);
       failGeneration(workflow._id, 10, errorMessage);
       setError(errorMessage);
+      setGeneratingModuleId(null);
     }
   };
 
@@ -120,137 +86,6 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      {/* Show generating state with real-time progress */}
-      {isCurrentlyGenerating && (
-        <div className="mb-6 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 border-3 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-white">
-                Generating Lesson Plans & PPTs...
-              </h3>
-              <p className="text-sm text-slate-400">
-                Module generation takes 2-5 minutes. The page will auto-refresh when complete, or
-                you can manually refresh to check progress.
-              </p>
-            </div>
-          </div>
-
-          {/* Real-time progress */}
-          {workflow.step10?.moduleLessonPlans && workflow.step10.moduleLessonPlans.length > 0 && (
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-300">Modules Completed:</span>
-                <span className="text-cyan-400 font-semibold">
-                  {workflow.step10.moduleLessonPlans.length} /{' '}
-                  {workflow.step4?.modules?.length || '?'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-300">Total Lessons Generated:</span>
-                <span className="text-cyan-400 font-semibold">
-                  {workflow.step10.summary?.totalLessons || 0}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-300">Contact Hours:</span>
-                <span className="text-cyan-400 font-semibold">
-                  {workflow.step10.summary?.totalContactHours || 0}h
-                </span>
-              </div>
-
-              {/* Module list with lesson-level detail */}
-              <div className="mt-4 space-y-3">
-                <p className="text-xs text-slate-400 font-medium">Progress by Module:</p>
-                {workflow.step10.moduleLessonPlans.map((module, idx) => {
-                  const step4Module = workflow.step4?.modules?.find(
-                    (m) => m.id === module.moduleId
-                  );
-                  const expectedLessons = step4Module
-                    ? Math.ceil((step4Module.contactHours * 60) / 90)
-                    : module.totalLessons;
-                  const isComplete = module.lessons.length >= expectedLessons;
-
-                  return (
-                    <div key={module.moduleId} className="bg-slate-800/50 rounded-lg p-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <svg
-                          className={`w-4 h-4 ${isComplete ? 'text-green-400' : 'text-amber-400'}`}
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          {isComplete ? (
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 13l4 4L19 7"
-                            />
-                          ) : (
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
-                          )}
-                        </svg>
-                        <span className="text-slate-300 font-medium text-sm">
-                          {module.moduleCode}: {module.moduleTitle}
-                        </span>
-                      </div>
-                      <div className="ml-6 space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-400">Lessons:</span>
-                          <span
-                            className={`font-semibold ${isComplete ? 'text-green-400' : 'text-amber-400'}`}
-                          >
-                            {module.lessons.length} / {expectedLessons}
-                            {!isComplete && ' (generating...)'}
-                          </span>
-                        </div>
-                        {/* Show individual lessons */}
-                        {module.lessons.length > 0 && (
-                          <div className="mt-2 space-y-1">
-                            {module.lessons.map((lesson, lessonIdx) => (
-                              <div
-                                key={lesson.lessonId}
-                                className="flex items-center gap-2 text-xs text-slate-400"
-                              >
-                                <svg
-                                  className="w-3 h-3 text-green-400"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M5 13l4 4L19 7"
-                                  />
-                                </svg>
-                                <span>
-                                  Lesson {lessonIdx + 1}: {lesson.lessonTitle} ({lesson.duration}
-                                  min)
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <GenerationProgressBar workflowId={workflow._id} step={10} />
-        </div>
-      )}
-
       {!hasStep10Data && !isCurrentlyGenerating ? (
         // Pre-Generation View
         <div className="space-y-6">
@@ -391,12 +226,180 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
       ) : (
         // Display Generated Lesson Plans
         <div className="space-y-6">
+          {/* Module Generation List - Show all modules with individual controls */}
+          <div className="bg-slate-900/50 rounded-lg p-6 border border-slate-700">
+            <h3 className="text-xl font-bold text-white mb-4">Module Generation Progress</h3>
+            <p className="text-sm text-slate-400 mb-6">
+              Generate lesson plans and PowerPoint decks for each module individually. Each module
+              takes 2-5 minutes to generate.
+            </p>
+
+            <div className="space-y-4">
+              {workflow.step4?.modules?.map((module, index) => {
+                const modulePlan = workflow.step10?.moduleLessonPlans?.find(
+                  (m) => m.moduleId === module.id
+                );
+                const isComplete = !!modulePlan;
+                const isGenerating =
+                  generatingModuleId === module.id ||
+                  (generatingModuleId === 'next' && !isComplete && index === completedModules);
+                const canGenerate =
+                  !isComplete && !isCurrentlyGenerating && index === completedModules;
+
+                return (
+                  <div
+                    key={module.id}
+                    className={`rounded-lg border p-4 transition-all ${
+                      isComplete
+                        ? 'bg-emerald-500/10 border-emerald-500/30'
+                        : isGenerating
+                          ? 'bg-cyan-500/10 border-cyan-500/30'
+                          : canGenerate
+                            ? 'bg-slate-800/50 border-slate-600'
+                            : 'bg-slate-800/30 border-slate-700/50 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-start gap-4">
+                      {/* Status Icon */}
+                      <div className="flex-shrink-0 mt-1">
+                        {isComplete ? (
+                          <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                            <svg
+                              className="w-6 h-6 text-emerald-400"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                          </div>
+                        ) : isGenerating ? (
+                          <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center">
+                            <div className="w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                          </div>
+                        ) : canGenerate ? (
+                          <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                            <span className="text-xl">📚</span>
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-slate-700/50 flex items-center justify-center">
+                            <svg
+                              className="w-6 h-6 text-slate-500"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                              />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Module Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-4 mb-2">
+                          <div className="flex-1">
+                            <h4 className="text-white font-semibold text-lg mb-1">
+                              Module {index + 1}: {module.moduleCode}
+                            </h4>
+                            <p className="text-slate-400 text-sm mb-2">{module.title}</p>
+                            <div className="flex items-center gap-4 text-xs text-slate-500">
+                              <span>{module.contactHours}h contact hours</span>
+                              {modulePlan && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-emerald-400">
+                                    {modulePlan.totalLessons} lessons generated
+                                  </span>
+                                  <span>•</span>
+                                  <span className="text-orange-400">
+                                    {modulePlan.pptDecks.length} PPT decks
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Action Button */}
+                          <div className="flex-shrink-0">
+                            {isComplete ? (
+                              <button
+                                onClick={() => setSelectedModule(module.id)}
+                                className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg transition-colors text-sm font-medium"
+                              >
+                                View Details
+                              </button>
+                            ) : isGenerating ? (
+                              <div className="px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg text-sm font-medium">
+                                Generating...
+                              </div>
+                            ) : canGenerate ? (
+                              <button
+                                onClick={handleGenerate}
+                                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-lg transition-all text-sm font-medium"
+                              >
+                                Generate Now
+                              </button>
+                            ) : (
+                              <div className="px-4 py-2 bg-slate-700/50 text-slate-500 rounded-lg text-sm font-medium">
+                                Locked
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Progress indicator for generating module */}
+                        {isGenerating && (
+                          <div className="mt-3 bg-slate-800/50 rounded-lg p-3">
+                            <div className="flex items-center gap-2 text-sm text-cyan-400 mb-2">
+                              <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                              <span>Generating lesson plans and PPT decks...</span>
+                            </div>
+                            <p className="text-xs text-slate-500">
+                              This will take 2-5 minutes. You can wait here or come back later -
+                              progress is saved automatically.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Manual Refresh Button */}
+            {isIncomplete && !isCurrentlyGenerating && (
+              <div className="mt-6 pt-6 border-t border-slate-700">
+                <button
+                  onClick={onRefresh}
+                  className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors text-sm font-medium"
+                >
+                  🔄 Refresh to Check Progress
+                </button>
+                <p className="text-xs text-slate-500 text-center mt-2">
+                  Click to manually check if generation has completed
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Completion Banner */}
-          {justGenerated && !isIncomplete && (
-            <div className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-xl p-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cyan-500/20 flex items-center justify-center">
+          {!isIncomplete && completedModules === totalModules && (
+            <div className="bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30 rounded-xl p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/20 flex items-center justify-center">
                 <svg
-                  className="w-8 h-8 text-cyan-400"
+                  className="w-8 h-8 text-emerald-400"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -409,62 +412,14 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
                   />
                 </svg>
               </div>
-              <h3 className="text-xl font-bold text-cyan-400 mb-2">
-                🎉 Lesson Plans & PPTs Generated!
-              </h3>
+              <h3 className="text-xl font-bold text-emerald-400 mb-2">🎉 All Modules Complete!</h3>
               <p className="text-slate-300 mb-4">
-                Your lesson plans and PowerPoint decks have been generated. Click "Complete &
-                Review" in the header to finalize your curriculum.
+                All lesson plans and PowerPoint decks have been generated. Click "Complete & Review"
+                in the header to finalize your curriculum.
               </p>
-              <p className="text-cyan-400 text-sm animate-pulse">
+              <p className="text-emerald-400 text-sm animate-pulse">
                 ↑ Click "Complete & Review" button above to finalize
               </p>
-            </div>
-          )}
-
-          {/* Incomplete Generation Banner */}
-          {isIncomplete && (
-            <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl p-6">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-                  <svg
-                    className="w-6 h-6 text-amber-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-amber-400 mb-1">
-                    Generation In Progress
-                  </h3>
-                  <p className="text-slate-300 text-sm">
-                    {completedModules} of {totalModules} modules completed. Click the button below
-                    to continue generating the remaining modules.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleGenerate}
-                disabled={isCurrentlyGenerating}
-                className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
-              >
-                {isCurrentlyGenerating ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Generating Next Module...
-                  </span>
-                ) : (
-                  `📚 Continue Generation (${totalModules - completedModules} modules remaining)`
-                )}
-              </button>
             </div>
           )}
 
