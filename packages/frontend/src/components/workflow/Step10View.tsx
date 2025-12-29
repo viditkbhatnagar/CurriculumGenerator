@@ -310,7 +310,7 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
                         <div className="flex items-start justify-between gap-4 mb-2">
                           <div className="flex-1">
                             <h4 className="text-white font-semibold text-lg mb-1">
-                              Module {index + 1}: {module.moduleCode}
+                              Module {index + 1}: {module.code}
                             </h4>
                             <p className="text-slate-400 text-sm mb-2">{module.title}</p>
                             <div className="flex items-center gap-4 text-xs text-slate-500">
