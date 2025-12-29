@@ -26,24 +26,71 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
   const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
   const [justGenerated, setJustGenerated] = useState(false);
   const [generatingModuleId, setGeneratingModuleId] = useState<string | null>(null);
+  const [pollIntervalId, setPollIntervalId] = useState<NodeJS.Timeout | null>(null);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
 
   const isCurrentlyGenerating = isGenerating(workflow._id, 10) || submitStep10.isPending;
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalId) {
+        clearInterval(pollIntervalId);
+      }
+    };
+  }, [pollIntervalId]);
+
   const handleGenerate = async () => {
     setError(null);
+    const currentCompletedModules = workflow.step10?.moduleLessonPlans?.length || 0;
     setGeneratingModuleId('next'); // Indicate we're generating the next module
     startGeneration(workflow._id, 10, 300); // 5 minutes estimated per module
 
     try {
       const response: any = await submitStep10.mutateAsync(workflow._id);
 
-      // Refresh to get the latest data
-      await onRefresh();
+      // Check if generation started in background
+      if (response?.data?.generationStarted) {
+        // Keep the generating state active
+        // Don't call completeGeneration yet - wait for actual completion
+        setJustGenerated(false);
 
-      completeGeneration(workflow._id, 10);
-      setJustGenerated(true);
-      setGeneratingModuleId(null);
+        // Start polling to check for completion
+        const interval = setInterval(async () => {
+          try {
+            await onRefresh();
+
+            // Check if the module is now complete
+            const newCompleted = workflow.step10?.moduleLessonPlans?.length || 0;
+            if (newCompleted > currentCompletedModules) {
+              // Module completed!
+              clearInterval(interval);
+              setPollIntervalId(null);
+              completeGeneration(workflow._id, 10);
+              setGeneratingModuleId(null);
+              setJustGenerated(true);
+            }
+          } catch (err) {
+            console.error('Polling error:', err);
+          }
+        }, 10000); // Poll every 10 seconds
+
+        setPollIntervalId(interval);
+
+        // Stop polling after 10 minutes (safety timeout)
+        setTimeout(() => {
+          clearInterval(interval);
+          setPollIntervalId(null);
+          completeGeneration(workflow._id, 10);
+          setGeneratingModuleId(null);
+        }, 600000); // 10 minutes
+      } else {
+        // Synchronous generation completed
+        await onRefresh();
+        completeGeneration(workflow._id, 10);
+        setJustGenerated(true);
+        setGeneratingModuleId(null);
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate lesson plans';
       console.error('Failed to generate lesson plans:', err);
