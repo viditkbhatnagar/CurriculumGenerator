@@ -42,6 +42,13 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
 
   const handleGenerate = async () => {
     setError(null);
+
+    // Clear any existing polling interval first
+    if (pollIntervalId) {
+      clearInterval(pollIntervalId);
+      setPollIntervalId(null);
+    }
+
     const currentCompletedModules = workflow.step10?.moduleLessonPlans?.length || 0;
     setGeneratingModuleId('next'); // Indicate we're generating the next module
     startGeneration(workflow._id, 10, 300); // 5 minutes estimated per module
@@ -79,10 +86,12 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
 
         // Stop polling after 10 minutes (safety timeout)
         setTimeout(() => {
-          clearInterval(interval);
-          setPollIntervalId(null);
-          completeGeneration(workflow._id, 10);
-          setGeneratingModuleId(null);
+          if (interval) {
+            clearInterval(interval);
+            setPollIntervalId(null);
+            completeGeneration(workflow._id, 10);
+            setGeneratingModuleId(null);
+          }
         }, 600000); // 10 minutes
       } else {
         // Synchronous generation completed
@@ -97,6 +106,12 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
       failGeneration(workflow._id, 10, errorMessage);
       setError(errorMessage);
       setGeneratingModuleId(null);
+
+      // Clear polling on error
+      if (pollIntervalId) {
+        clearInterval(pollIntervalId);
+        setPollIntervalId(null);
+      }
     }
   };
 
