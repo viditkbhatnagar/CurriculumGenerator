@@ -1,1 +1,0 @@
-Testing with detailed error logging... echo  curl -X POST http://localhost:4000/api/v3/ppt/generate/module//  -H Content-Type: application/json 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSubmitStep8, useApproveStep8 } from '@/hooks/useWorkflow';
+import { api } from '@/lib/api';
 import {
   CurriculumWorkflow,
   CaseStudy,
@@ -86,8 +87,403 @@ function _ProposalCard({
   );
 }
 
+// Case Study Edit Modal Component
+function CaseStudyEditModal({
+  caseStudy,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  caseStudy: CaseStudy;
+  onSave: (updatedCaseStudy: CaseStudy) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [title, setTitle] = useState(caseStudy.title || '');
+  const [caseType, setCaseType] = useState<CaseType>(caseStudy.caseType || 'practice');
+  const [difficulty, setDifficulty] = useState<CaseDifficulty>(caseStudy.difficulty || 'intermediate');
+  const [scenario, setScenario] = useState(caseStudy.scenario || '');
+  const [organizationalContext, setOrganizationalContext] = useState(caseStudy.organizationalContext || '');
+  const [backgroundInformation, setBackgroundInformation] = useState(caseStudy.backgroundInformation || '');
+  const [challengeDescription, setChallengeDescription] = useState(caseStudy.challengeDescription || '');
+  const [industryContext, setIndustryContext] = useState(caseStudy.industryContext || '');
+  const [brandName, setBrandName] = useState(caseStudy.brandName || '');
+  const [linkedMLOs, setLinkedMLOs] = useState<string[]>(caseStudy.linkedMLOs || []);
+  const [suggestedTiming, setSuggestedTiming] = useState(caseStudy.suggestedTiming || '');
+  const [estimatedDuration, setEstimatedDuration] = useState(caseStudy.estimatedDuration || '');
+  const [learningApplication, setLearningApplication] = useState(caseStudy.learningApplication || '');
+  const [suggestedApproach, setSuggestedApproach] = useState(caseStudy.suggestedApproach || '');
+  const [discussionPrompts, setDiscussionPrompts] = useState<string[]>(caseStudy.discussionPrompts || []);
+  const [ethicsCompliant, setEthicsCompliant] = useState(caseStudy.ethicsCompliant ?? true);
+  const [noPII, setNoPII] = useState(caseStudy.noPII ?? true);
+  const [mloInput, setMloInput] = useState('');
+  const [promptInput, setPromptInput] = useState('');
+
+  const wordCount = scenario.split(/\s+/).filter(Boolean).length;
+
+  const handleSave = () => {
+    onSave({
+      ...caseStudy,
+      title,
+      caseType,
+      difficulty,
+      scenario,
+      wordCount,
+      organizationalContext,
+      backgroundInformation,
+      challengeDescription,
+      industryContext,
+      brandName,
+      linkedMLOs,
+      suggestedTiming,
+      estimatedDuration,
+      learningApplication,
+      suggestedApproach,
+      discussionPrompts,
+      ethicsCompliant,
+      noPII,
+    });
+  };
+
+  const addMLO = () => {
+    if (mloInput.trim()) {
+      setLinkedMLOs([...linkedMLOs, mloInput.trim()]);
+      setMloInput('');
+    }
+  };
+
+  const removeMLO = (index: number) => {
+    setLinkedMLOs(linkedMLOs.filter((_, i) => i !== index));
+  };
+
+  const addPrompt = () => {
+    if (promptInput.trim()) {
+      setDiscussionPrompts([...discussionPrompts, promptInput.trim()]);
+      setPromptInput('');
+    }
+  };
+
+  const removePrompt = (index: number) => {
+    setDiscussionPrompts(discussionPrompts.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-slate-700">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            Edit <span className="text-purple-400">Case Study</span>
+          </h3>
+        </div>
+        
+        <div className="p-6 space-y-5">
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              placeholder="Enter case study title..."
+            />
+          </div>
+
+          {/* Case Type and Difficulty */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Case Type</label>
+              <select
+                value={caseType}
+                onChange={(e) => setCaseType(e.target.value as CaseType)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+              >
+                <option value="practice">Practice</option>
+                <option value="discussion">Discussion</option>
+                <option value="assessment_ready">Assessment-Ready</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Difficulty</label>
+              <select
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value as CaseDifficulty)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+              >
+                <option value="entry">Entry</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Organizational Context */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Organizational Context</label>
+            <textarea
+              value={organizationalContext}
+              onChange={(e) => setOrganizationalContext(e.target.value)}
+              rows={2}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              placeholder="Brief organizational context..."
+            />
+          </div>
+
+          {/* Challenge Description */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Challenge Description</label>
+            <textarea
+              value={challengeDescription}
+              onChange={(e) => setChallengeDescription(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              placeholder="Main challenge or problem..."
+            />
+          </div>
+
+          {/* Full Scenario */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Full Scenario
+              <span className={`ml-2 text-xs ${wordCount >= 400 && wordCount <= 800 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                ({wordCount}/400-800 words)
+              </span>
+            </label>
+            <textarea
+              value={scenario}
+              onChange={(e) => setScenario(e.target.value)}
+              rows={8}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              placeholder="Full case study scenario..."
+            />
+          </div>
+
+          {/* Background Information */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Background Information</label>
+            <textarea
+              value={backgroundInformation}
+              onChange={(e) => setBackgroundInformation(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              placeholder="Additional background context..."
+            />
+          </div>
+
+          {/* Industry Context and Brand Name */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Industry Context</label>
+              <input
+                type="text"
+                value={industryContext}
+                onChange={(e) => setIndustryContext(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                placeholder="e.g., Healthcare, Technology"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Brand Name</label>
+              <input
+                type="text"
+                value={brandName}
+                onChange={(e) => setBrandName(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                placeholder="Organization name"
+              />
+            </div>
+          </div>
+
+          {/* Linked MLOs */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Linked MLOs</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={mloInput}
+                onChange={(e) => setMloInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addMLO())}
+                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                placeholder="Add an MLO..."
+              />
+              <button
+                type="button"
+                onClick={addMLO}
+                className="px-4 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {linkedMLOs.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {linkedMLOs.map((mlo, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {mlo}
+                    <button
+                      type="button"
+                      onClick={() => removeMLO(i)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Timing and Duration */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Suggested Timing</label>
+              <input
+                type="text"
+                value={suggestedTiming}
+                onChange={(e) => setSuggestedTiming(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                placeholder="e.g., After Module 5 core readings"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Estimated Duration</label>
+              <input
+                type="text"
+                value={estimatedDuration}
+                onChange={(e) => setEstimatedDuration(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                placeholder="e.g., 90 min individual + 30 min group"
+              />
+            </div>
+          </div>
+
+          {/* Learning Application */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Learning Application</label>
+            <textarea
+              value={learningApplication}
+              onChange={(e) => setLearningApplication(e.target.value)}
+              rows={2}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              placeholder="How this case applies learning..."
+            />
+          </div>
+
+          {/* Practice Case: Suggested Approach */}
+          {caseType === 'practice' && (
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Suggested Approach</label>
+              <textarea
+                value={suggestedApproach}
+                onChange={(e) => setSuggestedApproach(e.target.value)}
+                rows={3}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+                placeholder="Suggested approach for learners..."
+              />
+            </div>
+          )}
+
+          {/* Discussion Case: Prompts */}
+          {caseType === 'discussion' && (
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Discussion Prompts</label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={promptInput}
+                  onChange={(e) => setPromptInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addPrompt())}
+                  className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                  placeholder="Add a discussion prompt..."
+                />
+                <button
+                  type="button"
+                  onClick={addPrompt}
+                  className="px-4 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+              {discussionPrompts.length > 0 && (
+                <div className="space-y-2">
+                  {discussionPrompts.map((prompt, i) => (
+                    <div key={i} className="flex items-start gap-2 p-2 bg-slate-900/50 rounded">
+                      <span className="text-sm text-slate-300 flex-1">{prompt}</span>
+                      <button
+                        type="button"
+                        onClick={() => removePrompt(i)}
+                        className="text-slate-500 hover:text-red-400"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Ethics Compliance */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="ethicsCompliant"
+                checked={ethicsCompliant}
+                onChange={(e) => setEthicsCompliant(e.target.checked)}
+                className="w-4 h-4 text-purple-600 bg-slate-900 border-slate-600 rounded focus:ring-purple-500"
+              />
+              <label htmlFor="ethicsCompliant" className="text-sm text-slate-300">
+                Ethics Compliant
+              </label>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="noPII"
+                checked={noPII}
+                onChange={(e) => setNoPII(e.target.checked)}
+                className="w-4 h-4 text-purple-600 bg-slate-900 border-slate-600 rounded focus:ring-purple-500"
+              />
+              <label htmlFor="noPII" className="text-sm text-slate-300">
+                No PII (Personally Identifiable Information)
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !title.trim()}
+            className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Full Case Study Card (Stage 2)
-function CaseStudyCard({ caseStudy }: { caseStudy: CaseStudy }) {
+function CaseStudyCard({ caseStudy, onEdit }: { caseStudy: CaseStudy; onEdit?: (caseStudy: CaseStudy) => void }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -302,6 +698,18 @@ function CaseStudyCard({ caseStudy }: { caseStudy: CaseStudy }) {
             </span>
             {caseStudy.noPII && <span className="text-emerald-400">✓ No PII</span>}
           </div>
+
+          {/* Edit Button */}
+          {onEdit && (
+            <div className="pt-2 border-t border-slate-700/50">
+              <button
+                onClick={() => onEdit(caseStudy)}
+                className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+              >
+                Edit
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -315,6 +723,10 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
   const [_selectedProposals, _setSelectedProposals] = useState<string[]>([]);
   const [filterType, setFilterType] = useState<CaseType | 'all'>('all');
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+  
+  // Edit state for case studies
+  const [editingCaseStudy, setEditingCaseStudy] = useState<CaseStudy | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const isCurrentlyGenerating = isGenerating(workflow._id, 8) || submitStep8.isPending;
 
@@ -353,6 +765,64 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
       console.error('Failed to approve Step 8:', err);
       setError(errorMessage);
     }
+  };
+  
+  // Handle editing a case study
+  const handleEditCaseStudy = (caseStudy: CaseStudy) => {
+    setEditingCaseStudy(caseStudy);
+  };
+
+  // Handle saving edited case study
+  const handleSaveCaseStudy = async (updatedCaseStudy: CaseStudy) => {
+    setIsSavingEdit(true);
+    setError(null);
+    
+    console.log('Saving case study:', updatedCaseStudy);
+    console.log('Workflow ID:', workflow._id);
+    console.log('Case Study ID:', updatedCaseStudy.id);
+    
+    try {
+      const response = await api.put(`/api/v3/workflow/${workflow._id}/step8/case/${updatedCaseStudy.id}`, {
+        title: updatedCaseStudy.title,
+        caseType: updatedCaseStudy.caseType,
+        difficulty: updatedCaseStudy.difficulty,
+        scenario: updatedCaseStudy.scenario,
+        organizationalContext: updatedCaseStudy.organizationalContext,
+        backgroundInformation: updatedCaseStudy.backgroundInformation,
+        challengeDescription: updatedCaseStudy.challengeDescription,
+        industryContext: updatedCaseStudy.industryContext,
+        brandName: updatedCaseStudy.brandName,
+        linkedMLOs: updatedCaseStudy.linkedMLOs,
+        suggestedTiming: updatedCaseStudy.suggestedTiming,
+        estimatedDuration: updatedCaseStudy.estimatedDuration,
+        learningApplication: updatedCaseStudy.learningApplication,
+        suggestedApproach: updatedCaseStudy.suggestedApproach,
+        discussionPrompts: updatedCaseStudy.discussionPrompts,
+        ethicsCompliant: updatedCaseStudy.ethicsCompliant,
+        noPII: updatedCaseStudy.noPII,
+      });
+      
+      console.log('Save response:', response.data);
+      
+      // Close modal first
+      setEditingCaseStudy(null);
+      
+      // Force refresh the workflow data
+      console.log('Refreshing workflow data...');
+      await onRefresh();
+      console.log('Refresh complete');
+    } catch (err: any) {
+      console.error('Failed to save case study:', err);
+      console.error('Error response:', err.response?.data);
+      setError(err.response?.data?.error || err.message || 'Failed to save changes');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Handle canceling case study edit
+  const handleCancelCaseStudyEdit = () => {
+    setEditingCaseStudy(null);
   };
 
   const hasStep8Data =
@@ -595,7 +1065,11 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
             </h3>
             <div className="space-y-4">
               {displayedCases.map((caseStudy) => (
-                <CaseStudyCard key={caseStudy.id} caseStudy={caseStudy} />
+                <CaseStudyCard 
+                  key={caseStudy.id} 
+                  caseStudy={caseStudy} 
+                  onEdit={handleEditCaseStudy}
+                />
               ))}
             </div>
           </div>
@@ -648,6 +1122,16 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
             </p>
           )}
         </div>
+      )}
+      
+      {/* Case Study Edit Modal */}
+      {editingCaseStudy && (
+        <CaseStudyEditModal
+          caseStudy={editingCaseStudy}
+          onSave={handleSaveCaseStudy}
+          onCancel={handleCancelCaseStudyEdit}
+          isSaving={isSavingEdit}
+        />
       )}
     </div>
   );

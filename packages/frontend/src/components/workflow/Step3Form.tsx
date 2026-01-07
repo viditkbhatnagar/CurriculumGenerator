@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSubmitStep3, useApproveStep3 } from '@/hooks/useWorkflow';
+import { api } from '@/lib/api';
 import {
   CurriculumWorkflow,
   Step3FormData,
@@ -57,15 +58,227 @@ const EMPHASIS_OPTIONS: { value: OutcomeEmphasis; label: string; description: st
   { value: 'mixed', label: 'Mixed', description: 'Combination approach' },
 ];
 
+// PLO Edit Modal Component
+function PLOEditModal({
+  plo,
+  index,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  plo: PLO;
+  index: number;
+  onSave: (updatedPlo: PLO) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [statement, setStatement] = useState(plo.statement || '');
+  const [verb, setVerb] = useState(plo.verb || '');
+  const [bloomLevel, setBloomLevel] = useState<BloomLevel>(plo.bloomLevel || 'apply');
+  const [assessmentAlignment, setAssessmentAlignment] = useState(plo.assessmentAlignment || '');
+  const [jobTaskMapping, setJobTaskMapping] = useState<string[]>(plo.jobTaskMapping || []);
+  const [jobTaskInput, setJobTaskInput] = useState('');
+
+  const handleSave = () => {
+    onSave({
+      ...plo,
+      statement,
+      verb,
+      bloomLevel,
+      assessmentAlignment,
+      jobTaskMapping,
+    });
+  };
+
+  const addJobTask = () => {
+    if (jobTaskInput.trim()) {
+      setJobTaskMapping([...jobTaskMapping, jobTaskInput.trim()]);
+      setJobTaskInput('');
+    }
+  };
+
+  const removeJobTask = (index: number) => {
+    setJobTaskMapping(jobTaskMapping.filter((_, i) => i !== index));
+  };
+
+  const wordCount = statement.split(/\s+/).filter(Boolean).length;
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-slate-700">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            Edit <span className="text-purple-400">PLO {index + 1}</span>
+          </h3>
+        </div>
+        
+        <div className="p-6 space-y-5">
+          {/* Statement */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              PLO Statement
+              <span className={`ml-2 text-xs ${wordCount <= 25 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                ({wordCount}/25 words)
+              </span>
+            </label>
+            <textarea
+              value={statement}
+              onChange={(e) => setStatement(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              placeholder="Enter the PLO statement..."
+            />
+          </div>
+
+          {/* Bloom's Level */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Bloom's Taxonomy Level
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {BLOOM_LEVELS.map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() => setBloomLevel(level)}
+                  className={`py-2 px-3 rounded-lg border text-sm capitalize transition-all ${
+                    bloomLevel === level
+                      ? BLOOM_COLORS[level]
+                      : 'bg-slate-900/50 border-slate-600 text-slate-400 hover:border-slate-500'
+                  }`}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Verb */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Bloom's Verb
+            </label>
+            <input
+              type="text"
+              value={verb}
+              onChange={(e) => setVerb(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              placeholder="e.g., analyze, evaluate, design"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Suggested verbs for {bloomLevel}: {BLOOM_VERBS[bloomLevel]?.slice(0, 5).join(', ')}
+            </p>
+          </div>
+
+          {/* Assessment Alignment */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Assessment Alignment
+            </label>
+            <textarea
+              value={assessmentAlignment}
+              onChange={(e) => setAssessmentAlignment(e.target.value)}
+              rows={2}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              placeholder="How will this PLO be assessed?"
+            />
+          </div>
+
+          {/* Job Task Mapping */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Job Tasks Addressed
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={jobTaskInput}
+                onChange={(e) => setJobTaskInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addJobTask())}
+                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                placeholder="Add a job task..."
+              />
+              <button
+                type="button"
+                onClick={addJobTask}
+                className="px-4 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {jobTaskMapping.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {jobTaskMapping.map((task, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {task}
+                    <button
+                      type="button"
+                      onClick={() => removeJobTask(i)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Linked KSCs (read-only) */}
+          {plo.linkedKSCs && plo.linkedKSCs.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Linked Competencies
+              </label>
+              <p className="text-sm text-slate-500 bg-slate-900/30 px-4 py-3 rounded-lg">
+                {plo.linkedKSCs.length} KSC{plo.linkedKSCs.length !== 1 ? 's' : ''} linked
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !statement.trim()}
+            className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // PLO Card Component
 function PLOCard({
   plo,
   index,
   onEdit,
+  onInlineEdit,
 }: {
   plo: PLO;
   index: number;
   onEdit?: (target: EditTarget) => void;
+  onInlineEdit?: (plo: PLO, index: number) => void;
 }) {
   const wordCount = plo.statement?.split(/\s+/).length || 0;
 
@@ -141,46 +354,56 @@ function PLOCard({
         )}
       </div>
 
-      {/* Validation Badges */}
-      <div className="flex items-center gap-3 mt-4 pt-3 border-t border-slate-700">
-        {plo.measurable && (
-          <span className="text-xs text-emerald-400 flex items-center gap-1">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-            Measurable
-          </span>
-        )}
-        {plo.assessable && (
-          <span className="text-xs text-emerald-400 flex items-center gap-1">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-            Assessable
-          </span>
-        )}
-        {wordCount <= 25 && (
-          <span className="text-xs text-emerald-400 flex items-center gap-1">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-            ≤25 words
-          </span>
+      {/* Validation Badges and Edit Button */}
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-700">
+        <div className="flex items-center gap-3">
+          {plo.measurable && (
+            <span className="text-xs text-emerald-400 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              Measurable
+            </span>
+          )}
+          {plo.assessable && (
+            <span className="text-xs text-emerald-400 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              Assessable
+            </span>
+          )}
+          {wordCount <= 25 && (
+            <span className="text-xs text-emerald-400 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              ≤25 words
+            </span>
+          )}
+        </div>
+        {onInlineEdit && (
+          <button
+            onClick={() => onInlineEdit(plo, index)}
+            className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+          >
+            Edit
+          </button>
         )}
       </div>
     </div>
@@ -206,6 +429,11 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
 
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Edit state for PLOs
+  const [editingPlo, setEditingPlo] = useState<PLO | null>(null);
+  const [editingPloIndex, setEditingPloIndex] = useState<number>(-1);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Get Essential KSCs from Step 2 for priority selection
   const essentialKSCs: KSCItem[] = [];
@@ -274,6 +502,48 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
       console.error('Failed to approve Step 3:', err);
       setError(err.message || 'Failed to approve Step 3');
     }
+  };
+
+  // Handle opening PLO edit modal
+  const handleEditPlo = (plo: PLO, index: number) => {
+    setEditingPlo(plo);
+    setEditingPloIndex(index);
+  };
+
+  // Handle saving edited PLO
+  const handleSavePlo = async (updatedPlo: PLO) => {
+    setIsSavingEdit(true);
+    setError(null);
+    
+    console.log('Saving PLO:', updatedPlo);
+    
+    try {
+      const response = await api.put(`/api/v3/workflow/${workflow._id}/step3/plo/${updatedPlo.id}`, {
+        statement: updatedPlo.statement,
+        verb: updatedPlo.verb,
+        bloomLevel: updatedPlo.bloomLevel,
+        assessmentAlignment: updatedPlo.assessmentAlignment,
+        jobTaskMapping: updatedPlo.jobTaskMapping,
+      });
+      
+      console.log('Save response:', response.data);
+      
+      // Close modal and refresh data
+      setEditingPlo(null);
+      setEditingPloIndex(-1);
+      await onRefresh();
+    } catch (err: any) {
+      console.error('Failed to save PLO:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to save changes');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Handle canceling PLO edit
+  const handleCancelPloEdit = () => {
+    setEditingPlo(null);
+    setEditingPloIndex(-1);
   };
 
   const hasStep3Data = workflow.step3 && workflow.step3.outcomes?.length > 0;
@@ -732,7 +1002,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
             </h3>
             <div className="space-y-4">
               {workflow.step3?.outcomes?.map((plo, index) => (
-                <PLOCard key={plo.id} plo={plo} index={index} onEdit={onOpenCanvas} />
+                <PLOCard key={plo.id} plo={plo} index={index} onEdit={onOpenCanvas} onInlineEdit={handleEditPlo} />
               ))}
             </div>
           </div>
@@ -785,6 +1055,17 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
             </p>
           )}
         </div>
+      )}
+
+      {/* PLO Edit Modal */}
+      {editingPlo && editingPloIndex >= 0 && (
+        <PLOEditModal
+          plo={editingPlo}
+          index={editingPloIndex}
+          onSave={handleSavePlo}
+          onCancel={handleCancelPloEdit}
+          isSaving={isSavingEdit}
+        />
       )}
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSubmitStep9, useApproveStep9 } from '@/hooks/useWorkflow';
+import { api } from '@/lib/api';
 import { CurriculumWorkflow, GlossaryTerm, ModuleTermList, TermPriority } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import { EditTarget } from './EditWithAIButton';
@@ -26,8 +27,428 @@ const PRIORITY_LABELS: Record<TermPriority, string> = {
   optional: 'Optional',
 };
 
+// Glossary Term Edit Modal Component
+function GlossaryTermEditModal({
+  term,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  term: GlossaryTerm;
+  onSave: (updatedTerm: GlossaryTerm) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [termText, setTermText] = useState(term.term || '');
+  const [definition, setDefinition] = useState(term.definition || '');
+  const [exampleSentence, setExampleSentence] = useState(term.exampleSentence || '');
+  const [technicalNote, setTechnicalNote] = useState(term.technicalNote || '');
+  const [relatedTerms, setRelatedTerms] = useState<string[]>(term.relatedTerms || []);
+  const [broaderTerms, setBroaderTerms] = useState<string[]>(term.broaderTerms || []);
+  const [narrowerTerms, setNarrowerTerms] = useState<string[]>(term.narrowerTerms || []);
+  const [synonyms, setSynonyms] = useState<string[]>(term.synonyms || []);
+  const [isAcronym, setIsAcronym] = useState(term.isAcronym || false);
+  const [acronymExpansion, setAcronymExpansion] = useState(term.acronymExpansion || '');
+  const [category, setCategory] = useState(term.category || '');
+  const [priority, setPriority] = useState<TermPriority>(term.priority || 'should_include');
+  const [usedInAssessment, setUsedInAssessment] = useState(term.usedInAssessment || false);
+  const [relatedInput, setRelatedInput] = useState('');
+  const [broaderInput, setBroaderInput] = useState('');
+  const [narrowerInput, setNarrowerInput] = useState('');
+  const [synonymInput, setSynonymInput] = useState('');
+
+  const wordCount = definition.split(/\s+/).filter(Boolean).length;
+
+  const handleSave = () => {
+    onSave({
+      ...term,
+      term: termText,
+      definition,
+      wordCount,
+      exampleSentence,
+      technicalNote,
+      relatedTerms,
+      broaderTerms,
+      narrowerTerms,
+      synonyms,
+      isAcronym,
+      acronymExpansion,
+      category,
+      priority,
+      usedInAssessment,
+    });
+  };
+
+  const addRelatedTerm = () => {
+    if (relatedInput.trim()) {
+      setRelatedTerms([...relatedTerms, relatedInput.trim()]);
+      setRelatedInput('');
+    }
+  };
+
+  const removeRelatedTerm = (index: number) => {
+    setRelatedTerms(relatedTerms.filter((_, i) => i !== index));
+  };
+
+  const addBroaderTerm = () => {
+    if (broaderInput.trim()) {
+      setBroaderTerms([...broaderTerms, broaderInput.trim()]);
+      setBroaderInput('');
+    }
+  };
+
+  const removeBroaderTerm = (index: number) => {
+    setBroaderTerms(broaderTerms.filter((_, i) => i !== index));
+  };
+
+  const addNarrowerTerm = () => {
+    if (narrowerInput.trim()) {
+      setNarrowerTerms([...narrowerTerms, narrowerInput.trim()]);
+      setNarrowerInput('');
+    }
+  };
+
+  const removeNarrowerTerm = (index: number) => {
+    setNarrowerTerms(narrowerTerms.filter((_, i) => i !== index));
+  };
+
+  const addSynonym = () => {
+    if (synonymInput.trim()) {
+      setSynonyms([...synonyms, synonymInput.trim()]);
+      setSynonymInput('');
+    }
+  };
+
+  const removeSynonym = (index: number) => {
+    setSynonyms(synonyms.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-slate-700">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            Edit <span className="text-emerald-400">Glossary Term</span>
+          </h3>
+        </div>
+        
+        <div className="p-6 space-y-5">
+          {/* Term */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Term</label>
+            <input
+              type="text"
+              value={termText}
+              onChange={(e) => setTermText(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              placeholder="Enter term..."
+            />
+          </div>
+
+          {/* Definition */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Definition
+              <span className={`ml-2 text-xs ${wordCount >= 20 && wordCount <= 40 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                ({wordCount}/20-40 words)
+              </span>
+            </label>
+            <textarea
+              value={definition}
+              onChange={(e) => setDefinition(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
+              placeholder="Enter definition (20-40 words)..."
+            />
+          </div>
+
+          {/* Category and Priority */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Category</label>
+              <input
+                type="text"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                placeholder="e.g., Technical, Business"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Priority</label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as TermPriority)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="must_include">Must Include</option>
+                <option value="should_include">Should Include</option>
+                <option value="optional">Optional</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Acronym */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="isAcronym"
+                checked={isAcronym}
+                onChange={(e) => setIsAcronym(e.target.checked)}
+                className="w-4 h-4 text-emerald-600 bg-slate-900 border-slate-600 rounded focus:ring-emerald-500"
+              />
+              <label htmlFor="isAcronym" className="text-sm text-slate-300">
+                Is Acronym
+              </label>
+            </div>
+            {isAcronym && (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Acronym Expansion</label>
+                <input
+                  type="text"
+                  value={acronymExpansion}
+                  onChange={(e) => setAcronymExpansion(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  placeholder="Full form of acronym..."
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Used in Assessment */}
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="usedInAssessment"
+              checked={usedInAssessment}
+              onChange={(e) => setUsedInAssessment(e.target.checked)}
+              className="w-4 h-4 text-emerald-600 bg-slate-900 border-slate-600 rounded focus:ring-emerald-500"
+            />
+            <label htmlFor="usedInAssessment" className="text-sm text-slate-300">
+              Used in Assessment
+            </label>
+          </div>
+
+          {/* Example Sentence */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Example Sentence (Optional)</label>
+            <textarea
+              value={exampleSentence}
+              onChange={(e) => setExampleSentence(e.target.value)}
+              rows={2}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
+              placeholder="Example sentence demonstrating usage..."
+            />
+          </div>
+
+          {/* Technical Note */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Technical Note (Optional)</label>
+            <textarea
+              value={technicalNote}
+              onChange={(e) => setTechnicalNote(e.target.value)}
+              rows={2}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
+              placeholder="Additional technical details..."
+            />
+          </div>
+
+          {/* Related Terms */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Related Terms</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={relatedInput}
+                onChange={(e) => setRelatedInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addRelatedTerm())}
+                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                placeholder="Add a related term..."
+              />
+              <button
+                type="button"
+                onClick={addRelatedTerm}
+                className="px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {relatedTerms.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {relatedTerms.map((relatedTerm, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {relatedTerm}
+                    <button
+                      type="button"
+                      onClick={() => removeRelatedTerm(i)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Broader and Narrower Terms */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Broader Terms</label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={broaderInput}
+                  onChange={(e) => setBroaderInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addBroaderTerm())}
+                  className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  placeholder="Add broader term..."
+                />
+                <button
+                  type="button"
+                  onClick={addBroaderTerm}
+                  className="px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+              {broaderTerms.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {broaderTerms.map((broaderTerm, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs flex items-center gap-1"
+                    >
+                      {broaderTerm}
+                      <button
+                        type="button"
+                        onClick={() => removeBroaderTerm(i)}
+                        className="text-slate-500 hover:text-red-400"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Narrower Terms</label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={narrowerInput}
+                  onChange={(e) => setNarrowerInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addNarrowerTerm())}
+                  className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  placeholder="Add narrower term..."
+                />
+                <button
+                  type="button"
+                  onClick={addNarrowerTerm}
+                  className="px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+              {narrowerTerms.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {narrowerTerms.map((narrowerTerm, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs flex items-center gap-1"
+                    >
+                      {narrowerTerm}
+                      <button
+                        type="button"
+                        onClick={() => removeNarrowerTerm(i)}
+                        className="text-slate-500 hover:text-red-400"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Synonyms */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Synonyms</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={synonymInput}
+                onChange={(e) => setSynonymInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSynonym())}
+                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                placeholder="Add a synonym..."
+              />
+              <button
+                type="button"
+                onClick={addSynonym}
+                className="px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {synonyms.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {synonyms.map((synonym, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {synonym}
+                    <button
+                      type="button"
+                      onClick={() => removeSynonym(i)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !termText.trim() || !definition.trim()}
+            className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Term Card Component
-function TermCard({ term }: { term: GlossaryTerm }) {
+function TermCard({ term, onEdit }: { term: GlossaryTerm; onEdit?: (term: GlossaryTerm) => void }) {
   const [expanded, setExpanded] = useState(false);
   const definitionValid = term.wordCount >= 20 && term.wordCount <= 40;
 
@@ -86,6 +507,18 @@ function TermCard({ term }: { term: GlossaryTerm }) {
             <span className="text-slate-500">Used in: {term.sourceModules.join(', ')}</span>
           )}
         </div>
+
+        {/* Edit Button */}
+        {onEdit && (
+          <div className="mt-2">
+            <button
+              onClick={() => onEdit(term)}
+              className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+            >
+              Edit
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Expand Button */}
@@ -238,6 +671,10 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
   const [viewMode, setViewMode] = useState<'alphabetical' | 'modules'>('alphabetical');
   const [justGenerated, setJustGenerated] = useState(false);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+  
+  // Edit state for glossary terms
+  const [editingTerm, setEditingTerm] = useState<GlossaryTerm | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const isCurrentlyGenerating = isGenerating(workflow._id, 9) || submitStep9.isPending;
 
@@ -275,6 +712,60 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
       console.error('Failed to approve Step 9:', err);
       setError(errorMessage);
     }
+  };
+  
+  // Handle editing a glossary term
+  const handleEditTerm = (term: GlossaryTerm) => {
+    setEditingTerm(term);
+  };
+
+  // Handle saving edited glossary term
+  const handleSaveTerm = async (updatedTerm: GlossaryTerm) => {
+    setIsSavingEdit(true);
+    setError(null);
+    
+    console.log('Saving glossary term:', updatedTerm);
+    console.log('Workflow ID:', workflow._id);
+    console.log('Term ID:', updatedTerm.id);
+    
+    try {
+      const response = await api.put(`/api/v3/workflow/${workflow._id}/step9/term/${updatedTerm.id}`, {
+        term: updatedTerm.term,
+        definition: updatedTerm.definition,
+        exampleSentence: updatedTerm.exampleSentence,
+        technicalNote: updatedTerm.technicalNote,
+        relatedTerms: updatedTerm.relatedTerms,
+        broaderTerms: updatedTerm.broaderTerms,
+        narrowerTerms: updatedTerm.narrowerTerms,
+        synonyms: updatedTerm.synonyms,
+        isAcronym: updatedTerm.isAcronym,
+        acronymExpansion: updatedTerm.acronymExpansion,
+        category: updatedTerm.category,
+        priority: updatedTerm.priority,
+        usedInAssessment: updatedTerm.usedInAssessment,
+      });
+      
+      console.log('Save response:', response.data);
+      
+      // Close modal first
+      setEditingTerm(null);
+      
+      // Force refresh the workflow data
+      console.log('Refreshing workflow data...');
+      await onRefresh();
+      console.log('Refresh complete');
+    } catch (err: any) {
+      console.error('Failed to save glossary term:', err);
+      console.error('Error response:', err.response?.data);
+      setError(err.response?.data?.error || err.message || 'Failed to save changes');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Handle canceling term edit
+  const handleCancelTermEdit = () => {
+    setEditingTerm(null);
   };
 
   const hasStep9Data = workflow.step9 && workflow.step9.terms?.length > 0;
@@ -673,7 +1164,11 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
                 </h3>
                 <div className="space-y-3">
                   {sortedTerms.map((term) => (
-                    <TermCard key={term.id} term={term} />
+                    <TermCard 
+                      key={term.id} 
+                      term={term} 
+                      onEdit={handleEditTerm}
+                    />
                   ))}
                 </div>
               </div>
@@ -708,6 +1203,16 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
             </button>
           </div>
         </div>
+      )}
+      
+      {/* Glossary Term Edit Modal */}
+      {editingTerm && (
+        <GlossaryTermEditModal
+          term={editingTerm}
+          onSave={handleSaveTerm}
+          onCancel={handleCancelTermEdit}
+          isSaving={isSavingEdit}
+        />
       )}
     </div>
   );
