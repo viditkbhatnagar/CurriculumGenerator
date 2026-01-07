@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSubmitStep7, useApproveStep7, useClearStep7 } from '@/hooks/useWorkflow';
+import { api } from '@/lib/api';
 import {
   CurriculumWorkflow,
   FormativeAssessment,
@@ -14,6 +15,403 @@ import {
   PracticalSample,
 } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+
+interface Props {
+  workflow: CurriculumWorkflow;
+  onComplete: () => void;
+  onRefresh: () => void;
+}
+
+// Formative Assessment Edit Modal Component
+function FormativeAssessmentEditModal({
+  assessment,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  assessment: FormativeAssessment;
+  onSave: (updatedAssessment: FormativeAssessment) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [title, setTitle] = useState(assessment.title || '');
+  const [assessmentType, setAssessmentType] = useState(assessment.assessmentType || '');
+  const [description, setDescription] = useState(assessment.description || '');
+  const [instructions, setInstructions] = useState(assessment.instructions || '');
+  const [alignedPLOs, setAlignedPLOs] = useState<string[]>(assessment.alignedPLOs || []);
+  const [alignedMLOs, setAlignedMLOs] = useState<string[]>(assessment.alignedMLOs || []);
+  const [assessmentCriteria, setAssessmentCriteria] = useState<string[]>(assessment.assessmentCriteria || []);
+  const [maxMarks, setMaxMarks] = useState(assessment.maxMarks || 0);
+  const [ploInput, setPloInput] = useState('');
+  const [mloInput, setMloInput] = useState('');
+  const [criteriaInput, setCriteriaInput] = useState('');
+
+  const handleSave = () => {
+    onSave({
+      ...assessment,
+      title,
+      assessmentType,
+      description,
+      instructions,
+      alignedPLOs,
+      alignedMLOs,
+      assessmentCriteria,
+      maxMarks,
+    });
+  };
+
+  const addPLO = () => {
+    if (ploInput.trim()) {
+      setAlignedPLOs([...alignedPLOs, ploInput.trim()]);
+      setPloInput('');
+    }
+  };
+
+  const removePLO = (index: number) => {
+    setAlignedPLOs(alignedPLOs.filter((_, i) => i !== index));
+  };
+
+  const addMLO = () => {
+    if (mloInput.trim()) {
+      setAlignedMLOs([...alignedMLOs, mloInput.trim()]);
+      setMloInput('');
+    }
+  };
+
+  const removeMLO = (index: number) => {
+    setAlignedMLOs(alignedMLOs.filter((_, i) => i !== index));
+  };
+
+  const addCriteria = () => {
+    if (criteriaInput.trim()) {
+      setAssessmentCriteria([...assessmentCriteria, criteriaInput.trim()]);
+      setCriteriaInput('');
+    }
+  };
+
+  const removeCriteria = (index: number) => {
+    setAssessmentCriteria(assessmentCriteria.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-slate-700">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            Edit <span className="text-cyan-400">Formative Assessment</span>
+          </h3>
+        </div>
+        
+        <div className="p-6 space-y-5">
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              placeholder="Enter assessment title..."
+            />
+          </div>
+
+          {/* Assessment Type */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Assessment Type</label>
+            <input
+              type="text"
+              value={assessmentType}
+              onChange={(e) => setAssessmentType(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              placeholder="e.g., Quiz, Short Answer, MCQ"
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              placeholder="Assessment description..."
+            />
+          </div>
+
+          {/* Instructions */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Instructions</label>
+            <textarea
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              rows={4}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              placeholder="Student instructions..."
+            />
+          </div>
+
+          {/* Max Marks */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Max Marks</label>
+            <input
+              type="number"
+              value={maxMarks}
+              onChange={(e) => setMaxMarks(parseInt(e.target.value) || 0)}
+              min="0"
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              placeholder="100"
+            />
+          </div>
+
+          {/* Aligned PLOs */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Aligned PLOs</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={ploInput}
+                onChange={(e) => setPloInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addPLO())}
+                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                placeholder="Add a PLO..."
+              />
+              <button
+                type="button"
+                onClick={addPLO}
+                className="px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {alignedPLOs.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {alignedPLOs.map((plo, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {plo}
+                    <button
+                      type="button"
+                      onClick={() => removePLO(i)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Aligned MLOs */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Aligned MLOs</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={mloInput}
+                onChange={(e) => setMloInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addMLO())}
+                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                placeholder="Add an MLO..."
+              />
+              <button
+                type="button"
+                onClick={addMLO}
+                className="px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {alignedMLOs.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {alignedMLOs.map((mlo, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {mlo}
+                    <button
+                      type="button"
+                      onClick={() => removeMLO(i)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Assessment Criteria */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Assessment Criteria</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={criteriaInput}
+                onChange={(e) => setCriteriaInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCriteria())}
+                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                placeholder="Add assessment criteria..."
+              />
+              <button
+                type="button"
+                onClick={addCriteria}
+                className="px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {assessmentCriteria.length > 0 && (
+              <div className="space-y-2">
+                {assessmentCriteria.map((criteria, i) => (
+                  <div key={i} className="flex items-start gap-2 p-2 bg-slate-900/50 rounded">
+                    <span className="text-sm text-slate-300 flex-1">{criteria}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeCriteria(i)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !title.trim()}
+            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Summative Assessment Edit Modal Component
+function SummativeAssessmentEditModal({
+  assessment,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  assessment: SummativeAssessment;
+  onSave: (updatedAssessment: SummativeAssessment) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [title, setTitle] = useState(assessment.title || '');
+  const [format, setFormat] = useState(assessment.format || '');
+  const [overview, setOverview] = useState(assessment.overview || '');
+
+  const handleSave = () => {
+    onSave({
+      ...assessment,
+      title,
+      format,
+      overview,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-slate-700">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            Edit <span className="text-amber-400">Summative Assessment</span>
+          </h3>
+        </div>
+        
+        <div className="p-6 space-y-5">
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              placeholder="Enter assessment title..."
+            />
+          </div>
+
+          {/* Format */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Format</label>
+            <input
+              type="text"
+              value={format}
+              onChange={(e) => setFormat(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              placeholder="e.g., Written Assignment, Case Study Analysis"
+            />
+          </div>
+
+          {/* Overview */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Overview</label>
+            <textarea
+              value={overview}
+              onChange={(e) => setOverview(e.target.value)}
+              rows={5}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 resize-none"
+              placeholder="Assessment overview and description..."
+            />
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !title.trim()}
+            className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -97,6 +495,11 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'advanced'>('basic');
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+
+  // Edit state for assessments
+  const [editingFormative, setEditingFormative] = useState<FormativeAssessment | null>(null);
+  const [editingSummative, setEditingSummative] = useState<SummativeAssessment | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Real-time streaming data
   const [streamingFormatives, setStreamingFormatives] = useState<FormativeAssessment[]>([]);
@@ -306,6 +709,83 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
       console.error('Failed to approve Step 7:', err);
       setError(errorMessage);
     }
+  };
+
+  // Handle editing a formative assessment
+  const handleEditFormative = (assessment: FormativeAssessment) => {
+    setEditingFormative(assessment);
+  };
+
+  // Handle editing a summative assessment
+  const handleEditSummative = (assessment: SummativeAssessment) => {
+    setEditingSummative(assessment);
+  };
+
+  // Handle saving edited formative assessment
+  const handleSaveFormative = async (updatedAssessment: FormativeAssessment) => {
+    setIsSavingEdit(true);
+    setError(null);
+    
+    console.log('Saving formative assessment:', updatedAssessment);
+    console.log('Workflow ID:', workflow._id);
+    console.log('Assessment ID:', updatedAssessment.id);
+    
+    try {
+      const response = await api.put(`/api/v3/workflow/${workflow._id}/step7/formative/${updatedAssessment.id}`, {
+        title: updatedAssessment.title,
+        assessmentType: updatedAssessment.assessmentType,
+        description: updatedAssessment.description,
+        instructions: updatedAssessment.instructions,
+        alignedPLOs: updatedAssessment.alignedPLOs,
+        alignedMLOs: updatedAssessment.alignedMLOs,
+        assessmentCriteria: updatedAssessment.assessmentCriteria,
+        maxMarks: updatedAssessment.maxMarks,
+      });
+      
+      console.log('Save response:', response.data);
+      
+      setEditingFormative(null);
+      await onRefresh();
+    } catch (err) {
+      console.error('Error saving formative assessment:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save formative assessment');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Handle saving edited summative assessment
+  const handleSaveSummative = async (updatedAssessment: SummativeAssessment) => {
+    setIsSavingEdit(true);
+    setError(null);
+    
+    console.log('Saving summative assessment:', updatedAssessment);
+    console.log('Workflow ID:', workflow._id);
+    console.log('Assessment ID:', updatedAssessment.id);
+    
+    try {
+      const response = await api.put(`/api/v3/workflow/${workflow._id}/step7/summative/${updatedAssessment.id}`, {
+        title: updatedAssessment.title,
+        format: updatedAssessment.format,
+        overview: updatedAssessment.overview,
+      });
+      
+      console.log('Save response:', response.data);
+      
+      setEditingSummative(null);
+      await onRefresh();
+    } catch (err) {
+      console.error('Error saving summative assessment:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save summative assessment');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Handle canceling edit
+  const handleCancelEdit = () => {
+    setEditingFormative(null);
+    setEditingSummative(null);
   };
 
   const handleRegenerate = async () => {
@@ -1154,6 +1634,136 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
             </div>
           )}
 
+          {/* Detailed Assessment Cards */}
+          {(workflow.step7?.formativeAssessments?.length > 0 || workflow.step7?.summativeAssessments?.length > 0) && (
+            <div className="space-y-6">
+              {/* Formative Assessments */}
+              {workflow.step7?.formativeAssessments?.length > 0 && (
+                <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
+                  <h4 className="text-cyan-400 font-medium mb-4 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                    </svg>
+                    Formative Assessments ({workflow.step7.formativeAssessments.length})
+                  </h4>
+                  <div className="space-y-4">
+                    {workflow.step7.formativeAssessments.map((assessment) => (
+                      <div key={assessment.id} className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <h5 className="text-white font-medium mb-1">{assessment.title}</h5>
+                            <div className="flex items-center gap-3 text-sm text-slate-400 mb-2">
+                              <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded text-xs">
+                                {assessment.assessmentType}
+                              </span>
+                              {assessment.maxMarks && (
+                                <span>{assessment.maxMarks} marks</span>
+                              )}
+                              <span>Module: {assessment.moduleId}</span>
+                            </div>
+                            <p className="text-sm text-slate-300 mb-2">{assessment.description}</p>
+                            {assessment.alignedPLOs?.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-2">
+                                <span className="text-xs text-slate-500">PLOs:</span>
+                                {assessment.alignedPLOs.map((plo, i) => (
+                                  <span key={i} className="text-xs px-2 py-0.5 bg-slate-700 rounded text-slate-300">
+                                    {plo}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {assessment.alignedMLOs?.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                <span className="text-xs text-slate-500">MLOs:</span>
+                                {assessment.alignedMLOs.map((mlo, i) => (
+                                  <span key={i} className="text-xs px-2 py-0.5 bg-slate-700 rounded text-slate-300">
+                                    {mlo}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleEditFormative(assessment)}
+                            className="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
+                          >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Edit
+                          </button>
+                        </div>
+                        {assessment.instructions && (
+                          <div className="bg-slate-900/50 rounded p-3 mt-3">
+                            <p className="text-xs text-slate-500 mb-1">Instructions:</p>
+                            <p className="text-sm text-slate-300">{assessment.instructions}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Summative Assessments */}
+              {workflow.step7?.summativeAssessments?.length > 0 && (
+                <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
+                  <h4 className="text-amber-400 font-medium mb-4 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Summative Assessments ({workflow.step7.summativeAssessments.length})
+                  </h4>
+                  <div className="space-y-4">
+                    {workflow.step7.summativeAssessments.map((assessment) => (
+                      <div key={assessment.id} className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <h5 className="text-white font-medium mb-1">{assessment.title}</h5>
+                            <div className="flex items-center gap-3 text-sm text-slate-400 mb-2">
+                              <span className="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs">
+                                {assessment.format}
+                              </span>
+                              <span className="px-2 py-1 bg-slate-600 text-slate-300 rounded text-xs">
+                                {assessment.scope}
+                              </span>
+                              {assessment.moduleId && (
+                                <span>Module: {assessment.moduleId}</span>
+                              )}
+                            </div>
+                            <p className="text-sm text-slate-300 mb-3">{assessment.overview}</p>
+                            {assessment.components?.length > 0 && (
+                              <div className="space-y-1">
+                                <span className="text-xs text-slate-500">Components:</span>
+                                {assessment.components.map((component, i) => (
+                                  <div key={i} className="flex items-center gap-2 text-xs">
+                                    <span className="px-2 py-0.5 bg-slate-700 rounded text-slate-300">
+                                      {component.name} ({component.weight}%)
+                                    </span>
+                                    <span className="text-slate-500">{component.description}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleEditSummative(assessment)}
+                            className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
+                          >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Error Display */}
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
@@ -1247,6 +1857,25 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Modals */}
+      {editingFormative && (
+        <FormativeAssessmentEditModal
+          assessment={editingFormative}
+          onSave={handleSaveFormative}
+          onCancel={handleCancelEdit}
+          isSaving={isSavingEdit}
+        />
+      )}
+
+      {editingSummative && (
+        <SummativeAssessmentEditModal
+          assessment={editingSummative}
+          onSave={handleSaveSummative}
+          onCancel={handleCancelEdit}
+          isSaving={isSavingEdit}
+        />
       )}
     </div>
   );

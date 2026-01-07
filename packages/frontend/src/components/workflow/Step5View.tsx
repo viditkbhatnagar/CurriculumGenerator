@@ -8,6 +8,7 @@ import {
   Source,
   ModuleSourceSummary,
   SourceCategory,
+  SourceAccessStatus,
   SourceType,
 } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
@@ -78,6 +79,260 @@ const ACCESS_STATUS_CONFIG: Record<string, { label: string; icon: string; color:
   },
 };
 
+// Source Edit Modal Component
+function SourceEditModal({
+  source,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  source: Source;
+  onSave: (updatedSource: Source) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [title, setTitle] = useState(source.title || '');
+  const [authors, setAuthors] = useState<string[]>(source.authors || []);
+  const [year, setYear] = useState(source.year || new Date().getFullYear());
+  const [citation, setCitation] = useState(source.citation || '');
+  const [doi, setDoi] = useState(source.doi || '');
+  const [url, setUrl] = useState(source.url || '');
+  const [category, setCategory] = useState<SourceCategory>(source.category || 'peer_reviewed_journal');
+  const [type, setType] = useState<SourceType>(source.type || 'academic');
+  const [complexityLevel, setComplexityLevel] = useState<'introductory' | 'intermediate' | 'advanced'>(
+    (source.complexityLevel as 'introductory' | 'intermediate' | 'advanced') || 'intermediate'
+  );
+  const [accessStatus, setAccessStatus] = useState<SourceAccessStatus>(source.accessStatus || 'verified_accessible');
+  const [authorsInput, setAuthorsInput] = useState('');
+
+  const handleSave = () => {
+    onSave({
+      ...source,
+      title,
+      authors,
+      year,
+      citation,
+      doi,
+      url,
+      category,
+      type,
+      complexityLevel,
+      accessStatus,
+    });
+  };
+
+  const addAuthor = () => {
+    if (authorsInput.trim()) {
+      setAuthors([...authors, authorsInput.trim()]);
+      setAuthorsInput('');
+    }
+  };
+
+  const removeAuthor = (index: number) => {
+    setAuthors(authors.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-slate-700">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            Edit <span className="text-amber-400">Source</span>
+          </h3>
+        </div>
+        
+        <div className="p-6 space-y-5">
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              placeholder="Enter source title..."
+            />
+          </div>
+
+          {/* Authors */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Authors</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={authorsInput}
+                onChange={(e) => setAuthorsInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAuthor())}
+                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                placeholder="Add an author..."
+              />
+              <button
+                type="button"
+                onClick={addAuthor}
+                className="px-4 py-2 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {authors.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {authors.map((author, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {author}
+                    <button
+                      type="button"
+                      onClick={() => removeAuthor(i)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Year and Category */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Year</label>
+              <input
+                type="number"
+                value={year}
+                onChange={(e) => setYear(parseInt(e.target.value) || new Date().getFullYear())}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Category</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as SourceCategory)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500"
+              >
+                {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Type and Complexity */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Type</label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as SourceType)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500"
+              >
+                {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Complexity Level</label>
+              <select
+                value={complexityLevel}
+                onChange={(e) => setComplexityLevel(e.target.value as 'introductory' | 'intermediate' | 'advanced')}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500"
+              >
+                <option value="introductory">Introductory</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Access Status */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Access Status</label>
+            <select
+              value={accessStatus}
+              onChange={(e) => setAccessStatus(e.target.value as SourceAccessStatus)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-amber-500"
+            >
+              {Object.entries(ACCESS_STATUS_CONFIG).map(([value, config]) => (
+                <option key={value} value={value}>
+                  {config.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Citation */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Citation</label>
+            <textarea
+              value={citation}
+              onChange={(e) => setCitation(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 resize-none"
+              placeholder="Enter APA citation..."
+            />
+          </div>
+
+          {/* DOI and URL */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">DOI</label>
+              <input
+                type="text"
+                value={doi}
+                onChange={(e) => setDoi(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                placeholder="10.1000/example"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">URL</label>
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                placeholder="https://..."
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !title.trim()}
+            className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Source Card Component
 function SourceCard({
   source,
@@ -90,7 +345,7 @@ function SourceCard({
   source: Source;
   onAccept?: (sourceId: string) => void;
   onReject?: (sourceId: string) => void;
-  onEdit?: (target: EditTarget) => void;
+  onEdit?: (source: Source) => void;
   status?: SourceStatus;
   isReplacement?: boolean;
 }) {
@@ -316,18 +571,12 @@ function SourceCard({
         {/* Edit with AI Button */}
         {onEdit && (
           <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <EditWithAIButton
-              target={{
-                type: 'item',
-                stepNumber: 5,
-                itemId: source.id,
-                originalContent: source,
-                fieldPath: `Source: ${source.title.substring(0, 40)}...`,
-              }}
-              onEdit={onEdit}
-              size="sm"
-              variant="both"
-            />
+            <button
+              onClick={() => onEdit(source)}
+              className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
+            >
+              Edit
+            </button>
           </div>
         )}
       </div>
@@ -473,6 +722,10 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
   const [sourceStatuses, setSourceStatuses] = useState<Record<string, SourceStatus>>({});
   const [replacementSources, setReplacementSources] = useState<Record<string, Source[]>>({});
   const [isRequestingReplacement, setIsRequestingReplacement] = useState(false);
+  
+  // Edit state for sources
+  const [editingSource, setEditingSource] = useState<Source | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const handleAcceptSource = (sourceId: string) => {
     setSourceStatuses((prev) => ({ ...prev, [sourceId]: 'accepted' }));
@@ -502,6 +755,58 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
       setIsRequestingReplacement(false);
     }
   };
+  
+  // Handle editing a source
+  const handleEditSource = (source: Source) => {
+    setEditingSource(source);
+  };
+
+  // Handle saving edited source
+  const handleSaveSource = async (updatedSource: Source) => {
+    setIsSavingEdit(true);
+    setError(null);
+    
+    console.log('Saving source:', updatedSource);
+    console.log('Workflow ID:', workflow._id);
+    console.log('Source ID:', updatedSource.id);
+    
+    try {
+      const response = await api.put(`/api/v3/workflow/${workflow._id}/step5/source/${updatedSource.id}`, {
+        title: updatedSource.title,
+        authors: updatedSource.authors,
+        year: updatedSource.year,
+        citation: updatedSource.citation,
+        doi: updatedSource.doi,
+        url: updatedSource.url,
+        category: updatedSource.category,
+        type: updatedSource.type,
+        complexityLevel: updatedSource.complexityLevel,
+        accessStatus: updatedSource.accessStatus,
+      });
+      
+      console.log('Save response:', response.data);
+      
+      // Close modal first
+      setEditingSource(null);
+      
+      // Force refresh the workflow data
+      console.log('Refreshing workflow data...');
+      await onRefresh();
+      console.log('Refresh complete');
+    } catch (err: any) {
+      console.error('Failed to save source:', err);
+      console.error('Error response:', err.response?.data);
+      setError(err.response?.data?.error || err.message || 'Failed to save changes');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Handle canceling source edit
+  const handleCancelSourceEdit = () => {
+    setEditingSource(null);
+  };
+  
   const submitStep5 = useSubmitStep5();
   const approveStep5 = useApproveStep5();
   const [error, setError] = useState<string | null>(null);
@@ -817,7 +1122,11 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
             </h3>
             <div className="space-y-3">
               {displayedSources.map((source) => (
-                <SourceCard key={source.id} source={source} />
+                <SourceCard 
+                  key={source.id} 
+                  source={source} 
+                  onEdit={handleEditSource}
+                />
               ))}
             </div>
           </div>
@@ -870,6 +1179,16 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
             </p>
           )}
         </div>
+      )}
+      
+      {/* Source Edit Modal */}
+      {editingSource && (
+        <SourceEditModal
+          source={editingSource}
+          onSave={handleSaveSource}
+          onCancel={handleCancelSourceEdit}
+          isSaving={isSavingEdit}
+        />
       )}
     </div>
   );

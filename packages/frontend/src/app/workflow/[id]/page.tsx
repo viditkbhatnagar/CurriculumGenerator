@@ -434,72 +434,76 @@ export default function WorkflowDetailPage() {
             <div className="p-4 border-b border-slate-700/50">
               <h2 className="font-semibold text-white">Workflow Steps</h2>
             </div>
-            <nav className="p-2">
-              {([1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as WorkflowStep[]).map((step) => {
-                const stepProgress = workflow.stepProgress.find((p) => p.step === step);
-                const isAccessible = isStepAccessible(step);
-                const isCurrent = workflow.currentStep === step;
-                const isActive = currentStep === step;
+            <div className="relative">
+              <nav className="p-2 max-h-[calc(100vh-200px)] overflow-y-auto scrollbar-thin scrollbar-track-slate-800 scrollbar-thumb-slate-600 hover:scrollbar-thumb-slate-500">
+                {([1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as WorkflowStep[]).map((step) => {
+                  const stepProgress = workflow.stepProgress.find((p) => p.step === step);
+                  const isAccessible = isStepAccessible(step);
+                  const isCurrent = workflow.currentStep === step;
+                  const isActive = currentStep === step;
 
-                return (
-                  <button
-                    key={step}
-                    onClick={() => isAccessible && setActiveStep(step)}
-                    disabled={!isAccessible}
-                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all mb-1 ${
-                      isActive
-                        ? 'bg-cyan-500/20 border border-cyan-500/50'
-                        : isAccessible
-                          ? 'hover:bg-slate-700/50'
-                          : 'opacity-50 cursor-not-allowed'
-                    }`}
-                  >
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${getStepStatusColor(
-                        stepProgress?.status,
-                        isCurrent
-                      )}`}
+                  return (
+                    <button
+                      key={step}
+                      onClick={() => isAccessible && setActiveStep(step)}
+                      disabled={!isAccessible}
+                      className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all mb-1 ${
+                        isActive
+                          ? 'bg-cyan-500/20 border border-cyan-500/50'
+                          : isAccessible
+                            ? 'hover:bg-slate-700/50'
+                            : 'opacity-50 cursor-not-allowed'
+                      }`}
                     >
-                      {stepProgress?.status === 'approved' ||
-                      stepProgress?.status === 'completed' ? (
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      ) : (
-                        <span className="text-sm font-medium">{step}</span>
-                      )}
-                    </div>
-                    <div className="flex-1 text-left">
-                      <p
-                        className={`text-sm font-medium ${
-                          isActive
-                            ? 'text-cyan-400'
-                            : isAccessible
-                              ? 'text-white'
-                              : 'text-slate-500'
-                        }`}
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${getStepStatusColor(
+                          stepProgress?.status,
+                          isCurrent
+                        )}`}
                       >
-                        {STEP_NAMES[step]}
-                      </p>
-                      <p className="text-xs text-slate-500">{ESTIMATED_TIMES[step]}</p>
-                    </div>
-                    {stepProgress?.status === 'approved' && (
-                      <span className="text-emerald-400 text-xs">Approved</span>
-                    )}
-                  </button>
-                );
-              })}
-            </nav>
+                        {stepProgress?.status === 'approved' ||
+                        stepProgress?.status === 'completed' ? (
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        ) : (
+                          <span className="text-sm font-medium">{step}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p
+                          className={`text-sm font-medium ${
+                            isActive
+                              ? 'text-cyan-400'
+                              : isAccessible
+                                ? 'text-white'
+                                : 'text-slate-500'
+                          }`}
+                        >
+                          {STEP_NAMES[step]}
+                        </p>
+                        <p className="text-xs text-slate-500">{ESTIMATED_TIMES[step]}</p>
+                      </div>
+                      {stepProgress?.status === 'approved' && (
+                        <span className="text-emerald-400 text-xs">Approved</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+              {/* Scroll indicator gradient */}
+              <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-slate-800/50 to-transparent pointer-events-none" />
+            </div>
           </div>
         </aside>
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSubmitStep6, useApproveStep6 } from '@/hooks/useWorkflow';
+import { api } from '@/lib/api';
 import {
   CurriculumWorkflow,
   ReadingItem,
@@ -58,8 +59,450 @@ const READING_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
   industry: { label: 'Industry', color: 'bg-teal-500/20 text-teal-400 border-teal-500/30' },
 };
 
+// Reading Edit Modal Component
+function ReadingEditModal({
+  reading,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  reading: ReadingItem;
+  onSave: (updatedReading: ReadingItem) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [title, setTitle] = useState(reading.title || '');
+  const [authors, setAuthors] = useState<string[]>(reading.authors || []);
+  const [year, setYear] = useState(reading.year || new Date().getFullYear());
+  const [citation, setCitation] = useState(reading.citation || '');
+  const [doi, setDoi] = useState(reading.doi || '');
+  const [url, setUrl] = useState(reading.url || '');
+  const [category, setCategory] = useState<'core' | 'supplementary'>(reading.category || 'core');
+  const [contentType, setContentType] = useState(reading.contentType || 'textbook_chapter');
+  const [readingType, setReadingType] = useState<'academic' | 'applied' | 'industry'>(reading.readingType || 'academic');
+  const [complexity, setComplexity] = useState<ReadingComplexity>(reading.complexity || 'intermediate');
+  const [estimatedReadingMinutes, setEstimatedReadingMinutes] = useState(reading.estimatedReadingMinutes || 0);
+  const [specificChapters, setSpecificChapters] = useState(reading.specificChapters || '');
+  const [pageRange, setPageRange] = useState(reading.pageRange || '');
+  const [sectionNames, setSectionNames] = useState<string[]>(reading.sectionNames || []);
+  const [notes, setNotes] = useState(reading.notes || '');
+  const [suggestedWeek, setSuggestedWeek] = useState(reading.suggestedWeek || '');
+  const [linkedMLOs, setLinkedMLOs] = useState<string[]>(reading.linkedMLOs || []);
+  const [assessmentRelevance, setAssessmentRelevance] = useState<'high' | 'medium' | 'low'>(reading.assessmentRelevance || 'medium');
+  const [authorsInput, setAuthorsInput] = useState('');
+  const [sectionInput, setSectionInput] = useState('');
+  const [mloInput, setMloInput] = useState('');
+
+  const handleSave = () => {
+    onSave({
+      ...reading,
+      title,
+      authors,
+      year,
+      citation,
+      doi,
+      url,
+      category,
+      contentType,
+      readingType,
+      complexity,
+      estimatedReadingMinutes,
+      specificChapters,
+      pageRange,
+      sectionNames,
+      notes,
+      suggestedWeek,
+      linkedMLOs,
+      assessmentRelevance,
+    });
+  };
+
+  const addAuthor = () => {
+    if (authorsInput.trim()) {
+      setAuthors([...authors, authorsInput.trim()]);
+      setAuthorsInput('');
+    }
+  };
+
+  const removeAuthor = (index: number) => {
+    setAuthors(authors.filter((_, i) => i !== index));
+  };
+
+  const addSection = () => {
+    if (sectionInput.trim()) {
+      setSectionNames([...sectionNames, sectionInput.trim()]);
+      setSectionInput('');
+    }
+  };
+
+  const removeSection = (index: number) => {
+    setSectionNames(sectionNames.filter((_, i) => i !== index));
+  };
+
+  const addMLO = () => {
+    if (mloInput.trim()) {
+      setLinkedMLOs([...linkedMLOs, mloInput.trim()]);
+      setMloInput('');
+    }
+  };
+
+  const removeMLO = (index: number) => {
+    setLinkedMLOs(linkedMLOs.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-slate-700">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            Edit <span className="text-blue-400">Reading Item</span>
+          </h3>
+        </div>
+        
+        <div className="p-6 space-y-5">
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              placeholder="Enter reading title..."
+            />
+          </div>
+
+          {/* Authors */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Authors</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={authorsInput}
+                onChange={(e) => setAuthorsInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAuthor())}
+                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                placeholder="Add an author..."
+              />
+              <button
+                type="button"
+                onClick={addAuthor}
+                className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {authors.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {authors.map((author, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {author}
+                    <button
+                      type="button"
+                      onClick={() => removeAuthor(i)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Year and Category */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Year</label>
+              <input
+                type="number"
+                value={year}
+                onChange={(e) => setYear(parseInt(e.target.value) || new Date().getFullYear())}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Category</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as 'core' | 'supplementary')}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="core">Core</option>
+                <option value="supplementary">Supplementary</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Content Type and Reading Type */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Content Type</label>
+              <select
+                value={contentType}
+                onChange={(e) => setContentType(e.target.value as any)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+              >
+                {Object.entries(CONTENT_TYPE_CONFIG).map(([value, config]) => (
+                  <option key={value} value={value}>
+                    {config.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Reading Type</label>
+              <select
+                value={readingType}
+                onChange={(e) => setReadingType(e.target.value as 'academic' | 'applied' | 'industry')}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="academic">Academic</option>
+                <option value="applied">Applied</option>
+                <option value="industry">Industry</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Complexity and Reading Time */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Complexity</label>
+              <select
+                value={complexity}
+                onChange={(e) => setComplexity(e.target.value as ReadingComplexity)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="introductory">Introductory</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Reading Time (minutes)</label>
+              <input
+                type="number"
+                value={estimatedReadingMinutes}
+                onChange={(e) => setEstimatedReadingMinutes(parseInt(e.target.value) || 0)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Specific Assignment Details */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Specific Chapters</label>
+              <input
+                type="text"
+                value={specificChapters}
+                onChange={(e) => setSpecificChapters(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                placeholder="e.g., Chapter 1: Introduction"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Page Range</label>
+              <input
+                type="text"
+                value={pageRange}
+                onChange={(e) => setPageRange(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                placeholder="e.g., pp. 17-24"
+              />
+            </div>
+          </div>
+
+          {/* Section Names */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Section Names</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={sectionInput}
+                onChange={(e) => setSectionInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSection())}
+                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                placeholder="Add a section name..."
+              />
+              <button
+                type="button"
+                onClick={addSection}
+                className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {sectionNames.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {sectionNames.map((section, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {section}
+                    <button
+                      type="button"
+                      onClick={() => removeSection(i)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Suggested Week and Assessment Relevance */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Suggested Week</label>
+              <input
+                type="text"
+                value={suggestedWeek}
+                onChange={(e) => setSuggestedWeek(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                placeholder="e.g., Week 1-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Assessment Relevance</label>
+              <select
+                value={assessmentRelevance}
+                onChange={(e) => setAssessmentRelevance(e.target.value as 'high' | 'medium' | 'low')}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Linked MLOs */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Linked MLOs</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={mloInput}
+                onChange={(e) => setMloInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addMLO())}
+                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                placeholder="Add an MLO..."
+              />
+              <button
+                type="button"
+                onClick={addMLO}
+                className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {linkedMLOs.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {linkedMLOs.map((mlo, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {mlo}
+                    <button
+                      type="button"
+                      onClick={() => removeMLO(i)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Citation */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Citation</label>
+            <textarea
+              value={citation}
+              onChange={(e) => setCitation(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 resize-none"
+              placeholder="Enter APA citation..."
+            />
+          </div>
+
+          {/* DOI and URL */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">DOI</label>
+              <input
+                type="text"
+                value={doi}
+                onChange={(e) => setDoi(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                placeholder="10.1000/example"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">URL</label>
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                placeholder="https://..."
+              />
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Notes</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 resize-none"
+              placeholder="Additional notes..."
+            />
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !title.trim()}
+            className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Reading Item Card
-function ReadingCard({ reading }: { reading: ReadingItem }) {
+function ReadingCard({ reading, onEdit }: { reading: ReadingItem; onEdit?: (reading: ReadingItem) => void }) {
   const [_expanded, _setExpanded] = useState(false);
   const contentConfig =
     CONTENT_TYPE_CONFIG[(reading as any).contentType] || CONTENT_TYPE_CONFIG.other;
@@ -68,7 +511,7 @@ function ReadingCard({ reading }: { reading: ReadingItem }) {
 
   return (
     <div
-      className={`rounded-lg border overflow-hidden ${
+      className={`rounded-lg border overflow-hidden group ${
         reading.category === 'core'
           ? 'bg-cyan-500/5 border-cyan-500/30'
           : 'bg-slate-900/30 border-slate-700'
@@ -226,6 +669,18 @@ function ReadingCard({ reading }: { reading: ReadingItem }) {
             )}
           </div>
         )}
+
+        {/* Edit Button */}
+        {onEdit && (
+          <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => onEdit(reading)}
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              Edit
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Reference Note */}
@@ -336,6 +791,10 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+  
+  // Edit state for reading items
+  const [editingReading, setEditingReading] = useState<ReadingItem | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const isCurrentlyGenerating = isGenerating(workflow._id, 6) || submitStep6.isPending;
 
@@ -374,6 +833,65 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
       console.error('Failed to approve Step 6:', err);
       setError(errorMessage);
     }
+  };
+  
+  // Handle editing a reading item
+  const handleEditReading = (reading: ReadingItem) => {
+    setEditingReading(reading);
+  };
+
+  // Handle saving edited reading item
+  const handleSaveReading = async (updatedReading: ReadingItem) => {
+    setIsSavingEdit(true);
+    setError(null);
+    
+    console.log('Saving reading item:', updatedReading);
+    console.log('Workflow ID:', workflow._id);
+    console.log('Reading ID:', updatedReading.id);
+    
+    try {
+      const response = await api.put(`/api/v3/workflow/${workflow._id}/step6/reading/${updatedReading.id}`, {
+        title: updatedReading.title,
+        authors: updatedReading.authors,
+        year: updatedReading.year,
+        citation: updatedReading.citation,
+        doi: updatedReading.doi,
+        url: updatedReading.url,
+        category: updatedReading.category,
+        contentType: updatedReading.contentType,
+        readingType: updatedReading.readingType,
+        complexity: updatedReading.complexity,
+        estimatedReadingMinutes: updatedReading.estimatedReadingMinutes,
+        specificChapters: updatedReading.specificChapters,
+        pageRange: updatedReading.pageRange,
+        sectionNames: updatedReading.sectionNames,
+        notes: updatedReading.notes,
+        suggestedWeek: updatedReading.suggestedWeek,
+        linkedMLOs: updatedReading.linkedMLOs,
+        assessmentRelevance: updatedReading.assessmentRelevance,
+      });
+      
+      console.log('Save response:', response.data);
+      
+      // Close modal first
+      setEditingReading(null);
+      
+      // Force refresh the workflow data
+      console.log('Refreshing workflow data...');
+      await onRefresh();
+      console.log('Refresh complete');
+    } catch (err: any) {
+      console.error('Failed to save reading item:', err);
+      console.error('Error response:', err.response?.data);
+      setError(err.response?.data?.error || err.message || 'Failed to save changes');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Handle canceling reading edit
+  const handleCancelReadingEdit = () => {
+    setEditingReading(null);
   };
 
   const hasStep6Data =
@@ -660,7 +1178,11 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
               </h3>
               <div className="space-y-3">
                 {coreReadings.map((reading) => (
-                  <ReadingCard key={reading.id} reading={reading} />
+                  <ReadingCard 
+                    key={reading.id} 
+                    reading={reading} 
+                    onEdit={handleEditReading}
+                  />
                 ))}
               </div>
             </div>
@@ -675,7 +1197,11 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
               </h3>
               <div className="space-y-3">
                 {supplementaryReadings.map((reading) => (
-                  <ReadingCard key={reading.id} reading={reading} />
+                  <ReadingCard 
+                    key={reading.id} 
+                    reading={reading} 
+                    onEdit={handleEditReading}
+                  />
                 ))}
               </div>
             </div>
@@ -729,6 +1255,16 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
             </p>
           )}
         </div>
+      )}
+      
+      {/* Reading Edit Modal */}
+      {editingReading && (
+        <ReadingEditModal
+          reading={editingReading}
+          onSave={handleSaveReading}
+          onCancel={handleCancelReadingEdit}
+          isSaving={isSavingEdit}
+        />
       )}
     </div>
   );

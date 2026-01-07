@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSubmitStep10 } from '@/hooks/useWorkflow';
+import { api } from '@/lib/api';
 import {
   CurriculumWorkflow,
   ModuleLessonPlan,
@@ -19,6 +20,251 @@ interface Props {
   onOpenCanvas?: (target: EditTarget) => void;
 }
 
+// Lesson Plan Edit Modal Component
+function LessonPlanEditModal({
+  lesson,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  lesson: LessonPlan;
+  onSave: (updatedLesson: LessonPlan) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [lessonTitle, setLessonTitle] = useState(lesson.lessonTitle || '');
+  const [duration, setDuration] = useState(lesson.duration || 90);
+  const [objectives, setObjectives] = useState<string[]>(lesson.objectives || []);
+  const [pedagogicalGuidance, setPedagogicalGuidance] = useState(lesson.instructorNotes?.pedagogicalGuidance || '');
+  const [pacingSuggestions, setPacingSuggestions] = useState(lesson.instructorNotes?.pacingSuggestions || '');
+  const [adaptationOptions, setAdaptationOptions] = useState<string[]>(lesson.instructorNotes?.adaptationOptions || []);
+  const [estimatedEffort, setEstimatedEffort] = useState(lesson.independentStudy?.estimatedEffort || 120);
+  const [objectiveInput, setObjectiveInput] = useState('');
+  const [adaptationInput, setAdaptationInput] = useState('');
+
+  const handleSave = () => {
+    onSave({
+      ...lesson,
+      lessonTitle,
+      duration,
+      objectives,
+      instructorNotes: {
+        ...lesson.instructorNotes,
+        pedagogicalGuidance,
+        pacingSuggestions,
+        adaptationOptions,
+      },
+      independentStudy: {
+        ...lesson.independentStudy,
+        estimatedEffort,
+      },
+    });
+  };
+
+  const addObjective = () => {
+    if (objectiveInput.trim()) {
+      setObjectives([...objectives, objectiveInput.trim()]);
+      setObjectiveInput('');
+    }
+  };
+
+  const removeObjective = (index: number) => {
+    setObjectives(objectives.filter((_, i) => i !== index));
+  };
+
+  const addAdaptation = () => {
+    if (adaptationInput.trim()) {
+      setAdaptationOptions([...adaptationOptions, adaptationInput.trim()]);
+      setAdaptationInput('');
+    }
+  };
+
+  const removeAdaptation = (index: number) => {
+    setAdaptationOptions(adaptationOptions.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-slate-700">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            Edit <span className="text-cyan-400">Lesson Plan</span>
+          </h3>
+        </div>
+        
+        <div className="p-6 space-y-5">
+          {/* Lesson Title */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Lesson Title</label>
+            <input
+              type="text"
+              value={lessonTitle}
+              onChange={(e) => setLessonTitle(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              placeholder="Enter lesson title..."
+            />
+          </div>
+
+          {/* Duration */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Duration (minutes)</label>
+            <input
+              type="number"
+              value={duration}
+              onChange={(e) => setDuration(parseInt(e.target.value) || 90)}
+              min="30"
+              max="180"
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              placeholder="90"
+            />
+          </div>
+
+          {/* Learning Objectives */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Learning Objectives</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={objectiveInput}
+                onChange={(e) => setObjectiveInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addObjective())}
+                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                placeholder="Add a learning objective..."
+              />
+              <button
+                type="button"
+                onClick={addObjective}
+                className="px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {objectives.length > 0 && (
+              <div className="space-y-2">
+                {objectives.map((objective, i) => (
+                  <div key={i} className="flex items-start gap-2 p-2 bg-slate-900/50 rounded">
+                    <span className="text-sm text-slate-300 flex-1">{objective}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeObjective(i)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Pedagogical Guidance */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Pedagogical Guidance</label>
+            <textarea
+              value={pedagogicalGuidance}
+              onChange={(e) => setPedagogicalGuidance(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              placeholder="Teaching approach and methodology guidance..."
+            />
+          </div>
+
+          {/* Pacing Suggestions */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Pacing Suggestions</label>
+            <textarea
+              value={pacingSuggestions}
+              onChange={(e) => setPacingSuggestions(e.target.value)}
+              rows={2}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              placeholder="Timing and pacing recommendations..."
+            />
+          </div>
+
+          {/* Adaptation Options */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Adaptation Options</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={adaptationInput}
+                onChange={(e) => setAdaptationInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAdaptation())}
+                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                placeholder="Add an adaptation option..."
+              />
+              <button
+                type="button"
+                onClick={addAdaptation}
+                className="px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {adaptationOptions.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {adaptationOptions.map((option, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {option}
+                    <button
+                      type="button"
+                      onClick={() => removeAdaptation(i)}
+                      className="text-slate-500 hover:text-red-400"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Independent Study Effort */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Independent Study Effort (minutes)</label>
+            <input
+              type="number"
+              value={estimatedEffort}
+              onChange={(e) => setEstimatedEffort(parseInt(e.target.value) || 120)}
+              min="30"
+              max="300"
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              placeholder="120"
+            />
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !lessonTitle.trim()}
+            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Step10View({ workflow, onComplete: _onComplete, onRefresh }: Props) {
   const submitStep10 = useSubmitStep10();
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +272,10 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
   const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
   const [generatingModuleId, setGeneratingModuleId] = useState<string | null>(null);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+  
+  // Edit state for lesson plans
+  const [editingLesson, setEditingLesson] = useState<LessonPlan | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const isCurrentlyGenerating = isGenerating(workflow._id, 10) || submitStep10.isPending;
 
@@ -56,6 +306,46 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
       setError(errorMessage);
       setGeneratingModuleId(null);
     }
+  };
+
+  // Handle editing a lesson plan
+  const handleEditLesson = (lesson: LessonPlan) => {
+    setEditingLesson(lesson);
+  };
+
+  // Handle saving edited lesson plan
+  const handleSaveLesson = async (updatedLesson: LessonPlan) => {
+    setIsSavingEdit(true);
+    setError(null);
+    
+    console.log('Saving lesson plan:', updatedLesson);
+    console.log('Workflow ID:', workflow._id);
+    console.log('Lesson ID:', updatedLesson.lessonId);
+    
+    try {
+      const response = await api.put(`/api/v3/workflow/${workflow._id}/step10/lesson/${updatedLesson.lessonId}`, {
+        lessonTitle: updatedLesson.lessonTitle,
+        duration: updatedLesson.duration,
+        objectives: updatedLesson.objectives,
+        instructorNotes: updatedLesson.instructorNotes,
+        independentStudy: updatedLesson.independentStudy,
+      });
+      
+      console.log('Save response:', response.data);
+      
+      setEditingLesson(null);
+      await onRefresh();
+    } catch (err) {
+      console.error('Error saving lesson plan:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save lesson plan');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Handle canceling edit
+  const handleCancelEdit = () => {
+    setEditingLesson(null);
   };
 
   const hasStep10Data = workflow.step10 && workflow.step10.moduleLessonPlans?.length > 0;
@@ -748,15 +1038,28 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
           {currentLesson && (
             <div className="space-y-4">
               <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 rounded-xl p-6">
-                <h3 className="text-2xl font-bold text-white mb-3">
-                  Lesson {currentLesson.lessonNumber}: {currentLesson.lessonTitle}
-                </h3>
-                <div className="flex items-center gap-4 text-sm text-slate-300 mb-4">
-                  <span>⏱️ {currentLesson.duration} minutes</span>
-                  <span>•</span>
-                  <span>📊 {currentLesson.bloomLevel}</span>
-                  <span>•</span>
-                  <span>🎯 {currentLesson.linkedMLOs.length} MLOs</span>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="text-2xl font-bold text-white mb-3">
+                      Lesson {currentLesson.lessonNumber}: {currentLesson.lessonTitle}
+                    </h3>
+                    <div className="flex items-center gap-4 text-sm text-slate-300 mb-4">
+                      <span>⏱️ {currentLesson.duration} minutes</span>
+                      <span>•</span>
+                      <span>📊 {currentLesson.bloomLevel}</span>
+                      <span>•</span>
+                      <span>🎯 {currentLesson.linkedMLOs.length} MLOs</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleEditLesson(currentLesson)}
+                    className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit Lesson
+                  </button>
                 </div>
 
                 {/* Objectives */}
@@ -1154,6 +1457,16 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
             </button>
           </div>
         </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingLesson && (
+        <LessonPlanEditModal
+          lesson={editingLesson}
+          onSave={handleSaveLesson}
+          onCancel={handleCancelEdit}
+          isSaving={isSavingEdit}
+        />
       )}
     </div>
   );

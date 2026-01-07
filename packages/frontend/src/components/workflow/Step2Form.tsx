@@ -92,6 +92,155 @@ const KNOWLEDGE_BASE_SOURCES = [
   },
 ];
 
+// KSC Edit Modal Component
+function KSCEditModal({
+  item,
+  type,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  item: KSCItem;
+  type: 'knowledge' | 'skill' | 'competency';
+  onSave: (updatedItem: KSCItem) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [statement, setStatement] = useState(item.statement);
+  const [description, setDescription] = useState(item.description || '');
+  const [importance, setImportance] = useState<KSCImportance>(item.importance as KSCImportance || 'essential');
+
+  const typeLabels = {
+    knowledge: 'Knowledge',
+    skill: 'Skill',
+    competency: 'Competency',
+  };
+
+  const typeColors = {
+    knowledge: 'text-cyan-400',
+    skill: 'text-emerald-400',
+    competency: 'text-amber-400',
+  };
+
+  const handleSave = () => {
+    onSave({
+      ...item,
+      statement,
+      description,
+      importance,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-slate-700">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            Edit <span className={typeColors[type]}>{typeLabels[type]}</span> Item
+          </h3>
+        </div>
+        
+        <div className="p-6 space-y-5">
+          {/* Statement/Title */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Statement / Title
+            </label>
+            <textarea
+              value={statement}
+              onChange={(e) => setStatement(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              placeholder="Enter the KSC statement..."
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Description / Context
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              placeholder="Provide additional context or details..."
+            />
+          </div>
+
+          {/* Importance */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Importance Level
+            </label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setImportance('essential')}
+                className={`flex-1 py-3 px-4 rounded-lg border transition-all ${
+                  importance === 'essential'
+                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                    : 'bg-slate-900/50 border-slate-600 text-slate-400 hover:border-slate-500'
+                }`}
+              >
+                Essential
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportance('desirable')}
+                className={`flex-1 py-3 px-4 rounded-lg border transition-all ${
+                  importance === 'desirable'
+                    ? 'bg-slate-500/20 border-slate-400 text-slate-300'
+                    : 'bg-slate-900/50 border-slate-600 text-slate-400 hover:border-slate-500'
+                }`}
+              >
+                Desirable
+              </button>
+            </div>
+          </div>
+
+          {/* Source (read-only) */}
+          {item.source && (
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Source
+              </label>
+              <p className="text-sm text-slate-500 bg-slate-900/30 px-4 py-3 rounded-lg">
+                {item.source}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !statement.trim()}
+            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // KSC Item Card Component
 function KSCCard({
   item,
@@ -168,6 +317,8 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
   const [uploadedFrameworks, setUploadedFrameworks] = useState<UploadedFramework[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [editingItem, setEditingItem] = useState<KSCItem | null>(null);
+  const [editingItemType, setEditingItemType] = useState<'knowledge' | 'skill' | 'competency' | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Handle framework file upload (per-workflow only)
@@ -288,6 +439,53 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
       console.error('Failed to approve Step 2:', err);
       setError(err.message || 'Failed to approve Step 2');
     }
+  };
+
+  // Handle editing a KSC item
+  const handleEditItem = (item: KSCItem, type: 'knowledge' | 'skill' | 'competency') => {
+    setEditingItem(item);
+    setEditingItemType(type);
+  };
+
+  // Handle saving edited KSC item
+  const handleSaveEdit = async (updatedItem: KSCItem) => {
+    setIsSavingEdit(true);
+    setError(null);
+    
+    console.log('Saving KSC item:', updatedItem);
+    console.log('Workflow ID:', workflow._id);
+    console.log('Item ID:', updatedItem.id);
+    
+    try {
+      const response = await api.put(`/api/v3/workflow/${workflow._id}/step2/ksa/${updatedItem.id}`, {
+        statement: updatedItem.statement,
+        description: updatedItem.description,
+        importance: updatedItem.importance,
+      });
+      
+      console.log('Save response:', response.data);
+      
+      // Close modal first
+      setEditingItem(null);
+      setEditingItemType(null);
+      
+      // Force refresh the workflow data
+      console.log('Refreshing workflow data...');
+      await onRefresh();
+      console.log('Refresh complete');
+    } catch (err: any) {
+      console.error('Failed to save KSC item:', err);
+      console.error('Error response:', err.response?.data);
+      setError(err.response?.data?.error || err.message || 'Failed to save changes');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Handle canceling edit
+  const handleCancelEdit = () => {
+    setEditingItem(null);
+    setEditingItemType(null);
   };
 
   // Benchmark management
@@ -782,7 +980,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             </h3>
             <div className="space-y-3">
               {step2Data?.knowledgeItems?.map((item: KSCItem) => (
-                <KSCCard key={item.id} item={item} type="knowledge" onEdit={setEditingItem} />
+                <KSCCard key={item.id} item={item} type="knowledge" onEdit={(item) => handleEditItem(item, 'knowledge')} />
               ))}
             </div>
           </section>
@@ -798,7 +996,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             </h3>
             <div className="space-y-3">
               {step2Data?.skillItems?.map((item: KSCItem) => (
-                <KSCCard key={item.id} item={item} type="skill" onEdit={setEditingItem} />
+                <KSCCard key={item.id} item={item} type="skill" onEdit={(item) => handleEditItem(item, 'skill')} />
               ))}
             </div>
           </section>
@@ -814,7 +1012,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             </h3>
             <div className="space-y-3">
               {competencyItems.map((item: KSCItem) => (
-                <KSCCard key={item.id} item={item} type="competency" onEdit={setEditingItem} />
+                <KSCCard key={item.id} item={item} type="competency" onEdit={(item) => handleEditItem(item, 'competency')} />
               ))}
             </div>
           </section>
@@ -900,6 +1098,17 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             </p>
           )}
         </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingItem && editingItemType && (
+        <KSCEditModal
+          item={editingItem}
+          type={editingItemType}
+          onSave={handleSaveEdit}
+          onCancel={handleCancelEdit}
+          isSaving={isSavingEdit}
+        />
       )}
     </div>
   );

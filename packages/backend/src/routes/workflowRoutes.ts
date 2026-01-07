@@ -506,32 +506,71 @@ router.put('/:id/step2/ksa/:ksaId', validateJWT, loadUser, async (req: Request, 
     const { id, ksaId } = req.params;
     const { statement, description, importance } = req.body;
 
+    loggingService.info('Updating KSC item', { workflowId: id, ksaId, statement, description, importance });
+
     const workflow = await CurriculumWorkflow.findById(id);
     if (!workflow || !workflow.step2) {
       return res.status(404).json({ success: false, error: 'Workflow or Step 2 not found' });
     }
 
-    // Find and update the KSC item
-    const allItems = [
-      ...workflow.step2.knowledgeItems,
-      ...workflow.step2.skillItems,
-      ...workflow.step2.attitudeItems,
-    ];
+    // Find the item in the appropriate array and update it
+    let found = false;
+    let updatedItem: any = null;
 
-    const item = allItems.find((i: any) => i.id === ksaId);
-    if (!item) {
+    // Check knowledge items
+    for (const item of workflow.step2.knowledgeItems) {
+      if ((item as any).id === ksaId) {
+        if (statement !== undefined) (item as any).statement = statement;
+        if (description !== undefined) (item as any).description = description;
+        if (importance !== undefined) (item as any).importance = importance;
+        found = true;
+        updatedItem = item;
+        break;
+      }
+    }
+
+    // Check skill items
+    if (!found) {
+      for (const item of workflow.step2.skillItems) {
+        if ((item as any).id === ksaId) {
+          if (statement !== undefined) (item as any).statement = statement;
+          if (description !== undefined) (item as any).description = description;
+          if (importance !== undefined) (item as any).importance = importance;
+          found = true;
+          updatedItem = item;
+          break;
+        }
+      }
+    }
+
+    // Check competency/attitude items
+    if (!found) {
+      const competencyItems = (workflow.step2 as any).competencyItems || workflow.step2.attitudeItems || [];
+      for (const item of competencyItems) {
+        if ((item as any).id === ksaId) {
+          if (statement !== undefined) (item as any).statement = statement;
+          if (description !== undefined) (item as any).description = description;
+          if (importance !== undefined) (item as any).importance = importance;
+          found = true;
+          updatedItem = item;
+          break;
+        }
+      }
+    }
+
+    if (!found) {
       return res.status(404).json({ success: false, error: 'KSC item not found' });
     }
 
-    if (statement) item.statement = statement;
-    if (description) item.description = description;
-    if (importance) item.importance = importance;
-
+    // Mark the step2 field as modified so Mongoose saves the changes
+    workflow.markModified('step2');
     await workflow.save();
+
+    loggingService.info('KSC item updated successfully', { ksaId, updatedItem });
 
     res.json({
       success: true,
-      data: item,
+      data: updatedItem,
       message: 'KSC item updated successfully',
     });
   } catch (error) {
@@ -648,6 +687,58 @@ router.post('/:id/step3', validateJWT, loadUser, async (req: Request, res: Respo
 });
 
 /**
+ * PUT /api/v3/workflow/:id/step3/plo/:ploId
+ * Edit a specific PLO item
+ */
+router.put('/:id/step3/plo/:ploId', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id, ploId } = req.params;
+    const { statement, verb, bloomLevel, assessmentAlignment, jobTaskMapping } = req.body;
+
+    loggingService.info('Updating PLO item', { workflowId: id, ploId, statement, verb, bloomLevel });
+
+    const workflow = await CurriculumWorkflow.findById(id);
+    if (!workflow || !workflow.step3) {
+      return res.status(404).json({ success: false, error: 'Workflow or Step 3 not found' });
+    }
+
+    // Find the PLO in the outcomes array
+    const outcomes = workflow.step3.outcomes || [];
+    const ploIndex = outcomes.findIndex((plo: any) => plo.id === ploId);
+    
+    if (ploIndex === -1) {
+      return res.status(404).json({ success: false, error: 'PLO not found' });
+    }
+
+    // Update the PLO fields
+    const plo = outcomes[ploIndex] as any;
+    if (statement !== undefined) plo.statement = statement;
+    if (verb !== undefined) plo.verb = verb;
+    if (bloomLevel !== undefined) plo.bloomLevel = bloomLevel;
+    if (assessmentAlignment !== undefined) plo.assessmentAlignment = assessmentAlignment;
+    if (jobTaskMapping !== undefined) plo.jobTaskMapping = jobTaskMapping;
+
+    // Mark the step3 field as modified so Mongoose saves the changes
+    workflow.markModified('step3');
+    await workflow.save();
+
+    loggingService.info('PLO item updated successfully', { ploId, plo });
+
+    res.json({
+      success: true,
+      data: plo,
+      message: 'PLO updated successfully',
+    });
+  } catch (error) {
+    loggingService.error('Error updating PLO', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update PLO',
+    });
+  }
+});
+
+/**
  * POST /api/v3/workflow/:id/step3/approve
  * Approve Step 3 and advance to Step 4
  */
@@ -731,6 +822,8 @@ router.put(
       const { id, moduleId } = req.params;
       const updates = req.body;
 
+      loggingService.info('Updating module', { workflowId: id, moduleId, updates });
+
       const workflow = await CurriculumWorkflow.findById(id);
       if (!workflow || !workflow.step4) {
         return res.status(404).json({ success: false, error: 'Workflow or Step 4 not found' });
@@ -741,8 +834,9 @@ router.put(
         return res.status(404).json({ success: false, error: 'Module not found' });
       }
 
-      // Apply updates
-      Object.assign(module, updates);
+      // Apply updates (excluding mlos to prevent accidental overwrites)
+      const { mlos, ...moduleUpdates } = updates;
+      Object.assign(module, moduleUpdates);
 
       // Recalculate hours integrity
       const totalModuleHours = workflow.step4.modules.reduce(
@@ -751,7 +845,11 @@ router.put(
       );
       workflow.step4.hoursIntegrity = totalModuleHours === workflow.step4.totalProgramHours;
 
+      // Mark as modified and save
+      workflow.markModified('step4');
       await workflow.save();
+
+      loggingService.info('Module updated successfully', { moduleId, module });
 
       res.json({
         success: true,
@@ -764,6 +862,64 @@ router.put(
       res.status(500).json({
         success: false,
         error: 'Failed to update module',
+      });
+    }
+  }
+);
+
+/**
+ * PUT /api/v3/workflow/:id/step4/module/:moduleId/mlo/:mloId
+ * Edit a specific MLO within a module
+ */
+router.put(
+  '/:id/step4/module/:moduleId/mlo/:mloId',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, moduleId, mloId } = req.params;
+      const { statement, code, bloomLevel, verb, linkedPLOs } = req.body;
+
+      loggingService.info('Updating MLO', { workflowId: id, moduleId, mloId, statement, bloomLevel });
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !workflow.step4) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 4 not found' });
+      }
+
+      const module = workflow.step4.modules.find((m: any) => m.id === moduleId);
+      if (!module) {
+        return res.status(404).json({ success: false, error: 'Module not found' });
+      }
+
+      const mlo = module.mlos?.find((m: any) => m.id === mloId);
+      if (!mlo) {
+        return res.status(404).json({ success: false, error: 'MLO not found' });
+      }
+
+      // Update MLO fields
+      if (statement !== undefined) mlo.statement = statement;
+      if (code !== undefined) mlo.code = code;
+      if (bloomLevel !== undefined) mlo.bloomLevel = bloomLevel;
+      if (verb !== undefined) mlo.verb = verb;
+      if (linkedPLOs !== undefined) mlo.linkedPLOs = linkedPLOs;
+
+      // Mark as modified and save
+      workflow.markModified('step4');
+      await workflow.save();
+
+      loggingService.info('MLO updated successfully', { mloId, mlo });
+
+      res.json({
+        success: true,
+        data: mlo,
+        message: 'MLO updated successfully',
+      });
+    } catch (error) {
+      loggingService.error('Error updating MLO', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update MLO',
       });
     }
   }
@@ -857,6 +1013,65 @@ router.post(
 );
 
 /**
+ * PUT /api/v3/workflow/:id/step5/source/:sourceId
+ * Edit a specific source
+ */
+router.put(
+  '/:id/step5/source/:sourceId',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, sourceId } = req.params;
+      const { title, authors, year, citation, doi, url, category, type, complexityLevel, accessStatus } = req.body;
+
+      loggingService.info('Updating source', { workflowId: id, sourceId, title, authors, year });
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !workflow.step5) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 5 not found' });
+      }
+
+      // Find the source in the sources array
+      const source = workflow.step5.sources?.find((s: any) => s.id === sourceId);
+      if (!source) {
+        return res.status(404).json({ success: false, error: 'Source not found' });
+      }
+
+      // Update source fields
+      if (title !== undefined) source.title = title;
+      if (authors !== undefined) source.authors = authors;
+      if (year !== undefined) source.year = year;
+      if (citation !== undefined) source.citation = citation;
+      if (doi !== undefined) source.doi = doi;
+      if (url !== undefined) source.url = url;
+      if (category !== undefined) source.category = category;
+      if (type !== undefined) source.type = type;
+      if (complexityLevel !== undefined) source.complexityLevel = complexityLevel;
+      if (accessStatus !== undefined) source.accessStatus = accessStatus;
+
+      // Mark as modified and save
+      workflow.markModified('step5');
+      await workflow.save();
+
+      loggingService.info('Source updated successfully', { sourceId, source });
+
+      res.json({
+        success: true,
+        data: source,
+        message: 'Source updated successfully',
+      });
+    } catch (error) {
+      loggingService.error('Error updating source', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update source',
+      });
+    }
+  }
+);
+
+/**
  * POST /api/v3/workflow/:id/step5/approve
  * Approve Step 5 and advance to Step 6
  */
@@ -933,6 +1148,92 @@ router.post(
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to process Step 6',
+      });
+    }
+  }
+);
+
+/**
+ * PUT /api/v3/workflow/:id/step6/reading/:readingId
+ * Edit a specific reading item
+ */
+router.put(
+  '/:id/step6/reading/:readingId',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, readingId } = req.params;
+      const { 
+        title, 
+        authors, 
+        year, 
+        citation, 
+        doi, 
+        url, 
+        category, 
+        contentType, 
+        readingType, 
+        complexity, 
+        estimatedReadingMinutes,
+        specificChapters,
+        pageRange,
+        sectionNames,
+        notes,
+        suggestedWeek,
+        linkedMLOs,
+        assessmentRelevance
+      } = req.body;
+
+      loggingService.info('Updating reading item', { workflowId: id, readingId, title, authors, year });
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !workflow.step6) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 6 not found' });
+      }
+
+      // Find the reading in the readings array
+      const reading = workflow.step6.readings?.find((r: any) => r.id === readingId);
+      if (!reading) {
+        return res.status(404).json({ success: false, error: 'Reading not found' });
+      }
+
+      // Update reading fields
+      if (title !== undefined) reading.title = title;
+      if (authors !== undefined) reading.authors = authors;
+      if (year !== undefined) reading.year = year;
+      if (citation !== undefined) reading.citation = citation;
+      if (doi !== undefined) reading.doi = doi;
+      if (url !== undefined) reading.url = url;
+      if (category !== undefined) reading.category = category;
+      if (contentType !== undefined) reading.contentType = contentType;
+      if (readingType !== undefined) reading.readingType = readingType;
+      if (complexity !== undefined) reading.complexity = complexity;
+      if (estimatedReadingMinutes !== undefined) reading.estimatedReadingMinutes = estimatedReadingMinutes;
+      if (specificChapters !== undefined) reading.specificChapters = specificChapters;
+      if (pageRange !== undefined) reading.pageRange = pageRange;
+      if (sectionNames !== undefined) reading.sectionNames = sectionNames;
+      if (notes !== undefined) reading.notes = notes;
+      if (suggestedWeek !== undefined) reading.suggestedWeek = suggestedWeek;
+      if (linkedMLOs !== undefined) reading.linkedMLOs = linkedMLOs;
+      if (assessmentRelevance !== undefined) reading.assessmentRelevance = assessmentRelevance;
+
+      // Mark as modified and save
+      workflow.markModified('step6');
+      await workflow.save();
+
+      loggingService.info('Reading item updated successfully', { readingId, reading });
+
+      res.json({
+        success: true,
+        data: reading,
+        message: 'Reading item updated successfully',
+      });
+    } catch (error) {
+      loggingService.error('Error updating reading item', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update reading item',
       });
     }
   }
@@ -1243,6 +1544,136 @@ router.post('/:id/step7/approve', validateJWT, loadUser, async (req: Request, re
   }
 });
 
+/**
+ * PUT /api/v3/workflow/:id/step7/formative/:assessmentId
+ * Edit a specific formative assessment
+ */
+router.put(
+  '/:id/step7/formative/:assessmentId',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, assessmentId } = req.params;
+      const { 
+        title,
+        assessmentType,
+        description,
+        instructions,
+        alignedPLOs,
+        alignedMLOs,
+        assessmentCriteria,
+        maxMarks,
+        questions
+      } = req.body;
+
+      loggingService.info('Updating formative assessment', { workflowId: id, assessmentId, title });
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !workflow.step7) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 7 not found' });
+      }
+
+      // Find the formative assessment in the formativeAssessments array
+      const assessment = workflow.step7.formativeAssessments?.find((a: any) => a.id === assessmentId);
+      if (!assessment) {
+        return res.status(404).json({ success: false, error: 'Formative assessment not found' });
+      }
+
+      // Update assessment fields
+      if (title !== undefined) assessment.title = title;
+      if (assessmentType !== undefined) assessment.assessmentType = assessmentType;
+      if (description !== undefined) assessment.description = description;
+      if (instructions !== undefined) assessment.instructions = instructions;
+      if (alignedPLOs !== undefined) assessment.alignedPLOs = alignedPLOs;
+      if (alignedMLOs !== undefined) assessment.alignedMLOs = alignedMLOs;
+      if (assessmentCriteria !== undefined) assessment.assessmentCriteria = assessmentCriteria;
+      if (maxMarks !== undefined) assessment.maxMarks = maxMarks;
+      if (questions !== undefined) assessment.questions = questions;
+
+      // Mark as modified and save
+      workflow.markModified('step7');
+      await workflow.save();
+
+      loggingService.info('Formative assessment updated successfully', { assessmentId, assessment });
+
+      res.json({
+        success: true,
+        data: assessment,
+        message: 'Formative assessment updated successfully',
+      });
+    } catch (error) {
+      loggingService.error('Error updating formative assessment', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update formative assessment',
+      });
+    }
+  }
+);
+
+/**
+ * PUT /api/v3/workflow/:id/step7/summative/:assessmentId
+ * Edit a specific summative assessment
+ */
+router.put(
+  '/:id/step7/summative/:assessmentId',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, assessmentId } = req.params;
+      const { 
+        title,
+        format,
+        overview,
+        alignmentTable,
+        components,
+        markingModel
+      } = req.body;
+
+      loggingService.info('Updating summative assessment', { workflowId: id, assessmentId, title });
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !workflow.step7) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 7 not found' });
+      }
+
+      // Find the summative assessment in the summativeAssessments array
+      const assessment = workflow.step7.summativeAssessments?.find((a: any) => a.id === assessmentId);
+      if (!assessment) {
+        return res.status(404).json({ success: false, error: 'Summative assessment not found' });
+      }
+
+      // Update assessment fields
+      if (title !== undefined) assessment.title = title;
+      if (format !== undefined) assessment.format = format;
+      if (overview !== undefined) assessment.overview = overview;
+      if (alignmentTable !== undefined) assessment.alignmentTable = alignmentTable;
+      if (components !== undefined) assessment.components = components;
+      if (markingModel !== undefined) assessment.markingModel = markingModel;
+
+      // Mark as modified and save
+      workflow.markModified('step7');
+      await workflow.save();
+
+      loggingService.info('Summative assessment updated successfully', { assessmentId, assessment });
+
+      res.json({
+        success: true,
+        data: assessment,
+        message: 'Summative assessment updated successfully',
+      });
+    } catch (error) {
+      loggingService.error('Error updating summative assessment', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update summative assessment',
+      });
+    }
+  }
+);
+
 // ============================================================================
 // STEP 8: CASE STUDIES
 // ============================================================================
@@ -1276,6 +1707,94 @@ router.post(
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to process Step 8',
+      });
+    }
+  }
+);
+
+/**
+ * PUT /api/v3/workflow/:id/step8/case/:caseId
+ * Edit a specific case study
+ */
+router.put(
+  '/:id/step8/case/:caseId',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, caseId } = req.params;
+      const { 
+        title, 
+        caseType, 
+        difficulty, 
+        scenario, 
+        organizationalContext, 
+        backgroundInformation, 
+        challengeDescription,
+        industryContext,
+        brandName,
+        linkedMLOs,
+        suggestedTiming,
+        estimatedDuration,
+        learningApplication,
+        suggestedApproach,
+        discussionPrompts,
+        ethicsCompliant,
+        noPII
+      } = req.body;
+
+      loggingService.info('Updating case study', { workflowId: id, caseId, title });
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !workflow.step8) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 8 not found' });
+      }
+
+      // Find the case study in the caseStudies array
+      const caseStudy = workflow.step8.caseStudies?.find((cs: any) => cs.id === caseId);
+      if (!caseStudy) {
+        return res.status(404).json({ success: false, error: 'Case study not found' });
+      }
+
+      // Update case study fields
+      if (title !== undefined) caseStudy.title = title;
+      if (caseType !== undefined) caseStudy.caseType = caseType;
+      if (difficulty !== undefined) caseStudy.difficulty = difficulty;
+      if (scenario !== undefined) {
+        caseStudy.scenario = scenario;
+        // Recalculate word count
+        caseStudy.wordCount = scenario.split(/\s+/).filter(Boolean).length;
+      }
+      if (organizationalContext !== undefined) caseStudy.organizationalContext = organizationalContext;
+      if (backgroundInformation !== undefined) caseStudy.backgroundInformation = backgroundInformation;
+      if (challengeDescription !== undefined) caseStudy.challengeDescription = challengeDescription;
+      if (industryContext !== undefined) caseStudy.industryContext = industryContext;
+      if (brandName !== undefined) caseStudy.brandName = brandName;
+      if (linkedMLOs !== undefined) caseStudy.linkedMLOs = linkedMLOs;
+      if (suggestedTiming !== undefined) caseStudy.suggestedTiming = suggestedTiming;
+      if (estimatedDuration !== undefined) caseStudy.estimatedDuration = estimatedDuration;
+      if (learningApplication !== undefined) caseStudy.learningApplication = learningApplication;
+      if (suggestedApproach !== undefined) caseStudy.suggestedApproach = suggestedApproach;
+      if (discussionPrompts !== undefined) caseStudy.discussionPrompts = discussionPrompts;
+      if (ethicsCompliant !== undefined) caseStudy.ethicsCompliant = ethicsCompliant;
+      if (noPII !== undefined) caseStudy.noPII = noPII;
+
+      // Mark as modified and save
+      workflow.markModified('step8');
+      await workflow.save();
+
+      loggingService.info('Case study updated successfully', { caseId, caseStudy });
+
+      res.json({
+        success: true,
+        data: caseStudy,
+        message: 'Case study updated successfully',
+      });
+    } catch (error) {
+      loggingService.error('Error updating case study', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update case study',
       });
     }
   }
@@ -1347,6 +1866,86 @@ router.post(
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to process Step 9',
+      });
+    }
+  }
+);
+
+/**
+ * PUT /api/v3/workflow/:id/step9/term/:termId
+ * Edit a specific glossary term
+ */
+router.put(
+  '/:id/step9/term/:termId',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, termId } = req.params;
+      const { 
+        term, 
+        definition, 
+        exampleSentence, 
+        technicalNote, 
+        relatedTerms, 
+        broaderTerms, 
+        narrowerTerms, 
+        synonyms,
+        isAcronym,
+        acronymExpansion,
+        category,
+        priority,
+        usedInAssessment
+      } = req.body;
+
+      loggingService.info('Updating glossary term', { workflowId: id, termId, term });
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !workflow.step9) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 9 not found' });
+      }
+
+      // Find the term in the terms array
+      const glossaryTerm = workflow.step9.terms?.find((t: any) => t.id === termId);
+      if (!glossaryTerm) {
+        return res.status(404).json({ success: false, error: 'Glossary term not found' });
+      }
+
+      // Update term fields
+      if (term !== undefined) glossaryTerm.term = term;
+      if (definition !== undefined) {
+        glossaryTerm.definition = definition;
+        // Recalculate word count
+        glossaryTerm.wordCount = definition.split(/\s+/).filter(Boolean).length;
+      }
+      if (exampleSentence !== undefined) glossaryTerm.exampleSentence = exampleSentence;
+      if (technicalNote !== undefined) glossaryTerm.technicalNote = technicalNote;
+      if (relatedTerms !== undefined) glossaryTerm.relatedTerms = relatedTerms;
+      if (broaderTerms !== undefined) glossaryTerm.broaderTerms = broaderTerms;
+      if (narrowerTerms !== undefined) glossaryTerm.narrowerTerms = narrowerTerms;
+      if (synonyms !== undefined) glossaryTerm.synonyms = synonyms;
+      if (isAcronym !== undefined) glossaryTerm.isAcronym = isAcronym;
+      if (acronymExpansion !== undefined) glossaryTerm.acronymExpansion = acronymExpansion;
+      if (category !== undefined) glossaryTerm.category = category;
+      if (priority !== undefined) glossaryTerm.priority = priority;
+      if (usedInAssessment !== undefined) glossaryTerm.usedInAssessment = usedInAssessment;
+
+      // Mark as modified and save
+      workflow.markModified('step9');
+      await workflow.save();
+
+      loggingService.info('Glossary term updated successfully', { termId, glossaryTerm });
+
+      res.json({
+        success: true,
+        data: glossaryTerm,
+        message: 'Glossary term updated successfully',
+      });
+    } catch (error) {
+      loggingService.error('Error updating glossary term', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update glossary term',
       });
     }
   }
@@ -2205,6 +2804,93 @@ var API = {
     });
   }
 });
+
+/**
+ * PUT /api/v3/workflow/:id/step10/lesson/:lessonId
+ * Edit a specific lesson plan
+ */
+router.put(
+  '/:id/step10/lesson/:lessonId',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, lessonId } = req.params;
+      const { 
+        lessonTitle,
+        duration,
+        objectives,
+        activities,
+        instructorNotes,
+        independentStudy,
+        formativeChecks
+      } = req.body;
+
+      loggingService.info('Updating lesson plan', { workflowId: id, lessonId, lessonTitle });
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !workflow.step10) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 10 not found' });
+      }
+
+      // Find the lesson in the moduleLessonPlans
+      let foundLesson: any = null;
+      let foundModule: any = null;
+      
+      for (const module of workflow.step10.moduleLessonPlans || []) {
+        const lesson = module.lessons?.find((l: any) => l.lessonId === lessonId);
+        if (lesson) {
+          foundLesson = lesson;
+          foundModule = module;
+          break;
+        }
+      }
+
+      if (!foundLesson) {
+        return res.status(404).json({ success: false, error: 'Lesson not found' });
+      }
+
+      // Update lesson fields
+      if (lessonTitle !== undefined) foundLesson.lessonTitle = lessonTitle;
+      if (duration !== undefined) foundLesson.duration = duration;
+      if (objectives !== undefined) foundLesson.objectives = objectives;
+      if (activities !== undefined) foundLesson.activities = activities;
+      if (instructorNotes !== undefined) foundLesson.instructorNotes = instructorNotes;
+      if (independentStudy !== undefined) foundLesson.independentStudy = independentStudy;
+      if (formativeChecks !== undefined) foundLesson.formativeChecks = formativeChecks;
+
+      // Recalculate module totals if duration changed
+      if (duration !== undefined && foundModule) {
+        foundModule.totalContactHours = foundModule.lessons.reduce((sum: number, l: any) => sum + (l.duration / 60), 0);
+      }
+
+      // Recalculate summary if needed
+      if (workflow.step10.summary && duration !== undefined) {
+        workflow.step10.summary.totalContactHours = workflow.step10.moduleLessonPlans.reduce(
+          (sum: number, m: any) => sum + m.totalContactHours, 0
+        );
+      }
+
+      // Mark as modified and save
+      workflow.markModified('step10');
+      await workflow.save();
+
+      loggingService.info('Lesson plan updated successfully', { lessonId, foundLesson });
+
+      res.json({
+        success: true,
+        data: foundLesson,
+        message: 'Lesson plan updated successfully',
+      });
+    } catch (error) {
+      loggingService.error('Error updating lesson plan', { error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update lesson plan',
+      });
+    }
+  }
+);
 
 /**
  * POST /api/v3/workflow/:id/regenerate-lesson

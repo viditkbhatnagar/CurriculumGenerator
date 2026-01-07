@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import { useSubmitStep4, useApproveStep4 } from '@/hooks/useWorkflow';
+import { api } from '@/lib/api';
 import {
   CurriculumWorkflow,
   Module,
   MLO,
   BloomLevel,
   BLOOM_LEVELS,
+  BLOOM_VERBS,
   ModulePhase,
 } from '@/types/workflow';
 import EditWithAIButton, { EditTarget } from './EditWithAIButton';
@@ -42,27 +44,350 @@ const PHASE_LABELS: Record<ModulePhase, string> = {
   late: 'Synthesis',
 };
 
-// MLO Card Component
-function MLOCard({ mlo }: { mlo: MLO }) {
+// Module Edit Modal Component
+function ModuleEditModal({
+  module,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  module: Module;
+  onSave: (updatedModule: Partial<Module>) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [title, setTitle] = useState(module.title || '');
+  const [description, setDescription] = useState(module.description || '');
+  const [totalHours, setTotalHours] = useState(module.totalHours || 0);
+  const [contactHours, setContactHours] = useState(module.contactHours || 0);
+  const [selfStudyHours, setSelfStudyHours] = useState(module.selfStudyHours || 0);
+  const [credits, setCredits] = useState(module.credits || 0);
+  const [phase, setPhase] = useState<ModulePhase>(module.phase || 'middle');
+
+  const handleSave = () => {
+    onSave({
+      title,
+      description,
+      totalHours,
+      contactHours,
+      selfStudyHours,
+      credits,
+      phase,
+    });
+  };
+
+  // Auto-calculate self-study hours
+  const handleContactHoursChange = (value: number) => {
+    setContactHours(value);
+    setSelfStudyHours(totalHours - value);
+  };
+
+  const handleTotalHoursChange = (value: number) => {
+    setTotalHours(value);
+    setSelfStudyHours(value - contactHours);
+  };
+
   return (
-    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-slate-700">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            Edit Module <span className="text-green-400">{module.code}</span>
+          </h3>
+        </div>
+        
+        <div className="p-6 space-y-5">
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Module Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-green-500"
+              placeholder="Enter module title..."
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-green-500 resize-none"
+              placeholder="Enter module description..."
+            />
+          </div>
+
+          {/* Phase */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Module Phase</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['early', 'middle', 'late'] as ModulePhase[]).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPhase(p)}
+                  className={`py-2 px-3 rounded-lg border text-sm transition-all ${
+                    phase === p
+                      ? PHASE_COLORS[p]
+                      : 'bg-slate-900/50 border-slate-600 text-slate-400 hover:border-slate-500'
+                  }`}
+                >
+                  {PHASE_LABELS[p]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Hours */}
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Total Hours</label>
+              <input
+                type="number"
+                value={totalHours}
+                onChange={(e) => handleTotalHoursChange(parseInt(e.target.value) || 0)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-green-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Contact Hours</label>
+              <input
+                type="number"
+                value={contactHours}
+                onChange={(e) => handleContactHoursChange(parseInt(e.target.value) || 0)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-green-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Self-Study Hours</label>
+              <input
+                type="number"
+                value={selfStudyHours}
+                onChange={(e) => setSelfStudyHours(parseInt(e.target.value) || 0)}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-green-500"
+              />
+            </div>
+          </div>
+
+          {/* Credits */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Credits</label>
+            <input
+              type="number"
+              value={credits}
+              onChange={(e) => setCredits(parseInt(e.target.value) || 0)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-green-500"
+            />
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !title.trim()}
+            className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// MLO Edit Modal Component
+function MLOEditModal({
+  mlo,
+  moduleCode,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  mlo: MLO;
+  moduleCode: string;
+  onSave: (updatedMlo: Partial<MLO>) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [statement, setStatement] = useState(mlo.statement || '');
+  const [code, setCode] = useState(mlo.code || '');
+  const [bloomLevel, setBloomLevel] = useState<BloomLevel>(mlo.bloomLevel || 'apply');
+  const [verb, setVerb] = useState(mlo.verb || '');
+
+  const handleSave = () => {
+    onSave({
+      statement,
+      code,
+      bloomLevel,
+      verb,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-slate-700">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            Edit MLO <span className="text-cyan-400">{mlo.code}</span>
+            <span className="text-slate-500 text-sm">in {moduleCode}</span>
+          </h3>
+        </div>
+        
+        <div className="p-6 space-y-5">
+          {/* Code */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">MLO Code</label>
+            <input
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              placeholder="e.g., MLO1.1"
+            />
+          </div>
+
+          {/* Statement */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">MLO Statement</label>
+            <textarea
+              value={statement}
+              onChange={(e) => setStatement(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              placeholder="Enter the MLO statement..."
+            />
+          </div>
+
+          {/* Bloom's Level */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Bloom's Taxonomy Level</label>
+            <div className="grid grid-cols-3 gap-2">
+              {BLOOM_LEVELS.map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() => setBloomLevel(level)}
+                  className={`py-2 px-3 rounded-lg border text-sm capitalize transition-all ${
+                    bloomLevel === level
+                      ? BLOOM_COLORS[level]
+                      : 'bg-slate-900/50 border-slate-600 text-slate-400 hover:border-slate-500'
+                  }`}
+                >
+                  {level}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Verb */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Bloom's Verb</label>
+            <input
+              type="text"
+              value={verb}
+              onChange={(e) => setVerb(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              placeholder="e.g., analyze, evaluate, design"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Suggested verbs for {bloomLevel}: {BLOOM_VERBS[bloomLevel]?.slice(0, 5).join(', ')}
+            </p>
+          </div>
+
+          {/* Linked PLOs (read-only) */}
+          {mlo.linkedPLOs && mlo.linkedPLOs.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Linked PLOs</label>
+              <div className="flex flex-wrap gap-2">
+                {mlo.linkedPLOs.map((plo) => (
+                  <span key={plo} className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm">
+                    {plo}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !statement.trim()}
+            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// MLO Card Component
+function MLOCard({ mlo, onEdit }: { mlo: MLO; onEdit?: (mlo: MLO) => void }) {
+  return (
+    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 group">
       <div className="flex items-start justify-between gap-2 mb-1">
         <span className="text-xs font-mono text-slate-500">{mlo.code}</span>
-        <span className={`text-xs px-2 py-0.5 rounded capitalize ${BLOOM_COLORS[mlo.bloomLevel]}`}>
-          {mlo.bloomLevel}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs px-2 py-0.5 rounded capitalize ${BLOOM_COLORS[mlo.bloomLevel]}`}>
+            {mlo.bloomLevel}
+          </span>
+        </div>
       </div>
       <p className="text-sm text-slate-300">{mlo.statement}</p>
-      {mlo.linkedPLOs && mlo.linkedPLOs.length > 0 && (
-        <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
-          <span>→</span>
-          {mlo.linkedPLOs.map((plo) => (
-            <span key={plo} className="px-1.5 py-0.5 bg-slate-700 rounded">
-              {plo}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="flex items-center justify-between mt-2">
+        {mlo.linkedPLOs && mlo.linkedPLOs.length > 0 && (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span>→</span>
+            {mlo.linkedPLOs.map((plo) => (
+              <span key={plo} className="px-1.5 py-0.5 bg-slate-700 rounded">
+                {plo}
+              </span>
+            ))}
+          </div>
+        )}
+        {onEdit && (
+          <button
+            onClick={() => onEdit(mlo)}
+            className="text-xs text-cyan-400 hover:text-cyan-300 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            Edit
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -73,11 +398,15 @@ function ModuleCard({
   totalProgramHours,
   contactPercent,
   onEdit,
+  onEditModule,
+  onEditMlo,
 }: {
   module: Module;
   totalProgramHours: number;
   contactPercent: number;
   onEdit?: (target: EditTarget) => void;
+  onEditModule?: (module: Module) => void;
+  onEditMlo?: (mlo: MLO, moduleId: string, moduleCode: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hoursPercent =
@@ -105,6 +434,14 @@ function ModuleCard({
           </div>
           <div className="text-right shrink-0">
             <div className="flex items-start gap-2 justify-end mb-1">
+              {onEditModule && (
+                <button
+                  onClick={() => onEditModule(module)}
+                  className="text-xs text-green-400 hover:text-green-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  Edit
+                </button>
+              )}
               {onEdit && (
                 <EditWithAIButton
                   target={{
@@ -204,7 +541,11 @@ function ModuleCard({
               </h5>
               <div className="space-y-2">
                 {module.mlos.map((mlo) => (
-                  <MLOCard key={mlo.id} mlo={mlo} />
+                  <MLOCard 
+                    key={mlo.id} 
+                    mlo={mlo} 
+                    onEdit={onEditMlo ? (m) => onEditMlo(m, module.id, module.code) : undefined}
+                  />
                 ))}
               </div>
             </div>
@@ -251,6 +592,13 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
   const submitStep4 = useSubmitStep4();
   const approveStep4 = useApproveStep4();
   const [error, setError] = useState<string | null>(null);
+  
+  // Edit state for modules and MLOs
+  const [editingModule, setEditingModule] = useState<Module | null>(null);
+  const [editingMlo, setEditingMlo] = useState<MLO | null>(null);
+  const [editingMloModuleId, setEditingMloModuleId] = useState<string>('');
+  const [editingMloModuleCode, setEditingMloModuleCode] = useState<string>('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const handleGenerate = async () => {
     setError(null);
@@ -272,6 +620,80 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
       console.error('Failed to approve Step 4:', err);
       setError(err.message || 'Failed to approve Step 4');
     }
+  };
+
+  // Handle editing a module
+  const handleEditModule = (module: Module) => {
+    setEditingModule(module);
+  };
+
+  // Handle saving edited module
+  const handleSaveModule = async (updates: Partial<Module>) => {
+    if (!editingModule) return;
+    
+    setIsSavingEdit(true);
+    setError(null);
+    
+    console.log('Saving module:', editingModule.id, updates);
+    
+    try {
+      const response = await api.put(`/api/v3/workflow/${workflow._id}/step4/module/${editingModule.id}`, updates);
+      console.log('Save response:', response.data);
+      
+      setEditingModule(null);
+      await onRefresh();
+    } catch (err: any) {
+      console.error('Failed to save module:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to save changes');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Handle editing an MLO
+  const handleEditMlo = (mlo: MLO, moduleId: string, moduleCode: string) => {
+    setEditingMlo(mlo);
+    setEditingMloModuleId(moduleId);
+    setEditingMloModuleCode(moduleCode);
+  };
+
+  // Handle saving edited MLO
+  const handleSaveMlo = async (updates: Partial<MLO>) => {
+    if (!editingMlo || !editingMloModuleId) return;
+    
+    setIsSavingEdit(true);
+    setError(null);
+    
+    console.log('Saving MLO:', editingMlo.id, updates);
+    
+    try {
+      const response = await api.put(
+        `/api/v3/workflow/${workflow._id}/step4/module/${editingMloModuleId}/mlo/${editingMlo.id}`,
+        updates
+      );
+      console.log('Save response:', response.data);
+      
+      setEditingMlo(null);
+      setEditingMloModuleId('');
+      setEditingMloModuleCode('');
+      await onRefresh();
+    } catch (err: any) {
+      console.error('Failed to save MLO:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to save changes');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Handle canceling edits
+  const handleCancelModuleEdit = () => {
+    setEditingModule(null);
+  };
+
+  const handleCancelMloEdit = () => {
+    setEditingMlo(null);
+    setEditingMloModuleId('');
+    setEditingMloModuleCode('');
   };
 
   const hasStep4Data = workflow.step4 && workflow.step4.modules?.length > 0;
@@ -543,6 +965,8 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                   totalProgramHours={workflow.step4?.totalProgramHours || totalModuleHours}
                   contactPercent={contactPercent}
                   onEdit={onOpenCanvas}
+                  onEditModule={handleEditModule}
+                  onEditMlo={handleEditMlo}
                 />
               ))}
             </div>
@@ -597,6 +1021,27 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
             </p>
           )}
         </div>
+      )}
+
+      {/* Module Edit Modal */}
+      {editingModule && (
+        <ModuleEditModal
+          module={editingModule}
+          onSave={handleSaveModule}
+          onCancel={handleCancelModuleEdit}
+          isSaving={isSavingEdit}
+        />
+      )}
+
+      {/* MLO Edit Modal */}
+      {editingMlo && (
+        <MLOEditModal
+          mlo={editingMlo}
+          moduleCode={editingMloModuleCode}
+          onSave={handleSaveMlo}
+          onCancel={handleCancelMloEdit}
+          isSaving={isSavingEdit}
+        />
       )}
     </div>
   );
