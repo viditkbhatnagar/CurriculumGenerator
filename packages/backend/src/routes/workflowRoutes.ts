@@ -3500,6 +3500,7 @@ router.post('/canvas-edit', validateJWT, loadUser, async (req: Request, res: Res
       success: true,
       message: result.message,
       proposedChanges: result.proposedChanges,
+      suggestions: result.suggestions,
     });
   } catch (error: any) {
     loggingService.error('Canvas AI edit failed', { error });

@@ -6050,7 +6050,11 @@ Return ONLY valid JSON:
       fieldPath: string;
     };
     context?: any;
-  }): Promise<{ message: string; proposedChanges?: any }> {
+  }): Promise<{
+    message: string;
+    proposedChanges?: any;
+    suggestions?: Array<{ label: string; text: string; targetItem?: string }>;
+  }> {
     const { workflowId, stepNumber, userMessage } = params;
 
     loggingService.info('Canvas AI edit request', { workflowId, stepNumber });
@@ -6442,8 +6446,43 @@ CRITICAL RULES:
 3. Use "term" for glossary entries
 4. Use "stem" for MCQ questions
 5. Match items by their ID when available, or by unique text content
-6. Always return valid JSON with the "updates" array format
+6. Always return valid JSON with the response format below
 7. Be precise about which step the change belongs to
+
+=== RESPONSE FORMAT ===
+You MUST respond in a CONVERSATIONAL, USER-FRIENDLY way. Do NOT return technical JSON structures to the user.
+
+When user asks for alternatives or suggestions:
+{
+  "message": "Here's an alternative for [ITEM]:\n\n**Option 1:**\n[Full suggested text here]\n\n**Option 2:**\n[Another alternative text here]\n\nYou can copy any of these and paste them using the Edit button on the item.",
+  "suggestions": [
+    {
+      "label": "Option 1",
+      "text": "[The actual text to copy]",
+      "targetItem": "PLO1"
+    },
+    {
+      "label": "Option 2", 
+      "text": "[Another alternative]",
+      "targetItem": "PLO1"
+    }
+  ]
+}
+
+When user asks to directly apply changes (e.g., "change PLO1 to..."):
+{
+  "message": "I've prepared the update for [ITEM]. Click 'Apply Changes' to save it.",
+  "proposedChanges": {
+    "updates": [...]
+  }
+}
+
+IMPORTANT:
+- For "give me alternatives", "suggest", "rewrite" requests: Return multiple options in the "suggestions" array with copyable text
+- For "change to", "update", "fix" requests: Return "proposedChanges" with the updates array
+- ALWAYS write the message in natural, conversational language
+- Include the FULL suggested text in the message so users can read it easily
+- Keep suggestions contextually relevant to the curriculum topic and academic level
 
 === COMPLETE VALIDATION RULES & HOW TO FIX EACH ISSUE ===
 
@@ -6592,16 +6631,20 @@ The system will AUTO-RECALCULATE validation metrics after you add/update sources
 
     const userPrompt = `User request: "${userMessage}"
 
-Find the content the user is referring to and return the appropriate changes.
+Find the content the user is referring to and respond appropriately.
+
+RESPONSE RULES:
+1. If user asks for "alternatives", "suggestions", "rewrite", "different version" → Return multiple text options they can copy
+2. If user asks to "change", "update", "fix", "apply" → Return proposedChanges with updates array
+3. ALWAYS write in natural, conversational language - like ChatGPT or Claude would respond
+4. Include the FULL text of any suggestions so users can easily read and copy them
 
 RESPOND IN JSON:
 {
-  "message": "Brief description of what you're changing",
-  "proposedChanges": {
-    "updates": [
-      // Your update operations here
-    ]
-  }
+  "message": "[Your conversational response with the suggestions written out in full]",
+  "suggestions": [...] // For alternatives/suggestions requests
+  // OR
+  "proposedChanges": {...} // For direct change requests
 }`;
 
     try {
@@ -6648,6 +6691,7 @@ RESPOND IN JSON:
       return {
         message: parsed.message || 'Here are the proposed changes:',
         proposedChanges: parsed.proposedChanges,
+        suggestions: parsed.suggestions,
       };
     } catch (error: any) {
       loggingService.error('Canvas edit generation failed', {

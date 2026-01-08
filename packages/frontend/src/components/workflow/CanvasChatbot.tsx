@@ -21,6 +21,11 @@ type CanvasMessage = {
   timestamp: Date;
   editTarget?: EditTarget;
   proposedChanges?: any;
+  suggestions?: Array<{
+    label: string;
+    text: string;
+    targetItem?: string;
+  }>;
   status?: 'pending' | 'applied' | 'rejected';
 };
 
@@ -293,7 +298,42 @@ function MessageBubble({
   onReject?: () => void;
 }) {
   const [showDiff, setShowDiff] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const isUser = message.role === 'user';
+
+  const handleCopy = async (text: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  // Parse markdown-style formatting in message
+  const formatMessage = (content: string) => {
+    // Split by double newlines to create paragraphs
+    const parts = content.split(/\n\n/);
+    return parts.map((part, idx) => {
+      // Handle bold text with **
+      const formatted = part.split(/(\*\*[^*]+\*\*)/).map((segment, segIdx) => {
+        if (segment.startsWith('**') && segment.endsWith('**')) {
+          return (
+            <strong key={segIdx} className="text-cyan-400 font-semibold">
+              {segment.slice(2, -2)}
+            </strong>
+          );
+        }
+        return segment;
+      });
+      return (
+        <p key={idx} className={idx > 0 ? 'mt-3' : ''}>
+          {formatted}
+        </p>
+      );
+    });
+  };
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -304,7 +344,73 @@ function MessageBubble({
             : 'bg-slate-800 border border-slate-700 text-slate-200'
         }`}
       >
-        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+        <div className="text-sm whitespace-pre-wrap">{formatMessage(message.content)}</div>
+
+        {/* Suggestions with Copy Buttons */}
+        {message.suggestions && message.suggestions.length > 0 && (
+          <div className="mt-4 space-y-3">
+            {message.suggestions.map((suggestion, idx) => (
+              <div key={idx} className="bg-slate-900/60 rounded-lg p-3 border border-slate-600/50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-cyan-400">
+                    {suggestion.label}
+                    {suggestion.targetItem && (
+                      <span className="text-slate-500 ml-1">({suggestion.targetItem})</span>
+                    )}
+                  </span>
+                  <button
+                    onClick={() => handleCopy(suggestion.text, idx)}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
+                      copiedIndex === idx
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    {copiedIndex === idx ? (
+                      <>
+                        <svg
+                          className="w-3 h-3"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="w-3 h-3"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                          />
+                        </svg>
+                        Copy
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-sm text-slate-300 leading-relaxed">{suggestion.text}</p>
+              </div>
+            ))}
+            <p className="text-xs text-slate-500 mt-2">
+              💡 Copy any suggestion above and paste it using the Edit button on the item
+            </p>
+          </div>
+        )}
 
         {/* Proposed Changes with Diff View */}
         {message.proposedChanges && message.status === 'pending' && (
@@ -405,7 +511,7 @@ function MessageBubble({
                 onClick={onApply}
                 className="flex-1 px-3 py-1.5 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-lg text-xs hover:bg-emerald-500/30 transition-colors"
               >
-                ✓ Insert Changes
+                ✓ Apply Changes
               </button>
               <button
                 onClick={onReject}
@@ -523,6 +629,7 @@ export default function CanvasChatbot({
 
       const data = response.data;
       const proposedChanges = data.proposedChanges || data.data?.proposedChanges;
+      const suggestions = data.suggestions || data.data?.suggestions;
 
       const assistantMessage: CanvasMessage = {
         id: `msg-${Date.now()}-ai`,
@@ -531,6 +638,7 @@ export default function CanvasChatbot({
         timestamp: new Date(),
         editTarget: effectiveEditTarget,
         proposedChanges,
+        suggestions,
         status: proposedChanges ? 'pending' : undefined,
       };
 
