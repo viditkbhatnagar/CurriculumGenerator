@@ -297,8 +297,10 @@ export default function WorkflowDetailPage() {
     }
   };
 
-  // Wrapper for refetch to match expected type signature
+  // Wrapper for refetch to match expected type signature - FORCE CACHE INVALIDATION
   const handleRefresh = async (): Promise<void> => {
+    // Invalidate cache first to ensure fresh data
+    await queryClient.invalidateQueries({ queryKey: ['workflow', id] });
     await refetch();
   };
 

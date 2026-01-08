@@ -40,7 +40,9 @@ function FormativeAssessmentEditModal({
   const [instructions, setInstructions] = useState(assessment.instructions || '');
   const [alignedPLOs, setAlignedPLOs] = useState<string[]>(assessment.alignedPLOs || []);
   const [alignedMLOs, setAlignedMLOs] = useState<string[]>(assessment.alignedMLOs || []);
-  const [assessmentCriteria, setAssessmentCriteria] = useState<string[]>(assessment.assessmentCriteria || []);
+  const [assessmentCriteria, setAssessmentCriteria] = useState<string[]>(
+    assessment.assessmentCriteria || []
+  );
   const [maxMarks, setMaxMarks] = useState(assessment.maxMarks || 0);
   const [ploInput, setPloInput] = useState('');
   const [mloInput, setMloInput] = useState('');
@@ -101,7 +103,7 @@ function FormativeAssessmentEditModal({
             Edit <span className="text-cyan-400">Formative Assessment</span>
           </h3>
         </div>
-        
+
         <div className="p-6 space-y-5">
           {/* Title */}
           <div>
@@ -248,7 +250,9 @@ function FormativeAssessmentEditModal({
 
           {/* Assessment Criteria */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Assessment Criteria</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Assessment Criteria
+            </label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
@@ -346,7 +350,7 @@ function SummativeAssessmentEditModal({
             Edit <span className="text-amber-400">Summative Assessment</span>
           </h3>
         </div>
-        
+
         <div className="p-6 space-y-5">
           {/* Title */}
           <div>
@@ -725,25 +729,28 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
   const handleSaveFormative = async (updatedAssessment: FormativeAssessment) => {
     setIsSavingEdit(true);
     setError(null);
-    
+
     console.log('Saving formative assessment:', updatedAssessment);
     console.log('Workflow ID:', workflow._id);
     console.log('Assessment ID:', updatedAssessment.id);
-    
+
     try {
-      const response = await api.put(`/api/v3/workflow/${workflow._id}/step7/formative/${updatedAssessment.id}`, {
-        title: updatedAssessment.title,
-        assessmentType: updatedAssessment.assessmentType,
-        description: updatedAssessment.description,
-        instructions: updatedAssessment.instructions,
-        alignedPLOs: updatedAssessment.alignedPLOs,
-        alignedMLOs: updatedAssessment.alignedMLOs,
-        assessmentCriteria: updatedAssessment.assessmentCriteria,
-        maxMarks: updatedAssessment.maxMarks,
-      });
-      
+      const response = await api.put(
+        `/api/v3/workflow/${workflow._id}/step7/formative/${updatedAssessment.id}`,
+        {
+          title: updatedAssessment.title,
+          assessmentType: updatedAssessment.assessmentType,
+          description: updatedAssessment.description,
+          instructions: updatedAssessment.instructions,
+          alignedPLOs: updatedAssessment.alignedPLOs,
+          alignedMLOs: updatedAssessment.alignedMLOs,
+          assessmentCriteria: updatedAssessment.assessmentCriteria,
+          maxMarks: updatedAssessment.maxMarks,
+        }
+      );
+
       console.log('Save response:', response.data);
-      
+
       setEditingFormative(null);
       await onRefresh();
     } catch (err) {
@@ -758,20 +765,23 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
   const handleSaveSummative = async (updatedAssessment: SummativeAssessment) => {
     setIsSavingEdit(true);
     setError(null);
-    
+
     console.log('Saving summative assessment:', updatedAssessment);
     console.log('Workflow ID:', workflow._id);
     console.log('Assessment ID:', updatedAssessment.id);
-    
+
     try {
-      const response = await api.put(`/api/v3/workflow/${workflow._id}/step7/summative/${updatedAssessment.id}`, {
-        title: updatedAssessment.title,
-        format: updatedAssessment.format,
-        overview: updatedAssessment.overview,
-      });
-      
+      const response = await api.put(
+        `/api/v3/workflow/${workflow._id}/step7/summative/${updatedAssessment.id}`,
+        {
+          title: updatedAssessment.title,
+          format: updatedAssessment.format,
+          overview: updatedAssessment.overview,
+        }
+      );
+
       console.log('Save response:', response.data);
-      
+
       setEditingSummative(null);
       await onRefresh();
     } catch (err) {
@@ -1635,20 +1645,29 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
           )}
 
           {/* Detailed Assessment Cards */}
-          {(workflow.step7?.formativeAssessments?.length > 0 || workflow.step7?.summativeAssessments?.length > 0) && (
+          {((workflow.step7?.formativeAssessments?.length ?? 0) > 0 ||
+            (workflow.step7?.summativeAssessments?.length ?? 0) > 0) && (
             <div className="space-y-6">
               {/* Formative Assessments */}
-              {workflow.step7?.formativeAssessments?.length > 0 && (
+              {(workflow.step7?.formativeAssessments?.length ?? 0) > 0 && (
                 <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
                   <h4 className="text-cyan-400 font-medium mb-4 flex items-center gap-2">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5H7a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
+                      />
                     </svg>
-                    Formative Assessments ({workflow.step7.formativeAssessments.length})
+                    Formative Assessments ({workflow.step7?.formativeAssessments?.length ?? 0})
                   </h4>
                   <div className="space-y-4">
-                    {workflow.step7.formativeAssessments.map((assessment) => (
-                      <div key={assessment.id} className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                    {workflow.step7?.formativeAssessments?.map((assessment) => (
+                      <div
+                        key={assessment.id}
+                        className="bg-slate-800/50 rounded-lg p-4 border border-slate-700"
+                      >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
                             <h5 className="text-white font-medium mb-1">{assessment.title}</h5>
@@ -1656,9 +1675,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                               <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded text-xs">
                                 {assessment.assessmentType}
                               </span>
-                              {assessment.maxMarks && (
-                                <span>{assessment.maxMarks} marks</span>
-                              )}
+                              {assessment.maxMarks && <span>{assessment.maxMarks} marks</span>}
                               <span>Module: {assessment.moduleId}</span>
                             </div>
                             <p className="text-sm text-slate-300 mb-2">{assessment.description}</p>
@@ -1666,7 +1683,10 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                               <div className="flex flex-wrap gap-1 mb-2">
                                 <span className="text-xs text-slate-500">PLOs:</span>
                                 {assessment.alignedPLOs.map((plo, i) => (
-                                  <span key={i} className="text-xs px-2 py-0.5 bg-slate-700 rounded text-slate-300">
+                                  <span
+                                    key={i}
+                                    className="text-xs px-2 py-0.5 bg-slate-700 rounded text-slate-300"
+                                  >
                                     {plo}
                                   </span>
                                 ))}
@@ -1676,7 +1696,10 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                               <div className="flex flex-wrap gap-1">
                                 <span className="text-xs text-slate-500">MLOs:</span>
                                 {assessment.alignedMLOs.map((mlo, i) => (
-                                  <span key={i} className="text-xs px-2 py-0.5 bg-slate-700 rounded text-slate-300">
+                                  <span
+                                    key={i}
+                                    className="text-xs px-2 py-0.5 bg-slate-700 rounded text-slate-300"
+                                  >
                                     {mlo}
                                   </span>
                                 ))}
@@ -1687,8 +1710,18 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                             onClick={() => handleEditFormative(assessment)}
                             className="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
                           >
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            <svg
+                              className="w-3 h-3"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                              />
                             </svg>
                             Edit
                           </button>
@@ -1706,17 +1739,25 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
               )}
 
               {/* Summative Assessments */}
-              {workflow.step7?.summativeAssessments?.length > 0 && (
+              {(workflow.step7?.summativeAssessments?.length ?? 0) > 0 && (
                 <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
                   <h4 className="text-amber-400 font-medium mb-4 flex items-center gap-2">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
                     </svg>
-                    Summative Assessments ({workflow.step7.summativeAssessments.length})
+                    Summative Assessments ({workflow.step7?.summativeAssessments?.length ?? 0})
                   </h4>
                   <div className="space-y-4">
-                    {workflow.step7.summativeAssessments.map((assessment) => (
-                      <div key={assessment.id} className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                    {workflow.step7?.summativeAssessments?.map((assessment) => (
+                      <div
+                        key={assessment.id}
+                        className="bg-slate-800/50 rounded-lg p-4 border border-slate-700"
+                      >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
                             <h5 className="text-white font-medium mb-1">{assessment.title}</h5>
@@ -1727,9 +1768,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                               <span className="px-2 py-1 bg-slate-600 text-slate-300 rounded text-xs">
                                 {assessment.scope}
                               </span>
-                              {assessment.moduleId && (
-                                <span>Module: {assessment.moduleId}</span>
-                              )}
+                              {assessment.moduleId && <span>Module: {assessment.moduleId}</span>}
                             </div>
                             <p className="text-sm text-slate-300 mb-3">{assessment.overview}</p>
                             {assessment.components?.length > 0 && (
@@ -1750,8 +1789,18 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                             onClick={() => handleEditSummative(assessment)}
                             className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
                           >
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            <svg
+                              className="w-3 h-3"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                              />
                             </svg>
                             Edit
                           </button>

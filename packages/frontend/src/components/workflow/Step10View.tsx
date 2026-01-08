@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSubmitStep10 } from '@/hooks/useWorkflow';
+import { useSubmitStep10, useApproveStep10 } from '@/hooks/useWorkflow';
 import { api } from '@/lib/api';
 import {
   CurriculumWorkflow,
@@ -35,10 +35,18 @@ function LessonPlanEditModal({
   const [lessonTitle, setLessonTitle] = useState(lesson.lessonTitle || '');
   const [duration, setDuration] = useState(lesson.duration || 90);
   const [objectives, setObjectives] = useState<string[]>(lesson.objectives || []);
-  const [pedagogicalGuidance, setPedagogicalGuidance] = useState(lesson.instructorNotes?.pedagogicalGuidance || '');
-  const [pacingSuggestions, setPacingSuggestions] = useState(lesson.instructorNotes?.pacingSuggestions || '');
-  const [adaptationOptions, setAdaptationOptions] = useState<string[]>(lesson.instructorNotes?.adaptationOptions || []);
-  const [estimatedEffort, setEstimatedEffort] = useState(lesson.independentStudy?.estimatedEffort || 120);
+  const [pedagogicalGuidance, setPedagogicalGuidance] = useState(
+    lesson.instructorNotes?.pedagogicalGuidance || ''
+  );
+  const [pacingSuggestions, setPacingSuggestions] = useState(
+    lesson.instructorNotes?.pacingSuggestions || ''
+  );
+  const [adaptationOptions, setAdaptationOptions] = useState<string[]>(
+    lesson.instructorNotes?.adaptationOptions || []
+  );
+  const [estimatedEffort, setEstimatedEffort] = useState(
+    lesson.independentStudy?.estimatedEffort || 120
+  );
   const [objectiveInput, setObjectiveInput] = useState('');
   const [adaptationInput, setAdaptationInput] = useState('');
 
@@ -91,7 +99,7 @@ function LessonPlanEditModal({
             Edit <span className="text-cyan-400">Lesson Plan</span>
           </h3>
         </div>
-        
+
         <div className="p-6 space-y-5">
           {/* Lesson Title */}
           <div>
@@ -107,7 +115,9 @@ function LessonPlanEditModal({
 
           {/* Duration */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Duration (minutes)</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Duration (minutes)
+            </label>
             <input
               type="number"
               value={duration}
@@ -121,7 +131,9 @@ function LessonPlanEditModal({
 
           {/* Learning Objectives */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Learning Objectives</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Learning Objectives
+            </label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
@@ -159,7 +171,9 @@ function LessonPlanEditModal({
 
           {/* Pedagogical Guidance */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Pedagogical Guidance</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Pedagogical Guidance
+            </label>
             <textarea
               value={pedagogicalGuidance}
               onChange={(e) => setPedagogicalGuidance(e.target.value)}
@@ -171,7 +185,9 @@ function LessonPlanEditModal({
 
           {/* Pacing Suggestions */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Pacing Suggestions</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Pacing Suggestions
+            </label>
             <textarea
               value={pacingSuggestions}
               onChange={(e) => setPacingSuggestions(e.target.value)}
@@ -183,7 +199,9 @@ function LessonPlanEditModal({
 
           {/* Adaptation Options */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Adaptation Options</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Adaptation Options
+            </label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
@@ -224,7 +242,9 @@ function LessonPlanEditModal({
 
           {/* Independent Study Effort */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Independent Study Effort (minutes)</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Independent Study Effort (minutes)
+            </label>
             <input
               type="number"
               value={estimatedEffort}
@@ -265,14 +285,15 @@ function LessonPlanEditModal({
   );
 }
 
-export default function Step10View({ workflow, onComplete: _onComplete, onRefresh }: Props) {
+export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   const submitStep10 = useSubmitStep10();
+  const approveStep10 = useApproveStep10();
   const [error, setError] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
   const [generatingModuleId, setGeneratingModuleId] = useState<string | null>(null);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
-  
+
   // Edit state for lesson plans
   const [editingLesson, setEditingLesson] = useState<LessonPlan | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -317,26 +338,40 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
   const handleSaveLesson = async (updatedLesson: LessonPlan) => {
     setIsSavingEdit(true);
     setError(null);
-    
-    console.log('Saving lesson plan:', updatedLesson);
-    console.log('Workflow ID:', workflow._id);
-    console.log('Lesson ID:', updatedLesson.lessonId);
-    
+
+    console.log('[Step10] Saving lesson plan:', {
+      workflowId: workflow._id,
+      lessonId: updatedLesson.lessonId,
+      lessonTitle: updatedLesson.lessonTitle,
+    });
+
     try {
-      const response = await api.put(`/api/v3/workflow/${workflow._id}/step10/lesson/${updatedLesson.lessonId}`, {
+      const payload = {
         lessonTitle: updatedLesson.lessonTitle,
         duration: updatedLesson.duration,
         objectives: updatedLesson.objectives,
         instructorNotes: updatedLesson.instructorNotes,
         independentStudy: updatedLesson.independentStudy,
-      });
-      
-      console.log('Save response:', response.data);
-      
+      };
+
+      console.log('[Step10] Sending PUT request with payload:', payload);
+
+      const response = await api.put(
+        `/api/v3/workflow/${workflow._id}/step10/lesson/${updatedLesson.lessonId}`,
+        payload
+      );
+
+      console.log('[Step10] ✅ Save response:', response.data);
+
+      // Close modal first
       setEditingLesson(null);
+
+      // Force refresh the workflow data
+      console.log('[Step10] Refreshing workflow data...');
       await onRefresh();
+      console.log('[Step10] ✅ Refresh complete');
     } catch (err) {
-      console.error('Error saving lesson plan:', err);
+      console.error('[Step10] ❌ Error saving lesson plan:', err);
       setError(err instanceof Error ? err.message : 'Failed to save lesson plan');
     } finally {
       setIsSavingEdit(false);
@@ -348,8 +383,21 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
     setEditingLesson(null);
   };
 
+  // Handle approving Step 10
+  const handleApprove = async () => {
+    setError(null);
+    try {
+      await approveStep10.mutateAsync(workflow._id);
+      onComplete();
+    } catch (err: any) {
+      console.error('Failed to approve Step 10:', err);
+      setError(err.message || 'Failed to approve Step 10');
+    }
+  };
+
   const hasStep10Data = workflow.step10 && workflow.step10.moduleLessonPlans?.length > 0;
   const validation = workflow.step10?.validation;
+  const isApproved = !!workflow.step10?.approvedAt;
 
   // Check if Step 9 is approved
   const validStatuses = [
@@ -365,6 +413,7 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
   const totalModules = workflow.step4?.modules?.length || 0;
   const completedModules = workflow.step10?.moduleLessonPlans?.length || 0;
   const isIncomplete = hasStep10Data && completedModules < totalModules;
+  const isAllModulesComplete = hasStep10Data && completedModules >= totalModules;
 
   // Auto-select first module if none selected
   useEffect(() => {
@@ -696,31 +745,99 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
           </div>
 
           {/* Completion Banner */}
-          {!isIncomplete && completedModules === totalModules && (
-            <div className="bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30 rounded-xl p-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                <svg
-                  className="w-8 h-8 text-emerald-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
+          {isAllModulesComplete && (
+            <div
+              className={`border rounded-xl p-6 text-center ${
+                isApproved
+                  ? 'bg-gradient-to-r from-emerald-500/20 to-green-500/20 border-emerald-500/30'
+                  : 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border-cyan-500/30'
+              }`}
+            >
+              <div
+                className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${
+                  isApproved ? 'bg-emerald-500/20' : 'bg-cyan-500/20'
+                }`}
+              >
+                {isApproved ? (
+                  <svg
+                    className="w-8 h-8 text-emerald-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    className="w-8 h-8 text-cyan-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                )}
               </div>
-              <h3 className="text-xl font-bold text-emerald-400 mb-2">🎉 All Modules Complete!</h3>
-              <p className="text-slate-300 mb-4">
-                All lesson plans and PowerPoint decks have been generated. Click "Complete & Review"
-                in the header to finalize your curriculum.
-              </p>
-              <p className="text-emerald-400 text-sm animate-pulse">
-                ↑ Click "Complete & Review" button above to finalize
-              </p>
+
+              {isApproved ? (
+                <>
+                  <h3 className="text-xl font-bold text-emerald-400 mb-2">✅ Step 10 Approved!</h3>
+                  <p className="text-slate-300 mb-4">
+                    All lesson plans and PowerPoint decks have been approved. Click "Complete &
+                    Review" in the header to finalize your curriculum.
+                  </p>
+                  <p className="text-emerald-400 text-sm animate-pulse">
+                    ↑ Click "Complete & Review" button above to finalize
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-xl font-bold text-cyan-400 mb-2">🎉 All Modules Complete!</h3>
+                  <p className="text-slate-300 mb-4">
+                    All lesson plans and PowerPoint decks have been generated. Review the content
+                    and approve to continue.
+                  </p>
+                  <button
+                    onClick={handleApprove}
+                    disabled={approveStep10.isPending}
+                    className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mx-auto"
+                  >
+                    {approveStep10.isPending ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Approving...
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                        Approve & Continue
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           )}
 
@@ -852,17 +969,19 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
                 <h4 className="text-white font-medium mb-4">Lessons</h4>
                 <div className="space-y-3">
                   {currentModule.lessons.map((lesson) => (
-                    <button
+                    <div
                       key={lesson.lessonId}
-                      onClick={() => setSelectedLesson(lesson.lessonId)}
-                      className={`w-full p-4 rounded-lg border text-left transition-all ${
+                      className={`w-full p-4 rounded-lg border transition-all ${
                         selectedLesson === lesson.lessonId
                           ? 'bg-cyan-500/20 border-cyan-500'
                           : 'bg-slate-800 border-slate-700 hover:border-slate-600'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1">
+                        <button
+                          onClick={() => setSelectedLesson(lesson.lessonId)}
+                          className="flex-1 text-left"
+                        >
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-white font-medium">
                               Lesson {lesson.lessonNumber}: {lesson.lessonTitle}
@@ -884,24 +1003,46 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
                               </span>
                             ))}
                           </div>
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleEditLesson(lesson)}
+                            className="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
+                            title="Edit lesson"
+                          >
+                            <svg
+                              className="w-3 h-3"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                              />
+                            </svg>
+                            Edit
+                          </button>
+                          <svg
+                            className={`w-5 h-5 text-slate-400 transition-transform ${
+                              selectedLesson === lesson.lessonId ? 'rotate-90' : ''
+                            }`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
                         </div>
-                        <svg
-                          className={`w-5 h-5 text-slate-400 transition-transform ${
-                            selectedLesson === lesson.lessonId ? 'rotate-90' : ''
-                          }`}
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5l7 7-7 7"
-                          />
-                        </svg>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1056,7 +1197,12 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
                     className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                      />
                     </svg>
                     Edit Lesson
                   </button>
@@ -1446,15 +1592,56 @@ export default function Step10View({ workflow, onComplete: _onComplete, onRefres
             </div>
           )}
 
-          {/* Regenerate Button */}
-          <div className="flex items-center justify-center pt-6 border-t border-slate-700">
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between pt-6 border-t border-slate-700">
             <button
               onClick={handleGenerate}
-              disabled={submitStep10.isPending}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+              disabled={submitStep10.isPending || isAllModulesComplete}
+              className="px-4 py-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Regenerate Lesson Plans
+              {isAllModulesComplete ? 'All Modules Generated' : 'Regenerate Lesson Plans'}
             </button>
+
+            {isAllModulesComplete && !isApproved && (
+              <button
+                onClick={handleApprove}
+                disabled={approveStep10.isPending}
+                className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {approveStep10.isPending ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Approving...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    Approve Step 10
+                  </>
+                )}
+              </button>
+            )}
+
+            {isApproved && (
+              <span className="px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg text-sm font-medium flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+                Approved
+              </span>
+            )}
           </div>
         </div>
       )}

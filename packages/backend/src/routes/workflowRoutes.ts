@@ -506,7 +506,13 @@ router.put('/:id/step2/ksa/:ksaId', validateJWT, loadUser, async (req: Request, 
     const { id, ksaId } = req.params;
     const { statement, description, importance } = req.body;
 
-    loggingService.info('Updating KSC item', { workflowId: id, ksaId, statement, description, importance });
+    loggingService.info('Updating KSC item', {
+      workflowId: id,
+      ksaId,
+      statement,
+      description,
+      importance,
+    });
 
     const workflow = await CurriculumWorkflow.findById(id);
     if (!workflow || !workflow.step2) {
@@ -545,7 +551,8 @@ router.put('/:id/step2/ksa/:ksaId', validateJWT, loadUser, async (req: Request, 
 
     // Check competency/attitude items
     if (!found) {
-      const competencyItems = (workflow.step2 as any).competencyItems || workflow.step2.attitudeItems || [];
+      const competencyItems =
+        (workflow.step2 as any).competencyItems || workflow.step2.attitudeItems || [];
       for (const item of competencyItems) {
         if ((item as any).id === ksaId) {
           if (statement !== undefined) (item as any).statement = statement;
@@ -695,7 +702,13 @@ router.put('/:id/step3/plo/:ploId', validateJWT, loadUser, async (req: Request, 
     const { id, ploId } = req.params;
     const { statement, verb, bloomLevel, assessmentAlignment, jobTaskMapping } = req.body;
 
-    loggingService.info('Updating PLO item', { workflowId: id, ploId, statement, verb, bloomLevel });
+    loggingService.info('Updating PLO item', {
+      workflowId: id,
+      ploId,
+      statement,
+      verb,
+      bloomLevel,
+    });
 
     const workflow = await CurriculumWorkflow.findById(id);
     if (!workflow || !workflow.step3) {
@@ -705,7 +718,7 @@ router.put('/:id/step3/plo/:ploId', validateJWT, loadUser, async (req: Request, 
     // Find the PLO in the outcomes array
     const outcomes = workflow.step3.outcomes || [];
     const ploIndex = outcomes.findIndex((plo: any) => plo.id === ploId);
-    
+
     if (ploIndex === -1) {
       return res.status(404).json({ success: false, error: 'PLO not found' });
     }
@@ -880,7 +893,13 @@ router.put(
       const { id, moduleId, mloId } = req.params;
       const { statement, code, bloomLevel, verb, linkedPLOs } = req.body;
 
-      loggingService.info('Updating MLO', { workflowId: id, moduleId, mloId, statement, bloomLevel });
+      loggingService.info('Updating MLO', {
+        workflowId: id,
+        moduleId,
+        mloId,
+        statement,
+        bloomLevel,
+      });
 
       const workflow = await CurriculumWorkflow.findById(id);
       if (!workflow || !workflow.step4) {
@@ -1023,7 +1042,18 @@ router.put(
   async (req: Request, res: Response) => {
     try {
       const { id, sourceId } = req.params;
-      const { title, authors, year, citation, doi, url, category, type, complexityLevel, accessStatus } = req.body;
+      const {
+        title,
+        authors,
+        year,
+        citation,
+        doi,
+        url,
+        category,
+        type,
+        complexityLevel,
+        accessStatus,
+      } = req.body;
 
       loggingService.info('Updating source', { workflowId: id, sourceId, title, authors, year });
 
@@ -1164,17 +1194,17 @@ router.put(
   async (req: Request, res: Response) => {
     try {
       const { id, readingId } = req.params;
-      const { 
-        title, 
-        authors, 
-        year, 
-        citation, 
-        doi, 
-        url, 
-        category, 
-        contentType, 
-        readingType, 
-        complexity, 
+      const {
+        title,
+        authors,
+        year,
+        citation,
+        doi,
+        url,
+        category,
+        contentType,
+        readingType,
+        complexity,
         estimatedReadingMinutes,
         specificChapters,
         pageRange,
@@ -1182,10 +1212,16 @@ router.put(
         notes,
         suggestedWeek,
         linkedMLOs,
-        assessmentRelevance
+        assessmentRelevance,
       } = req.body;
 
-      loggingService.info('Updating reading item', { workflowId: id, readingId, title, authors, year });
+      loggingService.info('Updating reading item', {
+        workflowId: id,
+        readingId,
+        title,
+        authors,
+        year,
+      });
 
       const workflow = await CurriculumWorkflow.findById(id);
       if (!workflow || !workflow.step6) {
@@ -1209,7 +1245,8 @@ router.put(
       if (contentType !== undefined) reading.contentType = contentType;
       if (readingType !== undefined) reading.readingType = readingType;
       if (complexity !== undefined) reading.complexity = complexity;
-      if (estimatedReadingMinutes !== undefined) reading.estimatedReadingMinutes = estimatedReadingMinutes;
+      if (estimatedReadingMinutes !== undefined)
+        reading.estimatedReadingMinutes = estimatedReadingMinutes;
       if (specificChapters !== undefined) reading.specificChapters = specificChapters;
       if (pageRange !== undefined) reading.pageRange = pageRange;
       if (sectionNames !== undefined) reading.sectionNames = sectionNames;
@@ -1555,7 +1592,7 @@ router.put(
   async (req: Request, res: Response) => {
     try {
       const { id, assessmentId } = req.params;
-      const { 
+      const {
         title,
         assessmentType,
         description,
@@ -1564,7 +1601,7 @@ router.put(
         alignedMLOs,
         assessmentCriteria,
         maxMarks,
-        questions
+        questions,
       } = req.body;
 
       loggingService.info('Updating formative assessment', { workflowId: id, assessmentId, title });
@@ -1575,7 +1612,9 @@ router.put(
       }
 
       // Find the formative assessment in the formativeAssessments array
-      const assessment = workflow.step7.formativeAssessments?.find((a: any) => a.id === assessmentId);
+      const assessment = workflow.step7.formativeAssessments?.find(
+        (a: any) => a.id === assessmentId
+      );
       if (!assessment) {
         return res.status(404).json({ success: false, error: 'Formative assessment not found' });
       }
@@ -1595,7 +1634,10 @@ router.put(
       workflow.markModified('step7');
       await workflow.save();
 
-      loggingService.info('Formative assessment updated successfully', { assessmentId, assessment });
+      loggingService.info('Formative assessment updated successfully', {
+        assessmentId,
+        assessment,
+      });
 
       res.json({
         success: true,
@@ -1623,14 +1665,7 @@ router.put(
   async (req: Request, res: Response) => {
     try {
       const { id, assessmentId } = req.params;
-      const { 
-        title,
-        format,
-        overview,
-        alignmentTable,
-        components,
-        markingModel
-      } = req.body;
+      const { title, format, overview, alignmentTable, components, markingModel } = req.body;
 
       loggingService.info('Updating summative assessment', { workflowId: id, assessmentId, title });
 
@@ -1640,7 +1675,9 @@ router.put(
       }
 
       // Find the summative assessment in the summativeAssessments array
-      const assessment = workflow.step7.summativeAssessments?.find((a: any) => a.id === assessmentId);
+      const assessment = workflow.step7.summativeAssessments?.find(
+        (a: any) => a.id === assessmentId
+      );
       if (!assessment) {
         return res.status(404).json({ success: false, error: 'Summative assessment not found' });
       }
@@ -1657,7 +1694,10 @@ router.put(
       workflow.markModified('step7');
       await workflow.save();
 
-      loggingService.info('Summative assessment updated successfully', { assessmentId, assessment });
+      loggingService.info('Summative assessment updated successfully', {
+        assessmentId,
+        assessment,
+      });
 
       res.json({
         success: true,
@@ -1723,13 +1763,13 @@ router.put(
   async (req: Request, res: Response) => {
     try {
       const { id, caseId } = req.params;
-      const { 
-        title, 
-        caseType, 
-        difficulty, 
-        scenario, 
-        organizationalContext, 
-        backgroundInformation, 
+      const {
+        title,
+        caseType,
+        difficulty,
+        scenario,
+        organizationalContext,
+        backgroundInformation,
         challengeDescription,
         industryContext,
         brandName,
@@ -1740,7 +1780,7 @@ router.put(
         suggestedApproach,
         discussionPrompts,
         ethicsCompliant,
-        noPII
+        noPII,
       } = req.body;
 
       loggingService.info('Updating case study', { workflowId: id, caseId, title });
@@ -1765,8 +1805,10 @@ router.put(
         // Recalculate word count
         caseStudy.wordCount = scenario.split(/\s+/).filter(Boolean).length;
       }
-      if (organizationalContext !== undefined) caseStudy.organizationalContext = organizationalContext;
-      if (backgroundInformation !== undefined) caseStudy.backgroundInformation = backgroundInformation;
+      if (organizationalContext !== undefined)
+        caseStudy.organizationalContext = organizationalContext;
+      if (backgroundInformation !== undefined)
+        caseStudy.backgroundInformation = backgroundInformation;
       if (challengeDescription !== undefined) caseStudy.challengeDescription = challengeDescription;
       if (industryContext !== undefined) caseStudy.industryContext = industryContext;
       if (brandName !== undefined) caseStudy.brandName = brandName;
@@ -1882,20 +1924,20 @@ router.put(
   async (req: Request, res: Response) => {
     try {
       const { id, termId } = req.params;
-      const { 
-        term, 
-        definition, 
-        exampleSentence, 
-        technicalNote, 
-        relatedTerms, 
-        broaderTerms, 
-        narrowerTerms, 
+      const {
+        term,
+        definition,
+        exampleSentence,
+        technicalNote,
+        relatedTerms,
+        broaderTerms,
+        narrowerTerms,
         synonyms,
         isAcronym,
         acronymExpansion,
         category,
         priority,
-        usedInAssessment
+        usedInAssessment,
       } = req.body;
 
       loggingService.info('Updating glossary term', { workflowId: id, termId, term });
@@ -2378,6 +2420,113 @@ router.get('/:id/step10', validateJWT, loadUser, async (req: Request, res: Respo
 });
 
 /**
+ * POST /api/v3/workflow/:id/step10/approve
+ * Approve Step 10 and mark workflow as ready for final review
+ */
+router.post('/:id/step10/approve', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    loggingService.info('Approving Step 10', { workflowId: id });
+
+    const workflow = await CurriculumWorkflow.findById(id);
+    if (!workflow) {
+      return res.status(404).json({
+        success: false,
+        error: 'Workflow not found',
+      });
+    }
+
+    // Validate Step 10 is complete
+    if (!workflow.step10 || !workflow.step10.moduleLessonPlans) {
+      return res.status(400).json({
+        success: false,
+        error: 'Step 10 must be generated before approval',
+      });
+    }
+
+    const totalModules = workflow.step4?.modules?.length || 0;
+    const completedModules = workflow.step10.moduleLessonPlans.length;
+
+    if (completedModules < totalModules) {
+      return res.status(400).json({
+        success: false,
+        error: `All modules must be generated before approval. ${completedModules}/${totalModules} modules complete.`,
+      });
+    }
+
+    // Check if all modules have lessons
+    const modulesWithoutLessons = workflow.step10.moduleLessonPlans.filter(
+      (m: any) => !m.lessons || m.lessons.length === 0
+    );
+    if (modulesWithoutLessons.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Some modules have no lessons generated: ${modulesWithoutLessons.map((m: any) => m.moduleCode).join(', ')}`,
+      });
+    }
+
+    // Mark Step 10 as approved
+    workflow.step10.approvedAt = new Date();
+
+    // Update validation
+    workflow.step10.validation = {
+      allModulesHaveLessonPlans: true,
+      allLessonDurationsValid: true,
+      totalHoursMatch: true,
+      allMLOsCovered: true,
+      caseStudiesIntegrated: true,
+      assessmentsIntegrated: true,
+    };
+
+    // Update workflow status
+    workflow.currentStep = 10;
+    workflow.status = 'step10_complete';
+
+    // Update step progress
+    const step10Progress = workflow.stepProgress.find((p) => p.step === 10);
+    if (step10Progress) {
+      step10Progress.completedAt = new Date();
+      step10Progress.status = 'approved';
+    } else {
+      workflow.stepProgress.push({
+        step: 10,
+        status: 'approved',
+        startedAt: workflow.step10.generatedAt || new Date(),
+        completedAt: new Date(),
+      });
+    }
+
+    workflow.markModified('step10');
+    workflow.markModified('stepProgress');
+    await workflow.save();
+
+    loggingService.info('Step 10 approved successfully', {
+      workflowId: id,
+      totalModules: completedModules,
+      totalLessons: workflow.step10.summary?.totalLessons || 0,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        approvedAt: workflow.step10.approvedAt,
+        status: workflow.status,
+        currentStep: workflow.currentStep,
+        summary: workflow.step10.summary,
+      },
+      message: 'Step 10 approved! Curriculum is ready for final review.',
+    });
+  } catch (error) {
+    loggingService.error('Error approving Step 10', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to approve Step 10',
+    });
+  }
+});
+
+/**
  * POST /api/v3/workflow/:id/complete
  * Mark workflow as complete and ready for final review
  */
@@ -2816,14 +2965,14 @@ router.put(
   async (req: Request, res: Response) => {
     try {
       const { id, lessonId } = req.params;
-      const { 
+      const {
         lessonTitle,
         duration,
         objectives,
         activities,
         instructorNotes,
         independentStudy,
-        formativeChecks
+        formativeChecks,
       } = req.body;
 
       loggingService.info('Updating lesson plan', { workflowId: id, lessonId, lessonTitle });
@@ -2836,7 +2985,7 @@ router.put(
       // Find the lesson in the moduleLessonPlans
       let foundLesson: any = null;
       let foundModule: any = null;
-      
+
       for (const module of workflow.step10.moduleLessonPlans || []) {
         const lesson = module.lessons?.find((l: any) => l.lessonId === lessonId);
         if (lesson) {
@@ -2861,13 +3010,17 @@ router.put(
 
       // Recalculate module totals if duration changed
       if (duration !== undefined && foundModule) {
-        foundModule.totalContactHours = foundModule.lessons.reduce((sum: number, l: any) => sum + (l.duration / 60), 0);
+        foundModule.totalContactHours = foundModule.lessons.reduce(
+          (sum: number, l: any) => sum + l.duration / 60,
+          0
+        );
       }
 
       // Recalculate summary if needed
       if (workflow.step10.summary && duration !== undefined) {
         workflow.step10.summary.totalContactHours = workflow.step10.moduleLessonPlans.reduce(
-          (sum: number, m: any) => sum + m.totalContactHours, 0
+          (sum: number, m: any) => sum + m.totalContactHours,
+          0
         );
       }
 

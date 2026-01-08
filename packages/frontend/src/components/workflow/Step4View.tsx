@@ -95,7 +95,7 @@ function ModuleEditModal({
             Edit Module <span className="text-green-400">{module.code}</span>
           </h3>
         </div>
-        
+
         <div className="p-6 space-y-5">
           {/* Title */}
           <div>
@@ -163,7 +163,9 @@ function ModuleEditModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Self-Study Hours</label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Self-Study Hours
+              </label>
               <input
                 type="number"
                 value={selfStudyHours}
@@ -250,7 +252,7 @@ function MLOEditModal({
             <span className="text-slate-500 text-sm">in {moduleCode}</span>
           </h3>
         </div>
-        
+
         <div className="p-6 space-y-5">
           {/* Code */}
           <div>
@@ -278,7 +280,9 @@ function MLOEditModal({
 
           {/* Bloom's Level */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Bloom's Taxonomy Level</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Bloom's Taxonomy Level
+            </label>
             <div className="grid grid-cols-3 gap-2">
               {BLOOM_LEVELS.map((level) => (
                 <button
@@ -318,7 +322,10 @@ function MLOEditModal({
               <label className="block text-sm font-medium text-slate-300 mb-2">Linked PLOs</label>
               <div className="flex flex-wrap gap-2">
                 {mlo.linkedPLOs.map((plo) => (
-                  <span key={plo} className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm">
+                  <span
+                    key={plo}
+                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm"
+                  >
                     {plo}
                   </span>
                 ))}
@@ -362,32 +369,41 @@ function MLOCard({ mlo, onEdit }: { mlo: MLO; onEdit?: (mlo: MLO) => void }) {
       <div className="flex items-start justify-between gap-2 mb-1">
         <span className="text-xs font-mono text-slate-500">{mlo.code}</span>
         <div className="flex items-center gap-2">
-          <span className={`text-xs px-2 py-0.5 rounded capitalize ${BLOOM_COLORS[mlo.bloomLevel]}`}>
+          <span
+            className={`text-xs px-2 py-0.5 rounded capitalize ${BLOOM_COLORS[mlo.bloomLevel]}`}
+          >
             {mlo.bloomLevel}
           </span>
+          {onEdit && (
+            <button
+              onClick={() => onEdit(mlo)}
+              className="px-2 py-1 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded transition-colors text-xs font-medium flex items-center gap-1"
+              title="Edit MLO"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                />
+              </svg>
+              Edit
+            </button>
+          )}
         </div>
       </div>
       <p className="text-sm text-slate-300">{mlo.statement}</p>
-      <div className="flex items-center justify-between mt-2">
-        {mlo.linkedPLOs && mlo.linkedPLOs.length > 0 && (
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span>→</span>
-            {mlo.linkedPLOs.map((plo) => (
-              <span key={plo} className="px-1.5 py-0.5 bg-slate-700 rounded">
-                {plo}
-              </span>
-            ))}
-          </div>
-        )}
-        {onEdit && (
-          <button
-            onClick={() => onEdit(mlo)}
-            className="text-xs text-cyan-400 hover:text-cyan-300 opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            Edit
-          </button>
-        )}
-      </div>
+      {mlo.linkedPLOs && mlo.linkedPLOs.length > 0 && (
+        <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
+          <span>→</span>
+          {mlo.linkedPLOs.map((plo) => (
+            <span key={plo} className="px-1.5 py-0.5 bg-slate-700 rounded">
+              {plo}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -437,8 +453,17 @@ function ModuleCard({
               {onEditModule && (
                 <button
                   onClick={() => onEditModule(module)}
-                  className="text-xs text-green-400 hover:text-green-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
+                  title="Edit module"
                 >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
                   Edit
                 </button>
               )}
@@ -541,9 +566,9 @@ function ModuleCard({
               </h5>
               <div className="space-y-2">
                 {module.mlos.map((mlo) => (
-                  <MLOCard 
-                    key={mlo.id} 
-                    mlo={mlo} 
+                  <MLOCard
+                    key={mlo.id}
+                    mlo={mlo}
                     onEdit={onEditMlo ? (m) => onEditMlo(m, module.id, module.code) : undefined}
                   />
                 ))}
@@ -592,7 +617,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
   const submitStep4 = useSubmitStep4();
   const approveStep4 = useApproveStep4();
   const [error, setError] = useState<string | null>(null);
-  
+
   // Edit state for modules and MLOs
   const [editingModule, setEditingModule] = useState<Module | null>(null);
   const [editingMlo, setEditingMlo] = useState<MLO | null>(null);
@@ -630,16 +655,19 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
   // Handle saving edited module
   const handleSaveModule = async (updates: Partial<Module>) => {
     if (!editingModule) return;
-    
+
     setIsSavingEdit(true);
     setError(null);
-    
+
     console.log('Saving module:', editingModule.id, updates);
-    
+
     try {
-      const response = await api.put(`/api/v3/workflow/${workflow._id}/step4/module/${editingModule.id}`, updates);
+      const response = await api.put(
+        `/api/v3/workflow/${workflow._id}/step4/module/${editingModule.id}`,
+        updates
+      );
       console.log('Save response:', response.data);
-      
+
       setEditingModule(null);
       await onRefresh();
     } catch (err: any) {
@@ -660,19 +688,19 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
   // Handle saving edited MLO
   const handleSaveMlo = async (updates: Partial<MLO>) => {
     if (!editingMlo || !editingMloModuleId) return;
-    
+
     setIsSavingEdit(true);
     setError(null);
-    
+
     console.log('Saving MLO:', editingMlo.id, updates);
-    
+
     try {
       const response = await api.put(
         `/api/v3/workflow/${workflow._id}/step4/module/${editingMloModuleId}/mlo/${editingMlo.id}`,
         updates
       );
       console.log('Save response:', response.data);
-      
+
       setEditingMlo(null);
       setEditingMloModuleId('');
       setEditingMloModuleCode('');

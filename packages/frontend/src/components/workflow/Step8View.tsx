@@ -93,27 +93,41 @@ function CaseStudyEditModal({
   onSave,
   onCancel,
   isSaving,
+  error,
 }: {
   caseStudy: CaseStudy;
   onSave: (updatedCaseStudy: CaseStudy) => void;
   onCancel: () => void;
   isSaving: boolean;
+  error?: string | null;
 }) {
   const [title, setTitle] = useState(caseStudy.title || '');
   const [caseType, setCaseType] = useState<CaseType>(caseStudy.caseType || 'practice');
-  const [difficulty, setDifficulty] = useState<CaseDifficulty>(caseStudy.difficulty || 'intermediate');
+  const [difficulty, setDifficulty] = useState<CaseDifficulty>(
+    caseStudy.difficulty || 'intermediate'
+  );
   const [scenario, setScenario] = useState(caseStudy.scenario || '');
-  const [organizationalContext, setOrganizationalContext] = useState(caseStudy.organizationalContext || '');
-  const [backgroundInformation, setBackgroundInformation] = useState(caseStudy.backgroundInformation || '');
-  const [challengeDescription, setChallengeDescription] = useState(caseStudy.challengeDescription || '');
+  const [organizationalContext, setOrganizationalContext] = useState(
+    caseStudy.organizationalContext || ''
+  );
+  const [backgroundInformation, setBackgroundInformation] = useState(
+    caseStudy.backgroundInformation || ''
+  );
+  const [challengeDescription, setChallengeDescription] = useState(
+    caseStudy.challengeDescription || ''
+  );
   const [industryContext, setIndustryContext] = useState(caseStudy.industryContext || '');
   const [brandName, setBrandName] = useState(caseStudy.brandName || '');
   const [linkedMLOs, setLinkedMLOs] = useState<string[]>(caseStudy.linkedMLOs || []);
   const [suggestedTiming, setSuggestedTiming] = useState(caseStudy.suggestedTiming || '');
   const [estimatedDuration, setEstimatedDuration] = useState(caseStudy.estimatedDuration || '');
-  const [learningApplication, setLearningApplication] = useState(caseStudy.learningApplication || '');
+  const [learningApplication, setLearningApplication] = useState(
+    caseStudy.learningApplication || ''
+  );
   const [suggestedApproach, setSuggestedApproach] = useState(caseStudy.suggestedApproach || '');
-  const [discussionPrompts, setDiscussionPrompts] = useState<string[]>(caseStudy.discussionPrompts || []);
+  const [discussionPrompts, setDiscussionPrompts] = useState<string[]>(
+    caseStudy.discussionPrompts || []
+  );
   const [ethicsCompliant, setEthicsCompliant] = useState(caseStudy.ethicsCompliant ?? true);
   const [noPII, setNoPII] = useState(caseStudy.noPII ?? true);
   const [mloInput, setMloInput] = useState('');
@@ -175,7 +189,7 @@ function CaseStudyEditModal({
             Edit <span className="text-purple-400">Case Study</span>
           </h3>
         </div>
-        
+
         <div className="p-6 space-y-5">
           {/* Title */}
           <div>
@@ -219,7 +233,9 @@ function CaseStudyEditModal({
 
           {/* Organizational Context */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Organizational Context</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Organizational Context
+            </label>
             <textarea
               value={organizationalContext}
               onChange={(e) => setOrganizationalContext(e.target.value)}
@@ -231,7 +247,9 @@ function CaseStudyEditModal({
 
           {/* Challenge Description */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Challenge Description</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Challenge Description
+            </label>
             <textarea
               value={challengeDescription}
               onChange={(e) => setChallengeDescription(e.target.value)}
@@ -245,7 +263,9 @@ function CaseStudyEditModal({
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
               Full Scenario
-              <span className={`ml-2 text-xs ${wordCount >= 400 && wordCount <= 800 ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <span
+                className={`ml-2 text-xs ${wordCount >= 400 && wordCount <= 800 ? 'text-emerald-400' : 'text-amber-400'}`}
+              >
                 ({wordCount}/400-800 words)
               </span>
             </label>
@@ -260,7 +280,9 @@ function CaseStudyEditModal({
 
           {/* Background Information */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Background Information</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Background Information
+            </label>
             <textarea
               value={backgroundInformation}
               onChange={(e) => setBackgroundInformation(e.target.value)}
@@ -273,7 +295,9 @@ function CaseStudyEditModal({
           {/* Industry Context and Brand Name */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Industry Context</label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Industry Context
+              </label>
               <input
                 type="text"
                 value={industryContext}
@@ -338,7 +362,9 @@ function CaseStudyEditModal({
           {/* Timing and Duration */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Suggested Timing</label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Suggested Timing
+              </label>
               <input
                 type="text"
                 value={suggestedTiming}
@@ -348,7 +374,9 @@ function CaseStudyEditModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Estimated Duration</label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Estimated Duration
+              </label>
               <input
                 type="text"
                 value={estimatedDuration}
@@ -361,7 +389,9 @@ function CaseStudyEditModal({
 
           {/* Learning Application */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Learning Application</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Learning Application
+            </label>
             <textarea
               value={learningApplication}
               onChange={(e) => setLearningApplication(e.target.value)}
@@ -374,7 +404,9 @@ function CaseStudyEditModal({
           {/* Practice Case: Suggested Approach */}
           {caseType === 'practice' && (
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Suggested Approach</label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Suggested Approach
+              </label>
               <textarea
                 value={suggestedApproach}
                 onChange={(e) => setSuggestedApproach(e.target.value)}
@@ -388,7 +420,9 @@ function CaseStudyEditModal({
           {/* Discussion Case: Prompts */}
           {caseType === 'discussion' && (
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Discussion Prompts</label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Discussion Prompts
+              </label>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
@@ -454,6 +488,15 @@ function CaseStudyEditModal({
           </div>
         </div>
 
+        {/* Error Display */}
+        {error && (
+          <div className="px-6 pb-4">
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
+          </div>
+        )}
+
         <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
           <button
             onClick={onCancel}
@@ -483,7 +526,13 @@ function CaseStudyEditModal({
 }
 
 // Full Case Study Card (Stage 2)
-function CaseStudyCard({ caseStudy, onEdit }: { caseStudy: CaseStudy; onEdit?: (caseStudy: CaseStudy) => void }) {
+function CaseStudyCard({
+  caseStudy,
+  onEdit,
+}: {
+  caseStudy: CaseStudy;
+  onEdit?: (caseStudy: CaseStudy) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -491,21 +540,40 @@ function CaseStudyCard({ caseStudy, onEdit }: { caseStudy: CaseStudy; onEdit?: (
       {/* Header */}
       <div className="p-4">
         <div className="flex items-start justify-between gap-3 mb-3">
-          <div>
+          <div className="flex-1">
             <h4 className="text-white font-medium">{caseStudy.title}</h4>
             <p className="text-sm text-slate-400">{caseStudy.moduleTitle || caseStudy.moduleId}</p>
           </div>
-          <div className="flex flex-col items-end gap-1">
-            <span
-              className={`text-xs px-2 py-1 rounded border ${CASE_TYPE_COLORS[caseStudy.caseType]}`}
-            >
-              {CASE_TYPE_LABELS[caseStudy.caseType]}
-            </span>
-            <span
-              className={`text-xs px-2 py-0.5 rounded ${DIFFICULTY_COLORS[caseStudy.difficulty]}`}
-            >
-              {caseStudy.difficulty}
-            </span>
+          <div className="flex items-start gap-2">
+            <div className="flex flex-col items-end gap-1">
+              <span
+                className={`text-xs px-2 py-1 rounded border ${CASE_TYPE_COLORS[caseStudy.caseType]}`}
+              >
+                {CASE_TYPE_LABELS[caseStudy.caseType]}
+              </span>
+              <span
+                className={`text-xs px-2 py-0.5 rounded ${DIFFICULTY_COLORS[caseStudy.difficulty]}`}
+              >
+                {caseStudy.difficulty}
+              </span>
+            </div>
+            {onEdit && (
+              <button
+                onClick={() => onEdit(caseStudy)}
+                className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
+                title="Edit case study"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
+                </svg>
+                Edit
+              </button>
+            )}
           </div>
         </div>
 
@@ -704,9 +772,9 @@ function CaseStudyCard({ caseStudy, onEdit }: { caseStudy: CaseStudy; onEdit?: (
             <div className="pt-2 border-t border-slate-700/50">
               <button
                 onClick={() => onEdit(caseStudy)}
-                className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                className="w-full px-4 py-2 bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 rounded-lg transition-colors text-sm font-medium"
               >
-                Edit
+                ✏️ Edit Case Study
               </button>
             </div>
           )}
@@ -723,7 +791,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
   const [_selectedProposals, _setSelectedProposals] = useState<string[]>([]);
   const [filterType, setFilterType] = useState<CaseType | 'all'>('all');
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
-  
+
   // Edit state for case studies
   const [editingCaseStudy, setEditingCaseStudy] = useState<CaseStudy | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -766,7 +834,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
       setError(errorMessage);
     }
   };
-  
+
   // Handle editing a case study
   const handleEditCaseStudy = (caseStudy: CaseStudy) => {
     setEditingCaseStudy(caseStudy);
@@ -776,13 +844,15 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
   const handleSaveCaseStudy = async (updatedCaseStudy: CaseStudy) => {
     setIsSavingEdit(true);
     setError(null);
-    
-    console.log('Saving case study:', updatedCaseStudy);
-    console.log('Workflow ID:', workflow._id);
-    console.log('Case Study ID:', updatedCaseStudy.id);
-    
+
+    console.log('[Step8] Saving case study:', {
+      workflowId: workflow._id,
+      caseStudyId: updatedCaseStudy.id,
+      title: updatedCaseStudy.title,
+    });
+
     try {
-      const response = await api.put(`/api/v3/workflow/${workflow._id}/step8/case/${updatedCaseStudy.id}`, {
+      const payload = {
         title: updatedCaseStudy.title,
         caseType: updatedCaseStudy.caseType,
         difficulty: updatedCaseStudy.difficulty,
@@ -800,21 +870,41 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
         discussionPrompts: updatedCaseStudy.discussionPrompts,
         ethicsCompliant: updatedCaseStudy.ethicsCompliant,
         noPII: updatedCaseStudy.noPII,
-      });
-      
-      console.log('Save response:', response.data);
-      
-      // Close modal first
+      };
+
+      console.log(
+        '[Step8] Sending PUT request to:',
+        `/api/v3/workflow/${workflow._id}/step8/case/${updatedCaseStudy.id}`
+      );
+      console.log('[Step8] Payload:', payload);
+
+      const response = await api.put(
+        `/api/v3/workflow/${workflow._id}/step8/case/${updatedCaseStudy.id}`,
+        payload
+      );
+
+      console.log('[Step8] ✅ Save successful:', response.data);
+
+      // Close modal
       setEditingCaseStudy(null);
-      
+
       // Force refresh the workflow data
-      console.log('Refreshing workflow data...');
+      console.log('[Step8] Refreshing workflow data...');
       await onRefresh();
-      console.log('Refresh complete');
+      console.log('[Step8] ✅ Refresh complete');
     } catch (err: any) {
-      console.error('Failed to save case study:', err);
-      console.error('Error response:', err.response?.data);
-      setError(err.response?.data?.error || err.message || 'Failed to save changes');
+      console.error('[Step8] ❌ Failed to save case study:', err);
+      console.error('[Step8] Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
+
+      // The error message comes from the axios interceptor
+      const errorMessage = err.message || 'Failed to save changes';
+      setError(errorMessage);
+
+      // Don't close modal on error so user can see the error and try again
     } finally {
       setIsSavingEdit(false);
     }
@@ -1065,9 +1155,9 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
             </h3>
             <div className="space-y-4">
               {displayedCases.map((caseStudy) => (
-                <CaseStudyCard 
-                  key={caseStudy.id} 
-                  caseStudy={caseStudy} 
+                <CaseStudyCard
+                  key={caseStudy.id}
+                  caseStudy={caseStudy}
                   onEdit={handleEditCaseStudy}
                 />
               ))}
@@ -1123,7 +1213,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
           )}
         </div>
       )}
-      
+
       {/* Case Study Edit Modal */}
       {editingCaseStudy && (
         <CaseStudyEditModal
@@ -1131,6 +1221,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
           onSave={handleSaveCaseStudy}
           onCancel={handleCancelCaseStudyEdit}
           isSaving={isSavingEdit}
+          error={error}
         />
       )}
     </div>
