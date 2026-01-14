@@ -485,23 +485,41 @@ class AIResearchService {
       normalized.forEach((topic: any) => {
         if (topic.sources) {
           topic.sources.forEach((source: any) => {
-            // Normalize type enum (only 'academic' and 'industry' are valid)
+            // Normalize type enum ('academic', 'applied', 'industry' are valid)
             if (source.type) {
               const lowerType = source.type.toLowerCase();
               // Map invalid types to valid ones
               const typeMapping: { [key: string]: string } = {
-                government: 'industry',
-                professional: 'industry',
-                'professional body': 'industry',
-                regulatory: 'industry',
+                government: 'applied',
+                professional: 'applied',
+                'professional body': 'applied',
+                regulatory: 'applied',
                 'peer-reviewed': 'academic',
                 journal: 'academic',
                 research: 'academic',
                 textbook: 'academic',
+                practitioner: 'applied',
+                'industry report': 'industry',
+                report: 'applied',
               };
               source.type =
                 typeMapping[lowerType] ||
-                (lowerType === 'academic' || lowerType === 'industry' ? lowerType : 'industry');
+                (['academic', 'applied', 'industry'].includes(lowerType) ? lowerType : 'applied');
+            }
+            // Normalize category for new source types
+            if (source.category) {
+              const lowerCategory = source.category.toLowerCase().replace(/[_\s]+/g, '_');
+              const categoryMapping: { [key: string]: string } = {
+                peer_reviewed: 'peer_reviewed_journal',
+                journal: 'peer_reviewed_journal',
+                textbook: 'academic_textbook',
+                book: 'academic_textbook',
+                professional: 'professional_body',
+                industry: 'industry_report',
+                government: 'government_research',
+                gov: 'government_research',
+              };
+              source.category = categoryMapping[lowerCategory] || source.category;
             }
             if (source.linkAccessible !== undefined && typeof source.linkAccessible === 'string') {
               source.linkAccessible = source.linkAccessible.toLowerCase() === 'true';

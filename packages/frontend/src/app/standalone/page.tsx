@@ -21,7 +21,7 @@ const logAnalytics = (event: string, data: Record<string, unknown>) => {
 
 export default function StandalonePage() {
   const router = useRouter();
-  
+
   // State management per design document
   const [selectedStep, setSelectedStep] = useState<number | null>(null);
   const [description, setDescription] = useState('');
@@ -53,11 +53,14 @@ export default function StandalonePage() {
   useEffect(() => {
     if (output && outputState === 'success') {
       try {
-        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
-          output,
-          selectedStep,
-          description,
-        }));
+        sessionStorage.setItem(
+          SESSION_STORAGE_KEY,
+          JSON.stringify({
+            output,
+            selectedStep,
+            description,
+          })
+        );
       } catch (err) {
         console.warn('Failed to save to session:', err);
       }
@@ -92,14 +95,14 @@ export default function StandalonePage() {
     setOutput(null);
     setError(null);
     setOutputState('idle');
-    
+
     // Clear session storage when selecting new step - Requirement 7.4
     try {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
     } catch (err) {
       // Ignore
     }
-    
+
     logAnalytics('step_selected', { stepNumber });
   };
 
@@ -121,7 +124,7 @@ export default function StandalonePage() {
 
     try {
       const response = await executeStep(selectedStep, description.trim());
-      
+
       if (response.success) {
         const outputData: StepOutputData = {
           stepNumber: response.stepNumber,
@@ -131,27 +134,31 @@ export default function StandalonePage() {
         };
         setOutput(outputData);
         setOutputState('success');
-        
+
         logAnalytics('generation_completed', {
           stepNumber: selectedStep,
           stepName: response.stepName,
-          contentLength: typeof response.output === 'string' ? response.output.length : JSON.stringify(response.output).length,
+          contentLength:
+            typeof response.output === 'string'
+              ? response.output.length
+              : JSON.stringify(response.output).length,
         });
       } else {
         const errorMsg = 'Generation failed. Please try again.';
         setError(errorMsg);
         setOutputState('error');
-        
+
         logAnalytics('generation_failed', {
           stepNumber: selectedStep,
           error: errorMsg,
         });
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Generation failed. Please try again.';
+      const errorMessage =
+        err instanceof Error ? err.message : 'Generation failed. Please try again.';
       setError(errorMessage);
       setOutputState('error');
-      
+
       logAnalytics('generation_error', {
         stepNumber: selectedStep,
         error: errorMessage,
@@ -175,7 +182,7 @@ export default function StandalonePage() {
         description: description.trim(),
         content: output.content,
       });
-      
+
       logAnalytics('download_completed', {
         stepNumber: output.stepNumber,
         stepName: output.stepName,
@@ -183,7 +190,7 @@ export default function StandalonePage() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to download Word document.';
       setError(errorMessage);
-      
+
       logAnalytics('download_failed', {
         stepNumber: output.stepNumber,
         error: errorMessage,
@@ -229,16 +236,24 @@ export default function StandalonePage() {
           </div>
           {/* Keyboard shortcut hint */}
           <div className="hidden md:block text-xs text-teal-500">
-            <kbd className="px-2 py-1 bg-teal-100 rounded border border-teal-200 text-teal-700">Ctrl</kbd>
+            <kbd className="px-2 py-1 bg-teal-100 rounded border border-teal-200 text-teal-700">
+              Ctrl
+            </kbd>
             {' + '}
-            <kbd className="px-2 py-1 bg-teal-100 rounded border border-teal-200 text-teal-700">Enter</kbd>
+            <kbd className="px-2 py-1 bg-teal-100 rounded border border-teal-200 text-teal-700">
+              Enter
+            </kbd>
             {' to generate'}
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main id="main-content" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8" role="main">
+      <main
+        id="main-content"
+        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8"
+        role="main"
+      >
         {/* Step Selector Section */}
         <section className="mb-6 sm:mb-8" aria-labelledby="step-selector-heading">
           <h2 id="step-selector-heading" className="text-lg font-semibold text-teal-800 mb-4">
@@ -270,36 +285,24 @@ export default function StandalonePage() {
         {/* Error Display */}
         {error && outputState === 'error' && (
           <section className="mb-6 sm:mb-8" aria-live="polite" role="alert">
-            <StepOutput
-              state="error"
-              output={null}
-              error={error}
-              onRetry={handleRetry}
-            />
+            <StepOutput state="error" output={null} error={error} onRetry={handleRetry} />
           </section>
         )}
 
         {/* Output Display Section - Using StepOutput component */}
         {output && outputState === 'success' && (
           <section className="mb-6 sm:mb-8" aria-labelledby="output-heading">
-            <h2 id="output-heading" className="sr-only">Generated Output</h2>
-            <StepOutput
-              state="success"
-              output={output}
-              error={null}
-              onDownload={handleDownload}
-            />
+            <h2 id="output-heading" className="sr-only">
+              Generated Output
+            </h2>
+            <StepOutput state="success" output={output} error={null} onDownload={handleDownload} />
           </section>
         )}
 
         {/* Loading State */}
         {outputState === 'loading' && (
           <section className="mb-6 sm:mb-8" aria-live="polite" aria-busy="true">
-            <StepOutput
-              state="loading"
-              output={null}
-              error={null}
-            />
+            <StepOutput state="loading" output={null} error={null} />
           </section>
         )}
 
@@ -307,12 +310,16 @@ export default function StandalonePage() {
         {!selectedStep && (
           <section className="text-center py-8 sm:py-12">
             <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-4 sm:mb-6 rounded-full bg-teal-100 flex items-center justify-center">
-              <span className="text-3xl sm:text-4xl" role="img" aria-label="Target">🎯</span>
+              <span className="text-3xl sm:text-4xl" role="img" aria-label="Target">
+                🎯
+              </span>
             </div>
-            <h3 className="text-lg sm:text-xl font-semibold text-teal-800 mb-2">Select a Step to Begin</h3>
+            <h3 className="text-lg sm:text-xl font-semibold text-teal-800 mb-2">
+              Select a Step to Begin
+            </h3>
             <p className="text-teal-600 max-w-md mx-auto text-sm sm:text-base px-4">
-              Choose any step from 2-10 above to generate individual curriculum components.
-              No workflow context required.
+              Choose any step from 2-10 above to generate individual curriculum components. Note:
+              PPT Generation (Step 11) requires completed lesson plans from Step 10.
             </p>
           </section>
         )}

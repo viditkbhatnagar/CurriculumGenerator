@@ -285,6 +285,124 @@ router.post('/generate/all/:workflowId', async (req: Request, res: Response) => 
 });
 
 // ============================================================================
+// STEP 11 MODULE PPT DOWNLOAD
+// ============================================================================
+
+/**
+ * POST /api/v3/ppt/download/module/:workflowId/:moduleIndex
+ * Download PPTs for a specific module from Step 10/11 data
+ * Uses moduleIndex (0-based) to find the module in step10.moduleLessonPlans
+ */
+router.post('/download/module/:workflowId/:moduleIndex', async (req: Request, res: Response) => {
+  try {
+    const { workflowId, moduleIndex } = req.params;
+    const moduleIdx = parseInt(moduleIndex, 10);
+
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+
+    if (!workflow) {
+      return res.status(404).json({
+        success: false,
+        message: 'Workflow not found',
+      });
+    }
+
+    if (!workflow.step10?.moduleLessonPlans || workflow.step10.moduleLessonPlans.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Step 10 (Lesson Plans) not completed',
+      });
+    }
+
+    const moduleLessonPlans = workflow.step10.moduleLessonPlans;
+
+    if (moduleIdx < 0 || moduleIdx >= moduleLessonPlans.length) {
+      return res.status(404).json({
+        success: false,
+        message: `Module at index ${moduleIdx} not found. Valid range: 0-${moduleLessonPlans.length - 1}`,
+      });
+    }
+
+    const modulePlan = moduleLessonPlans[moduleIdx];
+
+    loggingService.info('Generating PPTs for module download', {
+      workflowId,
+      moduleIndex: moduleIdx,
+      moduleCode: modulePlan.moduleCode,
+      lessonCount: modulePlan.lessons.length,
+    });
+
+    // Build context for PPT generation
+    const context = {
+      programTitle: workflow.step1?.programTitle || 'Program',
+      academicLevel: workflow.step1?.academicLevel || '',
+      deliveryMode: workflow.step1?.deliveryMode || 'in-person',
+      moduleCode: modulePlan.moduleCode,
+      moduleTitle: modulePlan.moduleTitle,
+      sources: workflow.step5?.sources || [],
+      glossaryEntries: workflow.step9?.entries || [],
+    };
+
+    // Create ZIP file for all lessons in this module
+    const zip = new JSZip();
+
+    for (const lesson of modulePlan.lessons) {
+      try {
+        const deck = await pptGenerationService.generateLessonPPT(lesson, context);
+        const pptxBuffer = await pptGenerationService.exportPPTX(deck);
+
+        const filename = `Lesson${lesson.lessonNumber}_${lesson.lessonTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.pptx`;
+        zip.file(filename, pptxBuffer);
+
+        loggingService.info('PPT generated for lesson', {
+          moduleCode: modulePlan.moduleCode,
+          lessonNumber: lesson.lessonNumber,
+          slideCount: deck.slideCount,
+        });
+      } catch (error: any) {
+        loggingService.error('Failed to generate PPT for lesson', {
+          error: error.message,
+          moduleCode: modulePlan.moduleCode,
+          lessonNumber: lesson.lessonNumber,
+        });
+      }
+    }
+
+    // Generate ZIP buffer
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+    // Set headers for download
+    const zipFilename = `${modulePlan.moduleCode}_PPTs.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+    res.setHeader('Content-Length', zipBuffer.length);
+
+    res.send(zipBuffer);
+
+    loggingService.info('Module PPT download completed', {
+      workflowId,
+      moduleCode: modulePlan.moduleCode,
+      lessonCount: modulePlan.lessons.length,
+      zipSize: zipBuffer.length,
+    });
+  } catch (error: any) {
+    loggingService.error('Failed to generate module PPT download', {
+      error: error.message,
+      stack: error.stack,
+      workflowId: req.params.workflowId,
+      moduleIndex: req.params.moduleIndex,
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate PowerPoints',
+      error: error.message,
+    });
+  }
+});
+
+// ============================================================================
 // PROGRESS TRACKING (for future WebSocket implementation)
 // ============================================================================
 

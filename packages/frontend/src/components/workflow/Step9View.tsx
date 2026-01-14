@@ -131,7 +131,7 @@ function GlossaryTermEditModal({
             Edit <span className="text-emerald-400">Glossary Term</span>
           </h3>
         </div>
-        
+
         <div className="p-6 space-y-5">
           {/* Term */}
           <div>
@@ -149,7 +149,9 @@ function GlossaryTermEditModal({
           <div>
             <label className="block text-sm font-medium text-teal-700 mb-2">
               Definition
-              <span className={`ml-2 text-xs ${wordCount >= 20 && wordCount <= 40 ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <span
+                className={`ml-2 text-xs ${wordCount >= 20 && wordCount <= 40 ? 'text-emerald-400' : 'text-amber-400'}`}
+              >
                 ({wordCount}/20-40 words)
               </span>
             </label>
@@ -204,7 +206,9 @@ function GlossaryTermEditModal({
             </div>
             {isAcronym && (
               <div>
-                <label className="block text-sm font-medium text-teal-700 mb-2">Acronym Expansion</label>
+                <label className="block text-sm font-medium text-teal-700 mb-2">
+                  Acronym Expansion
+                </label>
                 <input
                   type="text"
                   value={acronymExpansion}
@@ -232,7 +236,9 @@ function GlossaryTermEditModal({
 
           {/* Example Sentence */}
           <div>
-            <label className="block text-sm font-medium text-teal-700 mb-2">Example Sentence (Optional)</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">
+              Example Sentence (Optional)
+            </label>
             <textarea
               value={exampleSentence}
               onChange={(e) => setExampleSentence(e.target.value)}
@@ -244,7 +250,9 @@ function GlossaryTermEditModal({
 
           {/* Technical Note */}
           <div>
-            <label className="block text-sm font-medium text-teal-700 mb-2">Technical Note (Optional)</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">
+              Technical Note (Optional)
+            </label>
             <textarea
               value={technicalNote}
               onChange={(e) => setTechnicalNote(e.target.value)}
@@ -586,9 +594,7 @@ function TermCard({ term, onEdit }: { term: GlossaryTerm; onEdit?: (term: Glossa
                   {term.narrowerTerms && term.narrowerTerms.length > 0 && (
                     <div>
                       <p className="text-xs text-teal-500 mb-1">Narrower:</p>
-                      <span className="text-xs text-teal-600">
-                        {term.narrowerTerms.join(', ')}
-                      </span>
+                      <span className="text-xs text-teal-600">{term.narrowerTerms.join(', ')}</span>
                     </div>
                   )}
                 </div>
@@ -671,7 +677,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
   const [viewMode, setViewMode] = useState<'alphabetical' | 'modules'>('alphabetical');
   const [justGenerated, setJustGenerated] = useState(false);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
-  
+
   // Edit state for glossary terms
   const [editingTerm, setEditingTerm] = useState<GlossaryTerm | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -713,7 +719,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
       setError(errorMessage);
     }
   };
-  
+
   // Handle editing a glossary term
   const handleEditTerm = (term: GlossaryTerm) => {
     setEditingTerm(term);
@@ -723,33 +729,36 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
   const handleSaveTerm = async (updatedTerm: GlossaryTerm) => {
     setIsSavingEdit(true);
     setError(null);
-    
+
     console.log('Saving glossary term:', updatedTerm);
     console.log('Workflow ID:', workflow._id);
     console.log('Term ID:', updatedTerm.id);
-    
+
     try {
-      const response = await api.put(`/api/v3/workflow/${workflow._id}/step9/term/${updatedTerm.id}`, {
-        term: updatedTerm.term,
-        definition: updatedTerm.definition,
-        exampleSentence: updatedTerm.exampleSentence,
-        technicalNote: updatedTerm.technicalNote,
-        relatedTerms: updatedTerm.relatedTerms,
-        broaderTerms: updatedTerm.broaderTerms,
-        narrowerTerms: updatedTerm.narrowerTerms,
-        synonyms: updatedTerm.synonyms,
-        isAcronym: updatedTerm.isAcronym,
-        acronymExpansion: updatedTerm.acronymExpansion,
-        category: updatedTerm.category,
-        priority: updatedTerm.priority,
-        usedInAssessment: updatedTerm.usedInAssessment,
-      });
-      
+      const response = await api.put(
+        `/api/v3/workflow/${workflow._id}/step9/term/${updatedTerm.id}`,
+        {
+          term: updatedTerm.term,
+          definition: updatedTerm.definition,
+          exampleSentence: updatedTerm.exampleSentence,
+          technicalNote: updatedTerm.technicalNote,
+          relatedTerms: updatedTerm.relatedTerms,
+          broaderTerms: updatedTerm.broaderTerms,
+          narrowerTerms: updatedTerm.narrowerTerms,
+          synonyms: updatedTerm.synonyms,
+          isAcronym: updatedTerm.isAcronym,
+          acronymExpansion: updatedTerm.acronymExpansion,
+          category: updatedTerm.category,
+          priority: updatedTerm.priority,
+          usedInAssessment: updatedTerm.usedInAssessment,
+        }
+      );
+
       console.log('Save response:', response.data);
-      
+
       // Close modal first
       setEditingTerm(null);
-      
+
       // Force refresh the workflow data
       console.log('Refreshing workflow data...');
       await onRefresh();
@@ -773,6 +782,8 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
     workflow.status === 'step9_complete' ||
     workflow.status === 'step10_pending' ||
     workflow.status === 'step10_complete' ||
+    workflow.status === 'step11_pending' ||
+    workflow.status === 'step11_complete' ||
     workflow.status === 'review_pending' ||
     workflow.status === 'published';
   const validation = workflow.step9?.validationReport;
@@ -1164,11 +1175,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
                 </h3>
                 <div className="space-y-3">
                   {sortedTerms.map((term) => (
-                    <TermCard 
-                      key={term.id} 
-                      term={term} 
-                      onEdit={handleEditTerm}
-                    />
+                    <TermCard key={term.id} term={term} onEdit={handleEditTerm} />
                   ))}
                 </div>
               </div>
@@ -1204,7 +1211,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
           </div>
         </div>
       )}
-      
+
       {/* Glossary Term Edit Modal */}
       {editingTerm && (
         <GlossaryTermEditModal

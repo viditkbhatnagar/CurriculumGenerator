@@ -515,7 +515,7 @@ export function useApproveStep9() {
 }
 
 // =============================================================================
-// STEP 10: LESSON PLANS & PPT GENERATION
+// STEP 10: LESSON PLANS (Separated from PPT for timeout prevention)
 // =============================================================================
 
 export function useSubmitStep10() {
@@ -547,6 +547,54 @@ export function useApproveStep10() {
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['workflow', id] });
     },
+  });
+}
+
+// =============================================================================
+// STEP 11: PPT GENERATION (Separated from Lesson Plans for timeout prevention)
+// =============================================================================
+
+export function useSubmitStep11() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response: WorkflowResponse = await fetchAPI(`${WORKFLOW_BASE}/${id}/step11`, {
+        method: 'POST',
+      });
+      return response;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    },
+  });
+}
+
+export function useApproveStep11() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetchAPI(`${WORKFLOW_BASE}/${id}/step11/approve`, {
+        method: 'POST',
+      });
+      return response;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    },
+  });
+}
+
+export function useStep11Status(id: string) {
+  return useQuery({
+    queryKey: ['workflow', id, 'step11-status'],
+    queryFn: async () => {
+      const response = await fetchAPI(`${WORKFLOW_BASE}/${id}/step11/status`);
+      return response.data;
+    },
+    enabled: !!id,
+    refetchInterval: 10000, // Poll every 10 seconds
   });
 }
 
@@ -602,7 +650,7 @@ export function useNextWorkflowAction(workflow?: CurriculumWorkflow) {
   // Check if step is approved
   const stepProgress = workflow.stepProgress.find((p) => p.step === step);
   if (stepProgress?.status === 'approved') {
-    if (step < 10) {
+    if (step < 11) {
       return { type: 'generate', step: step + 1 };
     }
     return { type: 'complete' };
@@ -626,10 +674,11 @@ export function useRemainingTime(currentStep: number): string {
     8: 15,
     9: 5,
     10: 15,
+    11: 15,
   };
 
   let remaining = 0;
-  for (let i = currentStep; i <= 10; i++) {
+  for (let i = currentStep; i <= 11; i++) {
     remaining += stepTimes[i] || 0;
   }
 

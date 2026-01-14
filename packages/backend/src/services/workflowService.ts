@@ -2024,17 +2024,27 @@ CRITICAL VALIDATION:
       };
     });
 
-    // Validation report per AGI Standards
+    // Validation report - Updated to support industry and free access sources
+    const approvedCategories = [
+      'peer_reviewed_journal',
+      'academic_textbook',
+      'professional_body',
+      'open_access',
+      'institutional',
+      'industry_report', // NEW: McKinsey, HBR, Deloitte, etc.
+      'government_research', // NEW: Gov.uk, OECD, World Bank, etc.
+    ];
+
+    // Count free access sources
+    const freeAccessSources = sources.filter(
+      (s: any) =>
+        s.accessStatus === 'free_access' ||
+        s.accessStatus === 'open_access' ||
+        s.complianceBadges?.freeAccess === true
+    );
+
     const validationReport = {
-      allSourcesApproved: sources.every((s: any) =>
-        [
-          'peer_reviewed_journal',
-          'academic_textbook',
-          'professional_body',
-          'open_access',
-          'institutional',
-        ].includes(s.category)
-      ),
+      allSourcesApproved: sources.every((s: any) => approvedCategories.includes(s.category)),
       recencyCompliance: sources.every(
         (s: any) =>
           currentYear - s.year <= 5 ||
@@ -2042,15 +2052,18 @@ CRITICAL VALIDATION:
       ),
       minimumSourcesPerTopic: true, // Simplified check
       academicAppliedBalance: academicSources.length > 0 && appliedSources.length > 0,
-      peerReviewRatio: peerReviewedSources.length / (totalSources || 1) >= 0.5,
+      // Relaxed: Accept 30% peer-reviewed when including industry sources
+      peerReviewRatio: peerReviewedSources.length / (totalSources || 1) >= 0.3,
       completeCitations: sources.every(
-        (s: any) => s.citation && s.authors?.length > 0 && s.year && s.title && s.publisher
+        (s: any) => s.citation && s.authors?.length > 0 && s.year && s.title
       ),
       apaAccuracy: true, // Assume validated
       verifiedAccess: sources.every((s: any) => s.accessStatus !== 'rejected'),
       noPaywalled: sources.every((s: any) => s.accessStatus !== 'rejected'),
       everyMLOSupported: moduleSummaries.every((m: any) => m.allMLOsSupported),
       traceabilityComplete: true,
+      // NEW: Check for free access - at least 70% should be free
+      freeAccessRatio: freeAccessSources.length / (totalSources || 1) >= 0.7,
     };
 
     const complianceIssues: string[] = [];
@@ -2060,9 +2073,11 @@ CRITICAL VALIDATION:
       complianceIssues.push('Some sources are outdated without seminal justification');
     if (!validationReport.academicAppliedBalance)
       complianceIssues.push('Missing academic/applied source balance');
-    if (!validationReport.peerReviewRatio) complianceIssues.push('Peer-reviewed ratio below 50%');
+    if (!validationReport.peerReviewRatio) complianceIssues.push('Academic source ratio below 30%');
     if (!validationReport.everyMLOSupported)
       complianceIssues.push('Not all MLOs have supporting sources');
+    if (!validationReport.freeAccessRatio)
+      complianceIssues.push('Less than 70% of sources are freely accessible');
 
     const agiCompliant = Object.values(validationReport).every((v) => v === true);
 
@@ -2077,6 +2092,10 @@ CRITICAL VALIDATION:
       recentSourcesPercent:
         totalSources > 0 ? Math.round((recentSources.length / totalSources) * 100) : 0,
       academicAppliedBalance: academicSources.length > 0 && appliedSources.length > 0,
+      // NEW: Free access metrics
+      totalFreeAccess: freeAccessSources.length,
+      freeAccessPercent:
+        totalSources > 0 ? Math.round((freeAccessSources.length / totalSources) * 100) : 0,
       validationReport,
       agiCompliant,
       complianceIssues,
@@ -3334,6 +3353,365 @@ CRITICAL VALIDATION:
   }
 
   // ==========================================================================
+  // STEP 11: PPT GENERATION (Separated from Step 10 for timeout prevention)
+  // ==========================================================================
+
+  /**
+   * Process Step 11: Generate PPT decks for all modules
+   * This is the full processing method that handles all modules at once
+   * @param workflowId - Workflow ID
+   * @returns Updated workflow with step11 data
+   */
+  async processStep11(workflowId: string): Promise<ICurriculumWorkflow> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow || !workflow.step10) {
+      throw new Error('Workflow not found or Step 10 not complete');
+    }
+
+    loggingService.info('Processing Step 11: PPT Generation', { workflowId });
+
+    // Generate Step 11 content (PPT decks)
+    const step11Content = await this.generateStep11Content(workflow);
+
+    // Store step11 data in workflow
+    workflow.step11 = step11Content;
+
+    // Update workflow status
+    workflow.currentStep = 11;
+    workflow.status = 'step11_complete';
+
+    // Update step progress
+    const step11Progress = workflow.stepProgress.find((p) => p.step === 11);
+    if (step11Progress) {
+      step11Progress.status = 'completed';
+      step11Progress.startedAt = step11Progress.startedAt || new Date();
+      step11Progress.completedAt = new Date();
+    }
+
+    await workflow.save();
+
+    loggingService.info('Step 11 processed', {
+      workflowId,
+      totalPPTDecks: step11Content.summary.totalPPTDecks,
+      totalSlides: step11Content.summary.totalSlides,
+    });
+
+    return workflow;
+  }
+
+  /**
+   * Process Step 11: Generate PPT for the NEXT module only
+   * This method generates PPT for one module at a time to avoid timeouts
+   * Uses optimistic locking to prevent duplicate generation from race conditions
+   * @param workflowId - Workflow ID
+   * @returns Updated workflow with the new module PPT added to step11
+   */
+  async processStep11NextModule(workflowId: string): Promise<ICurriculumWorkflow> {
+    // Always fetch fresh workflow data to avoid stale state
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow || !workflow.step10) {
+      throw new Error('Workflow not found or Step 10 not complete');
+    }
+
+    // Get lesson plans from Step 10
+    const lessonPlans = workflow.step10.moduleLessonPlans || [];
+    const totalModules = lessonPlans.length;
+
+    if (totalModules === 0) {
+      throw new Error('No lesson plans found in Step 10. Complete Step 10 first.');
+    }
+
+    const existingModules = workflow.step11?.modulePPTDecks?.length || 0;
+    const expectedModuleIndex = existingModules;
+
+    loggingService.info('Processing Step 11: Next Module - Initial Check', {
+      workflowId,
+      existingModules,
+      totalModules,
+      nextModuleIndex: expectedModuleIndex,
+    });
+
+    if (existingModules >= totalModules) {
+      loggingService.info('All module PPTs already generated', {
+        workflowId,
+        existingModules,
+        totalModules,
+      });
+      return workflow;
+    }
+
+    // Get the next module to process
+    const moduleToProcess = lessonPlans[expectedModuleIndex];
+    if (!moduleToProcess) {
+      throw new Error(`Module at index ${expectedModuleIndex} not found in lesson plans`);
+    }
+
+    // Check if this specific module is already generated (by moduleId)
+    const existingModule = workflow.step11?.modulePPTDecks?.find(
+      (m) => m.moduleId === moduleToProcess.moduleId
+    );
+    if (existingModule) {
+      loggingService.info('Module PPT already exists, skipping to avoid duplicate', {
+        workflowId,
+        moduleId: moduleToProcess.moduleId,
+        moduleCode: moduleToProcess.moduleCode,
+      });
+      return workflow;
+    }
+
+    loggingService.info('Generating PPT for module', {
+      workflowId,
+      moduleNumber: expectedModuleIndex + 1,
+      totalModules,
+      moduleCode: moduleToProcess.moduleCode,
+      moduleId: moduleToProcess.moduleId,
+      lessonsCount: moduleToProcess.lessons?.length || 0,
+    });
+
+    // Build context for PPT generation
+    const pptContext = {
+      programTitle: workflow.step1?.programTitle || 'Program',
+      moduleCode: moduleToProcess.moduleCode,
+      moduleTitle: moduleToProcess.moduleTitle,
+      deliveryMode: workflow.step1?.delivery?.mode || 'online',
+      glossaryEntries: workflow.step9?.entries || [],
+    };
+
+    // Import PPT generation service
+    const { PPTGenerationService } = await import('./pptGenerationService');
+    const pptService = new PPTGenerationService();
+
+    // Generate PPT for each lesson in the module
+    const startTime = Date.now();
+    const pptDecks: any[] = [];
+
+    for (let i = 0; i < moduleToProcess.lessons.length; i++) {
+      const lesson = moduleToProcess.lessons[i];
+
+      try {
+        loggingService.info(
+          `Generating PPT for lesson ${i + 1}/${moduleToProcess.lessons.length}`,
+          {
+            workflowId,
+            moduleCode: moduleToProcess.moduleCode,
+            lessonId: lesson.lessonId,
+          }
+        );
+
+        const lessonStartTime = Date.now();
+        const pptDeck = await pptService.generateLessonPPT(lesson, pptContext);
+        const lessonDuration = Date.now() - lessonStartTime;
+
+        pptDecks.push(pptDeck);
+
+        loggingService.info(`PPT generated for lesson ${i + 1}/${moduleToProcess.lessons.length}`, {
+          workflowId,
+          moduleCode: moduleToProcess.moduleCode,
+          lessonId: lesson.lessonId,
+          slideCount: pptDeck.slideCount,
+          durationMs: lessonDuration,
+          durationSec: Math.round(lessonDuration / 1000),
+        });
+      } catch (err) {
+        loggingService.error(`Failed to generate PPT for lesson ${i + 1}`, {
+          workflowId,
+          moduleCode: moduleToProcess.moduleCode,
+          lessonId: lesson.lessonId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        // Continue with other lessons even if one fails
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    loggingService.info('Module PPT generation complete', {
+      workflowId,
+      moduleCode: moduleToProcess.moduleCode,
+      pptDecksGenerated: pptDecks.length,
+      durationMs: duration,
+      durationMin: Math.round(duration / 60000),
+    });
+
+    // Create module PPT deck object
+    const modulePPTDeck = {
+      moduleId: moduleToProcess.moduleId,
+      moduleCode: moduleToProcess.moduleCode,
+      moduleTitle: moduleToProcess.moduleTitle,
+      totalLessons: moduleToProcess.lessons.length,
+      pptDecks,
+    };
+
+    // Re-fetch workflow to check for race conditions (another process may have added this module)
+    const freshWorkflow = await CurriculumWorkflow.findById(workflowId);
+    if (!freshWorkflow) {
+      throw new Error('Workflow not found after generation');
+    }
+
+    // Check AGAIN if module was already added by another process during our generation
+    const alreadyExists = freshWorkflow.step11?.modulePPTDecks?.find(
+      (m) => m.moduleId === moduleToProcess.moduleId
+    );
+    if (alreadyExists) {
+      loggingService.warn(
+        'Module PPT was added by another process during generation, skipping duplicate',
+        {
+          workflowId,
+          moduleId: moduleToProcess.moduleId,
+          moduleCode: moduleToProcess.moduleCode,
+        }
+      );
+      return freshWorkflow;
+    }
+
+    // Initialize step11 if it doesn't exist
+    if (!freshWorkflow.step11) {
+      freshWorkflow.step11 = {
+        modulePPTDecks: [],
+        validation: {
+          allLessonsHavePPTs: false,
+          allSlideCountsValid: false,
+          allMLOsCovered: false,
+          allCitationsValid: false,
+        },
+        summary: {
+          totalPPTDecks: 0,
+          totalSlides: 0,
+          averageSlidesPerLesson: 0,
+        },
+        generatedAt: new Date(),
+      };
+    }
+
+    // Add the new module PPT deck
+    freshWorkflow.step11.modulePPTDecks.push(modulePPTDeck);
+
+    // Update summary
+    const allPPTDecks = freshWorkflow.step11.modulePPTDecks.flatMap((m) => m.pptDecks);
+    const totalSlides = allPPTDecks.reduce((sum, deck) => sum + (deck.slideCount || 0), 0);
+
+    freshWorkflow.step11.summary = {
+      totalPPTDecks: allPPTDecks.length,
+      totalSlides,
+      averageSlidesPerLesson:
+        allPPTDecks.length > 0 ? Math.round(totalSlides / allPPTDecks.length) : 0,
+    };
+
+    // Update validation
+    const newModulesCount = freshWorkflow.step11.modulePPTDecks.length;
+    const allLessonsCount = lessonPlans.reduce((sum, m) => sum + m.lessons.length, 0);
+    const pptDecksCount = allPPTDecks.length;
+
+    freshWorkflow.step11.validation = {
+      allLessonsHavePPTs: pptDecksCount >= allLessonsCount,
+      allSlideCountsValid: allPPTDecks.every(
+        (deck) => deck.slideCount >= 15 && deck.slideCount <= 35
+      ),
+      allMLOsCovered: true, // Simplified validation
+      allCitationsValid: true, // Simplified validation
+    };
+
+    // Update workflow status if all modules are complete
+    if (newModulesCount >= totalModules) {
+      freshWorkflow.currentStep = 11;
+      freshWorkflow.status = 'step11_complete';
+
+      const step11Progress = freshWorkflow.stepProgress.find((p) => p.step === 11);
+      if (step11Progress) {
+        step11Progress.status = 'completed';
+        step11Progress.startedAt = step11Progress.startedAt || new Date();
+        step11Progress.completedAt = new Date();
+      }
+    }
+
+    // Save workflow
+    freshWorkflow.markModified('step11');
+    await freshWorkflow.save();
+
+    loggingService.info('Next module PPT saved to workflow', {
+      workflowId,
+      modulesGenerated: newModulesCount,
+      totalModules,
+      totalPPTDecks: freshWorkflow.step11.summary.totalPPTDecks,
+      totalSlides: freshWorkflow.step11.summary.totalSlides,
+    });
+
+    return freshWorkflow;
+  }
+
+  /**
+   * Generate Step 11 content (all PPT decks) - used for full generation
+   * @param workflow - Workflow document
+   * @returns Step11PPTGeneration object
+   */
+  private async generateStep11Content(workflow: ICurriculumWorkflow): Promise<any> {
+    const lessonPlans = workflow.step10?.moduleLessonPlans || [];
+
+    if (lessonPlans.length === 0) {
+      throw new Error('No lesson plans found in Step 10');
+    }
+
+    // Import PPT generation service
+    const { PPTGenerationService } = await import('./pptGenerationService');
+    const pptService = new PPTGenerationService();
+
+    const modulePPTDecks: any[] = [];
+    let totalPPTDecks = 0;
+    let totalSlides = 0;
+
+    for (const modulePlan of lessonPlans) {
+      const pptContext = {
+        programTitle: workflow.step1?.programTitle || 'Program',
+        moduleCode: modulePlan.moduleCode,
+        moduleTitle: modulePlan.moduleTitle,
+        deliveryMode: workflow.step1?.delivery?.mode || 'online',
+        glossaryEntries: workflow.step9?.entries || [],
+      };
+
+      const pptDecks: any[] = [];
+
+      for (const lesson of modulePlan.lessons) {
+        try {
+          const pptDeck = await pptService.generateLessonPPT(lesson, pptContext);
+          pptDecks.push(pptDeck);
+          totalPPTDecks++;
+          totalSlides += pptDeck.slideCount || 0;
+        } catch (err) {
+          loggingService.error('Failed to generate PPT', {
+            moduleCode: modulePlan.moduleCode,
+            lessonId: lesson.lessonId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      modulePPTDecks.push({
+        moduleId: modulePlan.moduleId,
+        moduleCode: modulePlan.moduleCode,
+        moduleTitle: modulePlan.moduleTitle,
+        totalLessons: modulePlan.lessons.length,
+        pptDecks,
+      });
+    }
+
+    return {
+      modulePPTDecks,
+      validation: {
+        allLessonsHavePPTs:
+          totalPPTDecks === lessonPlans.reduce((sum, m) => sum + m.lessons.length, 0),
+        allSlideCountsValid: true,
+        allMLOsCovered: true,
+        allCitationsValid: true,
+      },
+      summary: {
+        totalPPTDecks,
+        totalSlides,
+        averageSlidesPerLesson: totalPPTDecks > 0 ? Math.round(totalSlides / totalPPTDecks) : 0,
+      },
+      generatedAt: new Date(),
+    };
+  }
+
+  // ==========================================================================
   // CONTENT GENERATION HELPERS
   // ==========================================================================
 
@@ -3440,86 +3818,97 @@ CRITICAL VALIDATION:
     const kbContextSection = formatKBContextForPrompt(kbContexts);
 
     const systemPrompt = `You are a senior academic librarian and research specialist with expertise in:
-- Academic publishing and scholarly literature
+- Open access publishing and freely available scholarly resources
 - APA 7th Edition citation format
 - Source credibility assessment
 - Professional body publications (SHRM, PMI, CIPD, ASCM, SFIA)
-- Open access repositories (DOAJ, PubMed, arXiv)
+- Open access repositories (DOAJ, PubMed Central, arXiv, SSRN, Google Scholar)
+- Industry research reports and practitioner publications
 - Vocational education resource selection
 
-YOUR TASK: Generate high-quality, AGI-compliant academic sources that:
-1. Meet strict academic integrity standards
-2. Are properly cited in APA 7th Edition format
-3. Support the Module Learning Outcomes
-4. Provide appropriate complexity for the academic level
+YOUR PRIMARY TASK: Generate HIGH-QUALITY sources that are **FREE TO ACCESS** online.
 
-=== AGI ACADEMIC STANDARDS ===
+⚠️ CRITICAL REQUIREMENT: ALL sources MUST be freely accessible without payment.
+Users should be able to click the link and read the full content immediately.
 
-**APPROVED SOURCE CATEGORIES (use ONLY these):**
+=== APPROVED SOURCE CATEGORIES ===
 
-1. **peer_reviewed_journal** - Academic journal articles
-   - Published in indexed journals (Web of Science, Scopus, EBSCO)
-   - Subject to blind peer review
-   - Examples: Academy of Management Journal, Human Resource Management, Journal of Applied Psychology
-   - Must have DOI or ISSN
-   - Verifiable through academic databases
+1. **open_access** - FREE peer-reviewed content (PRIORITY - use at least 2)
+   ✓ DOAJ journals (doaj.org) - fully open access
+   ✓ PubMed Central (ncbi.nlm.nih.gov/pmc) - free biomedical/health
+   ✓ arXiv (arxiv.org) - free preprints in sciences
+   ✓ SSRN (ssrn.com) - free business/social science papers
+   ✓ Google Scholar (scholar.google.com) - link to free PDFs
+   ✓ ResearchGate author uploads (researchgate.net)
+   ✓ University institutional repositories (.edu domains)
+   ✓ ERIC (eric.ed.gov) - free education research
 
-2. **academic_textbook** - Published academic textbooks
-   - From reputable academic publishers (Pearson, McGraw-Hill, Sage, Routledge, Kogan Page, Oxford University Press, Cambridge University Press, Wiley)
-   - Written by recognised subject experts
-   - Used in university courses worldwide
-   - ISBN required
+2. **professional_body** - FREE resources from professional organisations
+   ✓ SHRM (shrm.org) - free articles, toolkits, research
+   ✓ PMI (pmi.org) - free articles and guides
+   ✓ CIPD (cipd.org) - free factsheets and reports
+   ✓ ASCM (ascm.org) - free resources
+   ✓ ACAS (acas.org.uk) - free employment guides
+   ✓ Gov.uk publications - all free
+   ✓ ILO (ilo.org) - free international labour resources
 
-3. **professional_body** - Publications from professional organisations
-   - SHRM (Society for Human Resource Management)
-   - PMI (Project Management Institute)
-   - CIPD (Chartered Institute of Personnel and Development)
-   - ASCM (Association for Supply Chain Management)
-   - SFIA Foundation, CMI, ILM, ACCA, CIMA, CFA Institute
-   - Official standards, frameworks, and practice guides
+3. **industry_report** - FREE business/industry publications (PRIORITY - use at least 1)
+   ✓ Harvard Business Review (hbr.org) - many free articles
+   ✓ McKinsey Insights (mckinsey.com/insights) - all free
+   ✓ Deloitte Insights (deloitte.com/insights) - all free
+   ✓ PwC publications (pwc.com) - all free
+   ✓ BCG Insights (bcg.com) - all free
+   ✓ MIT Sloan Management Review (sloanreview.mit.edu) - some free
+   ✓ World Economic Forum reports (weforum.org) - all free
+   ✓ Gartner free research (gartner.com) - selected free content
 
-4. **open_access** - Peer-reviewed open access content
-   - DOAJ (Directory of Open Access Journals)
-   - PubMed Central
-   - arXiv (for quantitative disciplines)
-   - Must still meet peer-review standards
-   - Verifiable CC license
+4. **government_research** - FREE official publications
+   ✓ UK Government (gov.uk) - all free
+   ✓ OECD iLibrary (oecd-ilibrary.org) - many free reports
+   ✓ World Bank Open Knowledge (openknowledge.worldbank.org) - all free
+   ✓ UN publications - most free
+   ✓ EU publications (op.europa.eu) - all free
+
+5. **academic_textbook** - Reference textbooks (cite but note access)
+   - From reputable publishers (Pearson, McGraw-Hill, Sage, Routledge)
+   - Note: Usually requires purchase, include only 1 max per module
+   - Provide link to publisher page or free preview if available
 
 **PROHIBITED SOURCES (NEVER use):**
 ❌ Wikipedia, encyclopaedias, dictionaries
-❌ Blogs, Medium, LinkedIn articles, personal websites
-❌ Investopedia, business news sites (Forbes, Business Insider)
+❌ Personal blogs, Medium, LinkedIn articles
+❌ Paywalled-only journals (no free version available)
 ❌ AI-generated or AI-summarised content
-❌ Marketing materials, vendor whitepapers, sales collateral
-❌ Presentation slides, infographics, YouTube videos
+❌ Marketing materials, vendor sales collateral
+❌ YouTube videos, podcasts, presentation slides
 ❌ Forum posts, Q&A sites (Quora, Stack Exchange)
 ❌ Unverifiable or anonymous sources
-❌ Sources older than 5 years (unless seminal with justification)
-❌ Self-published books without peer review
-❌ Conference presentations (unless published in proceedings)
+❌ Sources older than 5 years (unless seminal)
+
+**FREE ACCESS VERIFICATION:**
+Before including ANY source, verify it meets ONE of these criteria:
+1. Full PDF freely downloadable (open access)
+2. Full HTML article freely readable online
+3. Official organisation resource page (professional bodies)
+4. Government/international organisation publication
+5. Author's institutional repository version
 
 **RECENCY REQUIREMENTS:**
 - Primary sources: ${moduleInfo.fiveYearsAgo}-${moduleInfo.currentYear} (within 5 years)
-- Seminal works: May be older IF:
-  * Foundational to the field (cited 1000+ times)
-  * Academically justified with 50-100 word rationale
-  * Paired with a recent source on same topic
+- Seminal works: May be older IF foundational and paired with recent source
 
 **BALANCE REQUIREMENTS:**
-- Per module: ≥50% peer-reviewed (minimum 2-3 peer-reviewed sources)
-- Per topic: ≥1 academic + ≥1 applied/professional source
-- Academic:Applied ratio: Approximately 60:40
-- Complexity spread: Mix of introductory, intermediate, advanced
-
-**QUALITY VERIFICATION:**
-- All DOIs must be valid (format: 10.xxxx/xxxxx)
-- All URLs must be direct links to the source
-- All citations must follow APA 7th Edition exactly
-- All authors must be real, verifiable academics/professionals
+- Per module: Mix of academic AND practical/applied sources
+- At least 2 open access academic sources
+- At least 1 industry/practitioner source (HBR, McKinsey, etc.)
+- At least 1 professional body resource
+- Maximum 1 textbook (since these require purchase)
 
 Use UK English spelling throughout.`;
 
-    const userPrompt = `Generate 4-5 HIGH-QUALITY AGI-compliant academic sources for this specific module.
+    const userPrompt = `Generate 5-6 HIGH-QUALITY **FREE TO ACCESS** sources for this specific module.
+
+⚠️ CRITICAL: Every source URL MUST lead to FREE, full-text content. No paywalls!
 
 ${kbContextSection}
 
@@ -3542,176 +3931,168 @@ ${moduleInfo.topics.length > 0 ? moduleInfo.topics.map((t) => `  - ${t}`).join('
 
 === GENERATION REQUIREMENTS ===
 
-Generate EXACTLY 4-5 HIGH-QUALITY sources for this module following these detailed specifications:
+Generate EXACTLY 5-6 sources with this MANDATORY distribution:
+- **2-3 Open Access academic sources** (SSRN, PubMed Central, DOAJ, ResearchGate, ERIC)
+- **1-2 Industry/Practitioner sources** (McKinsey, HBR, Deloitte, BCG, PwC)
+- **1 Professional Body resource** (SHRM, CIPD, PMI, ACAS, Gov.uk)
+- **0-1 Reference textbook** (optional, mark as "requires_purchase")
+
+=== VERIFIED FREE SOURCE DOMAINS ===
+
+Use ONLY these domains for free sources (URLs will actually work):
+
+**Open Access Academic:**
+- ssrn.com/abstract/XXXXXXX (Social Science Research Network)
+- ncbi.nlm.nih.gov/pmc/articles/PMCXXXXXX (PubMed Central)
+- arxiv.org/abs/XXXX.XXXXX (arXiv preprints)
+- eric.ed.gov/?id=EJXXXXXX (ERIC education research)
+- researchgate.net/publication/XXXXXXXXX (author uploads)
+- scholar.google.com (link to free PDF versions)
+
+**Industry/Business (all FREE):**
+- mckinsey.com/capabilities/... or mckinsey.com/industries/...
+- hbr.org/YYYY/MM/article-title (many free HBR articles)
+- deloitte.com/insights/...
+- pwc.com/gx/en/... (PwC global publications)
+- bcg.com/publications/...
+- weforum.org/publications/...
+
+**Professional Bodies (all FREE):**
+- shrm.org/topics-tools/... (SHRM resources)
+- cipd.org/knowledge/factsheets/... (CIPD factsheets)
+- pmi.org/learning/library/... (PMI articles)
+- acas.org.uk/... (ACAS guidance)
+- gov.uk/government/publications/... (UK Gov)
 
 **FOR EACH SOURCE PROVIDE:**
 
 1. **IDENTIFICATION:**
-   - id: Unique identifier (format: "src-${moduleInfo.moduleId}-1", "src-${moduleInfo.moduleId}-2", etc.)
-   - title: Full title exactly as it appears in the publication
-   - authors: Array of author names in "Surname, Initial." format (e.g., ["Armstrong, M.", "Taylor, S."])
+   - id: "src-${moduleInfo.moduleId}-1", "src-${moduleInfo.moduleId}-2", etc.
+   - title: Full title exactly as published
+   - authors: ["Surname, Initial."] format
 
 2. **PUBLICATION DETAILS:**
-   - year: Publication year (${moduleInfo.fiveYearsAgo}-${moduleInfo.currentYear} unless seminal)
-   - edition: Edition number if applicable (e.g., "3rd ed.", "Revised ed.")
-   - publisher: Journal name (for articles), book publisher (for books), or organisation (for professional body)
-   - volume: Volume number (for journals)
-   - issue: Issue number (for journals)
-   - pages: Page range (for journal articles or book chapters, e.g., "pp. 123-145")
-   - isbn: ISBN-13 for books (format: "978-x-xxx-xxxxx-x")
+   - year: ${moduleInfo.fiveYearsAgo}-${moduleInfo.currentYear} (within 5 years)
+   - publisher: Journal/organisation name
+   - doi: If available (format: "10.xxxx/xxxxx")
 
-3. **ACCESS INFORMATION:**
-   - doi: DOI if available (format: "10.xxxx/xxxxx" - must be valid)
-   - url: Direct URL to access the source (official publisher link preferred)
-   - accessStatus: "verified_accessible" | "requires_subscription" | "agi_library"
+3. **ACCESS INFORMATION (CRITICAL):**
+   - url: Direct URL to FREE full-text content
+   - accessStatus: "free_access" | "open_access" | "requires_purchase"
+   - accessNote: Brief note on how to access (e.g., "Full PDF available", "Free registration required")
 
-4. **FULL APA 7TH CITATION:**
-   Follow exact APA 7th format:
+4. **APA 7TH CITATION:**
+   *Open Access Article:*
+   Author, A. A. (Year). Title. Journal Name. https://doi.org/xxxxx
    
-   *Journal Article:*
-   Author, A. A., & Author, B. B. (Year). Title of article. Journal Name, Volume(Issue), pp-pp. https://doi.org/xxxxx
+   *Industry Report:*
+   Organisation. (Year). Title. https://url
    
-   *Book:*
-   Author, A. A. (Year). Title of work: Subtitle (Edition). Publisher. https://doi.org/xxxxx
-   
-   *Book Chapter:*
-   Author, A. A. (Year). Title of chapter. In E. E. Editor (Ed.), Title of book (pp. xx-xx). Publisher. https://doi.org/xxxxx
-   
-   *Professional Body Publication:*
-   Organisation Name. (Year). Title of publication. https://url
+   *Professional Body:*
+   Organisation. (Year). Title. Retrieved from https://url
 
 5. **CLASSIFICATION:**
-   - category: "peer_reviewed_journal" | "academic_textbook" | "professional_body" | "open_access"
+   - category: "open_access" | "industry_report" | "professional_body" | "government_research" | "academic_textbook"
    - type: "academic" | "applied" | "industry"
    - complexityLevel: "introductory" | "intermediate" | "advanced"
 
 6. **CURRICULUM MAPPING:**
    - moduleId: "${moduleInfo.moduleId}"
-   - linkedMLOs: Array of specific MLO IDs this source directly supports (e.g., ["${moduleInfo.mlos[0]?.id || 'M1-LO1'}", "${moduleInfo.mlos[1]?.id || 'M1-LO2'}"])
-   - relevantTopics: Array of topic names from the module this source covers
+   - linkedMLOs: ["${moduleInfo.mlos[0]?.id || 'M1-LO1'}", "${moduleInfo.mlos[1]?.id || 'M1-LO2'}"]
+   - relevantTopics: Array of relevant topic names
 
-7. **EFFORT ESTIMATION:**
-   - estimatedReadingHours: Time to read thoroughly (based on length and complexity)
-     * Journal article (15-25 pages): 1-2 hours
-     * Book chapter (30-50 pages): 2-4 hours
-     * Full textbook (selected chapters): 3-6 hours
-
-8. **COMPLIANCE BADGES:**
-   - peerReviewed: true/false (true for journal articles, false for textbooks)
-   - academicText: true/false (true for textbooks and academic books)
-   - professionalBody: true/false (true for SHRM, CIPD, PMI publications)
-   - recent: true if published ${moduleInfo.fiveYearsAgo}-${moduleInfo.currentYear}
-   - seminal: true if older than 5 years but foundational
-   - verifiedAccess: true if URL is confirmed working
-   - apaValidated: true if citation follows APA 7th exactly
-
-9. **SEMINAL WORKS (if including source older than ${moduleInfo.fiveYearsAgo}):**
-   - isSeminal: true
-   - seminalJustification: Academic rationale explaining why this older work is essential (50-100 words)
-   - pairedRecentSourceId: ID of a recent source covering the same topic
-
-=== QUALITY STANDARDS ===
-
-**ENSURE ALL SOURCES ARE:**
-✓ Genuinely published and accessible (real publications only)
-✓ From the approved categories only (no prohibited sources)
-✓ Properly formatted in APA 7th Edition
-✓ Directly relevant to the specific MLOs listed above
-✓ Appropriate complexity for ${moduleInfo.academicLevel}
-✓ Balanced between academic and applied perspectives
-✓ Recent (or justified seminal works with pairing)
-
-**SOURCE SELECTION PRIORITIES:**
-1. Directly supports achievement of the module MLOs
-2. From recognised authorities in the ${moduleInfo.industrySector} field
-3. Accessible to learners (AGI library or open access preferred)
-4. Appropriate reading level for ${moduleInfo.academicLevel}
-5. Provides practical application examples alongside theory
-
-**DIVERSITY REQUIREMENTS:**
-- At least 2 peer-reviewed journal articles
-- At least 1 academic textbook
-- Maximum 1 seminal work (if included)
-- Mix of complexity levels (not all advanced or all introductory)
+7. **COMPLIANCE:**
+   - complianceBadges: { freeAccess: true/false, peerReviewed: true/false, recent: true/false }
+   - estimatedReadingHours: 0.5-2 hours typical
 
 === OUTPUT FORMAT ===
 
-Return ONLY valid JSON (no markdown, no explanations):
+Return ONLY valid JSON:
 {
   "sources": [
     {
       "id": "src-${moduleInfo.moduleId}-1",
-      "title": "Strategic Human Resource Management: An International Perspective",
-      "authors": ["Armstrong, M.", "Taylor, S."],
+      "title": "The Future of Work: How Organisations Are Adapting",
+      "authors": ["McKinsey Global Institute"],
       "year": ${moduleInfo.currentYear - 1},
-      "edition": "7th ed.",
-      "publisher": "Kogan Page",
-      "isbn": "978-1-3986-0123-4",
-      "citation": "Armstrong, M., & Taylor, S. (${moduleInfo.currentYear - 1}). Strategic human resource management: An international perspective (7th ed.). Kogan Page.",
-      "doi": "10.1234/9781398601234",
-      "url": "https://www.koganpage.com/product/strategic-human-resource-management-9781398601234",
-      "category": "academic_textbook",
-      "type": "academic",
-      "accessStatus": "agi_library",
+      "publisher": "McKinsey & Company",
+      "citation": "McKinsey Global Institute. (${moduleInfo.currentYear - 1}). The future of work: How organisations are adapting. McKinsey & Company. https://www.mckinsey.com/capabilities/people-and-organizational-performance/our-insights/future-of-work",
+      "url": "https://www.mckinsey.com/capabilities/people-and-organizational-performance/our-insights/future-of-work",
+      "category": "industry_report",
+      "type": "applied",
+      "accessStatus": "free_access",
+      "accessNote": "Full report freely available online",
       "complianceBadges": {
+        "freeAccess": true,
         "peerReviewed": false,
-        "academicText": true,
-        "professionalBody": false,
-        "recent": true,
-        "seminal": false,
-        "verifiedAccess": true,
-        "apaValidated": true
-      },
-      "moduleId": "${moduleInfo.moduleId}",
-      "linkedMLOs": ["${moduleInfo.mlos[0]?.id || 'M1-LO1'}", "${moduleInfo.mlos[1]?.id || 'M1-LO2'}"],
-      "relevantTopics": ["Strategic HRM", "Workforce Planning"],
-      "complexityLevel": "intermediate",
-      "estimatedReadingHours": 3.5,
-      "isSeminal": false,
-      "agiCompliant": true
-    },
-    {
-      "id": "src-${moduleInfo.moduleId}-2",
-      "title": "The relationship between high-performance work systems and employee outcomes",
-      "authors": ["Jiang, K.", "Lepak, D. P.", "Hu, J.", "Baer, J. C."],
-      "year": ${moduleInfo.currentYear - 2},
-      "publisher": "Journal of Management",
-      "volume": "48",
-      "issue": "6",
-      "pages": "1512-1543",
-      "citation": "Jiang, K., Lepak, D. P., Hu, J., & Baer, J. C. (${moduleInfo.currentYear - 2}). The relationship between high-performance work systems and employee outcomes. Journal of Management, 48(6), 1512-1543. https://doi.org/10.1177/01234567891234",
-      "doi": "10.1177/01234567891234",
-      "url": "https://journals.sagepub.com/doi/10.1177/01234567891234",
-      "category": "peer_reviewed_journal",
-      "type": "academic",
-      "accessStatus": "verified_accessible",
-      "complianceBadges": {
-        "peerReviewed": true,
-        "academicText": false,
-        "professionalBody": false,
-        "recent": true,
-        "seminal": false,
-        "verifiedAccess": true,
-        "apaValidated": true
+        "recent": true
       },
       "moduleId": "${moduleInfo.moduleId}",
       "linkedMLOs": ["${moduleInfo.mlos[0]?.id || 'M1-LO1'}"],
-      "relevantTopics": ["High-Performance Work Systems"],
+      "relevantTopics": ["Future of Work", "Organisational Change"],
+      "complexityLevel": "intermediate",
+      "estimatedReadingHours": 1.5
+    },
+    {
+      "id": "src-${moduleInfo.moduleId}-2",
+      "title": "Employee Engagement: A Review of Current Research",
+      "authors": ["Saks, A. M."],
+      "year": ${moduleInfo.currentYear - 2},
+      "publisher": "SSRN Electronic Journal",
+      "doi": "10.2139/ssrn.XXXXXXX",
+      "citation": "Saks, A. M. (${moduleInfo.currentYear - 2}). Employee engagement: A review of current research. SSRN. https://ssrn.com/abstract=XXXXXXX",
+      "url": "https://ssrn.com/abstract=XXXXXXX",
+      "category": "open_access",
+      "type": "academic",
+      "accessStatus": "open_access",
+      "accessNote": "Free download from SSRN",
+      "complianceBadges": {
+        "freeAccess": true,
+        "peerReviewed": true,
+        "recent": true
+      },
+      "moduleId": "${moduleInfo.moduleId}",
+      "linkedMLOs": ["${moduleInfo.mlos[0]?.id || 'M1-LO1'}", "${moduleInfo.mlos[1]?.id || 'M1-LO2'}"],
+      "relevantTopics": ["Employee Engagement"],
       "complexityLevel": "advanced",
-      "estimatedReadingHours": 1.5,
-      "isSeminal": false,
-      "agiCompliant": true
+      "estimatedReadingHours": 1.0
+    },
+    {
+      "id": "src-${moduleInfo.moduleId}-3",
+      "title": "Performance Management Factsheet",
+      "authors": ["CIPD"],
+      "year": ${moduleInfo.currentYear},
+      "publisher": "Chartered Institute of Personnel and Development",
+      "citation": "CIPD. (${moduleInfo.currentYear}). Performance management factsheet. Retrieved from https://www.cipd.org/knowledge/factsheets/performance-management-factsheet",
+      "url": "https://www.cipd.org/knowledge/factsheets/performance-management-factsheet",
+      "category": "professional_body",
+      "type": "applied",
+      "accessStatus": "free_access",
+      "accessNote": "Free factsheet, registration may be required",
+      "complianceBadges": {
+        "freeAccess": true,
+        "peerReviewed": false,
+        "recent": true
+      },
+      "moduleId": "${moduleInfo.moduleId}",
+      "linkedMLOs": ["${moduleInfo.mlos[1]?.id || 'M1-LO2'}"],
+      "relevantTopics": ["Performance Management"],
+      "complexityLevel": "introductory",
+      "estimatedReadingHours": 0.5
     }
   ]
 }
 
-CRITICAL REQUIREMENTS:
-- Generate REAL sources that actually exist and are verifiable
-- Use knowledge base materials to inform source selection where available
-- Ensure proper APA 7th formatting for all citations
-- All sources must directly support the MLOs for ${moduleInfo.moduleTitle}
-- Balance academic rigour with practical application
-- Ensure at least 50% are peer-reviewed`;
+=== CRITICAL REQUIREMENTS ===
+
+✓ ALL URLs must lead to FREE content (test by clicking - no paywall!)
+✓ Use ONLY the verified domains listed above for free sources
+✓ Include at least 2 industry/practitioner sources (McKinsey, HBR, Deloitte, etc.)
+✓ Include at least 1 professional body resource (CIPD, SHRM, ACAS, PMI)
+✓ Mark any textbooks clearly as "requires_purchase" in accessStatus
+✓ Proper APA 7th formatting for all citations
+✓ All sources must directly support the MLOs for ${moduleInfo.moduleTitle}
+✓ Balance academic rigour with practical application`;
 
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {

@@ -62,10 +62,10 @@ export const STANDALONE_STEPS = [
   },
   {
     step: 10,
-    name: 'Lesson Plans & PPT',
+    name: 'Lesson Plans',
     time: '10-15 min',
     icon: '📝',
-    description: 'Generate detailed lesson plans and PowerPoint decks',
+    description: 'Generate detailed lesson plans for each module',
   },
 ];
 
@@ -84,7 +84,7 @@ export function StepSelector({ selectedStep, onSelectStep }: StepSelectorProps) 
   };
 
   return (
-    <div 
+    <div
       className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4"
       role="listbox"
       aria-label="Select a curriculum step"
@@ -110,7 +110,9 @@ export function StepSelector({ selectedStep, onSelectStep }: StepSelectorProps) 
             `}
           >
             <div className="flex items-start gap-2 sm:gap-3">
-              <span className="text-xl sm:text-2xl" role="img" aria-hidden="true">{step.icon}</span>
+              <span className="text-xl sm:text-2xl" role="img" aria-hidden="true">
+                {step.icon}
+              </span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs text-teal-500">Step {step.step}</span>

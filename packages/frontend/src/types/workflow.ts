@@ -1,10 +1,10 @@
 /**
- * 9-Step Curriculum Workflow Types
- * AI-Integrated Curriculum Generator v2.2
+ * 11-Step Curriculum Workflow Types
+ * AI-Integrated Curriculum Generator v2.3
  */
 
 // Workflow step identifiers
-export type WorkflowStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export type WorkflowStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 
 // Step statuses
 export type StepStatus = 'pending' | 'in_progress' | 'completed' | 'approved' | 'revision_needed';
@@ -31,6 +31,8 @@ export type WorkflowStatus =
   | 'step9_complete'
   | 'step10_pending'
   | 'step10_complete'
+  | 'step11_pending'
+  | 'step11_complete'
   | 'review_pending'
   | 'published';
 
@@ -1248,7 +1250,7 @@ export interface Step9Glossary {
 }
 
 // =============================================================================
-// STEP 10: LESSON PLANS & PPT GENERATION
+// STEP 10: LESSON PLANS (Separated from PPT for timeout prevention)
 // =============================================================================
 
 export interface LessonActivity {
@@ -1409,6 +1411,87 @@ export interface Step10LessonPlans {
 }
 
 // =============================================================================
+// STEP 11: PPT GENERATION (Separated from Lesson Plans for timeout prevention)
+// =============================================================================
+
+export interface PPTSlide {
+  slideNumber: number;
+  slideType:
+    | 'title'
+    | 'objectives'
+    | 'concepts'
+    | 'content'
+    | 'case_study'
+    | 'formative_check'
+    | 'summary'
+    | 'independent_study'
+    | 'references';
+  title: string;
+  content: {
+    type: 'title' | 'content' | 'table' | 'two_column' | 'bullets';
+    title: string;
+    content?: string | string[];
+    table?: {
+      headers: string[];
+      rows: string[][];
+    };
+    leftColumn?: string[];
+    rightColumn?: string[];
+    notes?: string;
+  };
+  speakerNotes: string;
+  visualSuggestion?: string;
+}
+
+export interface PPTDeck {
+  deckId: string;
+  lessonId: string;
+  moduleCode: string;
+  lessonNumber: number;
+  lessonTitle: string;
+  slides: PPTSlide[];
+  slideCount: number;
+  deliveryMode: string;
+  generatedAt: Date;
+  validation: {
+    slideCountValid: boolean;
+    mlosCovered: boolean;
+    citationsValid: boolean;
+    glossaryTermsDefined: boolean;
+  };
+}
+
+export interface ModulePPTDecks {
+  moduleId: string;
+  moduleCode: string;
+  moduleTitle: string;
+  totalLessons: number;
+  pptDecks: PPTDeck[];
+}
+
+export interface Step11PPTGeneration {
+  modulePPTDecks: ModulePPTDecks[];
+
+  validation: {
+    allLessonsHavePPTs: boolean;
+    allSlideCountsValid: boolean;
+    allMLOsCovered: boolean;
+    allCitationsValid: boolean;
+  };
+
+  summary: {
+    totalPPTDecks: number;
+    totalSlides: number;
+    averageSlidesPerLesson: number;
+  };
+
+  generatedAt: Date;
+  validatedAt?: Date;
+  approvedAt?: Date;
+  approvedBy?: string;
+}
+
+// =============================================================================
 // WORKFLOW PROGRESS
 // =============================================================================
 export interface StepProgress {
@@ -1443,6 +1526,7 @@ export interface CurriculumWorkflow {
   step8?: Step8CaseStudies;
   step9?: Step9Glossary;
   step10?: Step10LessonPlans;
+  step11?: Step11PPTGeneration;
 
   // Metadata
   createdAt: string;
@@ -1551,7 +1635,8 @@ export const STEP_NAMES: Record<WorkflowStep, string> = {
   7: 'Auto-Gradable Assessments',
   8: 'Case Studies',
   9: 'Glossary',
-  10: 'Lesson Plans & PPT',
+  10: 'Lesson Plans',
+  11: 'PPT Generation',
 };
 
 export const STEP_DESCRIPTIONS: Record<WorkflowStep, string> = {
@@ -1564,7 +1649,8 @@ export const STEP_DESCRIPTIONS: Record<WorkflowStep, string> = {
   7: 'Generate MCQ-first auto-gradable assessments and quizzes',
   8: 'Create engagement hooks and case study scenarios',
   9: 'Auto-generate glossary from all curriculum content',
-  10: 'Generate detailed lesson plans and PowerPoint decks',
+  10: 'Generate detailed lesson plans for all modules',
+  11: 'Generate PowerPoint slide decks for all lessons',
 };
 
 export const ESTIMATED_TIMES: Record<WorkflowStep, string> = {
@@ -1578,6 +1664,7 @@ export const ESTIMATED_TIMES: Record<WorkflowStep, string> = {
   8: '10-15 min',
   9: '5 min (auto)',
   10: '10-15 min',
+  11: '10-15 min',
 };
 
 export const BLOOM_LEVELS: BloomLevel[] = [

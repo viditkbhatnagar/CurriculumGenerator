@@ -2421,7 +2421,7 @@ router.get('/:id/step10', validateJWT, loadUser, async (req: Request, res: Respo
 
 /**
  * POST /api/v3/workflow/:id/step10/approve
- * Approve Step 10 and mark workflow as ready for final review
+ * Approve Step 10 (Lesson Plans) and advance to Step 11 (PPT Generation)
  */
 router.post('/:id/step10/approve', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
@@ -2479,11 +2479,11 @@ router.post('/:id/step10/approve', validateJWT, loadUser, async (req: Request, r
       assessmentsIntegrated: true,
     };
 
-    // Update workflow status
-    workflow.currentStep = 10;
-    workflow.status = 'step10_complete';
+    // Update workflow status - advance to Step 11
+    workflow.currentStep = 11;
+    workflow.status = 'step11_pending';
 
-    // Update step progress
+    // Update step progress for Step 10
     const step10Progress = workflow.stepProgress.find((p) => p.step === 10);
     if (step10Progress) {
       step10Progress.completedAt = new Date();
@@ -2497,11 +2497,24 @@ router.post('/:id/step10/approve', validateJWT, loadUser, async (req: Request, r
       });
     }
 
+    // Initialize Step 11 progress
+    const step11Progress = workflow.stepProgress.find((p) => p.step === 11);
+    if (step11Progress) {
+      step11Progress.status = 'in_progress';
+      step11Progress.startedAt = new Date();
+    } else {
+      workflow.stepProgress.push({
+        step: 11,
+        status: 'in_progress',
+        startedAt: new Date(),
+      });
+    }
+
     workflow.markModified('step10');
     workflow.markModified('stepProgress');
     await workflow.save();
 
-    loggingService.info('Step 10 approved successfully', {
+    loggingService.info('Step 10 approved successfully, advancing to Step 11', {
       workflowId: id,
       totalModules: completedModules,
       totalLessons: workflow.step10.summary?.totalLessons || 0,
@@ -2515,13 +2528,451 @@ router.post('/:id/step10/approve', validateJWT, loadUser, async (req: Request, r
         currentStep: workflow.currentStep,
         summary: workflow.step10.summary,
       },
-      message: 'Step 10 approved! Curriculum is ready for final review.',
+      message: 'Step 10 approved! Now at Step 11: PPT Generation.',
     });
   } catch (error) {
     loggingService.error('Error approving Step 10', { error, workflowId: req.params.id });
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to approve Step 10',
+    });
+  }
+});
+
+// ============================================================================
+// STEP 11: PPT GENERATION ROUTES (Separated from Step 10 for timeout prevention)
+// ============================================================================
+
+/**
+ * POST /api/v3/workflow/:id/step11
+ * Submit Step 11: Generate PPT decks for all lessons
+ * This endpoint queues the generation as a background job
+ */
+router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
+
+    loggingService.info('Step 11 PPT generation requested', { workflowId: id });
+
+    // Validate workflow exists and step 10 is complete AND approved
+    const existingWorkflow = await CurriculumWorkflow.findById(id);
+    if (!existingWorkflow) {
+      return res.status(404).json({
+        success: false,
+        error: 'Workflow not found',
+      });
+    }
+
+    if (!existingWorkflow.step10 || existingWorkflow.currentStep < 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Step 10 must be completed before generating PPTs',
+      });
+    }
+
+    // Check if Step 10 is approved
+    const validStatuses = [
+      'step10_complete',
+      'step11_pending',
+      'step11_complete',
+      'review_pending',
+      'published',
+    ];
+    if (!validStatuses.includes(existingWorkflow.status)) {
+      return res.status(400).json({
+        success: false,
+        error:
+          'Step 10 must be approved before proceeding to Step 11. Please approve Step 10 first.',
+      });
+    }
+
+    // Import queue functions
+    const { queueAllRemainingStep11Modules, getAllStep11Jobs, step11Queue } = await import(
+      '../queues/step11Queue'
+    );
+
+    // Check if Redis/queue is available
+    if (!step11Queue) {
+      // Fallback to incremental synchronous generation if queue is not available
+      loggingService.warn('Step 11 queue not available, using incremental synchronous generation', {
+        workflowId: id,
+      });
+
+      const totalModules = existingWorkflow.step10?.moduleLessonPlans?.length || 0;
+      const existingModules = existingWorkflow.step11?.modulePPTDecks?.length || 0;
+
+      // Check if already complete
+      if (existingModules >= totalModules) {
+        return res.json({
+          success: true,
+          data: existingWorkflow.step11,
+          message: 'All PPT decks already generated',
+        });
+      }
+
+      // Generate the next module only (with immediate response and background processing)
+      loggingService.info('Starting Step 11 next module PPT generation', {
+        workflowId: id,
+        moduleNumber: existingModules + 1,
+        totalModules,
+      });
+
+      // Start generation in background (don't await)
+      workflowService
+        .processStep11NextModule(id)
+        .then((result) => {
+          loggingService.info('Step 11 module PPT generation completed successfully', {
+            workflowId: id,
+            modulesGenerated: result.step11?.modulePPTDecks?.length || 0,
+            totalModules,
+            moduleJustCompleted: existingModules + 1,
+          });
+        })
+        .catch((err) => {
+          loggingService.error('Step 11 module PPT generation failed in background', {
+            workflowId: id,
+            moduleNumber: existingModules + 1,
+            totalModules,
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+          });
+        });
+
+      // Return immediately with status
+      return res.json({
+        success: true,
+        data: {
+          modulesGenerated: existingModules,
+          totalModules,
+          moduleBeingGenerated: existingModules + 1,
+          estimatedTimeMinutes: 15,
+        },
+        message: `Step 11 PPT generation started for module ${existingModules + 1} of ${totalModules}. Check status endpoint for progress.`,
+      });
+    }
+
+    // Check if jobs are already in progress
+    const existingJobs = await getAllStep11Jobs(id);
+    const activeJobs = existingJobs.filter((job: any) => {
+      const state = job.getState ? job.getState() : 'unknown';
+      return ['waiting', 'active', 'delayed'].includes(state);
+    });
+
+    if (activeJobs.length > 0) {
+      return res.json({
+        success: true,
+        data: {
+          message: 'PPT generation already in progress',
+          jobsQueued: activeJobs.length,
+          modulesGenerated: existingWorkflow.step11?.modulePPTDecks?.length || 0,
+          totalModules: existingWorkflow.step10?.moduleLessonPlans?.length || 0,
+        },
+        message: 'Step 11 PPT generation is already in progress. Check status for updates.',
+      });
+    }
+
+    // Queue the remaining modules
+    const jobs = await queueAllRemainingStep11Modules(id, userId);
+
+    const modulesGenerated = existingWorkflow.step11?.modulePPTDecks?.length || 0;
+    const totalModules = existingWorkflow.step10?.moduleLessonPlans?.length || 0;
+
+    loggingService.info('Step 11 jobs queued', {
+      workflowId: id,
+      jobsQueued: jobs.length,
+      modulesGenerated,
+      totalModules,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        jobsQueued: jobs.length,
+        modulesGenerated,
+        totalModules,
+        estimatedTimeMinutes: (totalModules - modulesGenerated) * 10,
+      },
+      message: `Step 11 PPT generation started. ${totalModules - modulesGenerated} module(s) will be generated in the background.`,
+    });
+  } catch (error) {
+    loggingService.error('Error queueing Step 11', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      workflowId: req.params.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to queue Step 11 PPT generation',
+    });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/step11/next-module
+ * Generate PPT for the next module in Step 11 (one module at a time)
+ */
+router.post(
+  '/:id/step11/next-module',
+  validateJWT,
+  loadUser,
+  extendTimeout(600000), // 10 minutes for a single module
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      loggingService.info('Step 11 next module PPT generation requested', { workflowId: id });
+
+      // Get workflow
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow) {
+        return res.status(404).json({
+          success: false,
+          error: 'Workflow not found',
+        });
+      }
+
+      if (!workflow.step10 || workflow.currentStep < 10) {
+        return res.status(400).json({
+          success: false,
+          error: 'Step 10 must be completed before generating PPTs',
+        });
+      }
+
+      // Check how many modules are already generated
+      const totalModules = workflow.step10?.moduleLessonPlans?.length || 0;
+      const existingModules = workflow.step11?.modulePPTDecks?.length || 0;
+
+      if (existingModules >= totalModules) {
+        return res.json({
+          success: true,
+          data: {
+            step11: workflow.step11,
+            currentStep: workflow.currentStep,
+            status: workflow.status,
+            allModulesComplete: true,
+          },
+          message: 'All PPT decks already generated!',
+        });
+      }
+
+      loggingService.info('Generating next module PPT', {
+        workflowId: id,
+        moduleNumber: existingModules + 1,
+        totalModules,
+      });
+
+      // Generate the next module PPT
+      const updatedWorkflow = await workflowService.processStep11NextModule(id);
+
+      const newModulesCount = updatedWorkflow.step11?.modulePPTDecks?.length || 0;
+      const allComplete = newModulesCount >= totalModules;
+
+      loggingService.info('Next module PPT generation complete', {
+        workflowId: id,
+        modulesGenerated: newModulesCount,
+        totalModules,
+        allComplete,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          step11: updatedWorkflow.step11,
+          currentStep: updatedWorkflow.currentStep,
+          status: updatedWorkflow.status,
+          modulesGenerated: newModulesCount,
+          totalModules,
+          allModulesComplete: allComplete,
+        },
+        message: allComplete
+          ? 'All PPT decks complete!'
+          : `PPT for module ${newModulesCount}/${totalModules} generated successfully`,
+      });
+    } catch (error) {
+      loggingService.error('Error generating next module PPT', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        workflowId: req.params.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate next module PPT',
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/v3/workflow/:id/step11/status
+ * Get Step 11 PPT generation status
+ */
+router.get('/:id/step11/status', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Get workflow
+    const workflow = await CurriculumWorkflow.findById(id);
+    if (!workflow) {
+      return res.status(404).json({
+        success: false,
+        error: 'Workflow not found',
+      });
+    }
+
+    // Import queue functions
+    const { getAllStep11Jobs } = await import('../queues/step11Queue');
+
+    // Get all jobs for this workflow
+    const jobs = await getAllStep11Jobs(id);
+
+    const jobStatuses = await Promise.all(
+      jobs.map(async (job) => {
+        const state = await job.getState();
+        return {
+          jobId: job.id,
+          moduleIndex: job.data.moduleIndex,
+          state,
+          progress: job.progress(),
+          attemptsMade: job.attemptsMade,
+          processedOn: job.processedOn,
+          finishedOn: job.finishedOn,
+          failedReason: job.failedReason,
+        };
+      })
+    );
+
+    const totalModules = workflow.step10?.moduleLessonPlans?.length || 0;
+    const modulesGenerated = workflow.step11?.modulePPTDecks?.length || 0;
+    const allComplete = modulesGenerated >= totalModules;
+
+    const activeJobs = jobStatuses.filter((j) =>
+      ['waiting', 'active', 'delayed'].includes(j.state)
+    );
+    const completedJobs = jobStatuses.filter((j) => j.state === 'completed');
+    const failedJobs = jobStatuses.filter((j) => j.state === 'failed');
+
+    res.json({
+      success: true,
+      data: {
+        workflowId: id,
+        modulesGenerated,
+        totalModules,
+        allComplete,
+        progressPercent: totalModules > 0 ? Math.round((modulesGenerated / totalModules) * 100) : 0,
+        jobs: {
+          active: activeJobs.length,
+          completed: completedJobs.length,
+          failed: failedJobs.length,
+          details: jobStatuses,
+        },
+        step11Summary: workflow.step11?.summary || null,
+        status: workflow.status,
+        currentStep: workflow.currentStep,
+      },
+    });
+  } catch (error) {
+    loggingService.error('Error getting Step 11 status', {
+      error: error instanceof Error ? error.message : String(error),
+      workflowId: req.params.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get Step 11 status',
+    });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/step11/approve
+ * Approve Step 11 and mark workflow as ready for final review
+ */
+router.post('/:id/step11/approve', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    loggingService.info('Approving Step 11', { workflowId: id });
+
+    const workflow = await CurriculumWorkflow.findById(id);
+    if (!workflow) {
+      return res.status(404).json({
+        success: false,
+        error: 'Workflow not found',
+      });
+    }
+
+    // Validate Step 11 is complete
+    if (!workflow.step11 || !workflow.step11.modulePPTDecks) {
+      return res.status(400).json({
+        success: false,
+        error: 'Step 11 must be generated before approval',
+      });
+    }
+
+    const totalModules = workflow.step10?.moduleLessonPlans?.length || 0;
+    const completedModules = workflow.step11.modulePPTDecks.length;
+
+    if (completedModules < totalModules) {
+      return res.status(400).json({
+        success: false,
+        error: `All module PPTs must be generated before approval. ${completedModules}/${totalModules} modules complete.`,
+      });
+    }
+
+    // Mark Step 11 as approved
+    workflow.step11.approvedAt = new Date();
+
+    // Update validation
+    workflow.step11.validation = {
+      allLessonsHavePPTs: true,
+      allSlideCountsValid: true,
+      allMLOsCovered: true,
+      allCitationsValid: true,
+    };
+
+    // Update workflow status
+    workflow.currentStep = 11;
+    workflow.status = 'step11_complete';
+
+    // Update step progress
+    const step11Progress = workflow.stepProgress.find((p) => p.step === 11);
+    if (step11Progress) {
+      step11Progress.completedAt = new Date();
+      step11Progress.status = 'approved';
+    } else {
+      workflow.stepProgress.push({
+        step: 11,
+        status: 'approved',
+        startedAt: workflow.step11.generatedAt || new Date(),
+        completedAt: new Date(),
+      });
+    }
+
+    workflow.markModified('step11');
+    workflow.markModified('stepProgress');
+    await workflow.save();
+
+    loggingService.info('Step 11 approved successfully', {
+      workflowId: id,
+      totalModules: completedModules,
+      totalPPTDecks: workflow.step11.summary?.totalPPTDecks || 0,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        approvedAt: workflow.step11.approvedAt,
+        status: workflow.status,
+        currentStep: workflow.currentStep,
+        summary: workflow.step11.summary,
+      },
+      message: 'Step 11 approved! Curriculum is ready for final review.',
+    });
+  } catch (error) {
+    loggingService.error('Error approving Step 11', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to approve Step 11',
     });
   }
 });
@@ -2540,15 +2991,17 @@ router.post('/:id/complete', validateJWT, loadUser, async (req: Request, res: Re
     }
 
     if (
-      workflow.currentStep < 10 ||
-      !workflow.step9 ||
+      workflow.currentStep < 11 ||
       !workflow.step10 ||
       !workflow.step10.moduleLessonPlans ||
-      workflow.step10.moduleLessonPlans.length === 0
+      workflow.step10.moduleLessonPlans.length === 0 ||
+      !workflow.step11 ||
+      !workflow.step11.modulePPTDecks ||
+      workflow.step11.modulePPTDecks.length === 0
     ) {
       return res.status(400).json({
         success: false,
-        error: 'All 10 steps must be completed first, including lesson plans generation',
+        error: 'All 11 steps must be completed first, including lesson plans and PPT generation',
       });
     }
 

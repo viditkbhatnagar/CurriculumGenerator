@@ -1,6 +1,6 @@
 /**
  * CurriculumWorkflow Model
- * Implements the 10-Step AI-Integrated Curriculum Generator Workflow v2.2
+ * Implements the 11-Step AI-Integrated Curriculum Generator Workflow v2.3
  *
  * Steps:
  * 1. Program Foundation (15-20 min)
@@ -12,7 +12,8 @@
  * 7. Auto-Gradable Assessments - MCQ-First (15-20 min)
  * 8. Case Studies (10-15 min)
  * 9. Glossary - Auto-Generated (5 min)
- * 10. Lesson Plans & PPT Generation (20-30 min)
+ * 10. Lesson Plans (15-20 min)
+ * 11. PPT Generation (15-20 min)
  *
  * Total: 2-3 hours of SME time
  */
@@ -20,7 +21,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 // ============================================================================
-// STEP 10 INTERFACES - Lesson Plans & PPT Generation
+// STEP 10 INTERFACES - Lesson Plans (Separated from PPT for timeout prevention)
 // ============================================================================
 
 export interface ReadingReference {
@@ -207,6 +208,91 @@ export interface Step10LessonPlans {
 }
 
 // ============================================================================
+// STEP 11 INTERFACES - PPT Generation (Separated from Lesson Plans)
+// ============================================================================
+
+export interface PPTSlide {
+  slideNumber: number;
+  slideType:
+    | 'title'
+    | 'objectives'
+    | 'concepts'
+    | 'content'
+    | 'case_study'
+    | 'formative_check'
+    | 'summary'
+    | 'independent_study'
+    | 'references';
+  title: string;
+  content: {
+    type: 'title' | 'content' | 'table' | 'two_column' | 'bullets';
+    title: string;
+    content?: string | string[];
+    table?: {
+      headers: string[];
+      rows: string[][];
+    };
+    leftColumn?: string[];
+    rightColumn?: string[];
+    notes?: string;
+  };
+  speakerNotes: string;
+  visualSuggestion?: string;
+}
+
+export interface PPTDeck {
+  deckId: string;
+  lessonId: string;
+  moduleCode: string;
+  lessonNumber: number;
+  lessonTitle: string;
+  slides: PPTSlide[];
+  slideCount: number;
+  deliveryMode: string;
+  generatedAt: Date;
+  validation: {
+    slideCountValid: boolean;
+    mlosCovered: boolean;
+    citationsValid: boolean;
+    glossaryTermsDefined: boolean;
+  };
+}
+
+export interface ModulePPTDecks {
+  moduleId: string;
+  moduleCode: string;
+  moduleTitle: string;
+  totalLessons: number;
+  pptDecks: PPTDeck[];
+}
+
+export interface Step11PPTGeneration {
+  // Module PPT decks
+  modulePPTDecks: ModulePPTDecks[];
+
+  // Validation results
+  validation: {
+    allLessonsHavePPTs: boolean;
+    allSlideCountsValid: boolean;
+    allMLOsCovered: boolean;
+    allCitationsValid: boolean;
+  };
+
+  // Summary statistics
+  summary: {
+    totalPPTDecks: number;
+    totalSlides: number;
+    averageSlidesPerLesson: number;
+  };
+
+  // Metadata
+  generatedAt: Date;
+  validatedAt?: Date;
+  approvedAt?: Date;
+  approvedBy?: string;
+}
+
+// ============================================================================
 // INTERFACES
 // ============================================================================
 
@@ -216,7 +302,7 @@ export interface ICurriculumWorkflow extends Document {
   createdBy: mongoose.Types.ObjectId;
 
   // Current State
-  currentStep: number; // 1-10
+  currentStep: number; // 1-11
   status: string;
 
   // Step 1: Program Foundation
@@ -736,8 +822,11 @@ export interface ICurriculumWorkflow extends Document {
     generatedAt: Date;
   };
 
-  // Step 10: Lesson Plans & PPT Generation
+  // Step 10: Lesson Plans (No PPT - separated for timeout prevention)
   step10?: Step10LessonPlans;
+
+  // Step 11: PPT Generation (Separate step for timeout prevention)
+  step11?: Step11PPTGeneration;
 
   // Step Progress Tracking
   stepProgress: Array<{
@@ -789,7 +878,7 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
     currentStep: {
       type: Number,
       min: 1,
-      max: 10,
+      max: 11,
       default: 1,
       required: true,
       index: true,
@@ -819,6 +908,8 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
         'step9_complete',
         'step10_pending',
         'step10_complete',
+        'step11_pending',
+        'step11_complete',
         'review_pending',
         'published',
       ],
@@ -881,8 +972,14 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
       default: undefined,
     },
 
-    // Step 10: Lesson Plans & PPT Generation
+    // Step 10: Lesson Plans (No PPT - separated for timeout prevention)
     step10: {
+      type: Schema.Types.Mixed,
+      default: undefined,
+    },
+
+    // Step 11: PPT Generation (Separate step for timeout prevention)
+    step11: {
       type: Schema.Types.Mixed,
       default: undefined,
     },
@@ -941,14 +1038,25 @@ CurriculumWorkflowSchema.pre('save', function (next) {
       { step: 8, status: 'pending' },
       { step: 9, status: 'pending' },
       { step: 10, status: 'pending' },
+      { step: 11, status: 'pending' },
     ];
   }
+
+  // Migrate existing workflows that don't have step 11
+  // This ensures old workflows can access the new Step 11
+  if (this.stepProgress && this.stepProgress.length > 0) {
+    const hasStep11 = this.stepProgress.some((p: any) => p.step === 11);
+    if (!hasStep11) {
+      this.stepProgress.push({ step: 11, status: 'pending' });
+    }
+  }
+
   next();
 });
 
 // Advance to next step
 CurriculumWorkflowSchema.methods.advanceStep = async function (): Promise<void> {
-  if (this.currentStep >= 10) {
+  if (this.currentStep >= 11) {
     throw new Error('Already at final step');
   }
 
@@ -1001,7 +1109,7 @@ CurriculumWorkflowSchema.methods.calculateProgress = function (): number {
   const completedSteps = this.stepProgress.filter(
     (p: any) => p.status === 'completed' || p.status === 'approved'
   ).length;
-  return Math.round((completedSteps / 10) * 100);
+  return Math.round((completedSteps / 11) * 100);
 };
 
 // Virtual for duration
