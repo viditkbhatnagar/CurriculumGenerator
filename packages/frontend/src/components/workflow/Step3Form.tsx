@@ -104,10 +104,10 @@ function PLOEditModal({
   const wordCount = statement.split(/\s+/).filter(Boolean).length;
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-700">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+    <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-teal-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-teal-200">
+          <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
             Edit <span className="text-purple-400">PLO {index + 1}</span>
           </h3>
         </div>
@@ -115,7 +115,7 @@ function PLOEditModal({
         <div className="p-6 space-y-5">
           {/* Statement */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               PLO Statement
               <span className={`ml-2 text-xs ${wordCount <= 25 ? 'text-emerald-400' : 'text-amber-400'}`}>
                 ({wordCount}/25 words)
@@ -125,14 +125,14 @@ function PLOEditModal({
               value={statement}
               onChange={(e) => setStatement(e.target.value)}
               rows={3}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="Enter the PLO statement..."
             />
           </div>
 
           {/* Bloom's Level */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Bloom's Taxonomy Level
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -144,7 +144,7 @@ function PLOEditModal({
                   className={`py-2 px-3 rounded-lg border text-sm capitalize transition-all ${
                     bloomLevel === level
                       ? BLOOM_COLORS[level]
-                      : 'bg-slate-900/50 border-slate-600 text-slate-400 hover:border-slate-500'
+                      : 'bg-white border-teal-300 text-teal-600 hover:border-teal-400'
                   }`}
                 >
                   {level}
@@ -155,38 +155,38 @@ function PLOEditModal({
 
           {/* Verb */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Bloom's Verb
             </label>
             <input
               type="text"
               value={verb}
               onChange={(e) => setVerb(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
               placeholder="e.g., analyze, evaluate, design"
             />
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-teal-500 mt-1">
               Suggested verbs for {bloomLevel}: {BLOOM_VERBS[bloomLevel]?.slice(0, 5).join(', ')}
             </p>
           </div>
 
           {/* Assessment Alignment */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Assessment Alignment
             </label>
             <textarea
               value={assessmentAlignment}
               onChange={(e) => setAssessmentAlignment(e.target.value)}
               rows={2}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="How will this PLO be assessed?"
             />
           </div>
 
           {/* Job Task Mapping */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Job Tasks Addressed
             </label>
             <div className="flex gap-2 mb-2">
@@ -195,7 +195,7 @@ function PLOEditModal({
                 value={jobTaskInput}
                 onChange={(e) => setJobTaskInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addJobTask())}
-                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
                 placeholder="Add a job task..."
               />
               <button
@@ -211,13 +211,13 @@ function PLOEditModal({
                 {jobTaskMapping.map((task, i) => (
                   <span
                     key={i}
-                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm flex items-center gap-2"
                   >
                     {task}
                     <button
                       type="button"
                       onClick={() => removeJobTask(i)}
-                      className="text-slate-500 hover:text-red-400"
+                      className="text-teal-500 hover:text-red-400"
                     >
                       ×
                     </button>
@@ -230,28 +230,28 @@ function PLOEditModal({
           {/* Linked KSCs (read-only) */}
           {plo.linkedKSCs && plo.linkedKSCs.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-teal-700 mb-2">
                 Linked Competencies
               </label>
-              <p className="text-sm text-slate-500 bg-slate-900/30 px-4 py-3 rounded-lg">
+              <p className="text-sm text-teal-500 bg-teal-50/50 px-4 py-3 rounded-lg">
                 {plo.linkedKSCs.length} KSC{plo.linkedKSCs.length !== 1 ? 's' : ''} linked
               </p>
             </div>
           )}
         </div>
 
-        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+        <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
           <button
             onClick={onCancel}
             disabled={isSaving}
-            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+            className="px-5 py-2.5 text-teal-600 hover:text-teal-600 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || !statement.trim()}
-            className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
           >
             {isSaving ? (
               <>
@@ -283,23 +283,23 @@ function PLOCard({
   const wordCount = plo.statement?.split(/\s+/).length || 0;
 
   return (
-    <div className="bg-slate-900/50 rounded-xl p-5 border border-slate-700 hover:border-slate-600 transition-colors group">
+    <div className="bg-white rounded-xl p-5 border border-teal-200 hover:border-teal-300 transition-colors group">
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-mono text-slate-500 bg-slate-800 px-2 py-1 rounded">
+          <span className="text-sm font-mono text-teal-500 bg-white px-2 py-1 rounded">
             PLO{index + 1}
           </span>
           <span
             className={`text-xs px-3 py-1 rounded-full border capitalize font-medium ${
-              BLOOM_COLORS[plo.bloomLevel] || 'bg-slate-700 text-slate-400'
+              BLOOM_COLORS[plo.bloomLevel] || 'bg-teal-100 text-teal-600'
             }`}
           >
             {plo.bloomLevel}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">{wordCount}/25 words</span>
+          <span className="text-xs text-teal-500">{wordCount}/25 words</span>
           {onEdit && (
             <EditWithAIButton
               target={{
@@ -319,43 +319,43 @@ function PLOCard({
       </div>
 
       {/* Statement */}
-      <p className="text-white text-lg leading-relaxed mb-4">{plo.statement}</p>
+      <p className="text-teal-800 text-lg leading-relaxed mb-4">{plo.statement}</p>
 
       {/* Details Grid */}
       <div className="grid grid-cols-2 gap-4 text-sm">
         {/* Verb */}
-        <div className="bg-slate-800/50 rounded-lg p-3">
-          <p className="text-xs text-slate-500 mb-1">Bloom's Verb</p>
+        <div className="bg-teal-50 rounded-lg p-3">
+          <p className="text-xs text-teal-500 mb-1">Bloom's Verb</p>
           <p className="text-cyan-400 font-medium capitalize">{plo.verb}</p>
         </div>
 
         {/* Competency Links */}
-        <div className="bg-slate-800/50 rounded-lg p-3">
-          <p className="text-xs text-slate-500 mb-1">Competency Links</p>
-          <p className="text-white">
+        <div className="bg-teal-50 rounded-lg p-3">
+          <p className="text-xs text-teal-500 mb-1">Competency Links</p>
+          <p className="text-teal-800">
             {plo.linkedKSCs?.length || 0} KSC{(plo.linkedKSCs?.length || 0) !== 1 ? 's' : ''}
           </p>
         </div>
 
         {/* Assessment Alignment */}
         {plo.assessmentAlignment && (
-          <div className="bg-slate-800/50 rounded-lg p-3 col-span-2">
-            <p className="text-xs text-slate-500 mb-1">Assessment Alignment</p>
-            <p className="text-slate-300">{plo.assessmentAlignment}</p>
+          <div className="bg-teal-50 rounded-lg p-3 col-span-2">
+            <p className="text-xs text-teal-500 mb-1">Assessment Alignment</p>
+            <p className="text-teal-700">{plo.assessmentAlignment}</p>
           </div>
         )}
 
         {/* Job Task Mapping */}
         {plo.jobTaskMapping && plo.jobTaskMapping.length > 0 && (
-          <div className="bg-slate-800/50 rounded-lg p-3 col-span-2">
-            <p className="text-xs text-slate-500 mb-1">Job Tasks Addressed</p>
-            <p className="text-slate-300">{plo.jobTaskMapping.join(', ')}</p>
+          <div className="bg-teal-50 rounded-lg p-3 col-span-2">
+            <p className="text-xs text-teal-500 mb-1">Job Tasks Addressed</p>
+            <p className="text-teal-700">{plo.jobTaskMapping.join(', ')}</p>
           </div>
         )}
       </div>
 
       {/* Validation Badges and Edit Button */}
-      <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-700">
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-teal-200">
         <div className="flex items-center gap-3">
           {plo.measurable && (
             <span className="text-xs text-emerald-400 flex items-center gap-1">
@@ -572,12 +572,12 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
               </svg>
               Step 3: Program Learning Outcomes (PLOs)
             </h3>
-            <p className="text-sm text-slate-300 mb-3">
+            <p className="text-sm text-teal-700 mb-3">
               Transform your KSC framework into{' '}
               <strong className="text-purple-300">4-8 precise, measurable</strong> Program Learning
               Outcomes using Bloom's taxonomy. Each PLO follows the structure:
             </p>
-            <div className="bg-slate-900/50 rounded-lg p-3 text-center">
+            <div className="bg-white rounded-lg p-3 text-center">
               <code className="text-cyan-400">
                 [Bloom's Verb] + [Specific Task] + [Real-World Context]
               </code>
@@ -587,10 +587,10 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
           {/* DECISION 1: Bloom's Taxonomy Levels */}
           <section className="space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2 mb-4">
+              <h3 className="text-lg font-semibold text-cyan-400 border-b border-teal-200 pb-2 mb-4">
                 1. Bloom's Taxonomy Levels <span className="text-red-400">*</span>
               </h3>
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-teal-600 mb-4">
                 Select cognitive levels your program emphasizes. You must choose at least{' '}
                 <span className="text-amber-400">1 lower level</span> (Remember/Understand/Apply)
                 AND <span className="text-amber-400">1 higher level</span>{' '}
@@ -610,7 +610,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                     className={`p-4 rounded-lg border text-left transition-all ${
                       isSelected
                         ? BLOOM_COLORS[level]
-                        : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                        : 'bg-teal-50 border-teal-200 text-teal-600 hover:border-teal-300'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
@@ -622,7 +622,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                       </span>
                     </div>
                     <p className="text-xs opacity-70">{BLOOM_DESCRIPTIONS[level]}</p>
-                    <p className="text-xs mt-2 text-slate-500">
+                    <p className="text-xs mt-2 text-teal-500">
                       {BLOOM_VERBS[level].slice(0, 4).join(', ')}...
                     </p>
                   </button>
@@ -667,10 +667,10 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
           {essentialKSCs.length > 0 && (
             <section className="space-y-4">
               <div>
-                <h3 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2 mb-4">
+                <h3 className="text-lg font-semibold text-cyan-400 border-b border-teal-200 pb-2 mb-4">
                   2. Priority Competencies
                 </h3>
-                <p className="text-sm text-slate-400 mb-4">
+                <p className="text-sm text-teal-600 mb-4">
                   Select Essential competencies from Step 2 that PLOs must address. PLOs should
                   cover ≥70% of Essential competencies.
                 </p>
@@ -684,16 +684,16 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                     onClick={() => togglePriorityCompetency(ksc.id)}
                     className={`p-3 rounded-lg border text-left text-sm transition-all ${
                       formData.priorityCompetencies?.includes(ksc.id)
-                        ? 'bg-cyan-500/20 border-cyan-500 text-white'
-                        : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                        ? 'bg-cyan-500/20 border-cyan-500 text-teal-800'
+                        : 'bg-teal-50 border-teal-200 text-teal-600 hover:border-teal-300'
                     }`}
                   >
-                    <span className="text-xs text-slate-500 mr-2">{ksc.id}</span>
+                    <span className="text-xs text-teal-500 mr-2">{ksc.id}</span>
                     {ksc.statement}
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-teal-500">
                 {formData.priorityCompetencies?.length || 0} of {essentialKSCs.length} selected
               </p>
             </section>
@@ -702,10 +702,10 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
           {/* DECISION 3: Outcome Emphasis */}
           <section className="space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2 mb-4">
+              <h3 className="text-lg font-semibold text-cyan-400 border-b border-teal-200 pb-2 mb-4">
                 3. Outcome Emphasis <span className="text-red-400">*</span>
               </h3>
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-teal-600 mb-4">
                 Choose the primary focus for your learning outcomes.
               </p>
             </div>
@@ -720,8 +720,8 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                   }
                   className={`p-4 rounded-lg border text-left transition-all ${
                     formData.outcomeEmphasis === option.value
-                      ? 'bg-cyan-500/20 border-cyan-500 text-white'
-                      : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                      ? 'bg-cyan-500/20 border-cyan-500 text-teal-800'
+                      : 'bg-teal-50 border-teal-200 text-teal-600 hover:border-teal-300'
                   }`}
                 >
                   <p className="font-medium">{option.label}</p>
@@ -734,12 +734,12 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
           {/* DECISION 4: Number of Outcomes */}
           <section className="space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2 mb-4">
+              <h3 className="text-lg font-semibold text-cyan-400 border-b border-teal-200 pb-2 mb-4">
                 4. Number of PLOs <span className="text-red-400">*</span>
               </h3>
             </div>
 
-            <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
+            <div className="bg-white rounded-lg p-5 border border-teal-200">
               <div className="flex items-center gap-6">
                 <input
                   type="range"
@@ -755,7 +755,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                   {formData.targetCount}
                 </span>
               </div>
-              <div className="flex justify-between text-xs text-slate-500 mt-2">
+              <div className="flex justify-between text-xs text-teal-500 mt-2">
                 <span>4 (minimum)</span>
                 <span>6 (recommended)</span>
                 <span>8 (maximum)</span>
@@ -768,7 +768,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+              className="flex items-center gap-2 text-sm text-teal-600 hover:text-teal-600 transition-colors"
             >
               <svg
                 className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
@@ -787,10 +787,10 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
             </button>
 
             {showAdvanced && (
-              <div className="space-y-4 pl-6 border-l-2 border-slate-700">
+              <div className="space-y-4 pl-6 border-l-2 border-teal-200">
                 {/* Context Constraints */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-teal-700 mb-2">
                     Context Constraints
                   </label>
                   <textarea
@@ -800,13 +800,13 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                     }
                     placeholder="Industry context, specific tools, limitations..."
                     rows={2}
-                    className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none text-sm"
+                    className="w-full px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none text-sm"
                   />
                 </div>
 
                 {/* Stakeholder Priorities */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-teal-700 mb-2">
                     Stakeholder Priorities
                   </label>
                   <textarea
@@ -816,13 +816,13 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                     }
                     placeholder="Employer/client expectations..."
                     rows={2}
-                    className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none text-sm"
+                    className="w-full px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none text-sm"
                   />
                 </div>
 
                 {/* Verbs to Prefer */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-teal-700 mb-2">
                     Verbs to Prefer (comma-separated)
                   </label>
                   <input
@@ -838,13 +838,13 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                       }))
                     }
                     placeholder="e.g., analyze, evaluate, design"
-                    className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 text-sm"
+                    className="w-full px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 text-sm"
                   />
                 </div>
 
                 {/* Verbs to Avoid */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-teal-700 mb-2">
                     Verbs to Avoid (comma-separated)
                   </label>
                   <input
@@ -860,7 +860,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                       }))
                     }
                     placeholder="e.g., know, understand, learn"
-                    className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 text-sm"
+                    className="w-full px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 text-sm"
                   />
                 </div>
               </div>
@@ -878,7 +878,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
           <button
             onClick={handleGenerate}
             disabled={submitStep3.isPending || !bloomValid}
-            className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+            className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
           >
             {submitStep3.isPending ? (
               <span className="flex items-center justify-center gap-2">
@@ -894,8 +894,8 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
         // Display Generated PLOs
         <div className="space-y-6">
           {/* Coverage Report */}
-          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-5 border border-slate-700">
-            <h4 className="text-lg font-semibold text-white mb-4">Coverage Report</h4>
+          <div className="bg-white border border-teal-200 rounded-xl p-5 border border-teal-200">
+            <h4 className="text-lg font-semibold text-teal-800 mb-4">Coverage Report</h4>
 
             {/* Stats Grid */}
             <div className="grid grid-cols-4 gap-4 mb-6">
@@ -903,13 +903,13 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                 <p className="text-3xl font-bold text-purple-400">
                   {workflow.step3?.outcomes?.length || 0}
                 </p>
-                <p className="text-xs text-slate-500">Total PLOs</p>
+                <p className="text-xs text-teal-500">Total PLOs</p>
               </div>
               <div className="text-center">
                 <p className="text-3xl font-bold text-cyan-400">
                   {coverageReport?.coveragePercent || 0}%
                 </p>
-                <p className="text-xs text-slate-500">KSC Coverage</p>
+                <p className="text-xs text-teal-500">KSC Coverage</p>
               </div>
               <div className="text-center">
                 <p className="text-3xl font-bold text-emerald-400">
@@ -920,19 +920,19 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                     ) ||
                     0}
                 </p>
-                <p className="text-xs text-slate-500">Competencies Linked</p>
+                <p className="text-xs text-teal-500">Competencies Linked</p>
               </div>
               <div className="text-center">
                 <p className="text-3xl font-bold text-amber-400">
                   {Object.values(bloomDistribution).filter((v) => (v as number) > 0).length}
                 </p>
-                <p className="text-xs text-slate-500">Bloom Levels</p>
+                <p className="text-xs text-teal-500">Bloom Levels</p>
               </div>
             </div>
 
             {/* Bloom Distribution */}
             <div>
-              <p className="text-sm text-slate-400 mb-3">Bloom's Taxonomy Distribution</p>
+              <p className="text-sm text-teal-600 mb-3">Bloom's Taxonomy Distribution</p>
               <div className="flex gap-2">
                 {BLOOM_LEVELS.map((level) => {
                   const count = (bloomDistribution[level] as number) || 0;
@@ -943,12 +943,12 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                     <div key={level} className="flex-1">
                       <div
                         className={`h-8 rounded-lg flex items-center justify-center text-xs font-medium ${
-                          count > 0 ? BLOOM_COLORS[level] : 'bg-slate-800 text-slate-600'
+                          count > 0 ? BLOOM_COLORS[level] : 'bg-white text-teal-300'
                         }`}
                       >
                         {count > 0 && `${count} (${percent}%)`}
                       </div>
-                      <p className="text-xs text-slate-500 text-center mt-1 capitalize">{level}</p>
+                      <p className="text-xs text-teal-500 text-center mt-1 capitalize">{level}</p>
                     </div>
                   );
                 })}
@@ -957,8 +957,8 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
 
             {/* Validation Checks */}
             {coverageReport?.validation && (
-              <div className="mt-4 pt-4 border-t border-slate-700">
-                <p className="text-sm text-slate-400 mb-2">Validation</p>
+              <div className="mt-4 pt-4 border-t border-teal-200">
+                <p className="text-sm text-teal-600 mb-2">Validation</p>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <span
                     className={
@@ -997,7 +997,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
 
           {/* PLO List */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-4">
+            <h3 className="text-lg font-semibold text-teal-800 mb-4">
               Program Learning Outcomes ({workflow.step3?.outcomes?.length || 0})
             </h3>
             <div className="space-y-4">
@@ -1015,11 +1015,11 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-6 border-t border-slate-700">
+          <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
               onClick={handleGenerate}
               disabled={submitStep3.isPending}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+              className="px-4 py-2 text-teal-600 hover:text-teal-600 transition-colors"
             >
               Regenerate
             </button>
@@ -1028,7 +1028,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                 <button
                   onClick={handleApprove}
                   disabled={approveStep3.isPending || (workflow.step3?.outcomes?.length || 0) < 4}
-                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
                 >
                   {approveStep3.isPending ? 'Approving...' : 'Approve & Continue →'}
                 </button>

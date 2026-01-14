@@ -88,10 +88,10 @@ function ModuleEditModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-700">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+    <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-teal-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-teal-200">
+          <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
             Edit Module <span className="text-green-400">{module.code}</span>
           </h3>
         </div>
@@ -99,31 +99,31 @@ function ModuleEditModal({
         <div className="p-6 space-y-5">
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Module Title</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Module Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-green-500"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
               placeholder="Enter module title..."
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-green-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="Enter module description..."
             />
           </div>
 
           {/* Phase */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Module Phase</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Module Phase</label>
             <div className="grid grid-cols-3 gap-2">
               {(['early', 'middle', 'late'] as ModulePhase[]).map((p) => (
                 <button
@@ -133,7 +133,7 @@ function ModuleEditModal({
                   className={`py-2 px-3 rounded-lg border text-sm transition-all ${
                     phase === p
                       ? PHASE_COLORS[p]
-                      : 'bg-slate-900/50 border-slate-600 text-slate-400 hover:border-slate-500'
+                      : 'bg-white border-teal-300 text-teal-600 hover:border-teal-400'
                   }`}
                 >
                   {PHASE_LABELS[p]}
@@ -145,60 +145,60 @@ function ModuleEditModal({
           {/* Hours */}
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Total Hours</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Total Hours</label>
               <input
                 type="number"
                 value={totalHours}
                 onChange={(e) => handleTotalHoursChange(parseInt(e.target.value) || 0)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-green-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Contact Hours</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Contact Hours</label>
               <input
                 type="number"
                 value={contactHours}
                 onChange={(e) => handleContactHoursChange(parseInt(e.target.value) || 0)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-green-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-teal-700 mb-2">
                 Self-Study Hours
               </label>
               <input
                 type="number"
                 value={selfStudyHours}
                 onChange={(e) => setSelfStudyHours(parseInt(e.target.value) || 0)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-green-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
               />
             </div>
           </div>
 
           {/* Credits */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Credits</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Credits</label>
             <input
               type="number"
               value={credits}
               onChange={(e) => setCredits(parseInt(e.target.value) || 0)}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-green-500"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
             />
           </div>
         </div>
 
-        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+        <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
           <button
             onClick={onCancel}
             disabled={isSaving}
-            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+            className="px-5 py-2.5 text-teal-600 hover:text-teal-600 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || !title.trim()}
-            className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
           >
             {isSaving ? (
               <>
@@ -244,43 +244,43 @@ function MLOEditModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-700">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+    <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-teal-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-teal-200">
+          <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
             Edit MLO <span className="text-cyan-400">{mlo.code}</span>
-            <span className="text-slate-500 text-sm">in {moduleCode}</span>
+            <span className="text-teal-500 text-sm">in {moduleCode}</span>
           </h3>
         </div>
 
         <div className="p-6 space-y-5">
           {/* Code */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">MLO Code</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">MLO Code</label>
             <input
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
               placeholder="e.g., MLO1.1"
             />
           </div>
 
           {/* Statement */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">MLO Statement</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">MLO Statement</label>
             <textarea
               value={statement}
               onChange={(e) => setStatement(e.target.value)}
               rows={3}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="Enter the MLO statement..."
             />
           </div>
 
           {/* Bloom's Level */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Bloom's Taxonomy Level
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -292,7 +292,7 @@ function MLOEditModal({
                   className={`py-2 px-3 rounded-lg border text-sm capitalize transition-all ${
                     bloomLevel === level
                       ? BLOOM_COLORS[level]
-                      : 'bg-slate-900/50 border-slate-600 text-slate-400 hover:border-slate-500'
+                      : 'bg-white border-teal-300 text-teal-600 hover:border-teal-400'
                   }`}
                 >
                   {level}
@@ -303,15 +303,15 @@ function MLOEditModal({
 
           {/* Verb */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Bloom's Verb</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Bloom's Verb</label>
             <input
               type="text"
               value={verb}
               onChange={(e) => setVerb(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
               placeholder="e.g., analyze, evaluate, design"
             />
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-teal-500 mt-1">
               Suggested verbs for {bloomLevel}: {BLOOM_VERBS[bloomLevel]?.slice(0, 5).join(', ')}
             </p>
           </div>
@@ -319,12 +319,12 @@ function MLOEditModal({
           {/* Linked PLOs (read-only) */}
           {mlo.linkedPLOs && mlo.linkedPLOs.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Linked PLOs</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Linked PLOs</label>
               <div className="flex flex-wrap gap-2">
                 {mlo.linkedPLOs.map((plo) => (
                   <span
                     key={plo}
-                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm"
+                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm"
                   >
                     {plo}
                   </span>
@@ -334,18 +334,18 @@ function MLOEditModal({
           )}
         </div>
 
-        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+        <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
           <button
             onClick={onCancel}
             disabled={isSaving}
-            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+            className="px-5 py-2.5 text-teal-600 hover:text-teal-600 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || !statement.trim()}
-            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
           >
             {isSaving ? (
               <>
@@ -365,9 +365,9 @@ function MLOEditModal({
 // MLO Card Component
 function MLOCard({ mlo, onEdit }: { mlo: MLO; onEdit?: (mlo: MLO) => void }) {
   return (
-    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 group">
+    <div className="bg-teal-50 rounded-lg p-3 border border-teal-200/50 group">
       <div className="flex items-start justify-between gap-2 mb-1">
-        <span className="text-xs font-mono text-slate-500">{mlo.code}</span>
+        <span className="text-xs font-mono text-teal-500">{mlo.code}</span>
         <div className="flex items-center gap-2">
           <span
             className={`text-xs px-2 py-0.5 rounded capitalize ${BLOOM_COLORS[mlo.bloomLevel]}`}
@@ -393,12 +393,12 @@ function MLOCard({ mlo, onEdit }: { mlo: MLO; onEdit?: (mlo: MLO) => void }) {
           )}
         </div>
       </div>
-      <p className="text-sm text-slate-300">{mlo.statement}</p>
+      <p className="text-sm text-teal-700">{mlo.statement}</p>
       {mlo.linkedPLOs && mlo.linkedPLOs.length > 0 && (
-        <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
+        <div className="flex items-center gap-2 text-xs text-teal-500 mt-2">
           <span>→</span>
           {mlo.linkedPLOs.map((plo) => (
-            <span key={plo} className="px-1.5 py-0.5 bg-slate-700 rounded">
+            <span key={plo} className="px-1.5 py-0.5 bg-teal-100 rounded">
               {plo}
             </span>
           ))}
@@ -429,13 +429,13 @@ function ModuleCard({
     totalProgramHours > 0 ? Math.round((module.totalHours / totalProgramHours) * 100) : 0;
 
   return (
-    <div className="bg-slate-900/50 rounded-xl border border-slate-700 overflow-hidden group">
+    <div className="bg-white rounded-xl border border-teal-200 overflow-hidden group">
       {/* Header */}
-      <div className="p-4 border-b border-slate-700/50">
+      <div className="p-4 border-b border-teal-200/50">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="flex flex-col items-center">
-              <span className="text-2xl font-bold text-white">{module.sequence}</span>
+              <span className="text-2xl font-bold text-teal-800">{module.sequence}</span>
               <span
                 className={`text-xs px-2 py-0.5 rounded border ${PHASE_COLORS[module.phase || 'middle']}`}
               >
@@ -443,9 +443,9 @@ function ModuleCard({
               </span>
             </div>
             <div>
-              <span className="text-xs font-mono text-slate-500">{module.code}</span>
-              <h4 className="text-white font-semibold text-lg">{module.title}</h4>
-              <p className="text-sm text-slate-400 mt-1">{module.description}</p>
+              <span className="text-xs font-mono text-teal-500">{module.code}</span>
+              <h4 className="text-teal-800 font-semibold text-lg">{module.title}</h4>
+              <p className="text-sm text-teal-600 mt-1">{module.description}</p>
             </div>
           </div>
           <div className="text-right shrink-0">
@@ -484,28 +484,28 @@ function ModuleCard({
               )}
             </div>
             <p className="text-cyan-400 font-bold text-xl">{module.totalHours}h</p>
-            <p className="text-xs text-slate-500">{hoursPercent}% of program</p>
+            <p className="text-xs text-teal-500">{hoursPercent}% of program</p>
             {module.credits > 0 && (
-              <p className="text-xs text-slate-500 mt-1">{module.credits} credits</p>
+              <p className="text-xs text-teal-500 mt-1">{module.credits} credits</p>
             )}
           </div>
         </div>
       </div>
 
       {/* Hours Breakdown */}
-      <div className="px-4 py-3 bg-slate-800/30 border-b border-slate-700/50">
+      <div className="px-4 py-3 bg-teal-50/30 border-b border-teal-200/50">
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
-            <p className="text-lg font-semibold text-white">{module.totalHours}h</p>
-            <p className="text-xs text-slate-500">Total Hours</p>
+            <p className="text-lg font-semibold text-teal-800">{module.totalHours}h</p>
+            <p className="text-xs text-teal-500">Total Hours</p>
           </div>
           <div>
             <p className="text-lg font-semibold text-emerald-400">{module.contactHours}h</p>
-            <p className="text-xs text-slate-500">Contact ({contactPercent}%)</p>
+            <p className="text-xs text-teal-500">Contact ({contactPercent}%)</p>
           </div>
           <div>
             <p className="text-lg font-semibold text-amber-400">{module.selfStudyHours}h</p>
-            <p className="text-xs text-slate-500">Independent ({100 - contactPercent}%)</p>
+            <p className="text-xs text-teal-500">Independent ({100 - contactPercent}%)</p>
           </div>
         </div>
 
@@ -526,8 +526,8 @@ function ModuleCard({
 
       {/* Prerequisites */}
       {module.prerequisites && module.prerequisites.length > 0 && (
-        <div className="px-4 py-2 bg-slate-800/20 border-b border-slate-700/50 text-xs">
-          <span className="text-slate-500">Prerequisites: </span>
+        <div className="px-4 py-2 bg-white/20 border-b border-teal-200/50 text-xs">
+          <span className="text-teal-500">Prerequisites: </span>
           {module.prerequisites.map((prereq, i) => (
             <span key={prereq}>
               <span className="text-cyan-400">{prereq}</span>
@@ -540,7 +540,7 @@ function ModuleCard({
       {/* Expand/Collapse */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-2 flex items-center justify-between text-sm text-slate-400 hover:bg-slate-800/30 transition-colors"
+        className="w-full px-4 py-2 flex items-center justify-between text-sm text-teal-600 hover:bg-teal-50/30 transition-colors"
       >
         <span>
           {module.mlos?.length || 0} MLOs • {module.topics?.length || 0} Topics
@@ -557,11 +557,11 @@ function ModuleCard({
 
       {/* Expanded Content */}
       {expanded && (
-        <div className="p-4 space-y-4 border-t border-slate-700/50">
+        <div className="p-4 space-y-4 border-t border-teal-200/50">
           {/* MLOs */}
           {module.mlos && module.mlos.length > 0 && (
             <div>
-              <h5 className="text-sm font-medium text-slate-300 mb-2">
+              <h5 className="text-sm font-medium text-teal-700 mb-2">
                 Module Learning Outcomes ({module.mlos.length})
               </h5>
               <div className="space-y-2">
@@ -579,20 +579,20 @@ function ModuleCard({
           {/* Topics */}
           {module.topics && module.topics.length > 0 && (
             <div>
-              <h5 className="text-sm font-medium text-slate-300 mb-2">
+              <h5 className="text-sm font-medium text-teal-700 mb-2">
                 Topics ({module.topics.length})
               </h5>
               <div className="grid gap-2">
                 {module.topics.map((topic) => (
                   <div
                     key={topic.id}
-                    className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg"
+                    className="flex items-center justify-between p-2 bg-teal-50 rounded-lg"
                   >
                     <div>
-                      <span className="text-xs text-slate-500 mr-2">#{topic.sequence}</span>
-                      <span className="text-sm text-white">{topic.title}</span>
+                      <span className="text-xs text-teal-500 mr-2">#{topic.sequence}</span>
+                      <span className="text-sm text-teal-800">{topic.title}</span>
                     </div>
-                    <span className="text-xs text-slate-400">{topic.hours}h</span>
+                    <span className="text-xs text-teal-600">{topic.hours}h</span>
                   </div>
                 ))}
               </div>
@@ -601,8 +601,8 @@ function ModuleCard({
 
           {/* PLO Coverage */}
           {module.linkedPLOs && module.linkedPLOs.length > 0 && (
-            <div className="pt-2 border-t border-slate-700/50">
-              <p className="text-xs text-slate-500">
+            <div className="pt-2 border-t border-teal-200/50">
+              <p className="text-xs text-teal-500">
                 Addresses PLOs: {module.linkedPLOs.join(', ')}
               </p>
             </div>
@@ -760,7 +760,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
               </svg>
               Step 4: Course Framework & Module Learning Outcomes
             </h3>
-            <p className="text-sm text-slate-300 mb-4">
+            <p className="text-sm text-teal-700 mb-4">
               The AI will organize your program into{' '}
               <strong className="text-green-300">6-8 modules</strong> with clear sequencing, precise
               hours allocation, and specific Module Learning Outcomes (MLOs) that build toward your
@@ -769,21 +769,21 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
 
             {/* Key Points */}
             <div className="grid md:grid-cols-2 gap-4 text-sm">
-              <div className="bg-slate-900/50 rounded-lg p-3">
-                <p className="text-slate-400 font-medium mb-2">Module Count</p>
-                <p className="text-white">6-8 modules using 15-hour guideline</p>
-                <p className="text-xs text-slate-500 mt-1">Hours are distributed proportionally</p>
+              <div className="bg-white rounded-lg p-3">
+                <p className="text-teal-600 font-medium mb-2">Module Count</p>
+                <p className="text-teal-800">6-8 modules using 15-hour guideline</p>
+                <p className="text-xs text-teal-500 mt-1">Hours are distributed proportionally</p>
               </div>
-              <div className="bg-slate-900/50 rounded-lg p-3">
-                <p className="text-slate-400 font-medium mb-2">Hours Breakdown</p>
-                <p className="text-white">
+              <div className="bg-white rounded-lg p-3">
+                <p className="text-teal-600 font-medium mb-2">Hours Breakdown</p>
+                <p className="text-teal-800">
                   {contactPercent}% Contact / {100 - contactPercent}% Independent
                 </p>
-                <p className="text-xs text-slate-500 mt-1">Based on your Step 1 settings</p>
+                <p className="text-xs text-teal-500 mt-1">Based on your Step 1 settings</p>
               </div>
-              <div className="bg-slate-900/50 rounded-lg p-3">
-                <p className="text-slate-400 font-medium mb-2">Progressive Complexity</p>
-                <ul className="text-xs text-slate-400 space-y-1">
+              <div className="bg-white rounded-lg p-3">
+                <p className="text-teal-600 font-medium mb-2">Progressive Complexity</p>
+                <ul className="text-xs text-teal-600 space-y-1">
                   <li>
                     <span className="text-amber-400">Early (1-2):</span> ≥60% Understand/Apply
                   </li>
@@ -796,38 +796,38 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                   </li>
                 </ul>
               </div>
-              <div className="bg-slate-900/50 rounded-lg p-3">
-                <p className="text-slate-400 font-medium mb-2">Hours Integrity</p>
-                <p className="text-white">Σ module hours = program hours</p>
+              <div className="bg-white rounded-lg p-3">
+                <p className="text-teal-600 font-medium mb-2">Hours Integrity</p>
+                <p className="text-teal-800">Σ module hours = program hours</p>
                 <p className="text-xs text-red-400 mt-1">No tolerance - must match exactly</p>
               </div>
             </div>
           </div>
 
           {/* Program Summary from previous steps */}
-          <div className="bg-slate-900/30 rounded-lg p-4 border border-slate-700">
-            <h4 className="text-sm font-medium text-slate-400 mb-3">From Previous Steps</h4>
+          <div className="bg-teal-50/50 rounded-lg p-4 border border-teal-200">
+            <h4 className="text-sm font-medium text-teal-600 mb-3">From Previous Steps</h4>
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <p className="text-2xl font-bold text-white">
+                <p className="text-2xl font-bold text-teal-800">
                   {(workflow.step1 as any)?.creditCalculation?.totalHours ||
                     (workflow.step1 as any)?.totalHours ||
                     120}
                   h
                 </p>
-                <p className="text-xs text-slate-500">Total Program Hours</p>
+                <p className="text-xs text-teal-500">Total Program Hours</p>
               </div>
               <div>
                 <p className="text-2xl font-bold text-emerald-400">
                   {workflow.step3?.outcomes?.length || 0}
                 </p>
-                <p className="text-xs text-slate-500">PLOs to Address</p>
+                <p className="text-xs text-teal-500">PLOs to Address</p>
               </div>
               <div>
                 <p className="text-2xl font-bold text-cyan-400">
                   {(workflow.step1 as any)?.deliveryMode || 'Hybrid'}
                 </p>
-                <p className="text-xs text-slate-500">Delivery Mode</p>
+                <p className="text-xs text-teal-500">Delivery Mode</p>
               </div>
             </div>
           </div>
@@ -843,7 +843,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
           <button
             onClick={handleGenerate}
             disabled={submitStep4.isPending}
-            className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+            className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
           >
             {submitStep4.isPending ? (
               <span className="flex items-center justify-center gap-2">
@@ -860,31 +860,31 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
         <div className="space-y-6">
           {/* Summary Stats */}
           <div className="grid grid-cols-5 gap-4">
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
-              <p className="text-3xl font-bold text-white">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
+              <p className="text-3xl font-bold text-teal-800">
                 {workflow.step4?.modules?.length || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Modules</p>
+              <p className="text-xs text-teal-500 mt-1">Modules</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-cyan-400">{totalModuleHours}h</p>
-              <p className="text-xs text-slate-500 mt-1">Total Hours</p>
+              <p className="text-xs text-teal-500 mt-1">Total Hours</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-emerald-400">{totalModuleContactHours}h</p>
-              <p className="text-xs text-slate-500 mt-1">Contact Hours</p>
+              <p className="text-xs text-teal-500 mt-1">Contact Hours</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-purple-400">{totalMLOs}</p>
-              <p className="text-xs text-slate-500 mt-1">Total MLOs</p>
+              <p className="text-xs text-teal-500 mt-1">Total MLOs</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p
                 className={`text-3xl font-bold ${workflow.step4?.hoursIntegrity ? 'text-emerald-400' : 'text-red-400'}`}
               >
                 {workflow.step4?.hoursIntegrity ? '✓' : '✗'}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Hours Integrity</p>
+              <p className="text-xs text-teal-500 mt-1">Hours Integrity</p>
             </div>
           </div>
 
@@ -892,7 +892,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
           {!workflow.step4?.hoursIntegrity && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
               <p className="text-red-400 font-medium">⚠ Hours Integrity Failed</p>
-              <p className="text-sm text-slate-400 mt-1">
+              <p className="text-sm text-teal-600 mt-1">
                 Module hours ({totalModuleHours}h) do not match program hours (
                 {workflow.step4?.totalProgramHours}h). Approval is blocked until this is resolved.
               </p>
@@ -901,8 +901,8 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
 
           {/* Validation Report */}
           {validation && (
-            <div className="bg-slate-900/30 rounded-lg p-4 border border-slate-700">
-              <h4 className="text-sm font-medium text-slate-400 mb-3">Validation Report</h4>
+            <div className="bg-teal-50/50 rounded-lg p-4 border border-teal-200">
+              <h4 className="text-sm font-medium text-teal-600 mb-3">Validation Report</h4>
               <div className="grid grid-cols-3 md:grid-cols-6 gap-3 text-xs">
                 <div
                   className={`flex items-center gap-1 ${validation.hoursMatch ? 'text-emerald-400' : 'text-red-400'}`}
@@ -940,14 +940,14 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
 
           {/* Progressive Complexity */}
           {progressiveComplexity && (
-            <div className="bg-slate-900/30 rounded-lg p-4 border border-slate-700">
-              <h4 className="text-sm font-medium text-slate-400 mb-3">Progressive Complexity</h4>
+            <div className="bg-teal-50/50 rounded-lg p-4 border border-teal-200">
+              <h4 className="text-sm font-medium text-teal-600 mb-3">Progressive Complexity</h4>
               <div className="flex gap-4">
                 <div
                   className={`flex-1 p-3 rounded-lg border ${progressiveComplexity.earlyModulesValid ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}
                 >
                   <p className="text-amber-400 font-medium text-sm">Early (1-2)</p>
-                  <p className="text-xs text-slate-400 mt-1">≥60% at Understand/Apply</p>
+                  <p className="text-xs text-teal-600 mt-1">≥60% at Understand/Apply</p>
                   <p
                     className={`text-xs mt-1 ${progressiveComplexity.earlyModulesValid ? 'text-emerald-400' : 'text-amber-400'}`}
                   >
@@ -958,7 +958,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                   className={`flex-1 p-3 rounded-lg border ${progressiveComplexity.middleModulesValid ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}
                 >
                   <p className="text-cyan-400 font-medium text-sm">Middle (3-5)</p>
-                  <p className="text-xs text-slate-400 mt-1">Balanced Apply/Analyze</p>
+                  <p className="text-xs text-teal-600 mt-1">Balanced Apply/Analyze</p>
                   <p
                     className={`text-xs mt-1 ${progressiveComplexity.middleModulesValid ? 'text-emerald-400' : 'text-amber-400'}`}
                   >
@@ -969,7 +969,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                   className={`flex-1 p-3 rounded-lg border ${progressiveComplexity.lateModulesValid ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}
                 >
                   <p className="text-purple-400 font-medium text-sm">Late (6-8)</p>
-                  <p className="text-xs text-slate-400 mt-1">≥30% at Analyze/Evaluate/Create</p>
+                  <p className="text-xs text-teal-600 mt-1">≥30% at Analyze/Evaluate/Create</p>
                   <p
                     className={`text-xs mt-1 ${progressiveComplexity.lateModulesValid ? 'text-emerald-400' : 'text-amber-400'}`}
                   >
@@ -982,7 +982,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
 
           {/* Modules List */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-4">
+            <h3 className="text-lg font-semibold text-teal-800 mb-4">
               Modules ({workflow.step4?.modules?.length || 0})
             </h3>
             <div className="space-y-4">
@@ -1008,11 +1008,11 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-6 border-t border-slate-700">
+          <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
               onClick={handleGenerate}
               disabled={submitStep4.isPending}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+              className="px-4 py-2 text-teal-600 hover:text-teal-600 transition-colors"
             >
               Regenerate
             </button>
@@ -1021,7 +1021,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                 <button
                   onClick={handleApprove}
                   disabled={approveStep4.isPending || !workflow.step4?.hoursIntegrity}
-                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
                 >
                   {approveStep4.isPending ? 'Approving...' : 'Approve & Continue →'}
                 </button>

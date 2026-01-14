@@ -50,7 +50,7 @@ const CONTENT_TYPE_CONFIG: Record<string, { label: string; icon: string; color: 
   report: { label: 'Report', icon: '📊', color: 'bg-amber-500/20 text-amber-400' },
   case_study: { label: 'Case Study', icon: '💼', color: 'bg-emerald-500/20 text-emerald-400' },
   video: { label: 'Video', icon: '🎬', color: 'bg-red-500/20 text-red-400' },
-  other: { label: 'Resource', icon: '📁', color: 'bg-slate-500/20 text-slate-400' },
+  other: { label: 'Resource', icon: '📁', color: 'bg-teal-400/20 text-teal-600' },
 };
 
 const READING_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
@@ -151,10 +151,10 @@ function ReadingEditModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-700">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+    <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-teal-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-teal-200">
+          <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
             Edit <span className="text-blue-400">Reading Item</span>
           </h3>
         </div>
@@ -162,26 +162,26 @@ function ReadingEditModal({
         <div className="p-6 space-y-5">
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-blue-500"
               placeholder="Enter reading title..."
             />
           </div>
 
           {/* Authors */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Authors</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Authors</label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={authorsInput}
                 onChange={(e) => setAuthorsInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAuthor())}
-                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-blue-500"
                 placeholder="Add an author..."
               />
               <button
@@ -197,13 +197,13 @@ function ReadingEditModal({
                 {authors.map((author, i) => (
                   <span
                     key={i}
-                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm flex items-center gap-2"
                   >
                     {author}
                     <button
                       type="button"
                       onClick={() => removeAuthor(i)}
-                      className="text-slate-500 hover:text-red-400"
+                      className="text-teal-500 hover:text-red-400"
                     >
                       ×
                     </button>
@@ -216,20 +216,20 @@ function ReadingEditModal({
           {/* Year and Category */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Year</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Year</label>
               <input
                 type="number"
                 value={year}
                 onChange={(e) => setYear(parseInt(e.target.value) || new Date().getFullYear())}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-blue-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Category</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Category</label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as 'core' | 'supplementary')}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-blue-500"
               >
                 <option value="core">Core</option>
                 <option value="supplementary">Supplementary</option>
@@ -240,11 +240,11 @@ function ReadingEditModal({
           {/* Content Type and Reading Type */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Content Type</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Content Type</label>
               <select
                 value={contentType}
                 onChange={(e) => setContentType(e.target.value as any)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-blue-500"
               >
                 {Object.entries(CONTENT_TYPE_CONFIG).map(([value, config]) => (
                   <option key={value} value={value}>
@@ -254,11 +254,11 @@ function ReadingEditModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Reading Type</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Reading Type</label>
               <select
                 value={readingType}
                 onChange={(e) => setReadingType(e.target.value as 'academic' | 'applied' | 'industry')}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-blue-500"
               >
                 <option value="academic">Academic</option>
                 <option value="applied">Applied</option>
@@ -270,11 +270,11 @@ function ReadingEditModal({
           {/* Complexity and Reading Time */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Complexity</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Complexity</label>
               <select
                 value={complexity}
                 onChange={(e) => setComplexity(e.target.value as ReadingComplexity)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-blue-500"
               >
                 <option value="introductory">Introductory</option>
                 <option value="intermediate">Intermediate</option>
@@ -282,12 +282,12 @@ function ReadingEditModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Reading Time (minutes)</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Reading Time (minutes)</label>
               <input
                 type="number"
                 value={estimatedReadingMinutes}
                 onChange={(e) => setEstimatedReadingMinutes(parseInt(e.target.value) || 0)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
@@ -295,22 +295,22 @@ function ReadingEditModal({
           {/* Specific Assignment Details */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Specific Chapters</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Specific Chapters</label>
               <input
                 type="text"
                 value={specificChapters}
                 onChange={(e) => setSpecificChapters(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-blue-500"
                 placeholder="e.g., Chapter 1: Introduction"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Page Range</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Page Range</label>
               <input
                 type="text"
                 value={pageRange}
                 onChange={(e) => setPageRange(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-blue-500"
                 placeholder="e.g., pp. 17-24"
               />
             </div>
@@ -318,14 +318,14 @@ function ReadingEditModal({
 
           {/* Section Names */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Section Names</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Section Names</label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={sectionInput}
                 onChange={(e) => setSectionInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSection())}
-                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-blue-500"
                 placeholder="Add a section name..."
               />
               <button
@@ -341,13 +341,13 @@ function ReadingEditModal({
                 {sectionNames.map((section, i) => (
                   <span
                     key={i}
-                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm flex items-center gap-2"
                   >
                     {section}
                     <button
                       type="button"
                       onClick={() => removeSection(i)}
-                      className="text-slate-500 hover:text-red-400"
+                      className="text-teal-500 hover:text-red-400"
                     >
                       ×
                     </button>
@@ -360,21 +360,21 @@ function ReadingEditModal({
           {/* Suggested Week and Assessment Relevance */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Suggested Week</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Suggested Week</label>
               <input
                 type="text"
                 value={suggestedWeek}
                 onChange={(e) => setSuggestedWeek(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-blue-500"
                 placeholder="e.g., Week 1-2"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Assessment Relevance</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Assessment Relevance</label>
               <select
                 value={assessmentRelevance}
                 onChange={(e) => setAssessmentRelevance(e.target.value as 'high' | 'medium' | 'low')}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-blue-500"
               >
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
@@ -385,14 +385,14 @@ function ReadingEditModal({
 
           {/* Linked MLOs */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Linked MLOs</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Linked MLOs</label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={mloInput}
                 onChange={(e) => setMloInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addMLO())}
-                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-blue-500"
                 placeholder="Add an MLO..."
               />
               <button
@@ -408,13 +408,13 @@ function ReadingEditModal({
                 {linkedMLOs.map((mlo, i) => (
                   <span
                     key={i}
-                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm flex items-center gap-2"
                   >
                     {mlo}
                     <button
                       type="button"
                       onClick={() => removeMLO(i)}
-                      className="text-slate-500 hover:text-red-400"
+                      className="text-teal-500 hover:text-red-400"
                     >
                       ×
                     </button>
@@ -426,12 +426,12 @@ function ReadingEditModal({
 
           {/* Citation */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Citation</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Citation</label>
             <textarea
               value={citation}
               onChange={(e) => setCitation(e.target.value)}
               rows={3}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-blue-500 resize-none"
               placeholder="Enter APA citation..."
             />
           </div>
@@ -439,22 +439,22 @@ function ReadingEditModal({
           {/* DOI and URL */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">DOI</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">DOI</label>
               <input
                 type="text"
                 value={doi}
                 onChange={(e) => setDoi(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-blue-500"
                 placeholder="10.1000/example"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">URL</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">URL</label>
               <input
                 type="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-blue-500"
                 placeholder="https://..."
               />
             </div>
@@ -462,29 +462,29 @@ function ReadingEditModal({
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Notes</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Notes</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-blue-500 resize-none"
               placeholder="Additional notes..."
             />
           </div>
         </div>
 
-        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+        <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
           <button
             onClick={onCancel}
             disabled={isSaving}
-            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+            className="px-5 py-2.5 text-teal-600 hover:text-teal-600 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || !title.trim()}
-            className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
           >
             {isSaving ? (
               <>
@@ -514,7 +514,7 @@ function ReadingCard({ reading, onEdit }: { reading: ReadingItem; onEdit?: (read
       className={`rounded-lg border overflow-hidden group ${
         reading.category === 'core'
           ? 'bg-cyan-500/5 border-cyan-500/30'
-          : 'bg-slate-900/30 border-slate-700'
+          : 'bg-teal-50/50 border-teal-200'
       }`}
     >
       <div className="p-4">
@@ -526,7 +526,7 @@ function ReadingCard({ reading, onEdit }: { reading: ReadingItem; onEdit?: (read
                 className={`text-xs px-2 py-0.5 rounded font-medium ${
                   reading.category === 'core'
                     ? 'bg-cyan-500/20 text-cyan-400'
-                    : 'bg-slate-700 text-slate-400'
+                    : 'bg-teal-100 text-teal-600'
                 }`}
               >
                 {reading.category === 'core' ? '📘 Core' : '📙 Supplementary'}
@@ -540,11 +540,11 @@ function ReadingCard({ reading, onEdit }: { reading: ReadingItem; onEdit?: (read
                 {readingTypeConfig.label}
               </span>
               {reading.suggestedWeek && (
-                <span className="text-xs text-slate-500">{reading.suggestedWeek}</span>
+                <span className="text-xs text-teal-500">{reading.suggestedWeek}</span>
               )}
             </div>
-            <h4 className="text-white font-medium">{reading.title}</h4>
-            <p className="text-sm text-slate-400">
+            <h4 className="text-teal-800 font-medium">{reading.title}</h4>
+            <p className="text-sm text-teal-600">
               {reading.authors?.join(', ')} ({reading.year})
             </p>
           </div>
@@ -581,7 +581,7 @@ function ReadingCard({ reading, onEdit }: { reading: ReadingItem; onEdit?: (read
         )}
 
         {/* Citation */}
-        <p className="text-xs text-slate-500 font-mono bg-slate-800/50 p-2 rounded">
+        <p className="text-xs text-teal-500 font-mono bg-teal-50 p-2 rounded">
           {reading.citation}
         </p>
 
@@ -632,9 +632,9 @@ function ReadingCard({ reading, onEdit }: { reading: ReadingItem; onEdit?: (read
         {/* MLO Links (for Core) */}
         {reading.category === 'core' && reading.linkedMLOs && reading.linkedMLOs.length > 0 && (
           <div className="mt-2 flex items-center gap-2">
-            <span className="text-xs text-slate-500">Supports:</span>
+            <span className="text-xs text-teal-500">Supports:</span>
             {reading.linkedMLOs.map((mlo) => (
-              <span key={mlo} className="text-xs px-1.5 py-0.5 bg-slate-700 rounded text-cyan-400">
+              <span key={mlo} className="text-xs px-1.5 py-0.5 bg-teal-100 rounded text-cyan-400">
                 {mlo}
               </span>
             ))}
@@ -685,7 +685,7 @@ function ReadingCard({ reading, onEdit }: { reading: ReadingItem; onEdit?: (read
 
       {/* Reference Note */}
       {reading.isReference && reading.originalModuleId && (
-        <div className="px-4 pb-3 text-xs text-slate-500">
+        <div className="px-4 pb-3 text-xs text-teal-500">
           → See {reading.originalModuleId} for full entry
         </div>
       )}
@@ -701,12 +701,12 @@ function ModuleSummaryCard({ summary }: { summary: ModuleReadingSummary }) {
 
   return (
     <div
-      className={`bg-slate-900/30 rounded-lg p-4 border ${
+      className={`bg-teal-50/50 rounded-lg p-4 border ${
         summary.agiCompliant && isTimeValid ? 'border-emerald-500/30' : 'border-amber-500/30'
       }`}
     >
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-white font-medium">{summary.moduleTitle}</h4>
+        <h4 className="text-teal-800 font-medium">{summary.moduleTitle}</h4>
         <span
           className={`text-xs px-2 py-1 rounded ${
             summary.agiCompliant
@@ -726,7 +726,7 @@ function ModuleSummaryCard({ summary }: { summary: ModuleReadingSummary }) {
           <p className={`text-lg font-bold ${isCoreValid ? 'text-cyan-400' : 'text-red-400'}`}>
             {summary.coreCount}
           </p>
-          <p className="text-xs text-slate-500">Core (3-6)</p>
+          <p className="text-xs text-teal-500">Core (3-6)</p>
         </div>
         <div
           className={`text-center p-2 rounded ${isSupplementaryValid ? 'bg-amber-500/10' : 'bg-red-500/10'}`}
@@ -736,22 +736,22 @@ function ModuleSummaryCard({ summary }: { summary: ModuleReadingSummary }) {
           >
             {summary.supplementaryCount}
           </p>
-          <p className="text-xs text-slate-500">Supplementary (4-8)</p>
+          <p className="text-xs text-teal-500">Supplementary (4-8)</p>
         </div>
       </div>
 
       {/* Time Allocation */}
       <div className="space-y-1">
         <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Core reading:</span>
+          <span className="text-teal-600">Core reading:</span>
           <span className="text-cyan-400">{formatTime(summary.coreReadingMinutes)}</span>
         </div>
         <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Supplementary:</span>
+          <span className="text-teal-600">Supplementary:</span>
           <span className="text-amber-400">{formatTime(summary.supplementaryReadingMinutes)}</span>
         </div>
-        <div className="flex justify-between text-xs font-medium border-t border-slate-700 pt-1 mt-1">
-          <span className="text-slate-300">Total:</span>
+        <div className="flex justify-between text-xs font-medium border-t border-teal-200 pt-1 mt-1">
+          <span className="text-teal-700">Total:</span>
           <span className={isTimeValid ? 'text-emerald-400' : 'text-red-400'}>
             {formatTime(summary.totalReadingMinutes)} /{' '}
             {formatTime(summary.independentStudyMinutes)}
@@ -761,19 +761,19 @@ function ModuleSummaryCard({ summary }: { summary: ModuleReadingSummary }) {
 
       {/* Progress Bar */}
       <div className="mt-2">
-        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+        <div className="h-2 bg-teal-100 rounded-full overflow-hidden">
           <div
             className={`h-full ${isTimeValid ? 'bg-emerald-500' : 'bg-red-500'}`}
             style={{ width: `${Math.min(summary.readingTimePercent, 100)}%` }}
           />
         </div>
-        <p className={`text-xs text-right mt-1 ${isTimeValid ? 'text-slate-500' : 'text-red-400'}`}>
+        <p className={`text-xs text-right mt-1 ${isTimeValid ? 'text-teal-500' : 'text-red-400'}`}>
           {summary.readingTimePercent}% of independent study
         </p>
       </div>
 
       {/* Validation Indicators */}
-      <div className="mt-2 pt-2 border-t border-slate-700 flex gap-2 text-xs">
+      <div className="mt-2 pt-2 border-t border-teal-200 flex gap-2 text-xs">
         <span className={summary.allCoreMapToMLO ? 'text-emerald-400' : 'text-amber-400'}>
           {summary.allCoreMapToMLO ? '✓' : '⚠'} MLO mapped
         </span>
@@ -917,8 +917,8 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
             <div>
-              <h3 className="text-lg font-semibold text-white">Generating Reading Lists...</h3>
-              <p className="text-sm text-slate-400">
+              <h3 className="text-lg font-semibold text-teal-800">Generating Reading Lists...</h3>
+              <p className="text-sm text-teal-600">
                 This may take a minute. You can navigate away and come back.
               </p>
             </div>
@@ -943,7 +943,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
               </svg>
               Step 6: Indicative & Additional Reading Lists
             </h3>
-            <p className="text-sm text-slate-300 mb-4">
+            <p className="text-sm text-teal-700 mb-4">
               Transform your AGI-validated sources into structured reading lists with
               <strong className="text-cyan-400"> Core (Indicative)</strong> and
               <strong className="text-amber-400"> Supplementary (Additional)</strong>{' '}
@@ -954,7 +954,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
             <div className="grid md:grid-cols-2 gap-4 text-sm">
               <div className="bg-cyan-500/10 rounded-lg p-3 border border-cyan-500/20">
                 <p className="text-cyan-400 font-medium mb-2">📘 Core Reading (3-6 per module)</p>
-                <ul className="text-xs text-slate-400 space-y-1">
+                <ul className="text-xs text-teal-600 space-y-1">
                   <li>• Essential for meeting MLOs</li>
                   <li>• Required for assessment preparation</li>
                   <li>• Foundation of module content</li>
@@ -965,7 +965,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
                 <p className="text-amber-400 font-medium mb-2">
                   📙 Supplementary Reading (4-8 per module)
                 </p>
-                <ul className="text-xs text-slate-400 space-y-1">
+                <ul className="text-xs text-teal-600 space-y-1">
                   <li>• Deepen understanding</li>
                   <li>• Alternative perspectives</li>
                   <li>• Support diverse learning styles</li>
@@ -975,8 +975,8 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
             </div>
 
             {/* Effort Estimation */}
-            <div className="mt-4 bg-slate-900/50 rounded-lg p-3">
-              <p className="text-slate-400 font-medium mb-2">📊 Effort Estimation</p>
+            <div className="mt-4 bg-white rounded-lg p-3">
+              <p className="text-teal-600 font-medium mb-2">📊 Effort Estimation</p>
               <div className="grid grid-cols-3 gap-3 text-xs text-center">
                 <div>
                   <span
@@ -984,7 +984,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
                   >
                     Introductory
                   </span>
-                  <p className="text-slate-500 mt-1">200 words/min</p>
+                  <p className="text-teal-500 mt-1">200 words/min</p>
                 </div>
                 <div>
                   <span
@@ -992,7 +992,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
                   >
                     Intermediate
                   </span>
-                  <p className="text-slate-500 mt-1">167 words/min</p>
+                  <p className="text-teal-500 mt-1">167 words/min</p>
                 </div>
                 <div>
                   <span
@@ -1000,10 +1000,10 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
                   >
                     Advanced
                   </span>
-                  <p className="text-slate-500 mt-1">133 words/min</p>
+                  <p className="text-teal-500 mt-1">133 words/min</p>
                 </div>
               </div>
-              <p className="text-xs text-slate-500 mt-2 text-center">
+              <p className="text-xs text-teal-500 mt-2 text-center">
                 Total reading time must not exceed independent study hours allocation
               </p>
             </div>
@@ -1020,7 +1020,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
           <button
             onClick={handleGenerate}
             disabled={isCurrentlyGenerating}
-            className="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+            className="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
           >
             {isCurrentlyGenerating ? (
               <span className="flex items-center justify-center gap-2">
@@ -1037,35 +1037,35 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
         <div className="space-y-6">
           {/* Overall Stats */}
           <div className="grid grid-cols-5 gap-4">
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
-              <p className="text-3xl font-bold text-white">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
+              <p className="text-3xl font-bold text-teal-800">
                 {workflow.step6?.totalReadings || workflow.step6?.readings?.length || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Total Readings</p>
+              <p className="text-xs text-teal-500 mt-1">Total Readings</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-cyan-400">{workflow.step6?.coreCount || 0}</p>
-              <p className="text-xs text-slate-500 mt-1">Core</p>
+              <p className="text-xs text-teal-500 mt-1">Core</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-amber-400">
                 {workflow.step6?.supplementaryCount || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Supplementary</p>
+              <p className="text-xs text-teal-500 mt-1">Supplementary</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-purple-400">
                 {formatTime(workflow.step6?.totalReadingMinutes || 0)}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Total Time</p>
+              <p className="text-xs text-teal-500 mt-1">Total Time</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p
                 className={`text-3xl font-bold ${workflow.step6?.isValid ? 'text-emerald-400' : 'text-red-400'}`}
               >
                 {workflow.step6?.isValid ? '✓' : '✗'}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Valid</p>
+              <p className="text-xs text-teal-500 mt-1">Valid</p>
             </div>
           </div>
 
@@ -1115,9 +1115,9 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
 
               {/* Validation Issues */}
               {workflow.step6?.validationIssues && workflow.step6.validationIssues.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-slate-700/50">
+                <div className="mt-3 pt-3 border-t border-teal-200/50">
                   <p className="text-amber-400 text-sm font-medium mb-2">Issues:</p>
-                  <ul className="text-xs text-slate-400 space-y-1">
+                  <ul className="text-xs text-teal-600 space-y-1">
                     {workflow.step6.validationIssues.map((issue, i) => (
                       <li key={i}>• {issue}</li>
                     ))}
@@ -1130,7 +1130,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
           {/* Module Summaries */}
           {workflow.step6?.moduleSummaries && workflow.step6.moduleSummaries.length > 0 && (
             <div>
-              <h3 className="text-lg font-semibold text-white mb-4">Module Summaries</h3>
+              <h3 className="text-lg font-semibold text-teal-800 mb-4">Module Summaries</h3>
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {workflow.step6.moduleSummaries.map((summary) => (
                   <ModuleSummaryCard key={summary.moduleId} summary={summary} />
@@ -1148,7 +1148,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
                   className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
                     selectedModule === null
                       ? 'bg-blue-500/20 text-blue-400 border border-blue-500'
-                      : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-600'
+                      : 'bg-white text-teal-600 border border-teal-200 hover:border-teal-300'
                   }`}
                 >
                   All Modules
@@ -1160,7 +1160,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
                     className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
                       selectedModule === modId
                         ? 'bg-blue-500/20 text-blue-400 border border-blue-500'
-                        : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-600'
+                        : 'bg-white text-teal-600 border border-teal-200 hover:border-teal-300'
                     }`}
                   >
                     {modId}
@@ -1172,7 +1172,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
           {/* Core Readings */}
           {coreReadings.length > 0 && (
             <div>
-              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-teal-800 mb-4 flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-cyan-400" />
                 Core Reading ({coreReadings.length})
               </h3>
@@ -1191,7 +1191,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
           {/* Supplementary Readings */}
           {supplementaryReadings.length > 0 && (
             <div>
-              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-teal-800 mb-4 flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-amber-400" />
                 Supplementary Reading ({supplementaryReadings.length})
               </h3>
@@ -1215,11 +1215,11 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-6 border-t border-slate-700">
+          <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
               onClick={handleGenerate}
               disabled={submitStep6.isPending}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+              className="px-4 py-2 text-teal-600 hover:text-teal-600 transition-colors"
             >
               Regenerate
             </button>
@@ -1228,7 +1228,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
                 <button
                   onClick={handleApprove}
                   disabled={approveStep6.isPending}
-                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
                 >
                   {approveStep6.isPending ? 'Approving...' : 'Approve & Continue →'}
                 </button>

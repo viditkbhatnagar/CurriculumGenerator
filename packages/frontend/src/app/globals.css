@@ -2,6 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  /* New Pleasant Teal/Mint Theme - Light Mode (Default) */
+  :root,
+  .light {
+    /* Main backgrounds using the provided palette */
+    --background: 218 244 245; /* #DAF4F5 - lightest mint */
+    --background-secondary: 196 220 224; /* #C4DCE0 - pale teal */
+    --foreground: 45 65 66; /* Dark teal for text */
+    --foreground-muted: 90 115 116; /* Muted teal for secondary text */
+    
+    /* Card and component backgrounds */
+    --card: 255 255 255; /* White cards */
+    --card-foreground: 45 65 66; /* Dark teal text */
+    --border: 171 206 207; /* #ABCECF - light teal borders */
+    
+    /* Primary accent - using the main teal #80A3A2 */
+    --accent-primary: 128 163 162; /* #80A3A2 */
+    --accent-secondary: 171 206 207; /* #ABCECF */
+    --accent-tertiary: 196 220 224; /* #C4DCE0 */
+    --accent-light: 218 244 245; /* #DAF4F5 */
+    
+    /* Semantic colors - teal-tinted versions */
+    --accent-cyan: 80 170 170; /* Teal-cyan */
+    --accent-indigo: 110 140 160; /* Muted blue-gray */
+    --accent-purple: 130 140 160; /* Muted purple-gray */
+    --accent-emerald: 100 165 150; /* Teal-green */
+    --accent-amber: 180 160 120; /* Warm accent */
+    --accent-rose: 170 130 140; /* Soft rose */
+    
+    /* Status colors */
+    --success: 100 165 150;
+    --warning: 180 160 120;
+    --error: 180 120 130;
+    --info: 128 163 162;
+  }
+
+  /* Dark theme - pleasant dark variant */
+  .dark {
+    --background: 35 50 52; /* Dark teal */
+    --background-secondary: 45 65 68; /* Slightly lighter */
+    --foreground: 218 244 245; /* Light mint text */
+    --foreground-muted: 171 206 207; /* Muted light teal */
+    
+    --card: 50 70 73; /* Dark teal cards */
+    --card-foreground: 218 244 245; /* Light text */
+    --border: 80 110 112; /* Muted teal borders */
+    
+    /* Primary accent - brightened for dark mode */
+    --accent-primary: 128 163 162; /* #80A3A2 */
+    --accent-secondary: 171 206 207; /* #ABCECF */
+    --accent-tertiary: 196 220 224; /* #C4DCE0 */
+    --accent-light: 218 244 245; /* #DAF4F5 */
+    
+    /* Semantic colors - brighter for dark mode */
+    --accent-cyan: 100 190 190;
+    --accent-indigo: 130 160 180;
+    --accent-purple: 150 160 180;
+    --accent-emerald: 120 185 170;
+    --accent-amber: 200 180 140;
+    --accent-rose: 190 150 160;
+    
+    /* Status colors */
+    --success: 120 185 170;
+    --warning: 200 180 140;
+    --error: 200 140 150;
+    --info: 128 163 162;
+  }
+}
+
 /* Custom Scrollbar Styles */
 .scrollbar-thin {
   scrollbar-width: thin;
@@ -11,25 +80,108 @@
   width: 6px;
 }
 
-.scrollbar-track-slate-800::-webkit-scrollbar-track {
-  background: rgb(30 41 59);
+.light .scrollbar-track-slate-800::-webkit-scrollbar-track,
+:root .scrollbar-track-slate-800::-webkit-scrollbar-track {
+  background: rgb(196 220 224);
   border-radius: 3px;
 }
 
-.scrollbar-thumb-slate-600::-webkit-scrollbar-thumb {
-  background: rgb(71 85 105);
+.dark .scrollbar-track-slate-800::-webkit-scrollbar-track {
+  background: rgb(50 70 73);
+  border-radius: 3px;
+}
+
+.light .scrollbar-thumb-slate-600::-webkit-scrollbar-thumb,
+:root .scrollbar-thumb-slate-600::-webkit-scrollbar-thumb {
+  background: rgb(128 163 162);
+  border-radius: 3px;
+}
+
+.dark .scrollbar-thumb-slate-600::-webkit-scrollbar-thumb {
+  background: rgb(100 140 142);
   border-radius: 3px;
 }
 
 .scrollbar-thumb-slate-600::-webkit-scrollbar-thumb:hover {
-  background: rgb(100 116 139);
+  background: rgb(90 130 132);
 }
 
 .hover\:scrollbar-thumb-slate-500:hover::-webkit-scrollbar-thumb {
-  background: rgb(100 116 139);
+  background: rgb(100 140 142);
 }
 
 /* Smooth scrolling */
 .scrollbar-thin {
   scroll-behavior: smooth;
+}
+
+/* Animation utilities */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out forwards;
+}
+
+/* Theme transition */
+html {
+  transition: background-color 0.3s ease;
+}
+
+body {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Custom utility classes for the teal palette */
+.bg-teal-primary {
+  background-color: #80A3A2;
+}
+
+.bg-teal-secondary {
+  background-color: #ABCECF;
+}
+
+.bg-teal-tertiary {
+  background-color: #C4DCE0;
+}
+
+.bg-teal-light {
+  background-color: #DAF4F5;
+}
+
+.text-teal-primary {
+  color: #80A3A2;
+}
+
+.text-teal-dark {
+  color: #4a6667;
+}
+
+.border-teal-primary {
+  border-color: #80A3A2;
+}
+
+.border-teal-secondary {
+  border-color: #ABCECF;
+}
+
+/* Gradient utilities */
+.gradient-teal {
+  background: linear-gradient(135deg, #80A3A2 0%, #ABCECF 50%, #C4DCE0 100%);
+}
+
+.gradient-teal-soft {
+  background: linear-gradient(135deg, #ABCECF 0%, #C4DCE0 50%, #DAF4F5 100%);
+}
+
+.gradient-teal-reverse {
+  background: linear-gradient(135deg, #DAF4F5 0%, #C4DCE0 50%, #ABCECF 100%);
 }

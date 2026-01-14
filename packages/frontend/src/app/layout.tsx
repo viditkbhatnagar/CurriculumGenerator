@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { GenerationProvider } from '@/contexts/GenerationContext';
+import { ThemeProvider } from '@/providers/ThemeProvider';
 
 export const metadata: Metadata = {
   title: 'Curriculum Generator App',
@@ -10,10 +11,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className="light">
       <body>
         <QueryProvider>
-          <GenerationProvider>{children}</GenerationProvider>
+          <ThemeProvider>
+            <GenerationProvider>{children}</GenerationProvider>
+          </ThemeProvider>
         </QueryProvider>
       </body>
     </html>

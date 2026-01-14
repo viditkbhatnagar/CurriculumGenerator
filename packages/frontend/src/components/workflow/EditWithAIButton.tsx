@@ -51,7 +51,7 @@ export default function EditWithAIButton({
         ${
           isHovered
             ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border-cyan-500/50 text-cyan-400'
-            : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-cyan-400'
+            : 'bg-teal-50 border-teal-200 text-teal-600 hover:text-cyan-400'
         }
         border
         ${className}

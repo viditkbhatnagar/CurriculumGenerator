@@ -132,10 +132,10 @@ function KSCEditModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-700">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+    <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-teal-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-teal-200">
+          <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
             Edit <span className={typeColors[type]}>{typeLabels[type]}</span> Item
           </h3>
         </div>
@@ -143,35 +143,35 @@ function KSCEditModal({
         <div className="p-6 space-y-5">
           {/* Statement/Title */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Statement / Title
             </label>
             <textarea
               value={statement}
               onChange={(e) => setStatement(e.target.value)}
               rows={3}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="Enter the KSC statement..."
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Description / Context
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="Provide additional context or details..."
             />
           </div>
 
           {/* Importance */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Importance Level
             </label>
             <div className="flex gap-3">
@@ -181,7 +181,7 @@ function KSCEditModal({
                 className={`flex-1 py-3 px-4 rounded-lg border transition-all ${
                   importance === 'essential'
                     ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
-                    : 'bg-slate-900/50 border-slate-600 text-slate-400 hover:border-slate-500'
+                    : 'bg-white border-teal-300 text-teal-600 hover:border-teal-400'
                 }`}
               >
                 Essential
@@ -191,8 +191,8 @@ function KSCEditModal({
                 onClick={() => setImportance('desirable')}
                 className={`flex-1 py-3 px-4 rounded-lg border transition-all ${
                   importance === 'desirable'
-                    ? 'bg-slate-500/20 border-slate-400 text-slate-300'
-                    : 'bg-slate-900/50 border-slate-600 text-slate-400 hover:border-slate-500'
+                    ? 'bg-teal-400/20 border-teal-400 text-teal-700'
+                    : 'bg-white border-teal-300 text-teal-600 hover:border-teal-400'
                 }`}
               >
                 Desirable
@@ -203,28 +203,28 @@ function KSCEditModal({
           {/* Source (read-only) */}
           {item.source && (
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-teal-700 mb-2">
                 Source
               </label>
-              <p className="text-sm text-slate-500 bg-slate-900/30 px-4 py-3 rounded-lg">
+              <p className="text-sm text-teal-500 bg-teal-50/50 px-4 py-3 rounded-lg">
                 {item.source}
               </p>
             </div>
           )}
         </div>
 
-        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+        <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
           <button
             onClick={onCancel}
             disabled={isSaving}
-            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+            className="px-5 py-2.5 text-teal-600 hover:text-teal-600 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || !statement.trim()}
-            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
           >
             {isSaving ? (
               <>
@@ -253,7 +253,7 @@ function KSCCard({
 }) {
   const importanceColors: Record<KSCImportance, string> = {
     essential: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    desirable: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+    desirable: 'bg-teal-400/20 text-teal-600 border-teal-400/30',
   };
 
   const typeColors = {
@@ -269,13 +269,13 @@ function KSCCard({
   };
 
   return (
-    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700 hover:border-slate-600 transition-colors">
+    <div className="bg-white rounded-lg p-4 border border-teal-200 hover:border-teal-300 transition-colors">
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex items-start gap-3">
           <span className={`text-xs px-2 py-1 rounded font-medium ${typeColors[type]}`}>
             {typeLabels[type]}
           </span>
-          <p className="text-white">{item.statement}</p>
+          <p className="text-teal-800">{item.statement}</p>
         </div>
         <span
           className={`text-xs px-2 py-1 rounded-full border whitespace-nowrap ${importanceColors[item.importance as KSCImportance] || importanceColors.desirable}`}
@@ -283,8 +283,8 @@ function KSCCard({
           {item.importance}
         </span>
       </div>
-      {item.description && <p className="text-sm text-slate-400 ml-10 mb-2">{item.description}</p>}
-      {item.source && <p className="text-xs text-slate-500 ml-10">Source: {item.source}</p>}
+      {item.description && <p className="text-sm text-teal-600 ml-10 mb-2">{item.description}</p>}
+      {item.source && <p className="text-xs text-teal-500 ml-10">Source: {item.source}</p>}
       <button
         onClick={() => onEdit(item)}
         className="mt-2 ml-10 text-xs text-cyan-400 hover:text-cyan-300"
@@ -557,7 +557,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
               </svg>
               About Step 2: Competency Framework (KSC)
             </h3>
-            <p className="text-sm text-slate-300 mb-3">
+            <p className="text-sm text-teal-700 mb-3">
               The AI will analyze your program foundation and generate a comprehensive{' '}
               <strong className="text-cyan-400">Knowledge</strong>,{' '}
               <strong className="text-emerald-400">Skills</strong>, and{' '}
@@ -567,18 +567,18 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             <div className="grid grid-cols-3 gap-4 text-center text-xs">
               <div className="bg-cyan-500/10 rounded-lg p-2">
                 <p className="text-cyan-400 font-semibold">Knowledge (K)</p>
-                <p className="text-slate-400">30-40% of items</p>
-                <p className="text-slate-500 mt-1">What learners understand</p>
+                <p className="text-teal-600">30-40% of items</p>
+                <p className="text-teal-500 mt-1">What learners understand</p>
               </div>
               <div className="bg-emerald-500/10 rounded-lg p-2">
                 <p className="text-emerald-400 font-semibold">Skills (S)</p>
-                <p className="text-slate-400">40-50% of items</p>
-                <p className="text-slate-500 mt-1">What learners can do</p>
+                <p className="text-teal-600">40-50% of items</p>
+                <p className="text-teal-500 mt-1">What learners can do</p>
               </div>
               <div className="bg-amber-500/10 rounded-lg p-2">
                 <p className="text-amber-400 font-semibold">Competencies (C)</p>
-                <p className="text-slate-400">10-30% of items</p>
-                <p className="text-slate-500 mt-1">Professional behaviors</p>
+                <p className="text-teal-600">10-30% of items</p>
+                <p className="text-teal-500 mt-1">Professional behaviors</p>
               </div>
             </div>
           </div>
@@ -586,10 +586,10 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
           {/* Benchmark Programs Section */}
           <section className="space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2 mb-4">
+              <h3 className="text-lg font-semibold text-cyan-400 border-b border-teal-200 pb-2 mb-4">
                 Benchmark Programs
               </h3>
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-teal-600 mb-4">
                 Provide similar programs you want the AI to analyze for competencies. These are the
                 primary source for generating your KSC framework.
               </p>
@@ -598,10 +598,10 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             {benchmarks.map((benchmark, index) => (
               <div
                 key={index}
-                className="bg-slate-900/30 border border-slate-700 rounded-lg p-4 space-y-3"
+                className="bg-teal-50/50 border border-teal-200 rounded-lg p-4 space-y-3"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-400">Benchmark {index + 1}</span>
+                  <span className="text-sm text-teal-600">Benchmark {index + 1}</span>
                   {benchmarks.length > 1 && (
                     <button
                       type="button"
@@ -614,34 +614,34 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1">Program Name</label>
+                    <label className="block text-xs text-teal-500 mb-1">Program Name</label>
                     <input
                       type="text"
                       value={benchmark.programName}
                       onChange={(e) => updateBenchmark(index, 'programName', e.target.value)}
                       placeholder="e.g., MSc Project Management"
-                      className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                      className="w-full px-3 py-2 bg-teal-50 border border-teal-300 rounded-lg text-teal-800 text-sm placeholder-teal-400 focus:outline-none focus:border-teal-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1">Institution</label>
+                    <label className="block text-xs text-teal-500 mb-1">Institution</label>
                     <input
                       type="text"
                       value={benchmark.institution}
                       onChange={(e) => updateBenchmark(index, 'institution', e.target.value)}
                       placeholder="e.g., University of Manchester"
-                      className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                      className="w-full px-3 py-2 bg-teal-50 border border-teal-300 rounded-lg text-teal-800 text-sm placeholder-teal-400 focus:outline-none focus:border-teal-500"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">URL (optional)</label>
+                  <label className="block text-xs text-teal-500 mb-1">URL (optional)</label>
                   <input
                     type="url"
                     value={benchmark.url}
                     onChange={(e) => updateBenchmark(index, 'url', e.target.value)}
                     placeholder="https://..."
-                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 bg-teal-50 border border-teal-300 rounded-lg text-teal-800 text-sm placeholder-teal-400 focus:outline-none focus:border-teal-500"
                   />
                 </div>
               </div>
@@ -650,7 +650,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             <button
               type="button"
               onClick={addBenchmark}
-              className="w-full py-2 border border-dashed border-slate-600 rounded-lg text-slate-400 hover:border-cyan-500 hover:text-cyan-400 transition-colors"
+              className="w-full py-2 border border-dashed border-teal-300 rounded-lg text-teal-600 hover:border-cyan-500 hover:text-cyan-400 transition-colors"
             >
               + Add Another Benchmark Program
             </button>
@@ -659,10 +659,10 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
           {/* Industry Frameworks Section */}
           <section className="space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2 mb-4">
+              <h3 className="text-lg font-semibold text-cyan-400 border-b border-teal-200 pb-2 mb-4">
                 Industry/Professional Frameworks (Optional)
               </h3>
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-teal-600 mb-4">
                 Select professional body standards to include in the analysis.
               </p>
             </div>
@@ -675,8 +675,8 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
                   onClick={() => toggleFramework(framework.value)}
                   className={`p-3 rounded-lg border text-left text-sm transition-all ${
                     selectedFrameworks.includes(framework.value)
-                      ? 'bg-cyan-500/20 border-cyan-500 text-white'
-                      : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                      ? 'bg-cyan-500/20 border-cyan-500 text-teal-800'
+                      : 'bg-teal-50 border-teal-200 text-teal-600 hover:border-teal-300'
                   }`}
                 >
                   {framework.label}
@@ -685,8 +685,8 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             </div>
 
             {/* Custom Framework Upload */}
-            <div className="mt-4 pt-4 border-t border-slate-700">
-              <p className="text-sm text-slate-400 mb-3">
+            <div className="mt-4 pt-4 border-t border-teal-200">
+              <p className="text-sm text-teal-600 mb-3">
                 Have a framework not listed above? Upload it for this workflow:
               </p>
               <input
@@ -701,7 +701,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
-                className="px-4 py-2 border border-dashed border-slate-600 rounded-lg text-slate-400 hover:border-cyan-500 hover:text-cyan-400 transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 border border-dashed border-teal-300 rounded-lg text-teal-600 hover:border-cyan-500 hover:text-cyan-400 transition-colors disabled:opacity-50 flex items-center gap-2"
               >
                 {isUploading ? (
                   <>
@@ -746,7 +746,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
                           />
                         </svg>
                         <span className="text-sm text-emerald-300">{framework.name}</span>
-                        <span className="text-xs text-slate-500">({framework.fileName})</span>
+                        <span className="text-xs text-teal-500">({framework.fileName})</span>
                       </div>
                       <button
                         type="button"
@@ -777,10 +777,10 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
           {/* Institutional Frameworks Section */}
           <section className="space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2 mb-4">
+              <h3 className="text-lg font-semibold text-cyan-400 border-b border-teal-200 pb-2 mb-4">
                 Institutional Frameworks (Optional)
               </h3>
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-teal-600 mb-4">
                 Add your organization's graduate attributes, competency models, or capability
                 frameworks.
               </p>
@@ -791,17 +791,17 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
               onChange={(e) => setInstitutionalFramework(e.target.value)}
               placeholder="Enter institutional frameworks, separated by commas (e.g., Graduate Attributes Framework, Digital Skills Matrix)"
               rows={3}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
             />
           </section>
 
           {/* Knowledge Base Sources Section */}
           <section className="space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2 mb-4">
+              <h3 className="text-lg font-semibold text-cyan-400 border-b border-teal-200 pb-2 mb-4">
                 Knowledge Base Sources
               </h3>
-              <p className="text-sm text-slate-400 mb-4">
+              <p className="text-sm text-teal-600 mb-4">
                 Select which sources the AI will search when generating your competency framework.
                 Sources are searched in priority order (1 = highest).
               </p>
@@ -821,19 +821,19 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
                     }}
                     className={`w-full p-3 rounded-lg border text-left transition-all ${
                       isSelected
-                        ? 'bg-emerald-500/10 border-emerald-500/50 text-white'
-                        : 'bg-slate-800/30 border-slate-700 text-slate-400 hover:border-slate-600'
+                        ? 'bg-emerald-500/10 border-emerald-500/50 text-teal-800'
+                        : 'bg-teal-50/30 border-teal-200 text-teal-600 hover:border-teal-300'
                     }`}
                   >
                     <div className="flex items-start gap-3">
                       <div
                         className={`w-5 h-5 rounded border flex items-center justify-center mt-0.5 ${
-                          isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'
+                          isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-teal-300'
                         }`}
                       >
                         {isSelected && (
                           <svg
-                            className="w-3 h-3 text-white"
+                            className="w-3 h-3 text-teal-800"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -849,12 +849,12 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">
+                          <span className="text-xs font-mono text-teal-500 bg-white px-1.5 py-0.5 rounded">
                             #{source.priority}
                           </span>
                           <span className="font-medium text-sm">{source.label}</span>
                         </div>
-                        <p className="text-xs text-slate-500 mt-1">{source.description}</p>
+                        <p className="text-xs text-teal-500 mt-1">{source.description}</p>
                       </div>
                     </div>
                   </button>
@@ -870,11 +870,11 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
               >
                 Select All
               </button>
-              <span className="text-slate-600">|</span>
+              <span className="text-teal-300">|</span>
               <button
                 type="button"
                 onClick={() => setSelectedKBSources([])}
-                className="px-3 py-1 text-slate-400 hover:text-slate-300"
+                className="px-3 py-1 text-teal-600 hover:text-teal-700"
               >
                 Deselect All
               </button>
@@ -892,7 +892,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
           <button
             onClick={handleGenerate}
             disabled={submitStep2.isPending}
-            className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+            className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
           >
             {submitStep2.isPending ? (
               <span className="flex items-center justify-center gap-2">
@@ -904,7 +904,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             )}
           </button>
 
-          <p className="text-xs text-slate-500 text-center">
+          <p className="text-xs text-teal-500 text-center">
             If you don't provide benchmarks, the AI will use public programs from the knowledge
             base.
           </p>
@@ -914,37 +914,37 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
         <div className="space-y-6">
           {/* Stats Overview */}
           <div className="grid grid-cols-4 gap-4">
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
-              <p className="text-3xl font-bold text-white">{totalItems}</p>
-              <p className="text-xs text-slate-500 mt-1">Total Items</p>
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
+              <p className="text-3xl font-bold text-teal-800">{totalItems}</p>
+              <p className="text-xs text-teal-500 mt-1">Total Items</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-cyan-400">
                 {step2Data?.knowledgeItems?.length || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">
-                Knowledge <span className="text-slate-600">({knowledgePercent}%)</span>
+              <p className="text-xs text-teal-500 mt-1">
+                Knowledge <span className="text-teal-300">({knowledgePercent}%)</span>
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-emerald-400">
                 {step2Data?.skillItems?.length || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">
-                Skills <span className="text-slate-600">({skillPercent}%)</span>
+              <p className="text-xs text-teal-500 mt-1">
+                Skills <span className="text-teal-300">({skillPercent}%)</span>
               </p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-amber-400">{competencyItems.length}</p>
-              <p className="text-xs text-slate-500 mt-1">
-                Competencies <span className="text-slate-600">({competencyPercent}%)</span>
+              <p className="text-xs text-teal-500 mt-1">
+                Competencies <span className="text-teal-300">({competencyPercent}%)</span>
               </p>
             </div>
           </div>
 
           {/* Distribution Bar */}
-          <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-            <p className="text-xs text-slate-400 mb-2">KSC Distribution</p>
+          <div className="bg-white rounded-lg p-4 border border-teal-200">
+            <p className="text-xs text-teal-600 mb-2">KSC Distribution</p>
             <div className="flex h-3 rounded-full overflow-hidden">
               <div
                 className="bg-cyan-500"
@@ -962,7 +962,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
                 title={`Competencies: ${competencyPercent}%`}
               />
             </div>
-            <div className="flex justify-between text-xs text-slate-500 mt-2">
+            <div className="flex justify-between text-xs text-teal-500 mt-2">
               <span>K: 30-40%</span>
               <span>S: 40-50%</span>
               <span>C: 10-30%</span>
@@ -971,10 +971,10 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Knowledge Items */}
           <section>
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-teal-800 mb-4 flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-cyan-400" />
               Knowledge (K)
-              <span className="text-sm font-normal text-slate-500">
+              <span className="text-sm font-normal text-teal-500">
                 — What learners need to understand
               </span>
             </h3>
@@ -987,10 +987,10 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Skills Items */}
           <section>
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-teal-800 mb-4 flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-emerald-400" />
               Skills (S)
-              <span className="text-sm font-normal text-slate-500">
+              <span className="text-sm font-normal text-teal-500">
                 — What learners need to be able to do
               </span>
             </h3>
@@ -1003,10 +1003,10 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Competency Items */}
           <section>
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-teal-800 mb-4 flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-amber-400" />
               Competencies (C)
-              <span className="text-sm font-normal text-slate-500">
+              <span className="text-sm font-normal text-teal-500">
                 — Professional behaviors and values
               </span>
             </h3>
@@ -1019,16 +1019,16 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Benchmarking Report */}
           {step2Data?.benchmarkingReport && (
-            <section className="bg-slate-900/30 border border-slate-700 rounded-lg p-5">
-              <h3 className="text-lg font-semibold text-white mb-3">Benchmarking Report</h3>
+            <section className="bg-teal-50/50 border border-teal-200 rounded-lg p-5">
+              <h3 className="text-lg font-semibold text-teal-800 mb-3">Benchmarking Report</h3>
               {step2Data.benchmarkingReport.programsAnalyzed && (
                 <div className="mb-3">
-                  <p className="text-sm text-slate-400 mb-2">Programs Analyzed:</p>
+                  <p className="text-sm text-teal-600 mb-2">Programs Analyzed:</p>
                   <div className="flex flex-wrap gap-2">
                     {step2Data.benchmarkingReport.programsAnalyzed.map((p: any, i: number) => (
                       <span
                         key={i}
-                        className="px-2 py-1 bg-slate-800 text-slate-300 rounded text-xs"
+                        className="px-2 py-1 bg-white text-teal-700 rounded text-xs"
                       >
                         {typeof p === 'string' ? p : p.programName}
                         {typeof p === 'object' && p.institution && ` (${p.institution})`}
@@ -1039,8 +1039,8 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
               )}
               {step2Data.benchmarkingReport.keyFindings && (
                 <div>
-                  <p className="text-sm text-slate-400 mb-2">Key Findings:</p>
-                  <ul className="list-disc list-inside text-sm text-slate-300 space-y-1">
+                  <p className="text-sm text-teal-600 mb-2">Key Findings:</p>
+                  <ul className="list-disc list-inside text-sm text-teal-700 space-y-1">
                     {step2Data.benchmarkingReport.keyFindings.map((finding: string, i: number) => (
                       <li key={i}>{finding}</li>
                     ))}
@@ -1058,11 +1058,11 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-6 border-t border-slate-700">
+          <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
               onClick={handleGenerate}
               disabled={submitStep2.isPending}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+              className="px-4 py-2 text-teal-600 hover:text-teal-600 transition-colors"
             >
               Regenerate
             </button>
@@ -1071,7 +1071,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
                 <button
                   onClick={handleApprove}
                   disabled={approveStep2.isPending || totalItems < 10}
-                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
                 >
                   {approveStep2.isPending ? 'Approving...' : 'Approve & Continue →'}
                 </button>
