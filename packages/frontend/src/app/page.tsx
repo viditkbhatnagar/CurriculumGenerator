@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Sparkles, BookOpen, Zap, CheckCircle, Clock, Target } from 'lucide-react';
+import { ArrowRight, Sparkles, BookOpen, Zap, Target, Layers } from 'lucide-react';
 
 const WORKFLOW_STEPS = [
   { step: 1, name: 'Program Foundation', time: '15-20 min', icon: '📋' },
@@ -49,14 +49,25 @@ export default function Home() {
             <button
               onClick={() => router.push('/workflow')}
               className="group inline-flex items-center justify-center px-8 py-4 text-lg font-medium text-white bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 rounded-lg shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 transition-all"
+              aria-label="Start a new curriculum workflow"
             >
               Start New Curriculum
               <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
 
             <button
+              onClick={() => router.push('/standalone')}
+              className="group inline-flex items-center justify-center px-8 py-4 text-lg font-medium text-white bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 rounded-lg shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all"
+              aria-label="Generate individual curriculum steps without a full workflow"
+            >
+              <Layers className="mr-2 w-5 h-5" />
+              Standalone Step
+            </button>
+
+            <button
               onClick={() => router.push('/workflow')}
               className="inline-flex items-center justify-center px-8 py-4 text-lg font-medium text-white bg-slate-700 hover:bg-slate-600 rounded-lg shadow-lg transition-all border border-slate-600"
+              aria-label="View your existing workflows"
             >
               View My Workflows
             </button>
@@ -92,8 +103,19 @@ export default function Home() {
           </div>
 
           {/* Features Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {/* Feature 1 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+            {/* Feature 1 - Standalone */}
+            <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50 hover:border-purple-500/50 transition-colors cursor-pointer" onClick={() => router.push('/standalone')} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && router.push('/standalone')}>
+              <div className="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                <Layers className="w-6 h-6 text-purple-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">Standalone Steps</h3>
+              <p className="text-slate-400 text-sm">
+                Generate individual curriculum components without a full workflow. Quick and flexible.
+              </p>
+            </div>
+
+            {/* Feature 2 */}
             <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50 hover:border-cyan-500/50 transition-colors">
               <div className="w-12 h-12 bg-cyan-500/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
                 <Zap className="w-6 h-6 text-cyan-400" />
@@ -104,10 +126,10 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Feature 2 */}
+            {/* Feature 3 */}
             <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50 hover:border-cyan-500/50 transition-colors">
-              <div className="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                <BookOpen className="w-6 h-6 text-purple-400" />
+              <div className="w-12 h-12 bg-emerald-500/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                <BookOpen className="w-6 h-6 text-emerald-400" />
               </div>
               <h3 className="text-lg font-semibold text-white mb-2">AGI Academic Standards</h3>
               <p className="text-slate-400 text-sm">
@@ -116,10 +138,10 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Feature 3 */}
+            {/* Feature 4 */}
             <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50 hover:border-cyan-500/50 transition-colors">
-              <div className="w-12 h-12 bg-emerald-500/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                <Target className="w-6 h-6 text-emerald-400" />
+              <div className="w-12 h-12 bg-amber-500/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                <Target className="w-6 h-6 text-amber-400" />
               </div>
               <h3 className="text-lg font-semibold text-white mb-2">Multi-Credit Systems</h3>
               <p className="text-slate-400 text-sm">

@@ -28,7 +28,7 @@ export type StreamCallback = (chunk: StreamChunk) => void;
 
 export class OpenAIService {
   private client: OpenAI;
-  private readonly defaultTimeout = 1200000; // 20 minutes for complex curriculum generation with GPT-5
+  private readonly defaultTimeout = 3600000; // 60 minutes for GPT-5 with 128k token output
   private readonly maxRetries = 5; // Increased retries for curriculum generation
   private readonly baseDelay = 2000; // 2 seconds for exponential backoff
   private initialized = false;
@@ -50,7 +50,7 @@ export class OpenAIService {
 
     this.client = new OpenAI({
       apiKey: apiKey || 'missing-key',
-      timeout: 1200000, // 20 minutes for complex curriculum generation with GPT-5
+      timeout: 3600000, // 60 minutes for GPT-5 with 128k token output
       maxRetries: 0, // We handle retries manually for better control
     });
   }
@@ -225,8 +225,8 @@ export class OpenAIService {
     options: OpenAIGenerateOptions = {}
   ): Promise<string> {
     const {
-      model = config.openai.chatModel, // Default: gpt-5
-      maxTokens = 128000, // GPT-5 supports large token outputs
+      model = config.openai.chatModel, // Default: gpt-4o
+      maxTokens = 16000, // gpt-4o supports up to 128k context, 16k output
       timeout = this.defaultTimeout, // 20 minutes
       responseFormat = 'text', // Default to text, can be 'json_object'
     } = options;
@@ -244,8 +244,14 @@ export class OpenAIService {
             ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
             { role: 'user' as const, content: prompt },
           ],
-          max_completion_tokens: maxTokens,
         };
+
+        // GPT-5 models use max_completion_tokens, older models use max_tokens
+        if (model.startsWith('gpt-5')) {
+          requestBody.max_completion_tokens = maxTokens;
+        } else {
+          requestBody.max_tokens = maxTokens;
+        }
 
         // Add response_format if JSON is requested
         if (responseFormat === 'json_object') {
@@ -259,7 +265,7 @@ export class OpenAIService {
 
         clearTimeout(timeoutId);
 
-        // Debug: log response for GPT-5 troubleshooting
+        // Debug: log response for troubleshooting
         console.log(
           `[OpenAI] Response - choices: ${response.choices?.length}, finish_reason: ${response.choices?.[0]?.finish_reason}, content_length: ${response.choices?.[0]?.message?.content?.length || 0}`
         );
@@ -434,16 +440,24 @@ export class OpenAIService {
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
       try {
+        const requestBody: any = {
+          model,
+          messages: [
+            ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
+            { role: 'user' as const, content: prompt },
+          ],
+          stream: true,
+        };
+
+        // GPT-5 models use max_completion_tokens, older models use max_tokens
+        if (model.startsWith('gpt-5')) {
+          requestBody.max_completion_tokens = maxTokens;
+        } else {
+          requestBody.max_tokens = maxTokens;
+        }
+
         const stream = await this.client.chat.completions.create(
-          {
-            model,
-            messages: [
-              ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
-              { role: 'user' as const, content: prompt },
-            ],
-            max_completion_tokens: maxTokens,
-            stream: true,
-          },
+          requestBody,
           {
             signal: controller.signal as any,
             timeout: timeout, // Pass timeout to each request

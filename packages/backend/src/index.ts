@@ -38,6 +38,7 @@ import newWorkflowRoutes from './routes/newWorkflowRoutes';
 import workflowRoutes from './routes/workflowRoutes';
 import step7StreamRoutes from './routes/step7StreamRoutes';
 import pptRoutes from './routes/pptRoutes';
+import standaloneRoutes from './routes/standaloneRoutes';
 
 dotenv.config();
 
@@ -64,10 +65,10 @@ if (config.security.enableHttps) {
   httpServer = createServer(app);
 }
 
-// Set server timeouts to 20 minutes for long-running LLM requests
-httpServer.timeout = 1200000; // 20 minutes
-httpServer.keepAliveTimeout = 1210000; // Slightly longer than timeout
-httpServer.headersTimeout = 1220000; // Slightly longer than keepAliveTimeout
+// Set server timeouts to 60 minutes for GPT-5 with 128k token generation
+httpServer.timeout = 3600000; // 60 minutes
+httpServer.keepAliveTimeout = 3610000; // Slightly longer than timeout
+httpServer.headersTimeout = 3620000; // Slightly longer than keepAliveTimeout
 
 // Rate limiting middleware - per user when authenticated, per IP otherwise
 const limiter = rateLimit({
@@ -242,6 +243,9 @@ app.use('/api/v3/workflow', step7StreamRoutes);
 
 // PPT Generation routes (Phase 2) - PowerPoint generation for modules
 app.use('/api/v3/ppt', pptRoutes);
+
+// Standalone Step Execution routes - Execute individual steps without workflow
+app.use('/api/v3/standalone', standaloneRoutes);
 
 // Sentry error handler (must be before other error handlers)
 app.use(errorTrackingService.getErrorHandler());
