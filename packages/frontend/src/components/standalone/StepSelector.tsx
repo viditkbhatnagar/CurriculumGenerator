@@ -101,11 +101,11 @@ export function StepSelector({ selectedStep, onSelectStep }: StepSelectorProps) 
             aria-label={`Step ${step.step}: ${step.name}. Estimated time: ${step.time}. ${step.description}`}
             className={`
               p-3 sm:p-4 rounded-xl border text-left transition-all
-              focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900
+              focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-teal-50
               ${
                 isSelected
-                  ? 'bg-cyan-500/20 border-cyan-500 ring-2 ring-cyan-500/50'
-                  : 'bg-slate-800/50 border-slate-700/50 hover:border-cyan-500/50 hover:bg-slate-800'
+                  ? 'bg-teal-100 border-teal-400 ring-2 ring-teal-300/50'
+                  : 'bg-white border-teal-200/50 hover:border-teal-300 hover:bg-teal-50 shadow-teal-sm'
               }
             `}
           >
@@ -113,15 +113,15 @@ export function StepSelector({ selectedStep, onSelectStep }: StepSelectorProps) 
               <span className="text-xl sm:text-2xl" role="img" aria-hidden="true">{step.icon}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-slate-500">Step {step.step}</span>
-                  <span className="text-xs text-cyan-400">{step.time}</span>
+                  <span className="text-xs text-teal-500">Step {step.step}</span>
+                  <span className="text-xs text-teal-500">{step.time}</span>
                 </div>
                 <h3
-                  className={`font-medium mt-1 text-sm sm:text-base ${isSelected ? 'text-cyan-400' : 'text-white'}`}
+                  className={`font-medium mt-1 text-sm sm:text-base ${isSelected ? 'text-teal-700' : 'text-teal-800'}`}
                 >
                   {step.name}
                 </h3>
-                <p className="text-xs text-slate-400 mt-1 line-clamp-2">{step.description}</p>
+                <p className="text-xs text-teal-600 mt-1 line-clamp-2">{step.description}</p>
               </div>
             </div>
           </button>

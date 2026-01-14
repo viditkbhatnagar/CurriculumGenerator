@@ -19,9 +19,9 @@ export function Sidebar() {
   if (!sidebarOpen) return null;
 
   return (
-    <aside className="w-64 bg-gray-900 text-white min-h-screen fixed left-0 top-0 z-40">
+    <aside className="w-64 bg-gradient-to-b from-teal-700 to-teal-800 text-white min-h-screen fixed left-0 top-0 z-40">
       <div className="p-6">
-        <h1 className="text-xl font-bold">AGCQ Admin</h1>
+        <h1 className="text-xl font-bold text-teal-50">AGCQ Admin</h1>
       </div>
       <nav className="mt-6">
         {navigation.map((item) => {
@@ -33,16 +33,16 @@ export function Sidebar() {
               href={item.href}
               className={`flex items-center px-6 py-3 text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-gray-800 text-white border-l-4 border-cyan-500'
+                  ? 'bg-teal-600/50 text-white border-l-4 border-teal-300'
                   : isHighlight
-                    ? 'text-cyan-400 hover:bg-gray-800 hover:text-cyan-300 border-l-4 border-transparent'
-                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                    ? 'text-teal-200 hover:bg-teal-600/30 hover:text-white border-l-4 border-transparent'
+                    : 'text-teal-100 hover:bg-teal-600/30 hover:text-white'
               }`}
             >
               <span className="mr-3 text-lg">{item.icon}</span>
               {item.name}
               {isHighlight && !isActive && (
-                <span className="ml-auto text-xs bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded">
+                <span className="ml-auto text-xs bg-teal-400/30 text-teal-200 px-2 py-0.5 rounded">
                   NEW
                 </span>
               )}

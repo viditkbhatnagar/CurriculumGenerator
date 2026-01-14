@@ -96,10 +96,10 @@ function FormativeAssessmentEditModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-700">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+    <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-teal-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-teal-200">
+          <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
             Edit <span className="text-cyan-400">Formative Assessment</span>
           </h3>
         </div>
@@ -107,75 +107,75 @@ function FormativeAssessmentEditModal({
         <div className="p-6 space-y-5">
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
               placeholder="Enter assessment title..."
             />
           </div>
 
           {/* Assessment Type */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Assessment Type</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Assessment Type</label>
             <input
               type="text"
               value={assessmentType}
               onChange={(e) => setAssessmentType(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
               placeholder="e.g., Quiz, Short Answer, MCQ"
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="Assessment description..."
             />
           </div>
 
           {/* Instructions */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Instructions</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Instructions</label>
             <textarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               rows={4}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="Student instructions..."
             />
           </div>
 
           {/* Max Marks */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Max Marks</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Max Marks</label>
             <input
               type="number"
               value={maxMarks}
               onChange={(e) => setMaxMarks(parseInt(e.target.value) || 0)}
               min="0"
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
               placeholder="100"
             />
           </div>
 
           {/* Aligned PLOs */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Aligned PLOs</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Aligned PLOs</label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={ploInput}
                 onChange={(e) => setPloInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addPLO())}
-                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
                 placeholder="Add a PLO..."
               />
               <button
@@ -191,13 +191,13 @@ function FormativeAssessmentEditModal({
                 {alignedPLOs.map((plo, i) => (
                   <span
                     key={i}
-                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm flex items-center gap-2"
                   >
                     {plo}
                     <button
                       type="button"
                       onClick={() => removePLO(i)}
-                      className="text-slate-500 hover:text-red-400"
+                      className="text-teal-500 hover:text-red-400"
                     >
                       ×
                     </button>
@@ -209,14 +209,14 @@ function FormativeAssessmentEditModal({
 
           {/* Aligned MLOs */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Aligned MLOs</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Aligned MLOs</label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={mloInput}
                 onChange={(e) => setMloInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addMLO())}
-                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
                 placeholder="Add an MLO..."
               />
               <button
@@ -232,13 +232,13 @@ function FormativeAssessmentEditModal({
                 {alignedMLOs.map((mlo, i) => (
                   <span
                     key={i}
-                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm flex items-center gap-2"
                   >
                     {mlo}
                     <button
                       type="button"
                       onClick={() => removeMLO(i)}
-                      className="text-slate-500 hover:text-red-400"
+                      className="text-teal-500 hover:text-red-400"
                     >
                       ×
                     </button>
@@ -250,7 +250,7 @@ function FormativeAssessmentEditModal({
 
           {/* Assessment Criteria */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Assessment Criteria
             </label>
             <div className="flex gap-2 mb-2">
@@ -259,7 +259,7 @@ function FormativeAssessmentEditModal({
                 value={criteriaInput}
                 onChange={(e) => setCriteriaInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCriteria())}
-                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
                 placeholder="Add assessment criteria..."
               />
               <button
@@ -273,12 +273,12 @@ function FormativeAssessmentEditModal({
             {assessmentCriteria.length > 0 && (
               <div className="space-y-2">
                 {assessmentCriteria.map((criteria, i) => (
-                  <div key={i} className="flex items-start gap-2 p-2 bg-slate-900/50 rounded">
-                    <span className="text-sm text-slate-300 flex-1">{criteria}</span>
+                  <div key={i} className="flex items-start gap-2 p-2 bg-white rounded">
+                    <span className="text-sm text-teal-700 flex-1">{criteria}</span>
                     <button
                       type="button"
                       onClick={() => removeCriteria(i)}
-                      className="text-slate-500 hover:text-red-400"
+                      className="text-teal-500 hover:text-red-400"
                     >
                       ×
                     </button>
@@ -289,18 +289,18 @@ function FormativeAssessmentEditModal({
           </div>
         </div>
 
-        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+        <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
           <button
             onClick={onCancel}
             disabled={isSaving}
-            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+            className="px-5 py-2.5 text-teal-600 hover:text-teal-600 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || !title.trim()}
-            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
           >
             {isSaving ? (
               <>
@@ -343,10 +343,10 @@ function SummativeAssessmentEditModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-700">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+    <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-teal-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-teal-200">
+          <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
             Edit <span className="text-amber-400">Summative Assessment</span>
           </h3>
         </div>
@@ -354,53 +354,53 @@ function SummativeAssessmentEditModal({
         <div className="p-6 space-y-5">
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-amber-500"
               placeholder="Enter assessment title..."
             />
           </div>
 
           {/* Format */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Format</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Format</label>
             <input
               type="text"
               value={format}
               onChange={(e) => setFormat(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-amber-500"
               placeholder="e.g., Written Assignment, Case Study Analysis"
             />
           </div>
 
           {/* Overview */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Overview</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Overview</label>
             <textarea
               value={overview}
               onChange={(e) => setOverview(e.target.value)}
               rows={5}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-amber-500 resize-none"
               placeholder="Assessment overview and description..."
             />
           </div>
         </div>
 
-        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+        <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
           <button
             onClick={onCancel}
             disabled={isSaving}
-            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+            className="px-5 py-2.5 text-teal-600 hover:text-teal-600 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || !title.trim()}
-            className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
           >
             {isSaving ? (
               <>
@@ -867,10 +867,10 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 border-3 border-cyan-500 border-t-transparent rounded-full animate-spin" />
             <div>
-              <h3 className="text-lg font-semibold text-white">
+              <h3 className="text-lg font-semibold text-teal-800">
                 Generating Comprehensive Assessments...
               </h3>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-teal-600">
                 This may take 30-40 minutes. Streaming results appear below in real-time.
               </p>
             </div>
@@ -885,23 +885,23 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                 arr.length > 0
             )) && (
             <div className="mt-6 space-y-4">
-              <h4 className="text-white font-medium">Live Data Stream</h4>
+              <h4 className="text-teal-800 font-medium">Live Data Stream</h4>
 
               {/* Streaming counts */}
               <div className="grid grid-cols-5 gap-4">
-                <div className="bg-slate-900/50 rounded-xl p-4 border border-cyan-500/30 text-center">
+                <div className="bg-white rounded-xl p-4 border border-cyan-500/30 text-center">
                   <p className="text-3xl font-bold text-cyan-400 animate-pulse">
                     {streamingFormatives.length}
                   </p>
-                  <p className="text-xs text-slate-500 mt-1">Formative</p>
+                  <p className="text-xs text-teal-500 mt-1">Formative</p>
                 </div>
-                <div className="bg-slate-900/50 rounded-xl p-4 border border-amber-500/30 text-center">
+                <div className="bg-white rounded-xl p-4 border border-amber-500/30 text-center">
                   <p className="text-3xl font-bold text-amber-400 animate-pulse">
                     {streamingSummatives.length}
                   </p>
-                  <p className="text-xs text-slate-500 mt-1">Summative</p>
+                  <p className="text-xs text-teal-500 mt-1">Summative</p>
                 </div>
-                <div className="bg-slate-900/50 rounded-xl p-4 border border-purple-500/30 text-center">
+                <div className="bg-white rounded-xl p-4 border border-purple-500/30 text-center">
                   <p className="text-3xl font-bold text-purple-400 animate-pulse">
                     {streamingSamples.mcq.length +
                       streamingSamples.sjt.length +
@@ -909,23 +909,23 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                       streamingSamples.essayPrompts.length +
                       streamingSamples.practicalTasks.length}
                   </p>
-                  <p className="text-xs text-slate-500 mt-1">Samples</p>
+                  <p className="text-xs text-teal-500 mt-1">Samples</p>
                 </div>
-                <div className="bg-slate-900/50 rounded-xl p-4 border border-green-500/30 text-center">
+                <div className="bg-white rounded-xl p-4 border border-green-500/30 text-center">
                   <p className="text-2xl font-bold text-green-400">
                     {streamingFormatives.reduce((sum, f) => sum + (f.questions?.length || 0), 0)}
                   </p>
-                  <p className="text-xs text-slate-500 mt-1">Questions</p>
+                  <p className="text-xs text-teal-500 mt-1">Questions</p>
                 </div>
-                <div className="bg-slate-900/50 rounded-xl p-4 border border-emerald-500/30 text-center">
+                <div className="bg-white rounded-xl p-4 border border-emerald-500/30 text-center">
                   <p className="text-lg font-bold text-emerald-400">✓ Saved</p>
-                  <p className="text-xs text-slate-500 mt-1">To Database</p>
+                  <p className="text-xs text-teal-500 mt-1">To Database</p>
                 </div>
               </div>
 
               {/* Preview of formatives */}
               {streamingFormatives.length > 0 && (
-                <div className="bg-slate-900/30 rounded-lg p-4 border border-cyan-500/20">
+                <div className="bg-teal-50/50 rounded-lg p-4 border border-cyan-500/20">
                   <h5 className="text-cyan-400 font-medium mb-2">Latest Formative Assessments</h5>
                   <div className="space-y-2 max-h-60 overflow-y-auto">
                     {streamingFormatives
@@ -934,10 +934,10 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                       .map((formative, idx) => (
                         <div
                           key={idx}
-                          className="bg-slate-800/50 p-3 rounded border border-slate-700"
+                          className="bg-teal-50 p-3 rounded border border-teal-200"
                         >
-                          <p className="text-white font-medium text-sm">{formative.title}</p>
-                          <p className="text-slate-400 text-xs mt-1">{formative.description}</p>
+                          <p className="text-teal-800 font-medium text-sm">{formative.title}</p>
+                          <p className="text-teal-600 text-xs mt-1">{formative.description}</p>
                           {formative.questions && formative.questions.length > 0 && (
                             <p className="text-cyan-400 text-xs mt-2">
                               ✓ {formative.questions.length} complete questions generated
@@ -969,14 +969,14 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
               </svg>
               Step 7: Comprehensive Assessment Generation
             </h3>
-            <p className="text-sm text-slate-300 mb-4">
+            <p className="text-sm text-teal-700 mb-4">
               Generate a complete assessment system including formative assessments, summative
               assessments with components, sample question banks (MCQ, SJT, case studies, essays,
               practical tasks), and LMS-ready packages.
             </p>
-            <div className="bg-slate-900/50 rounded-lg p-3 text-sm">
-              <p className="text-slate-400">
-                <strong className="text-white">Comprehensive Assessment Package:</strong> Formative
+            <div className="bg-white rounded-lg p-3 text-sm">
+              <p className="text-teal-600">
+                <strong className="text-teal-800">Comprehensive Assessment Package:</strong> Formative
                 (low-stakes practice), Summative (graded components), Sample Questions (MCQ, SJT,
                 cases, essays, practicals), and LMS export formats.
               </p>
@@ -990,7 +990,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
               className={`px-4 py-2 rounded-lg text-sm transition-colors ${
                 activeTab === 'basic'
                   ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
-                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+                  : 'bg-white text-teal-600 border border-teal-200'
               }`}
             >
               Basic Settings
@@ -1000,7 +1000,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
               className={`px-4 py-2 rounded-lg text-sm transition-colors ${
                 activeTab === 'advanced'
                   ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
-                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+                  : 'bg-white text-teal-600 border border-teal-200'
               }`}
             >
               Advanced Options
@@ -1011,7 +1011,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
             <div className="space-y-6">
               {/* Assessment Structure */}
               <div>
-                <h4 className="text-white font-medium mb-3">Assessment Structure</h4>
+                <h4 className="text-teal-800 font-medium mb-3">Assessment Structure</h4>
                 <div className="space-y-2">
                   {[
                     {
@@ -1032,7 +1032,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                   ].map((option) => (
                     <label
                       key={option.value}
-                      className="flex items-start gap-3 p-3 bg-slate-900/30 rounded-lg border border-slate-700 cursor-pointer hover:border-cyan-500/50 transition-colors"
+                      className="flex items-start gap-3 p-3 bg-teal-50/50 rounded-lg border border-teal-200 cursor-pointer hover:border-cyan-500/50 transition-colors"
                     >
                       <input
                         type="radio"
@@ -1051,8 +1051,8 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                         className="mt-1 w-4 h-4 text-cyan-500 focus:ring-cyan-500"
                       />
                       <div>
-                        <div className="text-sm text-white font-medium">{option.label}</div>
-                        <div className="text-xs text-slate-400">{option.desc}</div>
+                        <div className="text-sm text-teal-800 font-medium">{option.label}</div>
+                        <div className="text-xs text-teal-600">{option.desc}</div>
                       </div>
                     </label>
                   ))}
@@ -1061,7 +1061,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
 
               {/* Assessment Balance */}
               <div>
-                <h4 className="text-white font-medium mb-3">Assessment Balance</h4>
+                <h4 className="text-teal-800 font-medium mb-3">Assessment Balance</h4>
                 <div className="space-y-2">
                   {[
                     {
@@ -1087,7 +1087,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                   ].map((option) => (
                     <label
                       key={option.value}
-                      className="flex items-start gap-3 p-3 bg-slate-900/30 rounded-lg border border-slate-700 cursor-pointer hover:border-cyan-500/50 transition-colors"
+                      className="flex items-start gap-3 p-3 bg-teal-50/50 rounded-lg border border-teal-200 cursor-pointer hover:border-cyan-500/50 transition-colors"
                     >
                       <input
                         type="radio"
@@ -1107,8 +1107,8 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                         className="mt-1 w-4 h-4 text-cyan-500 focus:ring-cyan-500"
                       />
                       <div>
-                        <div className="text-sm text-white font-medium">{option.label}</div>
-                        <div className="text-xs text-slate-400">{option.desc}</div>
+                        <div className="text-sm text-teal-800 font-medium">{option.label}</div>
+                        <div className="text-xs text-teal-600">{option.desc}</div>
                       </div>
                     </label>
                   ))}
@@ -1119,10 +1119,10 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
               {(formData.assessmentStructure === 'both_formative_and_summative' ||
                 formData.assessmentStructure === 'formative_only') && (
                 <div>
-                  <h4 className="text-white font-medium mb-3">Formative Assessment Settings</h4>
+                  <h4 className="text-teal-800 font-medium mb-3">Formative Assessment Settings</h4>
 
                   <div className="mb-4">
-                    <label className="block text-sm text-slate-400 mb-2">
+                    <label className="block text-sm text-teal-600 mb-2">
                       Assessments per Module
                     </label>
                     <input
@@ -1136,15 +1136,15 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                           formativePerModule: parseInt(e.target.value) || 1,
                         }))
                       }
-                      className="w-32 px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                      className="w-32 px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
                     />
-                    <p className="text-xs text-slate-500 mt-1">
+                    <p className="text-xs text-teal-500 mt-1">
                       1-5 formative assessments per module
                     </p>
                   </div>
 
                   <div>
-                    <label className="block text-sm text-slate-400 mb-2">
+                    <label className="block text-sm text-teal-600 mb-2">
                       Formative Types (select multiple)
                     </label>
                     <div className="flex flex-wrap gap-2">
@@ -1164,7 +1164,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                           className={`text-xs px-3 py-1.5 rounded transition-colors ${
                             formData.formativeTypesPerUnit.includes(type)
                               ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
-                              : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-600'
+                              : 'bg-white text-teal-600 border border-teal-200 hover:border-teal-300'
                           }`}
                         >
                           {type}
@@ -1179,7 +1179,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
               {(formData.assessmentStructure === 'both_formative_and_summative' ||
                 formData.assessmentStructure === 'summative_only') && (
                 <div>
-                  <h4 className="text-white font-medium mb-3">Summative Assessment Format</h4>
+                  <h4 className="text-teal-800 font-medium mb-3">Summative Assessment Format</h4>
                   <select
                     value={formData.summativeFormat}
                     onChange={(e) =>
@@ -1194,7 +1194,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                           | 'user_defined',
                       }))
                     }
-                    className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
                   >
                     <option value="mixed_format">Mixed Format (recommended)</option>
                     <option value="mcq_exam">MCQ Examination</option>
@@ -1214,7 +1214,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                         }))
                       }
                       placeholder="Describe your custom summative format..."
-                      className="mt-3 w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                      className="mt-3 w-full px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
                       rows={3}
                     />
                   )}
@@ -1224,10 +1224,10 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
               {/* Weightages */}
               {formData.assessmentStructure === 'both_formative_and_summative' && (
                 <div>
-                  <h4 className="text-white font-medium mb-3">Assessment Weightages</h4>
+                  <h4 className="text-teal-800 font-medium mb-3">Assessment Weightages</h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm text-slate-400 mb-2">
+                      <label className="block text-sm text-teal-600 mb-2">
                         Formative Weight (%)
                       </label>
                       <input
@@ -1246,11 +1246,11 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                             },
                           }));
                         }}
-                        className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                        className="w-full px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm text-slate-400 mb-2">
+                      <label className="block text-sm text-teal-600 mb-2">
                         Summative Weight (%)
                       </label>
                       <input
@@ -1269,11 +1269,11 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                             },
                           }));
                         }}
-                        className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                        className="w-full px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
                       />
                     </div>
                   </div>
-                  <p className="text-xs text-slate-500 mt-2">
+                  <p className="text-xs text-teal-500 mt-2">
                     Total:{' '}
                     {(formData.weightages.formative || 0) + (formData.weightages.summative || 0)}%
                     {Math.abs(
@@ -1290,10 +1290,10 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
             <div className="space-y-6">
               {/* Certification Styles */}
               <div>
-                <h4 className="text-white font-medium mb-3">
+                <h4 className="text-teal-800 font-medium mb-3">
                   Certification Style Influence (optional)
                 </h4>
-                <p className="text-xs text-slate-400 mb-2">
+                <p className="text-xs text-teal-600 mb-2">
                   Select certification patterns to emulate:
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -1310,7 +1310,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                       className={`text-xs px-3 py-1.5 rounded transition-colors ${
                         formData.certificationStyles.includes(style)
                           ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
-                          : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-600'
+                          : 'bg-white text-teal-600 border border-teal-200 hover:border-teal-300'
                       }`}
                     >
                       {style}
@@ -1321,10 +1321,10 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
 
               {/* Academic Types */}
               <div>
-                <h4 className="text-white font-medium mb-3">
+                <h4 className="text-teal-800 font-medium mb-3">
                   Academic Assessment Types (optional)
                 </h4>
-                <p className="text-xs text-slate-400 mb-2">Select academic formats to include:</p>
+                <p className="text-xs text-teal-600 mb-2">Select academic formats to include:</p>
                 <div className="flex flex-wrap gap-2">
                   {ACADEMIC_TYPES.map((type) => (
                     <button
@@ -1339,7 +1339,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                       className={`text-xs px-3 py-1.5 rounded transition-colors ${
                         formData.academicTypes.includes(type)
                           ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
-                          : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-600'
+                          : 'bg-white text-teal-600 border border-teal-200 hover:border-teal-300'
                       }`}
                     >
                       {type}
@@ -1350,7 +1350,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
 
               {/* Higher-Order PLO Policy */}
               <div>
-                <h4 className="text-white font-medium mb-3">Higher-Order PLO Policy</h4>
+                <h4 className="text-teal-800 font-medium mb-3">Higher-Order PLO Policy</h4>
                 <div className="space-y-2">
                   {[
                     {
@@ -1367,7 +1367,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                   ].map((option) => (
                     <label
                       key={option.value}
-                      className="flex items-start gap-3 p-3 bg-slate-900/30 rounded-lg border border-slate-700 cursor-pointer hover:border-cyan-500/50 transition-colors"
+                      className="flex items-start gap-3 p-3 bg-teal-50/50 rounded-lg border border-teal-200 cursor-pointer hover:border-cyan-500/50 transition-colors"
                     >
                       <input
                         type="radio"
@@ -1383,8 +1383,8 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                         className="mt-1 w-4 h-4 text-cyan-500 focus:ring-cyan-500"
                       />
                       <div>
-                        <div className="text-sm text-white font-medium">{option.label}</div>
-                        <div className="text-xs text-slate-400">{option.desc}</div>
+                        <div className="text-sm text-teal-800 font-medium">{option.label}</div>
+                        <div className="text-xs text-teal-600">{option.desc}</div>
                       </div>
                     </label>
                   ))}
@@ -1397,7 +1397,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                       setFormData((prev) => ({ ...prev, higherOrderPloRules: e.target.value }))
                     }
                     placeholder="Describe your custom rules for higher-order PLOs..."
-                    className="mt-3 w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    className="mt-3 w-full px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
                     rows={3}
                   />
                 )}
@@ -1412,9 +1412,9 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, useRealWorldScenarios: e.target.checked }))
                     }
-                    className="w-4 h-4 rounded border-slate-600 text-cyan-500 focus:ring-cyan-500 bg-slate-800"
+                    className="w-4 h-4 rounded border-teal-300 text-cyan-500 focus:ring-cyan-500 bg-white"
                   />
-                  <span className="text-sm text-slate-300">
+                  <span className="text-sm text-teal-700">
                     Use real-world scenarios in assessments
                   </span>
                 </label>
@@ -1429,9 +1429,9 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                         alignToWorkplacePerformance: e.target.checked,
                       }))
                     }
-                    className="w-4 h-4 rounded border-slate-600 text-cyan-500 focus:ring-cyan-500 bg-slate-800"
+                    className="w-4 h-4 rounded border-teal-300 text-cyan-500 focus:ring-cyan-500 bg-white"
                   />
-                  <span className="text-sm text-slate-300">
+                  <span className="text-sm text-teal-700">
                     Align to workplace performance standards
                   </span>
                 </label>
@@ -1446,9 +1446,9 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                         integratedRealWorldSummative: e.target.checked,
                       }))
                     }
-                    className="w-4 h-4 rounded border-slate-600 text-cyan-500 focus:ring-cyan-500 bg-slate-800"
+                    className="w-4 h-4 rounded border-teal-300 text-cyan-500 focus:ring-cyan-500 bg-white"
                   />
-                  <span className="text-sm text-slate-300">
+                  <span className="text-sm text-teal-700">
                     Integrate real-world elements in summative assessment
                   </span>
                 </label>
@@ -1491,7 +1491,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
               formData.formativePerModule < 1 ||
               formData.formativePerModule > 5
             }
-            className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isCurrentlyGenerating ? (
               <span className="flex items-center justify-center gap-2">
@@ -1508,19 +1508,19 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
         <div className="space-y-6">
           {/* Overall Stats - Use workflow data if available, otherwise streaming data */}
           <div className="grid grid-cols-5 gap-4">
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-cyan-400">
                 {workflow.step7?.formativeAssessments?.length || streamingFormatives.length}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Formative</p>
+              <p className="text-xs text-teal-500 mt-1">Formative</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-amber-400">
                 {workflow.step7?.summativeAssessments?.length || streamingSummatives.length}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Summative</p>
+              <p className="text-xs text-teal-500 mt-1">Summative</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-purple-400">
                 {workflow.step7?.sampleQuestions
                   ? (workflow.step7.sampleQuestions.mcq?.length || 0) +
@@ -1534,21 +1534,21 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                     streamingSamples.essayPrompts.length +
                     streamingSamples.practicalTasks.length}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Sample Questions</p>
+              <p className="text-xs text-teal-500 mt-1">Sample Questions</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-green-400">
                 {Object.keys(workflow.step7?.lmsPackages || {}).length}
               </p>
-              <p className="text-xs text-slate-500 mt-1">LMS Formats</p>
+              <p className="text-xs text-teal-500 mt-1">LMS Formats</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p
                 className={`text-3xl font-bold ${validation?.plosCovered ? 'text-emerald-400' : hasStreamingData ? 'text-amber-400' : 'text-red-400'}`}
               >
                 {validation?.plosCovered ? '✓' : hasStreamingData ? '⟳' : '✗'}
               </p>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-teal-500 mt-1">
                 {hasStreamingData && !validation ? 'Loading...' : 'Valid'}
               </p>
             </div>
@@ -1607,36 +1607,36 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
 
           {/* Sample Breakdown */}
           {workflow.step7?.sampleQuestions && (
-            <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-              <h4 className="text-white font-medium mb-3">Sample Question Bank</h4>
+            <div className="bg-white rounded-lg p-4 border border-teal-200">
+              <h4 className="text-teal-800 font-medium mb-3">Sample Question Bank</h4>
               <div className="grid grid-cols-5 gap-3 text-sm">
                 <div>
-                  <span className="text-slate-400">MCQ:</span>
-                  <span className="text-white ml-2">
+                  <span className="text-teal-600">MCQ:</span>
+                  <span className="text-teal-800 ml-2">
                     {workflow.step7.sampleQuestions.mcq?.length || 0}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400">SJT:</span>
-                  <span className="text-white ml-2">
+                  <span className="text-teal-600">SJT:</span>
+                  <span className="text-teal-800 ml-2">
                     {workflow.step7.sampleQuestions.sjt?.length || 0}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400">Cases:</span>
-                  <span className="text-white ml-2">
+                  <span className="text-teal-600">Cases:</span>
+                  <span className="text-teal-800 ml-2">
                     {workflow.step7.sampleQuestions.caseQuestions?.length || 0}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400">Essays:</span>
-                  <span className="text-white ml-2">
+                  <span className="text-teal-600">Essays:</span>
+                  <span className="text-teal-800 ml-2">
                     {workflow.step7.sampleQuestions.essayPrompts?.length || 0}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400">Practical:</span>
-                  <span className="text-white ml-2">
+                  <span className="text-teal-600">Practical:</span>
+                  <span className="text-teal-800 ml-2">
                     {workflow.step7.sampleQuestions.practicalTasks?.length || 0}
                   </span>
                 </div>
@@ -1650,7 +1650,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
             <div className="space-y-6">
               {/* Formative Assessments */}
               {(workflow.step7?.formativeAssessments?.length ?? 0) > 0 && (
-                <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
+                <div className="bg-white rounded-lg p-5 border border-teal-200">
                   <h4 className="text-cyan-400 font-medium mb-4 flex items-center gap-2">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path
@@ -1666,26 +1666,26 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                     {workflow.step7?.formativeAssessments?.map((assessment) => (
                       <div
                         key={assessment.id}
-                        className="bg-slate-800/50 rounded-lg p-4 border border-slate-700"
+                        className="bg-teal-50 rounded-lg p-4 border border-teal-200"
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
-                            <h5 className="text-white font-medium mb-1">{assessment.title}</h5>
-                            <div className="flex items-center gap-3 text-sm text-slate-400 mb-2">
+                            <h5 className="text-teal-800 font-medium mb-1">{assessment.title}</h5>
+                            <div className="flex items-center gap-3 text-sm text-teal-600 mb-2">
                               <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded text-xs">
                                 {assessment.assessmentType}
                               </span>
                               {assessment.maxMarks && <span>{assessment.maxMarks} marks</span>}
                               <span>Module: {assessment.moduleId}</span>
                             </div>
-                            <p className="text-sm text-slate-300 mb-2">{assessment.description}</p>
+                            <p className="text-sm text-teal-700 mb-2">{assessment.description}</p>
                             {assessment.alignedPLOs?.length > 0 && (
                               <div className="flex flex-wrap gap-1 mb-2">
-                                <span className="text-xs text-slate-500">PLOs:</span>
+                                <span className="text-xs text-teal-500">PLOs:</span>
                                 {assessment.alignedPLOs.map((plo, i) => (
                                   <span
                                     key={i}
-                                    className="text-xs px-2 py-0.5 bg-slate-700 rounded text-slate-300"
+                                    className="text-xs px-2 py-0.5 bg-teal-100 rounded text-teal-700"
                                   >
                                     {plo}
                                   </span>
@@ -1694,11 +1694,11 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                             )}
                             {assessment.alignedMLOs?.length > 0 && (
                               <div className="flex flex-wrap gap-1">
-                                <span className="text-xs text-slate-500">MLOs:</span>
+                                <span className="text-xs text-teal-500">MLOs:</span>
                                 {assessment.alignedMLOs.map((mlo, i) => (
                                   <span
                                     key={i}
-                                    className="text-xs px-2 py-0.5 bg-slate-700 rounded text-slate-300"
+                                    className="text-xs px-2 py-0.5 bg-teal-100 rounded text-teal-700"
                                   >
                                     {mlo}
                                   </span>
@@ -1727,9 +1727,9 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                           </button>
                         </div>
                         {assessment.instructions && (
-                          <div className="bg-slate-900/50 rounded p-3 mt-3">
-                            <p className="text-xs text-slate-500 mb-1">Instructions:</p>
-                            <p className="text-sm text-slate-300">{assessment.instructions}</p>
+                          <div className="bg-white rounded p-3 mt-3">
+                            <p className="text-xs text-teal-500 mb-1">Instructions:</p>
+                            <p className="text-sm text-teal-700">{assessment.instructions}</p>
                           </div>
                         )}
                       </div>
@@ -1740,7 +1740,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
 
               {/* Summative Assessments */}
               {(workflow.step7?.summativeAssessments?.length ?? 0) > 0 && (
-                <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
+                <div className="bg-white rounded-lg p-5 border border-teal-200">
                   <h4 className="text-amber-400 font-medium mb-4 flex items-center gap-2">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path
@@ -1756,30 +1756,30 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                     {workflow.step7?.summativeAssessments?.map((assessment) => (
                       <div
                         key={assessment.id}
-                        className="bg-slate-800/50 rounded-lg p-4 border border-slate-700"
+                        className="bg-teal-50 rounded-lg p-4 border border-teal-200"
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
-                            <h5 className="text-white font-medium mb-1">{assessment.title}</h5>
-                            <div className="flex items-center gap-3 text-sm text-slate-400 mb-2">
+                            <h5 className="text-teal-800 font-medium mb-1">{assessment.title}</h5>
+                            <div className="flex items-center gap-3 text-sm text-teal-600 mb-2">
                               <span className="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs">
                                 {assessment.format}
                               </span>
-                              <span className="px-2 py-1 bg-slate-600 text-slate-300 rounded text-xs">
+                              <span className="px-2 py-1 bg-teal-300 text-teal-700 rounded text-xs">
                                 {assessment.scope}
                               </span>
                               {assessment.moduleId && <span>Module: {assessment.moduleId}</span>}
                             </div>
-                            <p className="text-sm text-slate-300 mb-3">{assessment.overview}</p>
+                            <p className="text-sm text-teal-700 mb-3">{assessment.overview}</p>
                             {assessment.components?.length > 0 && (
                               <div className="space-y-1">
-                                <span className="text-xs text-slate-500">Components:</span>
+                                <span className="text-xs text-teal-500">Components:</span>
                                 {assessment.components.map((component, i) => (
                                   <div key={i} className="flex items-center gap-2 text-xs">
-                                    <span className="px-2 py-0.5 bg-slate-700 rounded text-slate-300">
+                                    <span className="px-2 py-0.5 bg-teal-100 rounded text-teal-700">
                                       {component.name} ({component.weight}%)
                                     </span>
-                                    <span className="text-slate-500">{component.description}</span>
+                                    <span className="text-teal-500">{component.description}</span>
                                   </div>
                                 ))}
                               </div>
@@ -1821,11 +1821,11 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-6 border-t border-slate-700">
+          <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
               onClick={() => setShowRegenerateConfirm(true)}
               disabled={clearStep7.isPending || submitStep7.isPending}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-teal-600 hover:text-teal-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {clearStep7.isPending ? 'Clearing...' : 'Regenerate'}
             </button>
@@ -1847,8 +1847,8 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                   }
                   className={`px-6 py-2.5 font-medium rounded-lg transition-all disabled:opacity-50 ${
                     !validation?.plosCovered || (hasStreamingData && !hasWorkflowData)
-                      ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white'
+                      ? 'bg-teal-300 text-teal-600 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800'
                   }`}
                 >
                   {approveStep7.isPending
@@ -1879,27 +1879,27 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
       {/* Regenerate Confirmation Dialog */}
       {showRegenerateConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-md mx-4 shadow-2xl">
-            <h3 className="text-xl font-semibold text-white mb-3">Regenerate Step 7?</h3>
-            <p className="text-slate-300 mb-6">
+          <div className="bg-white border border-teal-200 rounded-xl p-6 max-w-md mx-4 shadow-2xl">
+            <h3 className="text-xl font-semibold text-teal-800 mb-3">Regenerate Step 7?</h3>
+            <p className="text-teal-700 mb-6">
               This will <strong className="text-red-400">delete all existing Step 7 data</strong>{' '}
               (formative assessments, summative assessments, sample questions) and start fresh
               generation.
             </p>
-            <p className="text-sm text-slate-400 mb-6">
+            <p className="text-sm text-teal-600 mb-6">
               This action cannot be undone. The generation will take 30-40 minutes.
             </p>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setShowRegenerateConfirm(false)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                className="px-4 py-2 bg-teal-100 hover:bg-teal-300 text-teal-800 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleRegenerate}
                 disabled={clearStep7.isPending}
-                className="px-4 py-2 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-400 hover:to-orange-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+                className="px-4 py-2 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-400 hover:to-orange-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
               >
                 {clearStep7.isPending ? 'Clearing...' : 'Yes, Regenerate'}
               </button>

@@ -354,22 +354,22 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
         {/* SECTION 1: PROGRAM IDENTITY & DESCRIPTION */}
         {/* ============================================================ */}
         <section className="space-y-6">
-          <h2 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2">
+          <h2 className="text-lg font-semibold text-cyan-400 border-b border-teal-200 pb-2">
             Program Identity & Description
           </h2>
 
           {/* Program Title */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Program Title <span className="text-red-400">*</span>
-              <span className="text-slate-500 font-normal ml-2">(5-100 characters)</span>
+              <span className="text-teal-500 font-normal ml-2">(5-100 characters)</span>
             </label>
             <input
               type="text"
               value={formData.programTitle}
               onChange={(e) => setFormData((prev) => ({ ...prev, programTitle: e.target.value }))}
               placeholder="e.g., Professional Diploma in Project Management"
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-cyan-500"
               required
               minLength={5}
               maxLength={100}
@@ -378,9 +378,9 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Program Description */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Program Description <span className="text-red-400">*</span>
-              <span className="text-slate-500 font-normal ml-2">(50-500 words)</span>
+              <span className="text-teal-500 font-normal ml-2">(50-500 words)</span>
             </label>
             <textarea
               value={formData.programDescription}
@@ -389,17 +389,17 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
               }
               placeholder="Provide a comprehensive description of the program's scope, focus areas, and what learners will gain..."
               rows={5}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               required
             />
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-teal-500 mt-1">
               {formData.programDescription.split(/\s+/).filter(Boolean).length} words (minimum 50)
             </p>
           </div>
 
           {/* Academic Level */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Academic Level <span className="text-red-400">*</span>
             </label>
             <div className="grid grid-cols-3 gap-3">
@@ -410,8 +410,8 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                   onClick={() => setFormData((prev) => ({ ...prev, academicLevel: level.value }))}
                   className={`p-4 rounded-lg border text-left transition-all ${
                     formData.academicLevel === level.value
-                      ? 'bg-cyan-500/20 border-cyan-500 text-white'
-                      : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                      ? 'bg-cyan-500/20 border-cyan-500 text-teal-800'
+                      : 'bg-teal-50 border-teal-200 text-teal-600 hover:border-teal-300'
                   }`}
                 >
                   <p className="font-medium">{level.label}</p>
@@ -426,13 +426,13 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
         {/* SECTION 2: CREDIT STRUCTURE & CONTACT HOURS */}
         {/* ============================================================ */}
         <section className="space-y-6">
-          <h2 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2">
+          <h2 className="text-lg font-semibold text-cyan-400 border-b border-teal-200 pb-2">
             Credit Structure & Contact Hours
           </h2>
 
           {/* Is Credit Awarding? */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Is this program credit-awarding? <span className="text-red-400">*</span>
             </label>
             <p className="text-sm text-cyan-400 mb-3 bg-cyan-500/10 px-3 py-2 rounded-lg border border-cyan-500/20">
@@ -446,8 +446,8 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                 }
                 className={`flex-1 p-4 rounded-lg border text-center transition-all ${
                   formData.isCreditAwarding
-                    ? 'bg-emerald-500/20 border-emerald-500 text-white'
-                    : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                    ? 'bg-emerald-500/20 border-emerald-500 text-teal-800'
+                    : 'bg-teal-50 border-teal-200 text-teal-600 hover:border-teal-300'
                 }`}
               >
                 <p className="font-medium">Yes</p>
@@ -464,8 +464,8 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                 }
                 className={`flex-1 p-4 rounded-lg border text-center transition-all ${
                   !formData.isCreditAwarding
-                    ? 'bg-amber-500/20 border-amber-500 text-white'
-                    : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                    ? 'bg-amber-500/20 border-amber-500 text-teal-800'
+                    : 'bg-teal-50 border-teal-200 text-teal-600 hover:border-teal-300'
                 }`}
               >
                 <p className="font-medium">No</p>
@@ -478,7 +478,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
           {formData.isCreditAwarding ? (
             <div className="grid grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-teal-700 mb-2">
                   Credit Framework <span className="text-red-400">*</span>
                 </label>
                 <select
@@ -489,7 +489,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                       creditSystem: e.target.value as CreditSystem,
                     }))
                   }
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
                 >
                   {CREDIT_SYSTEMS.filter((s) => s.value !== 'non_credit').map((system) => (
                     <option key={system.value} value={system.value}>
@@ -497,12 +497,12 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-teal-500 mt-1">
                   {CREDIT_SYSTEMS.find((s) => s.value === formData.creditSystem)?.description}
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-teal-700 mb-2">
                   Total Credits <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -513,16 +513,16 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                   }
                   min={10}
                   max={360}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
                 />
               </div>
             </div>
           ) : (
             /* Non-Credit: Direct Hours Entry */
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-teal-700 mb-2">
                 Total Program Hours <span className="text-red-400">*</span>
-                <span className="text-slate-500 font-normal ml-2">(20-500 hours)</span>
+                <span className="text-teal-500 font-normal ml-2">(20-500 hours)</span>
               </label>
               <input
                 type="number"
@@ -532,7 +532,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                 }
                 min={20}
                 max={500}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
               />
             </div>
           )}
@@ -549,15 +549,15 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                     setFormData((prev) => ({ ...prev, customContactPercent: undefined }));
                   }
                 }}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
+                className="w-4 h-4 rounded border-teal-300 bg-white text-cyan-500 focus:ring-cyan-500"
               />
-              <span className="text-sm text-slate-300">
+              <span className="text-sm text-teal-700">
                 Override default contact hours percentage
               </span>
             </label>
             {showCustomContactHours && (
               <div className="mt-3">
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-teal-700 mb-2">
                   Custom Contact Hours %
                 </label>
                 <input
@@ -572,58 +572,58 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                   min={10}
                   max={60}
                   placeholder={`Default: ${calculations.contactPercent}%`}
-                  className="w-32 px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-32 px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
                 />
               </div>
             )}
           </div>
 
           {/* Calculated Hours Display */}
-          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-5 border border-slate-700">
-            <h4 className="text-sm font-medium text-slate-300 mb-4">Workload Distribution</h4>
+          <div className="bg-white border border-teal-200 rounded-xl p-5 border border-teal-200">
+            <h4 className="text-sm font-medium text-teal-700 mb-4">Workload Distribution</h4>
             <div className="grid grid-cols-3 gap-6">
               <div className="text-center">
                 <p className="text-3xl font-bold text-cyan-400">{calculations.totalHours}</p>
-                <p className="text-xs text-slate-500 mt-1">Total Hours</p>
+                <p className="text-xs text-teal-500 mt-1">Total Hours</p>
               </div>
               <div className="text-center">
                 <p className="text-3xl font-bold text-emerald-400">
                   {calculations.contactHours}
-                  <span className="text-sm font-normal text-slate-500 ml-1">
+                  <span className="text-sm font-normal text-teal-500 ml-1">
                     ({calculations.contactPercent}%)
                   </span>
                 </p>
-                <p className="text-xs text-slate-500 mt-1">Contact Hours</p>
+                <p className="text-xs text-teal-500 mt-1">Contact Hours</p>
               </div>
               <div className="text-center">
                 <p className="text-3xl font-bold text-amber-400">{calculations.independentHours}</p>
-                <p className="text-xs text-slate-500 mt-1">Independent/Assessment</p>
+                <p className="text-xs text-teal-500 mt-1">Independent/Assessment</p>
               </div>
             </div>
 
             {/* International Equivalencies */}
-            <div className="mt-5 pt-4 border-t border-slate-700">
-              <h5 className="text-xs font-medium text-slate-400 mb-3">
+            <div className="mt-5 pt-4 border-t border-teal-200">
+              <h5 className="text-xs font-medium text-teal-600 mb-3">
                 International Equivalencies
               </h5>
               <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="bg-slate-800/50 rounded-lg p-3">
-                  <p className="text-lg font-semibold text-white">
+                <div className="bg-teal-50 rounded-lg p-3">
+                  <p className="text-lg font-semibold text-teal-800">
                     {calculations.equivalencies.ukCredits}
                   </p>
-                  <p className="text-xs text-slate-500">UK Credits</p>
+                  <p className="text-xs text-teal-500">UK Credits</p>
                 </div>
-                <div className="bg-slate-800/50 rounded-lg p-3">
-                  <p className="text-lg font-semibold text-white">
+                <div className="bg-teal-50 rounded-lg p-3">
+                  <p className="text-lg font-semibold text-teal-800">
                     {calculations.equivalencies.ectsCredits}
                   </p>
-                  <p className="text-xs text-slate-500">ECTS</p>
+                  <p className="text-xs text-teal-500">ECTS</p>
                 </div>
-                <div className="bg-slate-800/50 rounded-lg p-3">
-                  <p className="text-lg font-semibold text-white">
+                <div className="bg-teal-50 rounded-lg p-3">
+                  <p className="text-lg font-semibold text-teal-800">
                     {calculations.equivalencies.usSemesterCredits}
                   </p>
-                  <p className="text-xs text-slate-500">US Semester</p>
+                  <p className="text-xs text-teal-500">US Semester</p>
                 </div>
               </div>
             </div>
@@ -634,14 +634,14 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
         {/* SECTION 3: TARGET LEARNER PROFILE */}
         {/* ============================================================ */}
         <section className="space-y-6">
-          <h2 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2">
+          <h2 className="text-lg font-semibold text-cyan-400 border-b border-teal-200 pb-2">
             Target Learner Profile
           </h2>
 
           <div className="grid grid-cols-2 gap-6">
             {/* Age Range */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Age Range</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Age Range</label>
               <input
                 type="text"
                 value={formData.targetLearnerAgeRange}
@@ -649,13 +649,13 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                   setFormData((prev) => ({ ...prev, targetLearnerAgeRange: e.target.value }))
                 }
                 placeholder="e.g., 25-45 years"
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
               />
             </div>
 
             {/* Experience Level */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-teal-700 mb-2">
                 Experience Level <span className="text-red-400">*</span>
               </label>
               <select
@@ -666,7 +666,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                     targetLearnerExperienceLevel: e.target.value as ExperienceLevel,
                   }))
                 }
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
               >
                 {EXPERIENCE_LEVELS.map((level) => (
                   <option key={level.value} value={level.value}>
@@ -679,9 +679,9 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Educational Background */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Educational Background <span className="text-red-400">*</span>
-              <span className="text-slate-500 font-normal ml-2">(minimum 10 characters)</span>
+              <span className="text-teal-500 font-normal ml-2">(minimum 10 characters)</span>
             </label>
             <textarea
               value={formData.targetLearnerEducationalBackground}
@@ -693,16 +693,16 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
               }
               placeholder="Describe the typical educational background of your target learners..."
               rows={2}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               required
             />
           </div>
 
           {/* Industry Sector */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Industry Sector <span className="text-red-400">*</span>
-              <span className="text-slate-500 font-normal ml-2">(minimum 5 characters)</span>
+              <span className="text-teal-500 font-normal ml-2">(minimum 5 characters)</span>
             </label>
             <input
               type="text"
@@ -711,7 +711,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                 setFormData((prev) => ({ ...prev, targetLearnerIndustrySector: e.target.value }))
               }
               placeholder="e.g., Healthcare, Finance, Technology, Manufacturing"
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
               required
             />
           </div>
@@ -721,13 +721,13 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
         {/* SECTION 4: PROGRAM DELIVERY */}
         {/* ============================================================ */}
         <section className="space-y-6">
-          <h2 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2">
+          <h2 className="text-lg font-semibold text-cyan-400 border-b border-teal-200 pb-2">
             Program Delivery
           </h2>
 
           {/* Delivery Mode */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Delivery Mode <span className="text-red-400">*</span>
             </label>
             <div className="grid grid-cols-2 gap-3">
@@ -738,8 +738,8 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                   onClick={() => setFormData((prev) => ({ ...prev, deliveryMode: mode.value }))}
                   className={`p-4 rounded-lg border text-left transition-all ${
                     formData.deliveryMode === mode.value
-                      ? 'bg-cyan-500/20 border-cyan-500 text-white'
-                      : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                      ? 'bg-cyan-500/20 border-cyan-500 text-teal-800'
+                      : 'bg-teal-50 border-teal-200 text-teal-600 hover:border-teal-300'
                   }`}
                 >
                   <p className="font-medium">{mode.label}</p>
@@ -753,9 +753,9 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Delivery Structure Description */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Delivery Structure <span className="text-red-400">*</span>
-              <span className="text-slate-500 font-normal ml-2">(1-3 sentences)</span>
+              <span className="text-teal-500 font-normal ml-2">(1-3 sentences)</span>
             </label>
             <textarea
               value={formData.deliveryDescription}
@@ -764,7 +764,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
               }
               placeholder="Describe how the program will be delivered, including the balance of contact vs. independent learning..."
               rows={3}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               required
             />
           </div>
@@ -774,34 +774,34 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
         {/* SECTION 5: LABOUR MARKET RATIONALE */}
         {/* ============================================================ */}
         <section className="space-y-6">
-          <h2 className="text-lg font-semibold text-cyan-400 border-b border-slate-700 pb-2">
+          <h2 className="text-lg font-semibold text-cyan-400 border-b border-teal-200 pb-2">
             Labour Market Rationale
           </h2>
 
           {/* Program Purpose */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Program Purpose <span className="text-red-400">*</span>
-              <span className="text-slate-500 font-normal ml-2">(50-300 words)</span>
+              <span className="text-teal-500 font-normal ml-2">(50-300 words)</span>
             </label>
             <textarea
               value={formData.programPurpose}
               onChange={(e) => setFormData((prev) => ({ ...prev, programPurpose: e.target.value }))}
               placeholder="Explain why this program exists, what gap it fills, and its value proposition..."
               rows={4}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               required
             />
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-teal-500 mt-1">
               {formData.programPurpose.split(/\s+/).filter(Boolean).length} words (50-300 required)
             </p>
           </div>
 
           {/* Job Roles */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-3">
+            <label className="block text-sm font-medium text-teal-700 mb-3">
               Target Job Roles <span className="text-red-400">*</span>
-              <span className="text-slate-500 font-normal ml-2">
+              <span className="text-teal-500 font-normal ml-2">
                 (minimum 2 roles with descriptions)
               </span>
             </label>
@@ -810,10 +810,10 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
               {formData.jobRoles.map((role, roleIndex) => (
                 <div
                   key={roleIndex}
-                  className="bg-slate-900/30 border border-slate-700 rounded-lg p-5 space-y-4"
+                  className="bg-teal-50/50 border border-teal-200 rounded-lg p-5 space-y-4"
                 >
                   <div className="flex items-start justify-between">
-                    <h4 className="text-sm font-medium text-slate-300">Job Role {roleIndex + 1}</h4>
+                    <h4 className="text-sm font-medium text-teal-700">Job Role {roleIndex + 1}</h4>
                     {formData.jobRoles.length > 2 && (
                       <button
                         type="button"
@@ -827,19 +827,19 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
 
                   {/* Job Title */}
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">Job Title</label>
+                    <label className="block text-xs text-teal-600 mb-1">Job Title</label>
                     <input
                       type="text"
                       value={role.title}
                       onChange={(e) => updateJobRole(roleIndex, 'title', e.target.value)}
                       placeholder="e.g., Project Manager"
-                      className="w-full px-4 py-2 bg-slate-800/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                      className="w-full px-4 py-2 bg-teal-50 border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
                     />
                   </div>
 
                   {/* Job Description */}
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">
+                    <label className="block text-xs text-teal-600 mb-1">
                       Job Description (100-1000 words)
                     </label>
                     <textarea
@@ -847,13 +847,13 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                       onChange={(e) => updateJobRole(roleIndex, 'description', e.target.value)}
                       placeholder="Describe the role, responsibilities, and typical workplace context..."
                       rows={3}
-                      className="w-full px-4 py-2 bg-slate-800/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+                      className="w-full px-4 py-2 bg-teal-50 border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
                     />
                   </div>
 
                   {/* Workplace Tasks */}
                   <div>
-                    <label className="block text-xs text-slate-400 mb-2">Workplace Tasks</label>
+                    <label className="block text-xs text-teal-600 mb-2">Workplace Tasks</label>
                     <div className="space-y-2">
                       {role.tasks.map((task, taskIndex) => (
                         <div key={taskIndex} className="flex gap-2">
@@ -862,13 +862,13 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                             value={task}
                             onChange={(e) => updateTask(roleIndex, taskIndex, e.target.value)}
                             placeholder={`Task ${taskIndex + 1}`}
-                            className="flex-1 px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                            className="flex-1 px-3 py-2 bg-teal-50 border border-teal-300 rounded-lg text-teal-800 text-sm placeholder-teal-400 focus:outline-none focus:border-teal-500"
                           />
                           {role.tasks.length > 1 && (
                             <button
                               type="button"
                               onClick={() => removeTask(roleIndex, taskIndex)}
-                              className="p-2 text-slate-500 hover:text-red-400"
+                              className="p-2 text-teal-500 hover:text-red-400"
                             >
                               <svg
                                 className="w-4 h-4"
@@ -903,7 +903,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
             <button
               type="button"
               onClick={addJobRole}
-              className="mt-4 px-4 py-2 border border-dashed border-slate-600 rounded-lg text-slate-400 hover:border-cyan-500 hover:text-cyan-400 transition-colors w-full"
+              className="mt-4 px-4 py-2 border border-dashed border-teal-300 rounded-lg text-teal-600 hover:border-cyan-500 hover:text-cyan-400 transition-colors w-full"
             >
               + Add another job role
             </button>
@@ -929,11 +929,11 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
         {/* ============================================================ */}
         {/* ACTION BUTTONS */}
         {/* ============================================================ */}
-        <div className="flex items-center justify-between pt-6 border-t border-slate-700">
+        <div className="flex items-center justify-between pt-6 border-t border-teal-200">
           <div>
             {workflow.step1?.completenessScore !== undefined && (
               <div className="flex items-center gap-3">
-                <div className="w-40 h-2 bg-slate-700 rounded-full overflow-hidden">
+                <div className="w-40 h-2 bg-teal-100 rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${
                       workflow.step1.completenessScore >= 70 ? 'bg-emerald-500' : 'bg-amber-500'
@@ -941,7 +941,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                     style={{ width: `${workflow.step1.completenessScore}%` }}
                   />
                 </div>
-                <span className="text-sm text-slate-400">
+                <span className="text-sm text-teal-600">
                   {workflow.step1.completenessScore}% complete
                 </span>
               </div>
@@ -951,7 +951,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
             <button
               type="submit"
               disabled={submitStep1.isPending}
-              className="px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors disabled:opacity-50"
+              className="px-6 py-2.5 bg-teal-100 hover:bg-teal-300 text-teal-800 rounded-lg transition-colors disabled:opacity-50"
             >
               {submitStep1.isPending ? 'Saving...' : 'Save Draft'}
             </button>
@@ -960,7 +960,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                 type="button"
                 onClick={handleApprove}
                 disabled={approveStep1.isPending}
-                className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+                className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
               >
                 {approveStep1.isPending ? 'Approving...' : 'Approve & Continue →'}
               </button>

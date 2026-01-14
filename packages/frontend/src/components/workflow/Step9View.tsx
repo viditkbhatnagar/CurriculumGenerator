@@ -18,7 +18,7 @@ interface Props {
 const PRIORITY_COLORS: Record<TermPriority, string> = {
   must_include: 'bg-red-500/20 text-red-400 border-red-500/30',
   should_include: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  optional: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+  optional: 'bg-teal-400/20 text-teal-600 border-teal-400/30',
 };
 
 const PRIORITY_LABELS: Record<TermPriority, string> = {
@@ -124,10 +124,10 @@ function GlossaryTermEditModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-700">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+    <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-teal-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-teal-200">
+          <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
             Edit <span className="text-emerald-400">Glossary Term</span>
           </h3>
         </div>
@@ -135,19 +135,19 @@ function GlossaryTermEditModal({
         <div className="p-6 space-y-5">
           {/* Term */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Term</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Term</label>
             <input
               type="text"
               value={termText}
               onChange={(e) => setTermText(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-emerald-500"
               placeholder="Enter term..."
             />
           </div>
 
           {/* Definition */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Definition
               <span className={`ml-2 text-xs ${wordCount >= 20 && wordCount <= 40 ? 'text-emerald-400' : 'text-amber-400'}`}>
                 ({wordCount}/20-40 words)
@@ -157,7 +157,7 @@ function GlossaryTermEditModal({
               value={definition}
               onChange={(e) => setDefinition(e.target.value)}
               rows={3}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-emerald-500 resize-none"
               placeholder="Enter definition (20-40 words)..."
             />
           </div>
@@ -165,21 +165,21 @@ function GlossaryTermEditModal({
           {/* Category and Priority */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Category</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Category</label>
               <input
                 type="text"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-emerald-500"
                 placeholder="e.g., Technical, Business"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Priority</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Priority</label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TermPriority)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-emerald-500"
               >
                 <option value="must_include">Must Include</option>
                 <option value="should_include">Should Include</option>
@@ -196,20 +196,20 @@ function GlossaryTermEditModal({
                 id="isAcronym"
                 checked={isAcronym}
                 onChange={(e) => setIsAcronym(e.target.checked)}
-                className="w-4 h-4 text-emerald-600 bg-slate-900 border-slate-600 rounded focus:ring-emerald-500"
+                className="w-4 h-4 text-emerald-600 bg-teal-50 border-teal-300 rounded focus:ring-emerald-500"
               />
-              <label htmlFor="isAcronym" className="text-sm text-slate-300">
+              <label htmlFor="isAcronym" className="text-sm text-teal-700">
                 Is Acronym
               </label>
             </div>
             {isAcronym && (
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Acronym Expansion</label>
+                <label className="block text-sm font-medium text-teal-700 mb-2">Acronym Expansion</label>
                 <input
                   type="text"
                   value={acronymExpansion}
                   onChange={(e) => setAcronymExpansion(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-emerald-500"
                   placeholder="Full form of acronym..."
                 />
               </div>
@@ -223,47 +223,47 @@ function GlossaryTermEditModal({
               id="usedInAssessment"
               checked={usedInAssessment}
               onChange={(e) => setUsedInAssessment(e.target.checked)}
-              className="w-4 h-4 text-emerald-600 bg-slate-900 border-slate-600 rounded focus:ring-emerald-500"
+              className="w-4 h-4 text-emerald-600 bg-teal-50 border-teal-300 rounded focus:ring-emerald-500"
             />
-            <label htmlFor="usedInAssessment" className="text-sm text-slate-300">
+            <label htmlFor="usedInAssessment" className="text-sm text-teal-700">
               Used in Assessment
             </label>
           </div>
 
           {/* Example Sentence */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Example Sentence (Optional)</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Example Sentence (Optional)</label>
             <textarea
               value={exampleSentence}
               onChange={(e) => setExampleSentence(e.target.value)}
               rows={2}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-emerald-500 resize-none"
               placeholder="Example sentence demonstrating usage..."
             />
           </div>
 
           {/* Technical Note */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Technical Note (Optional)</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Technical Note (Optional)</label>
             <textarea
               value={technicalNote}
               onChange={(e) => setTechnicalNote(e.target.value)}
               rows={2}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-emerald-500 resize-none"
               placeholder="Additional technical details..."
             />
           </div>
 
           {/* Related Terms */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Related Terms</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Related Terms</label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={relatedInput}
                 onChange={(e) => setRelatedInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addRelatedTerm())}
-                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-emerald-500"
                 placeholder="Add a related term..."
               />
               <button
@@ -279,13 +279,13 @@ function GlossaryTermEditModal({
                 {relatedTerms.map((relatedTerm, i) => (
                   <span
                     key={i}
-                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm flex items-center gap-2"
                   >
                     {relatedTerm}
                     <button
                       type="button"
                       onClick={() => removeRelatedTerm(i)}
-                      className="text-slate-500 hover:text-red-400"
+                      className="text-teal-500 hover:text-red-400"
                     >
                       ×
                     </button>
@@ -298,14 +298,14 @@ function GlossaryTermEditModal({
           {/* Broader and Narrower Terms */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Broader Terms</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Broader Terms</label>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
                   value={broaderInput}
                   onChange={(e) => setBroaderInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addBroaderTerm())}
-                  className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-emerald-500"
                   placeholder="Add broader term..."
                 />
                 <button
@@ -321,13 +321,13 @@ function GlossaryTermEditModal({
                   {broaderTerms.map((broaderTerm, i) => (
                     <span
                       key={i}
-                      className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs flex items-center gap-1"
+                      className="px-2 py-1 bg-teal-100 text-teal-700 rounded text-xs flex items-center gap-1"
                     >
                       {broaderTerm}
                       <button
                         type="button"
                         onClick={() => removeBroaderTerm(i)}
-                        className="text-slate-500 hover:text-red-400"
+                        className="text-teal-500 hover:text-red-400"
                       >
                         ×
                       </button>
@@ -337,14 +337,14 @@ function GlossaryTermEditModal({
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Narrower Terms</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Narrower Terms</label>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
                   value={narrowerInput}
                   onChange={(e) => setNarrowerInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addNarrowerTerm())}
-                  className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-emerald-500"
                   placeholder="Add narrower term..."
                 />
                 <button
@@ -360,13 +360,13 @@ function GlossaryTermEditModal({
                   {narrowerTerms.map((narrowerTerm, i) => (
                     <span
                       key={i}
-                      className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs flex items-center gap-1"
+                      className="px-2 py-1 bg-teal-100 text-teal-700 rounded text-xs flex items-center gap-1"
                     >
                       {narrowerTerm}
                       <button
                         type="button"
                         onClick={() => removeNarrowerTerm(i)}
-                        className="text-slate-500 hover:text-red-400"
+                        className="text-teal-500 hover:text-red-400"
                       >
                         ×
                       </button>
@@ -379,14 +379,14 @@ function GlossaryTermEditModal({
 
           {/* Synonyms */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Synonyms</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Synonyms</label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={synonymInput}
                 onChange={(e) => setSynonymInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSynonym())}
-                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-emerald-500"
                 placeholder="Add a synonym..."
               />
               <button
@@ -402,13 +402,13 @@ function GlossaryTermEditModal({
                 {synonyms.map((synonym, i) => (
                   <span
                     key={i}
-                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm flex items-center gap-2"
                   >
                     {synonym}
                     <button
                       type="button"
                       onClick={() => removeSynonym(i)}
-                      className="text-slate-500 hover:text-red-400"
+                      className="text-teal-500 hover:text-red-400"
                     >
                       ×
                     </button>
@@ -419,18 +419,18 @@ function GlossaryTermEditModal({
           </div>
         </div>
 
-        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+        <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
           <button
             onClick={onCancel}
             disabled={isSaving}
-            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+            className="px-5 py-2.5 text-teal-600 hover:text-teal-600 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || !termText.trim() || !definition.trim()}
-            className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
           >
             {isSaving ? (
               <>
@@ -453,12 +453,12 @@ function TermCard({ term, onEdit }: { term: GlossaryTerm; onEdit?: (term: Glossa
   const definitionValid = term.wordCount >= 20 && term.wordCount <= 40;
 
   return (
-    <div className="bg-slate-900/50 rounded-lg border border-slate-700 overflow-hidden">
+    <div className="bg-white rounded-lg border border-teal-200 overflow-hidden">
       <div className="p-4">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="flex items-center gap-2">
-            <h4 className="text-white font-semibold">{term.term}</h4>
+            <h4 className="text-teal-800 font-semibold">{term.term}</h4>
             {term.isAcronym && (
               <span className="text-xs px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">
                 Acronym
@@ -485,26 +485,26 @@ function TermCard({ term, onEdit }: { term: GlossaryTerm; onEdit?: (term: Glossa
         )}
 
         {/* Definition */}
-        <p className="text-sm text-slate-300 mb-2">{term.definition}</p>
-        <span className={`text-xs ${definitionValid ? 'text-slate-500' : 'text-amber-400'}`}>
+        <p className="text-sm text-teal-700 mb-2">{term.definition}</p>
+        <span className={`text-xs ${definitionValid ? 'text-teal-500' : 'text-amber-400'}`}>
           {term.wordCount} words {!definitionValid && '(should be 20-40)'}
         </span>
 
         {/* Example Sentence */}
         {term.exampleSentence && (
-          <div className="mt-2 bg-slate-800/50 rounded p-2">
-            <p className="text-xs text-slate-500 mb-1">Example:</p>
-            <p className="text-sm text-slate-400 italic">"{term.exampleSentence}"</p>
+          <div className="mt-2 bg-teal-50 rounded p-2">
+            <p className="text-xs text-teal-500 mb-1">Example:</p>
+            <p className="text-sm text-teal-600 italic">"{term.exampleSentence}"</p>
           </div>
         )}
 
         {/* Category and Modules */}
         <div className="mt-3 flex items-center gap-3 text-xs">
           {term.category && (
-            <span className="px-2 py-0.5 bg-slate-700 rounded text-slate-400">{term.category}</span>
+            <span className="px-2 py-0.5 bg-teal-100 rounded text-teal-600">{term.category}</span>
           )}
           {term.sourceModules && term.sourceModules.length > 0 && (
-            <span className="text-slate-500">Used in: {term.sourceModules.join(', ')}</span>
+            <span className="text-teal-500">Used in: {term.sourceModules.join(', ')}</span>
           )}
         </div>
 
@@ -526,7 +526,7 @@ function TermCard({ term, onEdit }: { term: GlossaryTerm; onEdit?: (term: Glossa
         <>
           <button
             onClick={() => setExpanded(!expanded)}
-            className="w-full px-4 py-2 flex items-center justify-between text-xs text-slate-400 hover:bg-slate-800/30 transition-colors border-t border-slate-700/50"
+            className="w-full px-4 py-2 flex items-center justify-between text-xs text-teal-600 hover:bg-teal-50/30 transition-colors border-t border-teal-200/50"
           >
             <span>
               {term.relatedTerms?.length ? `${term.relatedTerms.length} related` : ''}
@@ -548,19 +548,19 @@ function TermCard({ term, onEdit }: { term: GlossaryTerm; onEdit?: (term: Glossa
           </button>
 
           {expanded && (
-            <div className="px-4 pb-4 space-y-3 border-t border-slate-700/50">
+            <div className="px-4 pb-4 space-y-3 border-t border-teal-200/50">
               {/* Technical Note */}
               {term.technicalNote && (
                 <div className="pt-3">
-                  <p className="text-xs text-slate-500 mb-1">Technical Note:</p>
-                  <p className="text-sm text-slate-400">{term.technicalNote}</p>
+                  <p className="text-xs text-teal-500 mb-1">Technical Note:</p>
+                  <p className="text-sm text-teal-600">{term.technicalNote}</p>
                 </div>
               )}
 
               {/* Related Terms */}
               {term.relatedTerms && term.relatedTerms.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-500 mb-1">Related Terms:</p>
+                  <p className="text-xs text-teal-500 mb-1">Related Terms:</p>
                   <div className="flex flex-wrap gap-1">
                     {term.relatedTerms.map((rt) => (
                       <span
@@ -579,14 +579,14 @@ function TermCard({ term, onEdit }: { term: GlossaryTerm; onEdit?: (term: Glossa
                 <div className="flex gap-4">
                   {term.broaderTerms && term.broaderTerms.length > 0 && (
                     <div>
-                      <p className="text-xs text-slate-500 mb-1">Broader:</p>
-                      <span className="text-xs text-slate-400">{term.broaderTerms.join(', ')}</span>
+                      <p className="text-xs text-teal-500 mb-1">Broader:</p>
+                      <span className="text-xs text-teal-600">{term.broaderTerms.join(', ')}</span>
                     </div>
                   )}
                   {term.narrowerTerms && term.narrowerTerms.length > 0 && (
                     <div>
-                      <p className="text-xs text-slate-500 mb-1">Narrower:</p>
-                      <span className="text-xs text-slate-400">
+                      <p className="text-xs text-teal-500 mb-1">Narrower:</p>
+                      <span className="text-xs text-teal-600">
                         {term.narrowerTerms.join(', ')}
                       </span>
                     </div>
@@ -597,8 +597,8 @@ function TermCard({ term, onEdit }: { term: GlossaryTerm; onEdit?: (term: Glossa
               {/* Synonyms */}
               {term.synonyms && term.synonyms.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-500 mb-1">Synonyms:</p>
-                  <span className="text-xs text-slate-400">{term.synonyms.join(', ')}</span>
+                  <p className="text-xs text-teal-500 mb-1">Synonyms:</p>
+                  <span className="text-xs text-teal-600">{term.synonyms.join(', ')}</span>
                 </div>
               )}
             </div>
@@ -614,20 +614,20 @@ function ModuleTermListCard({ moduleList }: { moduleList: ModuleTermList }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="bg-slate-900/30 rounded-lg border border-slate-700 overflow-hidden">
+    <div className="bg-teal-50/50 rounded-lg border border-teal-200 overflow-hidden">
       <div
-        className="p-4 cursor-pointer hover:bg-slate-800/30 transition-colors"
+        className="p-4 cursor-pointer hover:bg-teal-50/30 transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center justify-between">
           <div>
-            <h4 className="text-white font-medium">{moduleList.moduleTitle}</h4>
-            <p className="text-xs text-slate-500">{moduleList.moduleId}</p>
+            <h4 className="text-teal-800 font-medium">{moduleList.moduleTitle}</h4>
+            <p className="text-xs text-teal-500">{moduleList.moduleId}</p>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-lg font-bold text-cyan-400">{moduleList.termCount}</span>
             <svg
-              className={`w-5 h-5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+              className={`w-5 h-5 text-teal-600 transition-transform ${expanded ? 'rotate-180' : ''}`}
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -644,12 +644,12 @@ function ModuleTermListCard({ moduleList }: { moduleList: ModuleTermList }) {
       </div>
 
       {expanded && (
-        <div className="px-4 pb-4 border-t border-slate-700/50 pt-3">
+        <div className="px-4 pb-4 border-t border-teal-200/50 pt-3">
           <div className="flex flex-wrap gap-2">
             {moduleList.terms.map((term) => (
               <span
                 key={term.id}
-                className="text-xs px-2 py-1 bg-slate-800 rounded text-slate-300 hover:bg-slate-700 cursor-default"
+                className="text-xs px-2 py-1 bg-white rounded text-teal-700 hover:bg-teal-100 cursor-default"
                 title={term.definition}
               >
                 {term.term}
@@ -799,8 +799,8 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin" />
             <div>
-              <h3 className="text-lg font-semibold text-white">Generating Glossary...</h3>
-              <p className="text-sm text-slate-400">
+              <h3 className="text-lg font-semibold text-teal-800">Generating Glossary...</h3>
+              <p className="text-sm text-teal-600">
                 This may take 45 seconds. You can navigate away and come back.
               </p>
             </div>
@@ -825,30 +825,30 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
               </svg>
               Step 9: Glossary (Auto-Generated)
             </h3>
-            <p className="text-sm text-slate-300 mb-4">
+            <p className="text-sm text-teal-700 mb-4">
               <strong className="text-emerald-400">No SME input required</strong> - this step runs
               automatically by harvesting and defining all key terms from your curriculum content.
             </p>
 
             {/* Harvesting Sources */}
-            <div className="bg-slate-900/50 rounded-lg p-4 mb-4">
-              <p className="text-slate-400 font-medium mb-3">Comprehensive Harvesting From:</p>
+            <div className="bg-white rounded-lg p-4 mb-4">
+              <p className="text-teal-600 font-medium mb-3">Comprehensive Harvesting From:</p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Step 1: Program Description
                 </span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Step 2: Competency Framework
                 </span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">Step 3: PLOs</span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">Step 4: MLOs</span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">Step 3: PLOs</span>
+                <span className="px-2 py-1 bg-white rounded text-teal-700">Step 4: MLOs</span>
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Steps 5-6: Reading Lists
                 </span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Step 7: Assessments
                 </span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Step 8: Case Studies
                 </span>
               </div>
@@ -856,9 +856,9 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
 
             {/* Definition Quality */}
             <div className="grid md:grid-cols-2 gap-4 text-sm">
-              <div className="bg-slate-900/50 rounded-lg p-3">
+              <div className="bg-white rounded-lg p-3">
                 <p className="text-cyan-400 font-medium mb-2">Each Entry Includes:</p>
-                <ul className="text-xs text-slate-400 space-y-1">
+                <ul className="text-xs text-teal-600 space-y-1">
                   <li>• Main Definition (20-40 words)</li>
                   <li>• Example Sentence (optional)</li>
                   <li>• Technical Note (optional)</li>
@@ -866,9 +866,9 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
                   <li>• Module Mapping</li>
                 </ul>
               </div>
-              <div className="bg-slate-900/50 rounded-lg p-3">
+              <div className="bg-white rounded-lg p-3">
                 <p className="text-purple-400 font-medium mb-2">Term Priority:</p>
-                <ul className="text-xs text-slate-400 space-y-1">
+                <ul className="text-xs text-teal-600 space-y-1">
                   <li>
                     • <span className="text-red-400">Must Include:</span> Assessment terms,
                     Essential competencies
@@ -878,7 +878,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
                     study terms
                   </li>
                   <li>
-                    • <span className="text-slate-400">May Exclude:</span> Common English words
+                    • <span className="text-teal-600">May Exclude:</span> Common English words
                   </li>
                 </ul>
               </div>
@@ -890,11 +890,11 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-emerald-500/20 to-green-500/20 flex items-center justify-center">
               <span className="text-4xl">🎉</span>
             </div>
-            <h3 className="text-xl font-semibold text-white mb-2">Final Step!</h3>
-            <p className="text-slate-400 mb-2">
+            <h3 className="text-xl font-semibold text-teal-800 mb-2">Final Step!</h3>
+            <p className="text-teal-600 mb-2">
               Generate the glossary to complete your curriculum package
             </p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-teal-500">
               Typical size: Certificate (30-50 terms) | Diploma (50-80 terms)
             </p>
           </div>
@@ -910,7 +910,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
           <button
             onClick={handleGenerate}
             disabled={isCurrentlyGenerating}
-            className="w-full py-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+            className="w-full py-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
           >
             {isCurrentlyGenerating ? (
               <span className="flex items-center justify-center gap-2">
@@ -949,7 +949,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
                   ? 'Step 9 Approved!'
                   : 'Glossary Complete!'}
             </h3>
-            <p className="text-slate-300 mb-4">
+            <p className="text-teal-700 mb-4">
               {isApproved
                 ? 'Step 9 is approved. You can now proceed to Step 10: Lesson Plans & PPT Generation.'
                 : 'Review your glossary below and approve to continue to Step 10.'}
@@ -958,7 +958,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
               <button
                 onClick={handleApprove}
                 disabled={approveStep9.isPending}
-                className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 shadow-lg shadow-emerald-500/20"
+                className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 shadow-lg shadow-emerald-500/20"
               >
                 {approveStep9.isPending ? 'Approving...' : 'Approve & Continue to Step 10 →'}
               </button>
@@ -972,35 +972,35 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
 
           {/* Overall Stats */}
           <div className="grid grid-cols-5 gap-4">
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
-              <p className="text-3xl font-bold text-white">{workflow.step9?.totalTerms || 0}</p>
-              <p className="text-xs text-slate-500 mt-1">Total Terms</p>
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
+              <p className="text-3xl font-bold text-teal-800">{workflow.step9?.totalTerms || 0}</p>
+              <p className="text-xs text-teal-500 mt-1">Total Terms</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-cyan-400">
                 {workflow.step9?.categories?.length || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Categories</p>
+              <p className="text-xs text-teal-500 mt-1">Categories</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-purple-400">
                 {workflow.step9?.assessmentTermsCount || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Assessment Terms</p>
+              <p className="text-xs text-teal-500 mt-1">Assessment Terms</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-amber-400">
                 {workflow.step9?.acronymCount || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Acronyms</p>
+              <p className="text-xs text-teal-500 mt-1">Acronyms</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p
                 className={`text-3xl font-bold ${workflow.step9?.isValid ? 'text-emerald-400' : 'text-red-400'}`}
               >
                 {workflow.step9?.isValid ? '✓' : '✗'}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Valid</p>
+              <p className="text-xs text-teal-500 mt-1">Valid</p>
             </div>
           </div>
 
@@ -1060,9 +1060,9 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
 
               {/* Validation Issues */}
               {workflow.step9?.validationIssues && workflow.step9.validationIssues.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-slate-700/50">
+                <div className="mt-3 pt-3 border-t border-teal-200/50">
                   <p className="text-amber-400 text-sm font-medium mb-1">Issues:</p>
-                  <ul className="text-xs text-slate-400 space-y-1">
+                  <ul className="text-xs text-teal-600 space-y-1">
                     {workflow.step9.validationIssues.map((issue, i) => (
                       <li key={i}>• {issue}</li>
                     ))}
@@ -1074,8 +1074,8 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
 
           {/* Export Formats */}
           {workflow.step9?.exportFormats && (
-            <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-              <h4 className="text-white font-medium mb-3">Available Export Formats</h4>
+            <div className="bg-white rounded-lg p-4 border border-teal-200">
+              <h4 className="text-teal-800 font-medium mb-3">Available Export Formats</h4>
               <div className="flex flex-wrap gap-2">
                 {workflow.step9.exportFormats.alphabeticalPDF && (
                   <span className="text-xs px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded">
@@ -1113,7 +1113,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
               className={`px-4 py-2 rounded-lg text-sm transition-colors ${
                 viewMode === 'alphabetical'
                   ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
-                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+                  : 'bg-white text-teal-600 border border-teal-200'
               }`}
             >
               A-Z Alphabetical
@@ -1123,7 +1123,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
               className={`px-4 py-2 rounded-lg text-sm transition-colors ${
                 viewMode === 'modules'
                   ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
-                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+                  : 'bg-white text-teal-600 border border-teal-200'
               }`}
             >
               By Module
@@ -1140,13 +1140,13 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search terms..."
-                    className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    className="w-full px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
                   />
                 </div>
                 <select
                   value={selectedCategory || ''}
                   onChange={(e) => setSelectedCategory(e.target.value || null)}
-                  className="px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
                 >
                   <option value="">All Categories</option>
                   {workflow.step9?.categories?.map((cat) => (
@@ -1159,7 +1159,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
 
               {/* Alphabetical Term List */}
               <div>
-                <h3 className="text-lg font-semibold text-white mb-4">
+                <h3 className="text-lg font-semibold text-teal-800 mb-4">
                   Glossary ({sortedTerms.length} terms)
                 </h3>
                 <div className="space-y-3">
@@ -1176,7 +1176,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
           ) : (
             // Module View
             <div>
-              <h3 className="text-lg font-semibold text-white mb-4">Terms by Module</h3>
+              <h3 className="text-lg font-semibold text-teal-800 mb-4">Terms by Module</h3>
               <div className="space-y-3">
                 {workflow.step9?.moduleTermLists?.map((moduleList) => (
                   <ModuleTermListCard key={moduleList.moduleId} moduleList={moduleList} />
@@ -1193,11 +1193,11 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
           )}
 
           {/* Regenerate Button */}
-          <div className="flex items-center justify-center pt-6 border-t border-slate-700">
+          <div className="flex items-center justify-center pt-6 border-t border-teal-200">
             <button
               onClick={handleGenerate}
               disabled={submitStep9.isPending}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+              className="px-4 py-2 text-teal-600 hover:text-teal-600 transition-colors"
             >
               Regenerate Glossary
             </button>

@@ -62,11 +62,11 @@ function _ProposalCard({
       className={`rounded-lg p-4 border cursor-pointer transition-all ${
         isSelected
           ? 'bg-cyan-500/10 border-cyan-500'
-          : 'bg-slate-900/30 border-slate-700 hover:border-slate-600'
+          : 'bg-teal-50/50 border-teal-200 hover:border-teal-300'
       }`}
     >
       <div className="flex items-start justify-between gap-3 mb-2">
-        <h4 className="text-white font-medium">{proposal.title}</h4>
+        <h4 className="text-teal-800 font-medium">{proposal.title}</h4>
         <div className="flex items-center gap-2">
           <span className={`text-xs px-2 py-0.5 rounded ${CASE_TYPE_COLORS[proposal.caseType]}`}>
             {CASE_TYPE_LABELS[proposal.caseType]}
@@ -76,8 +76,8 @@ function _ProposalCard({
           </span>
         </div>
       </div>
-      <p className="text-sm text-slate-300 mb-2">{proposal.abstract}</p>
-      <p className="text-xs text-slate-500">{proposal.mappingSummary}</p>
+      <p className="text-sm text-teal-700 mb-2">{proposal.abstract}</p>
+      <p className="text-xs text-teal-500">{proposal.mappingSummary}</p>
       {isSelected && (
         <div className="mt-2 pt-2 border-t border-cyan-500/30">
           <span className="text-xs text-cyan-400">✓ Selected for development</span>
@@ -182,10 +182,10 @@ function CaseStudyEditModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-700">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+    <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-teal-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-teal-200">
+          <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
             Edit <span className="text-purple-400">Case Study</span>
           </h3>
         </div>
@@ -193,12 +193,12 @@ function CaseStudyEditModal({
         <div className="p-6 space-y-5">
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
               placeholder="Enter case study title..."
             />
           </div>
@@ -206,11 +206,11 @@ function CaseStudyEditModal({
           {/* Case Type and Difficulty */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Case Type</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Case Type</label>
               <select
                 value={caseType}
                 onChange={(e) => setCaseType(e.target.value as CaseType)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
               >
                 <option value="practice">Practice</option>
                 <option value="discussion">Discussion</option>
@@ -218,11 +218,11 @@ function CaseStudyEditModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Difficulty</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Difficulty</label>
               <select
                 value={difficulty}
                 onChange={(e) => setDifficulty(e.target.value as CaseDifficulty)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
               >
                 <option value="entry">Entry</option>
                 <option value="intermediate">Intermediate</option>
@@ -233,35 +233,35 @@ function CaseStudyEditModal({
 
           {/* Organizational Context */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Organizational Context
             </label>
             <textarea
               value={organizationalContext}
               onChange={(e) => setOrganizationalContext(e.target.value)}
               rows={2}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="Brief organizational context..."
             />
           </div>
 
           {/* Challenge Description */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Challenge Description
             </label>
             <textarea
               value={challengeDescription}
               onChange={(e) => setChallengeDescription(e.target.value)}
               rows={3}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="Main challenge or problem..."
             />
           </div>
 
           {/* Full Scenario */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Full Scenario
               <span
                 className={`ml-2 text-xs ${wordCount >= 400 && wordCount <= 800 ? 'text-emerald-400' : 'text-amber-400'}`}
@@ -273,21 +273,21 @@ function CaseStudyEditModal({
               value={scenario}
               onChange={(e) => setScenario(e.target.value)}
               rows={8}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="Full case study scenario..."
             />
           </div>
 
           {/* Background Information */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Background Information
             </label>
             <textarea
               value={backgroundInformation}
               onChange={(e) => setBackgroundInformation(e.target.value)}
               rows={3}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="Additional background context..."
             />
           </div>
@@ -295,24 +295,24 @@ function CaseStudyEditModal({
           {/* Industry Context and Brand Name */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-teal-700 mb-2">
                 Industry Context
               </label>
               <input
                 type="text"
                 value={industryContext}
                 onChange={(e) => setIndustryContext(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
                 placeholder="e.g., Healthcare, Technology"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Brand Name</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Brand Name</label>
               <input
                 type="text"
                 value={brandName}
                 onChange={(e) => setBrandName(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
                 placeholder="Organization name"
               />
             </div>
@@ -320,14 +320,14 @@ function CaseStudyEditModal({
 
           {/* Linked MLOs */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Linked MLOs</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Linked MLOs</label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={mloInput}
                 onChange={(e) => setMloInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addMLO())}
-                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
                 placeholder="Add an MLO..."
               />
               <button
@@ -343,13 +343,13 @@ function CaseStudyEditModal({
                 {linkedMLOs.map((mlo, i) => (
                   <span
                     key={i}
-                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm flex items-center gap-2"
                   >
                     {mlo}
                     <button
                       type="button"
                       onClick={() => removeMLO(i)}
-                      className="text-slate-500 hover:text-red-400"
+                      className="text-teal-500 hover:text-red-400"
                     >
                       ×
                     </button>
@@ -362,26 +362,26 @@ function CaseStudyEditModal({
           {/* Timing and Duration */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-teal-700 mb-2">
                 Suggested Timing
               </label>
               <input
                 type="text"
                 value={suggestedTiming}
                 onChange={(e) => setSuggestedTiming(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
                 placeholder="e.g., After Module 5 core readings"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-teal-700 mb-2">
                 Estimated Duration
               </label>
               <input
                 type="text"
                 value={estimatedDuration}
                 onChange={(e) => setEstimatedDuration(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
                 placeholder="e.g., 90 min individual + 30 min group"
               />
             </div>
@@ -389,14 +389,14 @@ function CaseStudyEditModal({
 
           {/* Learning Application */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Learning Application
             </label>
             <textarea
               value={learningApplication}
               onChange={(e) => setLearningApplication(e.target.value)}
               rows={2}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="How this case applies learning..."
             />
           </div>
@@ -404,14 +404,14 @@ function CaseStudyEditModal({
           {/* Practice Case: Suggested Approach */}
           {caseType === 'practice' && (
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-teal-700 mb-2">
                 Suggested Approach
               </label>
               <textarea
                 value={suggestedApproach}
                 onChange={(e) => setSuggestedApproach(e.target.value)}
                 rows={3}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
                 placeholder="Suggested approach for learners..."
               />
             </div>
@@ -420,7 +420,7 @@ function CaseStudyEditModal({
           {/* Discussion Case: Prompts */}
           {caseType === 'discussion' && (
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-teal-700 mb-2">
                 Discussion Prompts
               </label>
               <div className="flex gap-2 mb-2">
@@ -429,7 +429,7 @@ function CaseStudyEditModal({
                   value={promptInput}
                   onChange={(e) => setPromptInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addPrompt())}
-                  className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                  className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
                   placeholder="Add a discussion prompt..."
                 />
                 <button
@@ -443,12 +443,12 @@ function CaseStudyEditModal({
               {discussionPrompts.length > 0 && (
                 <div className="space-y-2">
                   {discussionPrompts.map((prompt, i) => (
-                    <div key={i} className="flex items-start gap-2 p-2 bg-slate-900/50 rounded">
-                      <span className="text-sm text-slate-300 flex-1">{prompt}</span>
+                    <div key={i} className="flex items-start gap-2 p-2 bg-white rounded">
+                      <span className="text-sm text-teal-700 flex-1">{prompt}</span>
                       <button
                         type="button"
                         onClick={() => removePrompt(i)}
-                        className="text-slate-500 hover:text-red-400"
+                        className="text-teal-500 hover:text-red-400"
                       >
                         ×
                       </button>
@@ -467,9 +467,9 @@ function CaseStudyEditModal({
                 id="ethicsCompliant"
                 checked={ethicsCompliant}
                 onChange={(e) => setEthicsCompliant(e.target.checked)}
-                className="w-4 h-4 text-purple-600 bg-slate-900 border-slate-600 rounded focus:ring-purple-500"
+                className="w-4 h-4 text-purple-600 bg-teal-50 border-teal-300 rounded focus:ring-purple-500"
               />
-              <label htmlFor="ethicsCompliant" className="text-sm text-slate-300">
+              <label htmlFor="ethicsCompliant" className="text-sm text-teal-700">
                 Ethics Compliant
               </label>
             </div>
@@ -479,9 +479,9 @@ function CaseStudyEditModal({
                 id="noPII"
                 checked={noPII}
                 onChange={(e) => setNoPII(e.target.checked)}
-                className="w-4 h-4 text-purple-600 bg-slate-900 border-slate-600 rounded focus:ring-purple-500"
+                className="w-4 h-4 text-purple-600 bg-teal-50 border-teal-300 rounded focus:ring-purple-500"
               />
-              <label htmlFor="noPII" className="text-sm text-slate-300">
+              <label htmlFor="noPII" className="text-sm text-teal-700">
                 No PII (Personally Identifiable Information)
               </label>
             </div>
@@ -497,18 +497,18 @@ function CaseStudyEditModal({
           </div>
         )}
 
-        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+        <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
           <button
             onClick={onCancel}
             disabled={isSaving}
-            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+            className="px-5 py-2.5 text-teal-600 hover:text-teal-600 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || !title.trim()}
-            className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
           >
             {isSaving ? (
               <>
@@ -536,13 +536,13 @@ function CaseStudyCard({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="bg-slate-900/50 rounded-lg border border-slate-700 overflow-hidden">
+    <div className="bg-white rounded-lg border border-teal-200 overflow-hidden">
       {/* Header */}
       <div className="p-4">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex-1">
-            <h4 className="text-white font-medium">{caseStudy.title}</h4>
-            <p className="text-sm text-slate-400">{caseStudy.moduleTitle || caseStudy.moduleId}</p>
+            <h4 className="text-teal-800 font-medium">{caseStudy.title}</h4>
+            <p className="text-sm text-teal-600">{caseStudy.moduleTitle || caseStudy.moduleId}</p>
           </div>
           <div className="flex items-start gap-2">
             <div className="flex flex-col items-end gap-1">
@@ -578,15 +578,15 @@ function CaseStudyCard({
         </div>
 
         {/* Organizational Context */}
-        <div className="bg-slate-800/50 rounded-lg p-3 mb-3">
-          <p className="text-xs text-slate-500 mb-1">Organizational Context</p>
-          <p className="text-sm text-slate-300">{caseStudy.organizationalContext}</p>
+        <div className="bg-teal-50 rounded-lg p-3 mb-3">
+          <p className="text-xs text-teal-500 mb-1">Organizational Context</p>
+          <p className="text-sm text-teal-700">{caseStudy.organizationalContext}</p>
         </div>
 
         {/* Challenge */}
         <div className="mb-3">
-          <p className="text-xs text-slate-500 mb-1">Challenge</p>
-          <p className="text-sm text-white">{caseStudy.challengeDescription}</p>
+          <p className="text-xs text-teal-500 mb-1">Challenge</p>
+          <p className="text-sm text-teal-800">{caseStudy.challengeDescription}</p>
         </div>
 
         {/* Word count indicator */}
@@ -596,7 +596,7 @@ function CaseStudyCard({
           >
             {caseStudy.wordCount} words
           </span>
-          <span className="text-slate-500">{caseStudy.industryContext}</span>
+          <span className="text-teal-500">{caseStudy.industryContext}</span>
           {caseStudy.hasDataAssets && <span className="text-cyan-400">📊 Data Assets</span>}
           {caseStudy.hasHooks && <span className="text-purple-400">🎯 Assessment Hooks</span>}
         </div>
@@ -605,7 +605,7 @@ function CaseStudyCard({
       {/* Expand Button */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-4 py-2 flex items-center justify-between text-xs text-slate-400 hover:bg-slate-800/30 transition-colors border-t border-slate-700/50"
+        className="w-full px-4 py-2 flex items-center justify-between text-xs text-teal-600 hover:bg-teal-50/30 transition-colors border-t border-teal-200/50"
       >
         <span>
           MLOs: {caseStudy.linkedMLOs?.join(', ')} |
@@ -623,18 +623,18 @@ function CaseStudyCard({
 
       {/* Expanded Content */}
       {expanded && (
-        <div className="px-4 pb-4 space-y-4 border-t border-slate-700/50">
+        <div className="px-4 pb-4 space-y-4 border-t border-teal-200/50">
           {/* Full Scenario */}
           <div className="pt-3">
-            <p className="text-xs text-slate-500 mb-2">Full Scenario</p>
-            <p className="text-sm text-slate-300 whitespace-pre-line">{caseStudy.scenario}</p>
+            <p className="text-xs text-teal-500 mb-2">Full Scenario</p>
+            <p className="text-sm text-teal-700 whitespace-pre-line">{caseStudy.scenario}</p>
           </div>
 
           {/* Background */}
           {caseStudy.backgroundInformation && (
             <div>
-              <p className="text-xs text-slate-500 mb-1">Background Information</p>
-              <p className="text-sm text-slate-400">{caseStudy.backgroundInformation}</p>
+              <p className="text-xs text-teal-500 mb-1">Background Information</p>
+              <p className="text-sm text-teal-600">{caseStudy.backgroundInformation}</p>
             </div>
           )}
 
@@ -643,12 +643,12 @@ function CaseStudyCard({
             <div>
               <p className="text-xs text-cyan-400 mb-2">📊 Data Assets</p>
               {caseStudy.dataAssets.map((asset, i) => (
-                <div key={i} className="bg-slate-800/50 rounded p-2 mb-2">
-                  <p className="text-sm text-white font-medium">{asset.name}</p>
-                  <p className="text-xs text-slate-400 mb-2">{asset.description}</p>
+                <div key={i} className="bg-teal-50 rounded p-2 mb-2">
+                  <p className="text-sm text-teal-800 font-medium">{asset.name}</p>
+                  <p className="text-xs text-teal-600 mb-2">{asset.description}</p>
                   <div className="flex flex-wrap gap-1">
                     {asset.columns.map((col) => (
-                      <span key={col.name} className="text-xs px-2 py-0.5 bg-slate-700 rounded">
+                      <span key={col.name} className="text-xs px-2 py-0.5 bg-teal-100 rounded">
                         {col.name}: {col.type}
                       </span>
                     ))}
@@ -666,15 +666,15 @@ function CaseStudyCard({
               {/* Key Facts */}
               {caseStudy.assessmentHooks.keyFacts?.length > 0 && (
                 <div className="mb-3">
-                  <p className="text-xs text-slate-400 mb-1">
+                  <p className="text-xs text-teal-600 mb-1">
                     Key Facts ({caseStudy.assessmentHooks.keyFacts.length}/10-15)
                   </p>
-                  <ul className="text-xs text-slate-300 space-y-1">
+                  <ul className="text-xs text-teal-700 space-y-1">
                     {caseStudy.assessmentHooks.keyFacts.slice(0, 5).map((fact, i) => (
                       <li key={i}>• {fact}</li>
                     ))}
                     {caseStudy.assessmentHooks.keyFacts.length > 5 && (
-                      <li className="text-slate-500">
+                      <li className="text-teal-500">
                         +{caseStudy.assessmentHooks.keyFacts.length - 5} more...
                       </li>
                     )}
@@ -685,7 +685,7 @@ function CaseStudyCard({
               {/* Misconceptions */}
               {caseStudy.assessmentHooks.misconceptions?.length > 0 && (
                 <div className="mb-3">
-                  <p className="text-xs text-slate-400 mb-1">
+                  <p className="text-xs text-teal-600 mb-1">
                     Common Misconceptions ({caseStudy.assessmentHooks.misconceptions.length}/5-8)
                   </p>
                   <ul className="text-xs text-amber-400/80 space-y-1">
@@ -699,7 +699,7 @@ function CaseStudyCard({
               {/* Decision Points */}
               {caseStudy.assessmentHooks.decisionPoints?.length > 0 && (
                 <div className="mb-3">
-                  <p className="text-xs text-slate-400 mb-1">
+                  <p className="text-xs text-teal-600 mb-1">
                     Decision Points ({caseStudy.assessmentHooks.decisionPoints.length}/3-5)
                   </p>
                   <ul className="text-xs text-cyan-400/80 space-y-1">
@@ -713,12 +713,12 @@ function CaseStudyCard({
               {/* Terminology */}
               {caseStudy.assessmentHooks.terminology?.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-1">Terminology</p>
+                  <p className="text-xs text-teal-600 mb-1">Terminology</p>
                   <div className="flex flex-wrap gap-1">
                     {caseStudy.assessmentHooks.terminology.map((t, i) => (
                       <span
                         key={i}
-                        className="text-xs px-2 py-0.5 bg-slate-700 rounded"
+                        className="text-xs px-2 py-0.5 bg-teal-100 rounded"
                         title={t.definition}
                       >
                         {t.term}
@@ -734,7 +734,7 @@ function CaseStudyCard({
           {caseStudy.caseType === 'practice' && caseStudy.suggestedApproach && (
             <div className="bg-green-500/10 rounded-lg p-3 border border-green-500/20">
               <p className="text-xs text-green-400 font-medium mb-1">Suggested Approach</p>
-              <p className="text-sm text-slate-300">{caseStudy.suggestedApproach}</p>
+              <p className="text-sm text-teal-700">{caseStudy.suggestedApproach}</p>
             </div>
           )}
 
@@ -742,7 +742,7 @@ function CaseStudyCard({
           {caseStudy.caseType === 'discussion' && caseStudy.discussionPrompts && (
             <div className="bg-blue-500/10 rounded-lg p-3 border border-blue-500/20">
               <p className="text-xs text-blue-400 font-medium mb-1">Discussion Prompts</p>
-              <ul className="text-sm text-slate-300 space-y-1">
+              <ul className="text-sm text-teal-700 space-y-1">
                 {caseStudy.discussionPrompts.map((prompt, i) => (
                   <li key={i}>• {prompt}</li>
                 ))}
@@ -753,13 +753,13 @@ function CaseStudyCard({
           {/* Learning Application */}
           {caseStudy.learningApplication && (
             <div>
-              <p className="text-xs text-slate-500 mb-1">Learning Application</p>
-              <p className="text-sm text-slate-400">{caseStudy.learningApplication}</p>
+              <p className="text-xs text-teal-500 mb-1">Learning Application</p>
+              <p className="text-sm text-teal-600">{caseStudy.learningApplication}</p>
             </div>
           )}
 
           {/* Usage Guidance */}
-          <div className="pt-2 border-t border-slate-700/50 flex gap-4 text-xs text-slate-500">
+          <div className="pt-2 border-t border-teal-200/50 flex gap-4 text-xs text-teal-500">
             {caseStudy.estimatedDuration && <span>⏱ {caseStudy.estimatedDuration}</span>}
             <span className={caseStudy.ethicsCompliant ? 'text-emerald-400' : 'text-red-400'}>
               {caseStudy.ethicsCompliant ? '✓ Ethics Compliant' : '⚠ Ethics Review Needed'}
@@ -769,7 +769,7 @@ function CaseStudyCard({
 
           {/* Edit Button */}
           {onEdit && (
-            <div className="pt-2 border-t border-slate-700/50">
+            <div className="pt-2 border-t border-teal-200/50">
               <button
                 onClick={() => onEdit(caseStudy)}
                 className="w-full px-4 py-2 bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 rounded-lg transition-colors text-sm font-medium"
@@ -935,8 +935,8 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
             <div>
-              <h3 className="text-lg font-semibold text-white">Generating Case Studies...</h3>
-              <p className="text-sm text-slate-400">
+              <h3 className="text-lg font-semibold text-teal-800">Generating Case Studies...</h3>
+              <p className="text-sm text-teal-600">
                 This may take 2-3 minutes. You can navigate away and come back.
               </p>
             </div>
@@ -961,7 +961,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
               </svg>
               Step 8: Case Studies (Practice, Discussion, or Assessment-Ready)
             </h3>
-            <p className="text-sm text-slate-300 mb-4">
+            <p className="text-sm text-teal-700 mb-4">
               Generate realistic, industry-relevant scenarios with optional data assets and
               <strong className="text-purple-400"> assessment hooks</strong>.
               <strong className="text-amber-400">
@@ -975,7 +975,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
             <div className="grid md:grid-cols-3 gap-4 text-sm">
               <div className="bg-green-500/10 rounded-lg p-3 border border-green-500/20">
                 <p className="text-green-400 font-medium mb-2">📚 Practice Cases</p>
-                <ul className="text-xs text-slate-400 space-y-1">
+                <ul className="text-xs text-teal-600 space-y-1">
                   <li>• Ungraded learning activities</li>
                   <li>• Build confidence</li>
                   <li>• Include suggested approaches</li>
@@ -983,7 +983,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
               </div>
               <div className="bg-blue-500/10 rounded-lg p-3 border border-blue-500/20">
                 <p className="text-blue-400 font-medium mb-2">💬 Discussion Cases</p>
-                <ul className="text-xs text-slate-400 space-y-1">
+                <ul className="text-xs text-teal-600 space-y-1">
                   <li>• Forum prompts</li>
                   <li>• Graded on participation</li>
                   <li>• Encourage perspective-sharing</li>
@@ -991,7 +991,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
               </div>
               <div className="bg-purple-500/10 rounded-lg p-3 border border-purple-500/20">
                 <p className="text-purple-400 font-medium mb-2">🎯 Assessment-Ready</p>
-                <ul className="text-xs text-slate-400 space-y-1">
+                <ul className="text-xs text-teal-600 space-y-1">
                   <li>• Structured scenarios with hooks</li>
                   <li>• Key facts, misconceptions</li>
                   <li>• Decision points, terminology</li>
@@ -1000,21 +1000,21 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
             </div>
 
             {/* Two-Stage Process */}
-            <div className="mt-4 bg-slate-900/50 rounded-lg p-3">
-              <p className="text-slate-400 font-medium mb-2">Two-Stage Process</p>
+            <div className="mt-4 bg-white rounded-lg p-3">
+              <p className="text-teal-600 font-medium mb-2">Two-Stage Process</p>
               <div className="flex items-center gap-4 text-xs">
                 <div className="flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
                     1
                   </span>
-                  <span className="text-slate-300">Generate Proposals (1-3 per module)</span>
+                  <span className="text-teal-700">Generate Proposals (1-3 per module)</span>
                 </div>
-                <span className="text-slate-600">→</span>
+                <span className="text-teal-300">→</span>
                 <div className="flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
                     2
                   </span>
-                  <span className="text-slate-300">Develop Selected Cases (400-800 words)</span>
+                  <span className="text-teal-700">Develop Selected Cases (400-800 words)</span>
                 </div>
               </div>
             </div>
@@ -1031,7 +1031,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
           <button
             onClick={handleGenerateProposals}
             disabled={isCurrentlyGenerating}
-            className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+            className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
           >
             {isCurrentlyGenerating ? (
               <span className="flex items-center justify-center gap-2">
@@ -1048,35 +1048,35 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
         <div className="space-y-6">
           {/* Overall Stats */}
           <div className="grid grid-cols-5 gap-4">
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
-              <p className="text-3xl font-bold text-white">{workflow.step8?.totalCases || 0}</p>
-              <p className="text-xs text-slate-500 mt-1">Total Cases</p>
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
+              <p className="text-3xl font-bold text-teal-800">{workflow.step8?.totalCases || 0}</p>
+              <p className="text-xs text-teal-500 mt-1">Total Cases</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-green-400">
                 {workflow.step8?.practiceCount || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Practice</p>
+              <p className="text-xs text-teal-500 mt-1">Practice</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-blue-400">
                 {workflow.step8?.discussionCount || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Discussion</p>
+              <p className="text-xs text-teal-500 mt-1">Discussion</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-purple-400">
                 {workflow.step8?.assessmentReadyCount || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Assessment-Ready</p>
+              <p className="text-xs text-teal-500 mt-1">Assessment-Ready</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p
                 className={`text-3xl font-bold ${workflow.step8?.isValid ? 'text-emerald-400' : 'text-red-400'}`}
               >
                 {workflow.step8?.isValid ? '✓' : '✗'}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Valid</p>
+              <p className="text-xs text-teal-500 mt-1">Valid</p>
             </div>
           </div>
 
@@ -1117,9 +1117,9 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
 
               {/* Validation Issues */}
               {workflow.step8?.validationIssues && workflow.step8.validationIssues.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-slate-700/50">
+                <div className="mt-3 pt-3 border-t border-teal-200/50">
                   <p className="text-amber-400 text-sm font-medium mb-1">Issues:</p>
-                  <ul className="text-xs text-slate-400 space-y-1">
+                  <ul className="text-xs text-teal-600 space-y-1">
                     {workflow.step8.validationIssues.map((issue, i) => (
                       <li key={i}>• {issue}</li>
                     ))}
@@ -1140,7 +1140,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
                     ? type === 'all'
                       ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500'
                       : `${CASE_TYPE_COLORS[type]} border`
-                    : 'bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-600'
+                    : 'bg-white text-teal-600 border border-teal-200 hover:border-teal-300'
                 }`}
               >
                 {type === 'all' ? 'All Cases' : CASE_TYPE_LABELS[type]}
@@ -1150,7 +1150,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Case Studies */}
           <div>
-            <h3 className="text-lg font-semibold text-white mb-4">
+            <h3 className="text-lg font-semibold text-teal-800 mb-4">
               Case Studies ({displayedCases.length})
             </h3>
             <div className="space-y-4">
@@ -1172,11 +1172,11 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-6 border-t border-slate-700">
+          <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
               onClick={handleGenerateProposals}
               disabled={submitStep8.isPending}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+              className="px-4 py-2 text-teal-600 hover:text-teal-600 transition-colors"
             >
               Regenerate
             </button>
@@ -1185,7 +1185,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
                 <button
                   onClick={handleApprove}
                   disabled={approveStep8.isPending}
-                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50"
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
                 >
                   {approveStep8.isPending ? 'Approving...' : 'Approve & Continue →'}
                 </button>

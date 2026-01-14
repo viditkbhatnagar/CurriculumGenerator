@@ -160,10 +160,10 @@ export default function PPTGenerationPage() {
 
   if (workflowLoading || isValidating) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-teal-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-400">Loading workflow...</p>
+          <div className="w-16 h-16 border-4 border-[#80A3A2] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-teal-600">Loading workflow...</p>
         </div>
       </div>
     );
@@ -171,12 +171,12 @@ export default function PPTGenerationPage() {
 
   if (!validation || !validation.canGeneratePPT) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-teal-50 p-6">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-8 text-center">
-            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-red-500/20 to-orange-500/20 flex items-center justify-center">
+          <div className="bg-white rounded-xl border border-teal-200/50 p-8 text-center shadow-sm">
+            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-rose-100 flex items-center justify-center">
               <svg
-                className="w-10 h-10 text-red-400"
+                className="w-10 h-10 text-rose-500"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -189,18 +189,18 @@ export default function PPTGenerationPage() {
                 />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-white mb-4">Cannot Generate PowerPoints</h2>
-            <p className="text-slate-400 mb-6">
+            <h2 className="text-2xl font-bold text-teal-800 mb-4">Cannot Generate PowerPoints</h2>
+            <p className="text-teal-600 mb-6">
               Please complete all 9 steps of the curriculum workflow before generating PowerPoints.
             </p>
             {validation && validation.missingSteps.length > 0 && (
               <div className="mb-6">
-                <p className="text-slate-300 mb-2">Missing steps:</p>
+                <p className="text-teal-700 mb-2">Missing steps:</p>
                 <div className="flex flex-wrap gap-2 justify-center">
                   {validation.missingSteps.map((step) => (
                     <span
                       key={step}
-                      className="px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm"
+                      className="px-3 py-1 bg-rose-100 text-rose-600 rounded-full text-sm"
                     >
                       Step {step}
                     </span>
@@ -210,7 +210,7 @@ export default function PPTGenerationPage() {
             )}
             <button
               onClick={() => router.push(`/workflow/${workflowId}`)}
-              className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all"
+              className="px-6 py-3 bg-gradient-to-r from-[#80A3A2] to-[#5a9090] hover:from-[#8fb3b2] hover:to-[#6aa0a0] text-white font-medium rounded-lg transition-all"
             >
               Return to Workflow
             </button>
@@ -221,13 +221,13 @@ export default function PPTGenerationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-teal-50 p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <button
             onClick={() => router.push(`/workflow/${workflowId}`)}
-            className="mb-4 text-slate-400 hover:text-white flex items-center gap-2 transition-colors"
+            className="mb-4 text-teal-600 hover:text-teal-800 flex items-center gap-2 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
@@ -240,17 +240,17 @@ export default function PPTGenerationPage() {
             Back to Workflow
           </button>
 
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
+          <div className="bg-white rounded-xl border border-teal-200/50 p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-white mb-2">PowerPoint Generation</h1>
-                <p className="text-slate-400">
+                <h1 className="text-3xl font-bold text-teal-800 mb-2">PowerPoint Generation</h1>
+                <p className="text-teal-600">
                   Generate professional PowerPoint presentations for each module
                 </p>
               </div>
-              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-orange-500/20 to-red-500/20 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-[#c4967a]/20 to-[#b47a5a]/20 flex items-center justify-center">
                 <svg
-                  className="w-8 h-8 text-orange-400"
+                  className="w-8 h-8 text-[#c4967a]"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -269,8 +269,8 @@ export default function PPTGenerationPage() {
 
         {/* Progress Message */}
         {progressMessage && (
-          <div className="mb-6 bg-slate-800/50 rounded-lg border border-slate-700/50 p-4">
-            <p className="text-slate-300 text-center">{progressMessage}</p>
+          <div className="mb-6 bg-white rounded-lg border border-teal-200/50 p-4 shadow-sm">
+            <p className="text-teal-700 text-center">{progressMessage}</p>
           </div>
         )}
 
@@ -279,7 +279,7 @@ export default function PPTGenerationPage() {
           <button
             onClick={handleGenerateAll}
             disabled={isGeneratingAll}
-            className="w-full px-6 py-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 disabled:from-slate-700 disabled:to-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-all shadow-lg flex items-center justify-center gap-3"
+            className="w-full px-6 py-4 bg-gradient-to-r from-[#80A3A2] to-[#5a9090] hover:from-[#8fb3b2] hover:to-[#6aa0a0] disabled:from-teal-200 disabled:to-teal-300 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-all shadow-lg flex items-center justify-center gap-3"
           >
             {isGeneratingAll ? (
               <>
@@ -303,8 +303,8 @@ export default function PPTGenerationPage() {
         </div>
 
         {/* Module List */}
-        <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
-          <h2 className="text-xl font-bold text-white mb-4">Modules ({validation.moduleCount})</h2>
+        <div className="bg-white rounded-xl border border-teal-200/50 p-6 shadow-sm">
+          <h2 className="text-xl font-bold text-teal-800 mb-4">Modules ({validation.moduleCount})</h2>
 
           <div className="space-y-3">
             {validation.modules.map((module) => {
@@ -315,16 +315,16 @@ export default function PPTGenerationPage() {
               return (
                 <div
                   key={module.id}
-                  className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg border border-slate-600/30 hover:border-slate-500/50 transition-colors"
+                  className="flex items-center justify-between p-4 bg-teal-50/50 rounded-lg border border-teal-200/30 hover:border-teal-300 transition-colors"
                 >
                   <div className="flex items-center gap-4">
                     <div
                       className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                         isCompleted
-                          ? 'bg-emerald-500/20 text-emerald-400'
+                          ? 'bg-[#80A3A2]/20 text-[#80A3A2]'
                           : hasError
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'bg-orange-500/20 text-orange-400'
+                            ? 'bg-rose-100 text-rose-500'
+                            : 'bg-[#c4967a]/20 text-[#c4967a]'
                       }`}
                     >
                       {isCompleted ? (
@@ -372,15 +372,15 @@ export default function PPTGenerationPage() {
                       )}
                     </div>
                     <div>
-                      <p className="text-white font-medium">{module.moduleCode}</p>
-                      <p className="text-sm text-slate-400">{module.title}</p>
+                      <p className="text-teal-800 font-medium">{module.moduleCode}</p>
+                      <p className="text-sm text-teal-600">{module.title}</p>
                     </div>
                   </div>
 
                   <button
                     onClick={() => handleGenerateSingle(module.id, module.moduleCode)}
                     disabled={isGenerating || isGeneratingAll}
-                    className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:from-slate-700 disabled:to-slate-600 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-all flex items-center gap-2"
+                    className="px-4 py-2 bg-gradient-to-r from-[#80A3A2] to-[#5a9090] hover:from-[#8fb3b2] hover:to-[#6aa0a0] disabled:from-teal-200 disabled:to-teal-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-all flex items-center gap-2"
                   >
                     {isGenerating ? (
                       <>

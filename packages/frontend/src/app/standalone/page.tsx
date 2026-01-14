@@ -198,40 +198,40 @@ export default function StandalonePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-sage-50">
       {/* Skip to main content link for accessibility */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-cyan-500 focus:text-white focus:rounded-lg"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-teal-400 focus:text-white focus:rounded-lg"
       >
         Skip to main content
       </a>
 
       {/* Header */}
-      <header className="border-b border-slate-700/50 backdrop-blur-sm bg-slate-900/50 sticky top-0 z-10">
+      <header className="border-b border-teal-200/50 backdrop-blur-sm bg-white/80 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/')}
-              className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="p-2 hover:bg-teal-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-teal-400"
               aria-label="Back to home"
             >
-              <ArrowLeft className="w-5 h-5 text-slate-400" />
+              <ArrowLeft className="w-5 h-5 text-teal-600" />
             </button>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+              <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-teal-500 to-sage-500 bg-clip-text text-transparent">
                 Standalone Step Execution
               </h1>
-              <p className="text-slate-400 text-xs sm:text-sm mt-1 hidden sm:block">
+              <p className="text-teal-600 text-xs sm:text-sm mt-1 hidden sm:block">
                 Generate individual curriculum components without a full workflow
               </p>
             </div>
           </div>
           {/* Keyboard shortcut hint */}
-          <div className="hidden md:block text-xs text-slate-500">
-            <kbd className="px-2 py-1 bg-slate-800 rounded border border-slate-700">Ctrl</kbd>
+          <div className="hidden md:block text-xs text-teal-500">
+            <kbd className="px-2 py-1 bg-teal-100 rounded border border-teal-200 text-teal-700">Ctrl</kbd>
             {' + '}
-            <kbd className="px-2 py-1 bg-slate-800 rounded border border-slate-700">Enter</kbd>
+            <kbd className="px-2 py-1 bg-teal-100 rounded border border-teal-200 text-teal-700">Enter</kbd>
             {' to generate'}
           </div>
         </div>
@@ -241,7 +241,7 @@ export default function StandalonePage() {
       <main id="main-content" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8" role="main">
         {/* Step Selector Section */}
         <section className="mb-6 sm:mb-8" aria-labelledby="step-selector-heading">
-          <h2 id="step-selector-heading" className="text-lg font-semibold text-white mb-4">
+          <h2 id="step-selector-heading" className="text-lg font-semibold text-teal-800 mb-4">
             Select a Step
           </h2>
           <StepSelector selectedStep={selectedStep} onSelectStep={handleSelectStep} />
@@ -306,11 +306,11 @@ export default function StandalonePage() {
         {/* Empty State - When no step is selected */}
         {!selectedStep && (
           <section className="text-center py-8 sm:py-12">
-            <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-4 sm:mb-6 rounded-full bg-slate-800/50 flex items-center justify-center">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-4 sm:mb-6 rounded-full bg-teal-100 flex items-center justify-center">
               <span className="text-3xl sm:text-4xl" role="img" aria-label="Target">🎯</span>
             </div>
-            <h3 className="text-lg sm:text-xl font-semibold text-white mb-2">Select a Step to Begin</h3>
-            <p className="text-slate-400 max-w-md mx-auto text-sm sm:text-base px-4">
+            <h3 className="text-lg sm:text-xl font-semibold text-teal-800 mb-2">Select a Step to Begin</h3>
+            <p className="text-teal-600 max-w-md mx-auto text-sm sm:text-base px-4">
               Choose any step from 2-10 above to generate individual curriculum components.
               No workflow context required.
             </p>

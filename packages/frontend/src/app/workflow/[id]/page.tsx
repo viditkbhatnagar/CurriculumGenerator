@@ -134,15 +134,15 @@ const STEP_ICONS: Record<WorkflowStep, React.ReactNode> = {
 
 function getStepStatusColor(status?: StepStatus, isCurrent: boolean = false): string {
   if (status === 'approved' || status === 'completed') {
-    return 'bg-emerald-500 text-white border-emerald-500';
+    return 'bg-[#80A3A2] text-white border-[#80A3A2]';
   }
   if (isCurrent) {
-    return 'bg-cyan-500 text-white border-cyan-500';
+    return 'bg-[#5a9090] text-white border-[#5a9090]';
   }
   if (status === 'in_progress') {
-    return 'bg-amber-500 text-white border-amber-500';
+    return 'bg-[#b4a078] text-white border-[#b4a078]';
   }
-  return 'bg-slate-800 text-slate-400 border-slate-700';
+  return 'bg-teal-50 text-teal-600 border-teal-200';
 }
 
 export default function WorkflowDetailPage() {
@@ -202,10 +202,10 @@ export default function WorkflowDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-teal-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-300">Loading workflow...</p>
+          <div className="w-16 h-16 border-4 border-[#80A3A2] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-teal-600">Loading workflow...</p>
         </div>
       </div>
     );
@@ -213,12 +213,12 @@ export default function WorkflowDetailPage() {
 
   if (error || !workflow) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-        <div className="text-center text-red-400">
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-teal-50 flex items-center justify-center">
+        <div className="text-center text-rose-500">
           <p>Failed to load workflow</p>
           <button
             onClick={() => router.push('/workflow')}
-            className="mt-4 px-4 py-2 bg-slate-700 rounded-lg text-white"
+            className="mt-4 px-4 py-2 bg-teal-100 hover:bg-teal-200 rounded-lg text-teal-700"
           >
             Back to Workflows
           </button>
@@ -233,18 +233,18 @@ export default function WorkflowDetailPage() {
   // If showing final review, render that instead
   if (showFinalReview) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-teal-50">
         {/* Header */}
-        <header className="border-b border-slate-700/50 backdrop-blur-sm bg-slate-900/50 sticky top-0 z-10">
+        <header className="border-b border-teal-200/50 backdrop-blur-sm bg-white/80 sticky top-0 z-10">
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <button
                   onClick={() => setShowFinalReview(false)}
-                  className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
+                  className="p-2 hover:bg-teal-100 rounded-lg transition-colors"
                 >
                   <svg
-                    className="w-5 h-5 text-slate-400"
+                    className="w-5 h-5 text-teal-600"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -258,13 +258,13 @@ export default function WorkflowDetailPage() {
                   </svg>
                 </button>
                 <div>
-                  <h1 className="text-xl font-bold text-white">Final Review & Download</h1>
-                  <p className="text-slate-400 text-sm">{workflow.projectName}</p>
+                  <h1 className="text-xl font-bold text-teal-800">Final Review & Download</h1>
+                  <p className="text-teal-600 text-sm">{workflow.projectName}</p>
                 </div>
               </div>
               <button
                 onClick={() => router.push('/workflow')}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                className="px-4 py-2 bg-teal-100 hover:bg-teal-200 text-teal-700 rounded-lg transition-colors"
               >
                 Back to Workflows
               </button>
@@ -348,18 +348,18 @@ export default function WorkflowDetailPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-teal-50">
       {/* Header */}
-      <header className="border-b border-slate-700/50 backdrop-blur-sm bg-slate-900/50 sticky top-0 z-10">
+      <header className="border-b border-teal-200/50 backdrop-blur-sm bg-white/80 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => router.push('/workflow')}
-                className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
+                className="p-2 hover:bg-teal-100 rounded-lg transition-colors"
               >
                 <svg
-                  className="w-5 h-5 text-slate-400"
+                  className="w-5 h-5 text-teal-600"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -373,8 +373,8 @@ export default function WorkflowDetailPage() {
                 </svg>
               </button>
               <div>
-                <h1 className="text-xl font-bold text-white">{workflow.projectName}</h1>
-                <p className="text-slate-400 text-sm">
+                <h1 className="text-xl font-bold text-teal-800">{workflow.projectName}</h1>
+                <p className="text-teal-600 text-sm">
                   Step {workflow.currentStep} of 10 •{' '}
                   {progress?.estimatedTimeRemaining || '~2 hours'} remaining
                 </p>
@@ -387,7 +387,7 @@ export default function WorkflowDetailPage() {
                   <button
                     onClick={handleCompleteWorkflow}
                     disabled={completeWorkflow.isPending}
-                    className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all shadow-lg shadow-emerald-500/20"
+                    className="px-5 py-2.5 bg-gradient-to-r from-[#80A3A2] to-[#5a9090] hover:from-[#8fb3b2] hover:to-[#6aa0a0] text-white font-medium rounded-lg transition-all shadow-lg shadow-[#80A3A2]/20"
                   >
                     {completeWorkflow.isPending ? 'Completing...' : 'Complete & Review'}
                   </button>
@@ -395,7 +395,7 @@ export default function WorkflowDetailPage() {
               {workflow.currentStep >= 9 && workflow.step9 && (
                 <button
                   onClick={() => router.push(`/workflow/${id}/ppt`)}
-                  className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white rounded-lg transition-all flex items-center gap-2"
+                  className="px-4 py-2 bg-gradient-to-r from-[#c4967a] to-[#b47a5a] hover:from-[#d4a68a] hover:to-[#c48a6a] text-white rounded-lg transition-all flex items-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
@@ -410,7 +410,7 @@ export default function WorkflowDetailPage() {
               )}
               <button
                 onClick={() => router.push(`/workflow/${id}/export`)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                className="px-4 py-2 bg-teal-100 hover:bg-teal-200 text-teal-700 rounded-lg transition-colors"
               >
                 Export
               </button>
@@ -419,9 +419,9 @@ export default function WorkflowDetailPage() {
 
           {/* Progress bar */}
           <div className="mt-4">
-            <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
+            <div className="h-1 bg-teal-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-500"
+                className="h-full bg-gradient-to-r from-[#80A3A2] to-[#5a9090] transition-all duration-500"
                 style={{ width: `${progress?.progressPercent || 0}%` }}
               />
             </div>
@@ -432,9 +432,9 @@ export default function WorkflowDetailPage() {
       <div className="max-w-7xl mx-auto px-6 py-6 flex gap-6">
         {/* Sidebar - Step Navigation */}
         <aside className="w-72 flex-shrink-0">
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden sticky top-28">
-            <div className="p-4 border-b border-slate-700/50">
-              <h2 className="font-semibold text-white">Workflow Steps</h2>
+          <div className="bg-white rounded-xl border border-teal-200/50 overflow-hidden sticky top-28 shadow-sm">
+            <div className="p-4 border-b border-teal-200/50">
+              <h2 className="font-semibold text-teal-800">Workflow Steps</h2>
             </div>
             <div className="relative">
               <nav className="p-2 max-h-[calc(100vh-200px)] overflow-y-auto scrollbar-thin scrollbar-track-slate-800 scrollbar-thumb-slate-600 hover:scrollbar-thumb-slate-500">
@@ -451,9 +451,9 @@ export default function WorkflowDetailPage() {
                       disabled={!isAccessible}
                       className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all mb-1 ${
                         isActive
-                          ? 'bg-cyan-500/20 border border-cyan-500/50'
+                          ? 'bg-[#80A3A2]/10 border border-[#80A3A2]/30'
                           : isAccessible
-                            ? 'hover:bg-slate-700/50'
+                            ? 'hover:bg-teal-50'
                             : 'opacity-50 cursor-not-allowed'
                       }`}
                     >
@@ -486,25 +486,25 @@ export default function WorkflowDetailPage() {
                         <p
                           className={`text-sm font-medium ${
                             isActive
-                              ? 'text-cyan-400'
+                              ? 'text-[#80A3A2]'
                               : isAccessible
-                                ? 'text-white'
-                                : 'text-slate-500'
+                                ? 'text-teal-800'
+                                : 'text-teal-400'
                           }`}
                         >
                           {STEP_NAMES[step]}
                         </p>
-                        <p className="text-xs text-slate-500">{ESTIMATED_TIMES[step]}</p>
+                        <p className="text-xs text-teal-500">{ESTIMATED_TIMES[step]}</p>
                       </div>
                       {stepProgress?.status === 'approved' && (
-                        <span className="text-emerald-400 text-xs">Approved</span>
+                        <span className="text-[#80A3A2] text-xs">Approved</span>
                       )}
                     </button>
                   );
                 })}
               </nav>
               {/* Scroll indicator gradient */}
-              <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-slate-800/50 to-transparent pointer-events-none" />
+              <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white to-transparent pointer-events-none" />
             </div>
           </div>
         </aside>
@@ -512,22 +512,22 @@ export default function WorkflowDetailPage() {
         {/* Main Content */}
         <main className="flex-1 min-w-0">
           {/* Step Header */}
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6 mb-6">
+          <div className="bg-white rounded-xl border border-teal-200/50 p-6 mb-6 shadow-sm">
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center text-cyan-400">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#80A3A2]/20 to-[#5a9090]/20 flex items-center justify-center text-[#80A3A2]">
                 {STEP_ICONS[currentStep]}
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">
+                <h2 className="text-xl font-bold text-teal-800">
                   Step {currentStep}: {STEP_NAMES[currentStep]}
                 </h2>
-                <p className="text-slate-400">{STEP_DESCRIPTIONS[currentStep]}</p>
+                <p className="text-teal-600">{STEP_DESCRIPTIONS[currentStep]}</p>
               </div>
             </div>
           </div>
 
           {/* Step Content */}
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50">
+          <div className="bg-white rounded-xl border border-teal-200/50 shadow-sm">
             {renderStepContent()}
           </div>
         </main>
@@ -553,7 +553,7 @@ export default function WorkflowDetailPage() {
       {workflow && !isCanvasOpen && (
         <button
           onClick={() => setIsCanvasOpen(true)}
-          className="fixed right-6 bottom-6 px-4 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-xl shadow-lg shadow-cyan-500/30 flex items-center gap-2 transition-all z-40"
+          className="fixed right-6 bottom-6 px-4 py-3 bg-gradient-to-r from-[#80A3A2] to-[#5a9090] hover:from-[#8fb3b2] hover:to-[#6aa0a0] text-white font-medium rounded-xl shadow-lg shadow-[#80A3A2]/30 flex items-center gap-2 transition-all z-40"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
@@ -569,11 +569,11 @@ export default function WorkflowDetailPage() {
 
       {/* Completion Modal */}
       {showCompletionModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-2xl p-8 w-full max-w-md border border-slate-700 shadow-2xl text-center">
-            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-emerald-500/20 to-green-500/20 flex items-center justify-center">
+        <div className="fixed inset-0 bg-teal-900/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-md border border-teal-200 shadow-2xl text-center">
+            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-[#80A3A2]/20 to-[#5a9090]/20 flex items-center justify-center">
               <svg
-                className="w-10 h-10 text-emerald-400"
+                className="w-10 h-10 text-[#80A3A2]"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -586,8 +586,8 @@ export default function WorkflowDetailPage() {
                 />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">🎉 Curriculum Complete!</h2>
-            <p className="text-slate-400 mb-6">
+            <h2 className="text-2xl font-bold text-teal-800 mb-2">🎉 Curriculum Complete!</h2>
+            <p className="text-teal-600 mb-6">
               Your curriculum has been successfully generated and is ready for export or PowerPoint
               generation.
             </p>
@@ -595,20 +595,20 @@ export default function WorkflowDetailPage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowCompletionModal(false)}
-                  className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                  className="flex-1 px-4 py-3 bg-teal-100 hover:bg-teal-200 text-teal-700 rounded-lg transition-colors"
                 >
                   Continue Editing
                 </button>
                 <button
                   onClick={() => router.push(`/workflow/${id}/export`)}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all"
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-[#80A3A2] to-[#5a9090] hover:from-[#8fb3b2] hover:to-[#6aa0a0] text-white font-medium rounded-lg transition-all"
                 >
                   Export Document
                 </button>
               </div>
               <button
                 onClick={() => router.push(`/workflow/${id}/ppt`)}
-                className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2"
+                className="w-full px-4 py-3 bg-gradient-to-r from-[#c4967a] to-[#b47a5a] hover:from-[#d4a68a] hover:to-[#c48a6a] text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
