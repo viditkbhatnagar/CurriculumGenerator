@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Target } from 'lucide-react';
 import { StepSelector, STANDALONE_STEPS } from '@/components/standalone/StepSelector';
 import { StepOutput, OutputState, StepOutputData } from '@/components/standalone/StepOutput';
 import { DescriptionInput } from '@/components/standalone/DescriptionInput';
@@ -99,8 +99,8 @@ export default function StandalonePage() {
     // Clear session storage when selecting new step - Requirement 7.4
     try {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
-    } catch (err) {
-      // Ignore
+    } catch {
+      // Ignore session storage errors
     }
 
     logAnalytics('step_selected', { stepNumber });
@@ -310,9 +310,7 @@ export default function StandalonePage() {
         {!selectedStep && (
           <section className="text-center py-8 sm:py-12">
             <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-4 sm:mb-6 rounded-full bg-teal-100 flex items-center justify-center">
-              <span className="text-3xl sm:text-4xl" role="img" aria-label="Target">
-                🎯
-              </span>
+              <Target className="w-10 h-10 sm:w-12 sm:h-12 text-teal-600" aria-hidden="true" />
             </div>
             <h3 className="text-lg sm:text-xl font-semibold text-teal-800 mb-2">
               Select a Step to Begin

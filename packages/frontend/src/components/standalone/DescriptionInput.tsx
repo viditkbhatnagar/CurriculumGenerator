@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, type LucideIcon } from 'lucide-react';
 
 /**
  * Props for the DescriptionInput component
@@ -10,7 +10,7 @@ import { Loader2 } from 'lucide-react';
 export interface DescriptionInputProps {
   stepNumber: number;
   stepName: string;
-  stepIcon: string;
+  stepIcon: LucideIcon;
   stepDescription: string;
   value: string;
   onChange: (value: string) => void;
@@ -49,7 +49,7 @@ export function validateDescription(description: string): boolean {
 export function DescriptionInput({
   stepNumber,
   stepName,
-  stepIcon,
+  stepIcon: IconComponent,
   stepDescription,
   value,
   onChange,
@@ -84,7 +84,9 @@ export function DescriptionInput({
       {/* Step Header - Requirement 3.5: Display step description above input */}
       <div className="mb-4">
         <h2 className="text-base sm:text-lg font-semibold text-teal-800 flex items-center gap-2">
-          <span role="img" aria-hidden="true">{stepIcon}</span>
+          <div className="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center">
+            <IconComponent className="w-4 h-4 text-teal-600" aria-hidden="true" />
+          </div>
           <span>Step {stepNumber}: {stepName}</span>
         </h2>
         <p className="text-teal-600 text-xs sm:text-sm mt-1">{stepDescription}</p>

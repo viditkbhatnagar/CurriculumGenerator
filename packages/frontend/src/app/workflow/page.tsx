@@ -34,10 +34,12 @@ function formatStatus(status: WorkflowStatus): string {
 }
 
 function getProgressPercent(workflow: CurriculumWorkflow): number {
+  const totalSteps = 11;
   const completedSteps = workflow.stepProgress.filter(
     (p) => p.status === 'completed' || p.status === 'approved'
   ).length;
-  return Math.round((completedSteps / 9) * 100);
+  const percent = Math.round((completedSteps / totalSteps) * 100);
+  return Math.min(percent, 100); // Cap at 100%
 }
 
 export default function WorkflowListPage() {

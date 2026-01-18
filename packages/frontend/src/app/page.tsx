@@ -1,48 +1,65 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Sparkles, BookOpen, Zap, Target, Layers } from 'lucide-react';
+import {
+  ArrowRight,
+  Sparkles,
+  BookOpen,
+  Zap,
+  Target,
+  Layers,
+  FileText,
+  Lightbulb,
+  GraduationCap,
+  Search,
+  BookMarked,
+  CheckSquare,
+  Building2,
+  Book,
+  FileEdit,
+  Presentation,
+} from 'lucide-react';
 
 const WORKFLOW_STEPS = [
-  { step: 1, name: 'Program Foundation', time: '15-20 min', icon: '📋' },
-  { step: 2, name: 'Competency Framework (KSC)', time: '10-15 min', icon: '🎯' },
-  { step: 3, name: 'Program Learning Outcomes', time: '15-20 min', icon: '⚡' },
-  { step: 4, name: 'Course Framework & MLOs', time: '25-30 min', icon: '📚' },
-  { step: 5, name: 'Topic-Level Sources', time: '10 min', icon: '📖' },
-  { step: 6, name: 'Reading Lists', time: '8 min', icon: '📕' },
-  { step: 7, name: 'Auto-Gradable Assessments', time: '15-20 min', icon: '✅' },
-  { step: 8, name: 'Case Studies', time: '10-15 min', icon: '🏢' },
-  { step: 9, name: 'Glossary', time: '5 min (auto)', icon: '📖' },
-  { step: 10, name: 'Lesson Plans', time: '10-15 min', icon: '📝' },
-  { step: 11, name: 'PPT Generation', time: '10-15 min', icon: '📊' },
+  { step: 1, name: 'Program Foundation', time: '15-20 min', icon: FileText },
+  { step: 2, name: 'Competency Framework (KSC)', time: '10-15 min', icon: Target },
+  { step: 3, name: 'Program Learning Outcomes', time: '15-20 min', icon: Lightbulb },
+  { step: 4, name: 'Course Framework & MLOs', time: '25-30 min', icon: GraduationCap },
+  { step: 5, name: 'Topic-Level Sources', time: '10 min', icon: Search },
+  { step: 6, name: 'Reading Lists', time: '8 min', icon: BookMarked },
+  { step: 7, name: 'Auto-Gradable Assessments', time: '15-20 min', icon: CheckSquare },
+  { step: 8, name: 'Case Studies', time: '10-15 min', icon: Building2 },
+  { step: 9, name: 'Glossary', time: '5 min (auto)', icon: Book },
+  { step: 10, name: 'Lesson Plans', time: '10-15 min', icon: FileEdit },
+  { step: 11, name: 'PPT Generation', time: '10-15 min', icon: Presentation },
 ];
 
 export default function Home() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-sage-50">
       {/* Hero Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center">
           {/* Badge */}
-          <div className="inline-flex items-center px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-full text-sm font-medium mb-8 border border-cyan-500/30">
+          <div className="inline-flex items-center px-4 py-2 bg-teal-100 text-teal-700 rounded-full text-sm font-medium mb-8 border border-teal-200">
             <Sparkles className="w-4 h-4 mr-2" />
-            NEW: 9-Step AI-Powered Workflow v2.2
+            NEW: 11-Step AI-Powered Workflow v2.2
           </div>
 
           {/* Main Heading */}
-          <h1 className="text-5xl md:text-6xl font-bold text-white mb-6">
+          <h1 className="text-5xl md:text-6xl font-bold text-teal-800 mb-6">
             AI-Integrated Curriculum
             <br />
-            <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-teal-500 to-teal-600 bg-clip-text text-transparent">
               Generator
             </span>
           </h1>
 
           {/* Subheading */}
-          <p className="text-xl text-slate-300 mb-12 max-w-3xl mx-auto">
-            Generate complete, AGI-compliant curricula in ~2 hours. 9-step workflow with SME
+          <p className="text-xl text-teal-600 mb-12 max-w-3xl mx-auto">
+            Generate complete, AGI-compliant curricula in ~2 hours. 11-step workflow with SME
             checkpoints, auto-gradable MCQ assessments, and full credit system support (UK/ECTS/US).
           </p>
 
@@ -50,7 +67,7 @@ export default function Home() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
             <button
               onClick={() => router.push('/workflow')}
-              className="group inline-flex items-center justify-center px-8 py-4 text-lg font-medium text-white bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 rounded-lg shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 transition-all"
+              className="group inline-flex items-center justify-center px-8 py-4 text-lg font-medium text-white bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 rounded-lg shadow-lg shadow-teal-500/25 hover:shadow-teal-500/40 transition-all"
               aria-label="Start a new curriculum workflow"
             >
               Start New Curriculum
@@ -68,39 +85,49 @@ export default function Home() {
 
             <button
               onClick={() => router.push('/workflow')}
-              className="inline-flex items-center justify-center px-8 py-4 text-lg font-medium text-white bg-slate-700 hover:bg-slate-600 rounded-lg shadow-lg transition-all border border-slate-600"
+              className="inline-flex items-center justify-center px-8 py-4 text-lg font-medium text-teal-700 bg-white hover:bg-teal-50 rounded-lg shadow-lg transition-all border border-teal-200"
               aria-label="View your existing workflows"
             >
               View My Workflows
             </button>
           </div>
 
-          {/* 9-Step Workflow Preview */}
-          <div className="bg-slate-800/50 rounded-2xl p-8 border border-slate-700/50 max-w-4xl mx-auto mb-16">
-            <h2 className="text-2xl font-bold text-white mb-6">9-Step Workflow</h2>
-            <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
-              {WORKFLOW_STEPS.slice(0, 5).map((step) => (
-                <div
-                  key={step.step}
-                  className="bg-slate-900/50 rounded-lg p-3 border border-slate-700/50 text-center"
-                >
-                  <span className="text-2xl mb-2 block">{step.icon}</span>
-                  <p className="text-xs text-slate-400">{step.name}</p>
-                  <p className="text-xs text-cyan-400 mt-1">{step.time}</p>
-                </div>
-              ))}
+          {/* 11-Step Workflow Preview */}
+          <div className="bg-white rounded-2xl p-8 border border-teal-200/50 max-w-5xl mx-auto mb-16 shadow-sm">
+            <h2 className="text-2xl font-bold text-teal-800 mb-6">11-Step Workflow</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {WORKFLOW_STEPS.slice(0, 6).map((step) => {
+                const IconComponent = step.icon;
+                return (
+                  <div
+                    key={step.step}
+                    className="bg-teal-50/50 rounded-xl p-4 border border-teal-100 text-center hover:border-teal-300 hover:bg-teal-50 transition-all"
+                  >
+                    <div className="w-10 h-10 mx-auto mb-3 rounded-lg bg-teal-100 flex items-center justify-center">
+                      <IconComponent className="w-5 h-5 text-teal-600" />
+                    </div>
+                    <p className="text-xs font-medium text-teal-800 leading-tight">{step.name}</p>
+                    <p className="text-xs text-teal-500 mt-1">{step.time}</p>
+                  </div>
+                );
+              })}
             </div>
-            <div className="grid grid-cols-4 gap-3 mt-3">
-              {WORKFLOW_STEPS.slice(5).map((step) => (
-                <div
-                  key={step.step}
-                  className="bg-slate-900/50 rounded-lg p-3 border border-slate-700/50 text-center"
-                >
-                  <span className="text-2xl mb-2 block">{step.icon}</span>
-                  <p className="text-xs text-slate-400">{step.name}</p>
-                  <p className="text-xs text-cyan-400 mt-1">{step.time}</p>
-                </div>
-              ))}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
+              {WORKFLOW_STEPS.slice(6).map((step) => {
+                const IconComponent = step.icon;
+                return (
+                  <div
+                    key={step.step}
+                    className="bg-teal-50/50 rounded-xl p-4 border border-teal-100 text-center hover:border-teal-300 hover:bg-teal-50 transition-all"
+                  >
+                    <div className="w-10 h-10 mx-auto mb-3 rounded-lg bg-teal-100 flex items-center justify-center">
+                      <IconComponent className="w-5 h-5 text-teal-600" />
+                    </div>
+                    <p className="text-xs font-medium text-teal-800 leading-tight">{step.name}</p>
+                    <p className="text-xs text-teal-500 mt-1">{step.time}</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -108,52 +135,52 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
             {/* Feature 1 - Standalone */}
             <div
-              className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50 hover:border-purple-500/50 transition-colors cursor-pointer"
+              className="bg-white rounded-xl p-6 border border-teal-200/50 hover:border-purple-300 hover:shadow-md transition-all cursor-pointer"
               onClick={() => router.push('/standalone')}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => e.key === 'Enter' && router.push('/standalone')}
             >
-              <div className="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                <Layers className="w-6 h-6 text-purple-400" />
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                <Layers className="w-6 h-6 text-purple-600" />
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Standalone Steps</h3>
-              <p className="text-slate-400 text-sm">
+              <h3 className="text-lg font-semibold text-teal-800 mb-2">Standalone Steps</h3>
+              <p className="text-teal-600 text-sm">
                 Generate individual curriculum components without a full workflow. Quick and
                 flexible.
               </p>
             </div>
 
             {/* Feature 2 */}
-            <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50 hover:border-cyan-500/50 transition-colors">
-              <div className="w-12 h-12 bg-cyan-500/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                <Zap className="w-6 h-6 text-cyan-400" />
+            <div className="bg-white rounded-xl p-6 border border-teal-200/50 hover:border-teal-300 hover:shadow-md transition-all">
+              <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                <Zap className="w-6 h-6 text-teal-600" />
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">MCQ-First Assessments</h3>
-              <p className="text-slate-400 text-sm">
+              <h3 className="text-lg font-semibold text-teal-800 mb-2">MCQ-First Assessments</h3>
+              <p className="text-teal-600 text-sm">
                 Auto-gradable only. MCQ with optional Cloze. No manual grading required.
               </p>
             </div>
 
             {/* Feature 3 */}
-            <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50 hover:border-cyan-500/50 transition-colors">
-              <div className="w-12 h-12 bg-emerald-500/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                <BookOpen className="w-6 h-6 text-emerald-400" />
+            <div className="bg-white rounded-xl p-6 border border-teal-200/50 hover:border-teal-300 hover:shadow-md transition-all">
+              <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                <BookOpen className="w-6 h-6 text-emerald-600" />
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">AGI Academic Standards</h3>
-              <p className="text-slate-400 text-sm">
+              <h3 className="text-lg font-semibold text-teal-800 mb-2">AGI Academic Standards</h3>
+              <p className="text-teal-600 text-sm">
                 Strict source validation. Peer-reviewed journals &lt;5 years, textbooks &lt;10
                 years.
               </p>
             </div>
 
             {/* Feature 4 */}
-            <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700/50 hover:border-cyan-500/50 transition-colors">
-              <div className="w-12 h-12 bg-amber-500/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                <Target className="w-6 h-6 text-amber-400" />
+            <div className="bg-white rounded-xl p-6 border border-teal-200/50 hover:border-teal-300 hover:shadow-md transition-all">
+              <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                <Target className="w-6 h-6 text-amber-600" />
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Multi-Credit Systems</h3>
-              <p className="text-slate-400 text-sm">
+              <h3 className="text-lg font-semibold text-teal-800 mb-2">Multi-Credit Systems</h3>
+              <p className="text-teal-600 text-sm">
                 UK Credits, ECTS, US Semester Hours. Automatic contact hour calculations.
               </p>
             </div>
@@ -161,33 +188,33 @@ export default function Home() {
 
           {/* Stats */}
           <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
-            <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/30">
-              <div className="text-3xl font-bold text-cyan-400 mb-1">9</div>
-              <div className="text-sm text-slate-500">Steps</div>
+            <div className="bg-white rounded-xl p-4 border border-teal-200/50 shadow-sm">
+              <div className="text-3xl font-bold text-teal-600 mb-1">11</div>
+              <div className="text-sm text-teal-500">Steps</div>
             </div>
-            <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/30">
-              <div className="text-3xl font-bold text-emerald-400 mb-1">~2h</div>
-              <div className="text-sm text-slate-500">Total Time</div>
+            <div className="bg-white rounded-xl p-4 border border-teal-200/50 shadow-sm">
+              <div className="text-3xl font-bold text-emerald-600 mb-1">~2h</div>
+              <div className="text-sm text-teal-500">Total Time</div>
             </div>
-            <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/30">
-              <div className="text-3xl font-bold text-purple-400 mb-1">100%</div>
-              <div className="text-sm text-slate-500">Auto-Gradable</div>
+            <div className="bg-white rounded-xl p-4 border border-teal-200/50 shadow-sm">
+              <div className="text-3xl font-bold text-purple-600 mb-1">100%</div>
+              <div className="text-sm text-teal-500">Auto-Gradable</div>
             </div>
-            <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/30">
-              <div className="text-3xl font-bold text-amber-400 mb-1">3</div>
-              <div className="text-sm text-slate-500">Credit Systems</div>
+            <div className="bg-white rounded-xl p-4 border border-teal-200/50 shadow-sm">
+              <div className="text-3xl font-bold text-amber-600 mb-1">3</div>
+              <div className="text-sm text-teal-500">Credit Systems</div>
             </div>
           </div>
 
           {/* Quick Start */}
-          <div className="mt-16 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 rounded-2xl p-8 border border-cyan-500/20 max-w-3xl mx-auto">
-            <h2 className="text-2xl font-bold text-white mb-4">Ready to Start?</h2>
-            <p className="text-slate-300 mb-6">
+          <div className="mt-16 bg-gradient-to-r from-teal-100/80 to-teal-50 rounded-2xl p-8 border border-teal-200 max-w-3xl mx-auto">
+            <h2 className="text-2xl font-bold text-teal-800 mb-4">Ready to Start?</h2>
+            <p className="text-teal-700 mb-6">
               Create your first curriculum in about 2 hours with AI assistance at every step.
             </p>
             <button
               onClick={() => router.push('/workflow')}
-              className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 text-lg font-medium text-white bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 rounded-lg transition-all"
+              className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 text-lg font-medium text-white bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 rounded-lg transition-all shadow-lg shadow-teal-500/25"
             >
               Create New Curriculum
               <ArrowRight className="ml-2 w-5 h-5" />
