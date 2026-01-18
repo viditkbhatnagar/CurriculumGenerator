@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep11, useApproveStep11, useStep11Status } from '@/hooks/useWorkflow';
-import { CurriculumWorkflow, ModulePPTDecks, PPTDeck } from '@/types/workflow';
+import { CurriculumWorkflow } from '@/types/workflow';
 import { useGeneration } from '@/contexts/GenerationContext';
 import { api } from '@/lib/api';
 
@@ -15,7 +15,7 @@ interface Props {
 export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
   const submitStep11 = useSubmitStep11();
   const approveStep11 = useApproveStep11();
-  const { data: statusData, refetch: refetchStatus } = useStep11Status(workflow._id);
+  const { data: _statusData, refetch: _refetchStatus } = useStep11Status(workflow._id);
   const [error, setError] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [generatingModuleId, setGeneratingModuleId] = useState<string | null>(null);
@@ -220,7 +220,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
     }
   }
 
-  const isIncomplete = hasStep11Data && completedModules < totalModules;
+  const _isIncomplete = hasStep11Data && completedModules < totalModules;
   const isAllModulesComplete = hasStep11Data && completedModules >= totalModules;
 
   // Auto-select first module if none selected
@@ -260,7 +260,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                   <h3 className="text-lg font-semibold text-red-400 mb-1">
                     Step 10 Approval Required
                   </h3>
-                  <p className="text-slate-300 text-sm">
+                  <p className="text-teal-700 text-sm">
                     You must approve Step 10 (Lesson Plans) before generating PowerPoint decks.
                     Please go back to Step 10 and click the "Approve" button.
                   </p>
@@ -282,19 +282,19 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
               </svg>
               Step 11: PowerPoint Generation
             </h3>
-            <p className="text-sm text-slate-300 mb-4">
+            <p className="text-sm text-teal-700 mb-4">
               Generate professional PowerPoint slide decks for each lesson based on the lesson plans
               from Step 10. Each deck includes objectives, key concepts, case studies, and formative
               checks.
             </p>
 
             {/* What Will Be Generated */}
-            <div className="bg-slate-900/50 rounded-lg p-4 mb-4">
-              <p className="text-slate-400 font-medium mb-3">What Will Be Generated:</p>
+            <div className="bg-teal-50/50 rounded-lg p-4 mb-4">
+              <p className="text-teal-600 font-medium mb-3">What Will Be Generated:</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                <div className="bg-slate-800/50 rounded p-3">
+                <div className="bg-white/50 rounded p-3">
                   <p className="text-orange-400 font-medium mb-2">📊 Slide Types</p>
-                  <ul className="text-slate-400 space-y-1">
+                  <ul className="text-teal-600 space-y-1">
                     <li>• Title & objectives slides</li>
                     <li>• Key concepts & definitions</li>
                     <li>• Content explanation slides</li>
@@ -303,9 +303,9 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                     <li>• Summary & key takeaways</li>
                   </ul>
                 </div>
-                <div className="bg-slate-800/50 rounded p-3">
-                  <p className="text-cyan-400 font-medium mb-2">🎯 Features</p>
-                  <ul className="text-slate-400 space-y-1">
+                <div className="bg-white/50 rounded p-3">
+                  <p className="text-teal-600 font-medium mb-2">🎯 Features</p>
+                  <ul className="text-teal-600 space-y-1">
                     <li>• 15-35 slides per lesson</li>
                     <li>• Speaker notes included</li>
                     <li>• Visual suggestions</li>
@@ -318,18 +318,18 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
             </div>
 
             {/* Context Sources */}
-            <div className="bg-slate-900/50 rounded-lg p-4">
-              <p className="text-slate-400 font-medium mb-3">Using Context From:</p>
+            <div className="bg-teal-50/50 rounded-lg p-4">
+              <p className="text-teal-600 font-medium mb-3">Using Context From:</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Step 1: Program Info
                 </span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">Step 3: PLOs</span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">Step 4: MLOs</span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">Step 3: PLOs</span>
+                <span className="px-2 py-1 bg-white rounded text-teal-700">Step 4: MLOs</span>
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Step 9: Glossary
                 </span>
-                <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded">
+                <span className="px-2 py-1 bg-cyan-500/20 text-teal-600 rounded">
                   Step 10: Lesson Plans
                 </span>
               </div>
@@ -347,7 +347,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
           <button
             onClick={handleGenerate}
             disabled={isCurrentlyGenerating || !isStep10Approved}
-            className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isCurrentlyGenerating ? (
               <span className="flex items-center justify-center gap-2">
@@ -365,9 +365,9 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
         // Display Generated PPT Decks
         <div className="space-y-6">
           {/* Module Generation List */}
-          <div className="bg-slate-900/50 rounded-lg p-6 border border-slate-700">
-            <h3 className="text-xl font-bold text-white mb-4">PPT Generation Progress</h3>
-            <p className="text-sm text-slate-400 mb-6">
+          <div className="bg-teal-50/50 rounded-lg p-6 border border-teal-200">
+            <h3 className="text-xl font-bold text-teal-800 mb-4">PPT Generation Progress</h3>
+            <p className="text-sm text-teal-600 mb-6">
               Generate PowerPoint slide decks for each module. Each module takes 2-3 minutes to
               generate.
             </p>
@@ -393,8 +393,8 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                         : isGenerating
                           ? 'bg-orange-500/10 border-orange-500/30'
                           : canGenerate
-                            ? 'bg-slate-800/50 border-slate-600'
-                            : 'bg-slate-800/30 border-slate-700/50 opacity-60'
+                            ? 'bg-white/50 border-slate-600'
+                            : 'bg-white/30 border-teal-200/50 opacity-60'
                     }`}
                   >
                     <div className="flex items-start gap-4">
@@ -425,9 +425,9 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                             <span className="text-xl">📊</span>
                           </div>
                         ) : (
-                          <div className="w-10 h-10 rounded-full bg-slate-700/50 flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-full bg-teal-100/50 flex items-center justify-center">
                             <svg
-                              className="w-6 h-6 text-slate-500"
+                              className="w-6 h-6 text-teal-500"
                               fill="none"
                               viewBox="0 0 24 24"
                               stroke="currentColor"
@@ -447,11 +447,11 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-4 mb-2">
                           <div className="flex-1">
-                            <h4 className="text-white font-semibold text-lg mb-1">
+                            <h4 className="text-teal-800 font-semibold text-lg mb-1">
                               Module {index + 1}: {module.moduleCode}
                             </h4>
-                            <p className="text-slate-400 text-sm mb-2">{module.moduleTitle}</p>
-                            <div className="flex items-center gap-4 text-xs text-slate-500">
+                            <p className="text-teal-600 text-sm mb-2">{module.moduleTitle}</p>
+                            <div className="flex items-center gap-4 text-xs text-teal-500">
                               <span>{module.totalLessons} lessons</span>
                               {modulePPT && (
                                 <>
@@ -460,7 +460,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                                     {modulePPT.pptDecks.length} PPT decks generated
                                   </span>
                                   <span>•</span>
-                                  <span className="text-cyan-400">
+                                  <span className="text-teal-600">
                                     {modulePPT.pptDecks.reduce((sum, d) => sum + d.slideCount, 0)}{' '}
                                     slides
                                   </span>
@@ -484,7 +484,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                                     handleDownloadModulePPTs(module.moduleId, module.moduleCode)
                                   }
                                   disabled={downloadingModule === module.moduleId}
-                                  className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                  className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-teal-600 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                                   title="Download PPTs for this module"
                                 >
                                   {downloadingModule === module.moduleId ? (
@@ -519,12 +519,12 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                             ) : canGenerate ? (
                               <button
                                 onClick={handleGenerate}
-                                className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white rounded-lg transition-all text-sm font-medium"
+                                className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-teal-800 rounded-lg transition-all text-sm font-medium"
                               >
                                 Generate Now
                               </button>
                             ) : (
-                              <div className="px-4 py-2 bg-slate-700/50 text-slate-500 rounded-lg text-sm font-medium">
+                              <div className="px-4 py-2 bg-teal-100/50 text-teal-500 rounded-lg text-sm font-medium">
                                 Locked
                               </div>
                             )}
@@ -533,12 +533,12 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
 
                         {/* Progress indicator for generating module */}
                         {isGenerating && (
-                          <div className="mt-3 bg-slate-800/50 rounded-lg p-3">
+                          <div className="mt-3 bg-white/50 rounded-lg p-3">
                             <div className="flex items-center gap-2 text-sm text-orange-400 mb-2">
                               <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
                               <span>Generating PPT decks for {module.totalLessons} lessons...</span>
                             </div>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-teal-500">
                               This will take 2-3 minutes. You can wait here or come back later.
                             </p>
                           </div>
@@ -551,10 +551,10 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
             </div>
 
             {/* Manual Refresh Button */}
-            <div className="mt-6 pt-6 border-t border-slate-700">
+            <div className="mt-6 pt-6 border-t border-teal-200">
               <button
                 onClick={onRefresh}
-                className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2"
+                className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-teal-800 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -566,7 +566,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                 </svg>
                 Refresh to Check Progress
               </button>
-              <p className="text-xs text-slate-500 text-center mt-2">
+              <p className="text-xs text-teal-500 text-center mt-2">
                 Click after starting generation to check if the module has completed
               </p>
             </div>
@@ -620,14 +620,14 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
               {isApproved ? (
                 <>
                   <h3 className="text-xl font-bold text-emerald-400 mb-2">✅ Step 11 Approved!</h3>
-                  <p className="text-slate-300 mb-4">
+                  <p className="text-teal-700 mb-4">
                     All PowerPoint decks have been approved. Your curriculum is now complete!
                   </p>
                   <div className="flex items-center justify-center gap-4 mb-4">
                     <button
                       onClick={handleDownloadAllPPTs}
                       disabled={downloadingAll}
-                      className="px-6 py-3 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="px-6 py-3 bg-cyan-500/20 hover:bg-cyan-500/30 text-teal-600 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {downloadingAll ? (
                         <>
@@ -661,7 +661,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
               ) : (
                 <>
                   <h3 className="text-xl font-bold text-orange-400 mb-2">🎉 All PPTs Generated!</h3>
-                  <p className="text-slate-300 mb-4">
+                  <p className="text-teal-700 mb-4">
                     All PowerPoint decks have been generated. Review the content and approve to
                     complete.
                   </p>
@@ -669,7 +669,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                     <button
                       onClick={handleDownloadAllPPTs}
                       disabled={downloadingAll}
-                      className="px-6 py-3 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="px-6 py-3 bg-cyan-500/20 hover:bg-cyan-500/30 text-teal-600 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {downloadingAll ? (
                         <>
@@ -698,7 +698,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                     <button
                       onClick={handleApprove}
                       disabled={approveStep11.isPending}
-                      className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {approveStep11.isPending ? (
                         <>
@@ -732,29 +732,29 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Overall Stats */}
           <div className="grid grid-cols-4 gap-4">
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
-              <p className="text-3xl font-bold text-white">
+            <div className="bg-teal-50/50 rounded-xl p-4 border border-teal-200 text-center">
+              <p className="text-3xl font-bold text-teal-800">
                 {workflow.step11?.summary?.totalPPTDecks || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Total PPT Decks</p>
+              <p className="text-xs text-teal-500 mt-1">Total PPT Decks</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-teal-50/50 rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-orange-400">
                 {workflow.step11?.summary?.totalSlides || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Total Slides</p>
+              <p className="text-xs text-teal-500 mt-1">Total Slides</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
-              <p className="text-3xl font-bold text-cyan-400">
+            <div className="bg-teal-50/50 rounded-xl p-4 border border-teal-200 text-center">
+              <p className="text-3xl font-bold text-teal-600">
                 {workflow.step11?.summary?.averageSlidesPerLesson || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Avg Slides/Lesson</p>
+              <p className="text-xs text-teal-500 mt-1">Avg Slides/Lesson</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-teal-50/50 rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-purple-400">
                 {completedModules}/{totalModules}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Modules Complete</p>
+              <p className="text-xs text-teal-500 mt-1">Modules Complete</p>
             </div>
           </div>
 
@@ -786,8 +786,8 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
           )}
 
           {/* Module Selection */}
-          <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-            <h4 className="text-white font-medium mb-3">Select Module to View PPTs</h4>
+          <div className="bg-teal-50/50 rounded-lg p-4 border border-teal-200">
+            <h4 className="text-teal-800 font-medium mb-3">Select Module to View PPTs</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {workflow.step11?.modulePPTDecks?.map((module, index) => (
                 <button
@@ -796,7 +796,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                   className={`p-4 rounded-lg border text-left transition-all ${
                     selectedModule === module.moduleId
                       ? 'bg-orange-500/20 border-orange-500 text-orange-400'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600'
+                      : 'bg-white border-teal-200 text-teal-700 hover:border-slate-600'
                   }`}
                 >
                   <div className="font-medium mb-1">{module.moduleCode}</div>
@@ -814,13 +814,13 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
           {/* Module PPT Details */}
           {currentModule && (
             <div className="space-y-4">
-              <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
+              <div className="bg-teal-50/50 rounded-lg p-5 border border-teal-200">
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="text-xl font-bold text-white mb-2">
+                    <h3 className="text-xl font-bold text-teal-800 mb-2">
                       {currentModule.moduleCode}: {currentModule.moduleTitle}
                     </h3>
-                    <div className="flex items-center gap-4 text-sm text-slate-400">
+                    <div className="flex items-center gap-4 text-sm text-teal-600">
                       <span>{currentModule.totalLessons} Lessons</span>
                       <span>•</span>
                       <span>{currentModule.pptDecks.length} PPT Decks</span>
@@ -836,7 +836,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                       handleDownloadModulePPTs(currentModule.moduleId, currentModule.moduleCode)
                     }
                     disabled={downloadingModule === currentModule.moduleId}
-                    className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-teal-600 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {downloadingModule === currentModule.moduleId ? (
                       <>
@@ -880,13 +880,13 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {currentModule.pptDecks.map((deck) => (
-                    <div key={deck.deckId} className="bg-slate-900/50 rounded-lg p-4">
+                    <div key={deck.deckId} className="bg-teal-50/50 rounded-lg p-4">
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <p className="text-white font-medium text-sm mb-1">
+                          <p className="text-teal-800 font-medium text-sm mb-1">
                             Lesson {deck.lessonNumber}: {deck.lessonTitle}
                           </p>
-                          <p className="text-xs text-slate-400">
+                          <p className="text-xs text-teal-600">
                             {deck.slideCount} slides • {deck.deliveryMode}
                           </p>
                         </div>
@@ -898,13 +898,13 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                         {deck.slides?.slice(0, 5).map((slide, i) => (
                           <span
                             key={i}
-                            className="px-2 py-0.5 bg-slate-800 rounded text-xs text-slate-400"
+                            className="px-2 py-0.5 bg-white rounded text-xs text-teal-600"
                           >
                             {slide.slideType}
                           </span>
                         ))}
                         {deck.slides?.length > 5 && (
-                          <span className="px-2 py-0.5 bg-slate-800 rounded text-xs text-slate-500">
+                          <span className="px-2 py-0.5 bg-white rounded text-xs text-teal-500">
                             +{deck.slides.length - 5} more
                           </span>
                         )}
@@ -942,11 +942,11 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-6 border-t border-slate-700">
+          <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
               onClick={handleGenerate}
               disabled={submitStep11.isPending || isAllModulesComplete}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-teal-600 hover:text-teal-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isAllModulesComplete ? 'All PPTs Generated' : 'Generate Next Module PPT'}
             </button>
@@ -955,7 +955,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
               <button
                 onClick={handleApprove}
                 disabled={approveStep11.isPending}
-                className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {approveStep11.isPending ? (
                   <>

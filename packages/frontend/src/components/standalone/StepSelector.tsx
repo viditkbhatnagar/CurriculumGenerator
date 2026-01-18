@@ -1,70 +1,88 @@
 'use client';
 
 import React from 'react';
+import {
+  Target,
+  Lightbulb,
+  GraduationCap,
+  Search,
+  BookMarked,
+  CheckSquare,
+  Building2,
+  Book,
+  FileEdit,
+  type LucideIcon,
+} from 'lucide-react';
 
 // Step configuration matching the design document
-export const STANDALONE_STEPS = [
+export const STANDALONE_STEPS: Array<{
+  step: number;
+  name: string;
+  time: string;
+  icon: LucideIcon;
+  description: string;
+}> = [
   {
     step: 2,
     name: 'Competency Framework (KSC)',
     time: '10-15 min',
-    icon: '🎯',
+    icon: Target,
     description: 'Generate Knowledge, Skills, and Competencies (KSC) framework',
   },
   {
     step: 3,
     name: 'Program Learning Outcomes',
     time: '15-20 min',
-    icon: '⚡',
+    icon: Lightbulb,
     description: "Create measurable Program Learning Outcomes using Bloom's Taxonomy",
   },
   {
     step: 4,
     name: 'Course Framework & MLOs',
     time: '25-30 min',
-    icon: '📚',
+    icon: GraduationCap,
     description: 'Structure modules, topics, and Module Learning Outcomes',
   },
   {
     step: 5,
     name: 'Topic-Level Sources',
     time: '10 min',
-    icon: '📖',
+    icon: Search,
     description: 'Assign AGI-compliant academic sources to topics',
   },
   {
     step: 6,
     name: 'Reading Lists',
     time: '8 min',
-    icon: '📕',
+    icon: BookMarked,
     description: 'Create core and supplementary reading lists per module',
   },
   {
     step: 7,
     name: 'Auto-Gradable Assessments',
     time: '15-20 min',
-    icon: '✅',
+    icon: CheckSquare,
     description: 'Generate MCQ-first auto-gradable assessments and quizzes',
   },
   {
     step: 8,
     name: 'Case Studies',
     time: '10-15 min',
-    icon: '🏢',
+    icon: Building2,
     description: 'Create engagement hooks and case study scenarios',
   },
   {
     step: 9,
     name: 'Glossary',
     time: '5 min',
-    icon: '📖',
+    icon: Book,
     description: 'Auto-generate glossary from all curriculum content',
   },
   {
     step: 10,
     name: 'Lesson Plans',
     time: '10-15 min',
-    icon: '📝',
+    icon: FileEdit,
     description: 'Generate detailed lesson plans for each module',
   },
 ];
@@ -91,6 +109,7 @@ export function StepSelector({ selectedStep, onSelectStep }: StepSelectorProps) 
     >
       {STANDALONE_STEPS.map((step) => {
         const isSelected = selectedStep === step.step;
+        const IconComponent = step.icon;
         return (
           <button
             key={step.step}
@@ -110,9 +129,16 @@ export function StepSelector({ selectedStep, onSelectStep }: StepSelectorProps) 
             `}
           >
             <div className="flex items-start gap-2 sm:gap-3">
-              <span className="text-xl sm:text-2xl" role="img" aria-hidden="true">
-                {step.icon}
-              </span>
+              <div
+                className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  isSelected ? 'bg-teal-200' : 'bg-teal-100'
+                }`}
+              >
+                <IconComponent
+                  className={`w-5 h-5 ${isSelected ? 'text-teal-700' : 'text-teal-600'}`}
+                  aria-hidden="true"
+                />
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs text-teal-500">Step {step.step}</span>

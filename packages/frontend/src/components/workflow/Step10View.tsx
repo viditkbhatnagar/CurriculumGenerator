@@ -1,17 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSubmitStep10, useApproveStep10 } from '@/hooks/useWorkflow';
+import { useStep10Status } from '@/hooks/useStep10Status';
 import { api } from '@/lib/api';
 import {
   CurriculumWorkflow,
-  ModuleLessonPlan,
   LessonPlan,
-  LessonActivity,
-  FormativeCheck,
 } from '@/types/workflow';
-import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import { EditTarget } from './EditWithAIButton';
+import { toast } from '@/stores/toastStore';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -92,30 +90,30 @@ function LessonPlanEditModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-700">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-            Edit <span className="text-cyan-400">Lesson Plan</span>
+    <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-teal-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-teal-200">
+          <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
+            Edit <span className="text-teal-600">Lesson Plan</span>
           </h3>
         </div>
 
         <div className="p-6 space-y-5">
           {/* Lesson Title */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Lesson Title</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Lesson Title</label>
             <input
               type="text"
               value={lessonTitle}
               onChange={(e) => setLessonTitle(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full px-4 py-3 bg-teal-50/50 border border-slate-600 rounded-lg text-teal-800 placeholder-slate-500 focus:outline-none focus:border-teal-500"
               placeholder="Enter lesson title..."
             />
           </div>
 
           {/* Duration */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Duration (minutes)
             </label>
             <input
@@ -124,14 +122,14 @@ function LessonPlanEditModal({
               onChange={(e) => setDuration(parseInt(e.target.value) || 90)}
               min="30"
               max="180"
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full px-4 py-3 bg-teal-50/50 border border-slate-600 rounded-lg text-teal-800 placeholder-slate-500 focus:outline-none focus:border-teal-500"
               placeholder="90"
             />
           </div>
 
           {/* Learning Objectives */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Learning Objectives
             </label>
             <div className="flex gap-2 mb-2">
@@ -140,13 +138,13 @@ function LessonPlanEditModal({
                 value={objectiveInput}
                 onChange={(e) => setObjectiveInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addObjective())}
-                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                className="flex-1 px-4 py-2 bg-teal-50/50 border border-slate-600 rounded-lg text-teal-800 placeholder-slate-500 focus:outline-none focus:border-teal-500"
                 placeholder="Add a learning objective..."
               />
               <button
                 type="button"
                 onClick={addObjective}
-                className="px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-500/30 transition-colors"
+                className="px-4 py-2 bg-teal-500/20 text-teal-600 rounded-lg hover:bg-teal-500/30 transition-colors"
               >
                 Add
               </button>
@@ -154,12 +152,12 @@ function LessonPlanEditModal({
             {objectives.length > 0 && (
               <div className="space-y-2">
                 {objectives.map((objective, i) => (
-                  <div key={i} className="flex items-start gap-2 p-2 bg-slate-900/50 rounded">
-                    <span className="text-sm text-slate-300 flex-1">{objective}</span>
+                  <div key={i} className="flex items-start gap-2 p-2 bg-teal-50/50 rounded">
+                    <span className="text-sm text-teal-700 flex-1">{objective}</span>
                     <button
                       type="button"
                       onClick={() => removeObjective(i)}
-                      className="text-slate-500 hover:text-red-400"
+                      className="text-teal-500 hover:text-red-400"
                     >
                       ×
                     </button>
@@ -171,35 +169,35 @@ function LessonPlanEditModal({
 
           {/* Pedagogical Guidance */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Pedagogical Guidance
             </label>
             <textarea
               value={pedagogicalGuidance}
               onChange={(e) => setPedagogicalGuidance(e.target.value)}
               rows={3}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              className="w-full px-4 py-3 bg-teal-50/50 border border-slate-600 rounded-lg text-teal-800 placeholder-slate-500 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="Teaching approach and methodology guidance..."
             />
           </div>
 
           {/* Pacing Suggestions */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Pacing Suggestions
             </label>
             <textarea
               value={pacingSuggestions}
               onChange={(e) => setPacingSuggestions(e.target.value)}
               rows={2}
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              className="w-full px-4 py-3 bg-teal-50/50 border border-slate-600 rounded-lg text-teal-800 placeholder-slate-500 focus:outline-none focus:border-teal-500 resize-none"
               placeholder="Timing and pacing recommendations..."
             />
           </div>
 
           {/* Adaptation Options */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Adaptation Options
             </label>
             <div className="flex gap-2 mb-2">
@@ -208,13 +206,13 @@ function LessonPlanEditModal({
                 value={adaptationInput}
                 onChange={(e) => setAdaptationInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAdaptation())}
-                className="flex-1 px-4 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                className="flex-1 px-4 py-2 bg-teal-50/50 border border-slate-600 rounded-lg text-teal-800 placeholder-slate-500 focus:outline-none focus:border-teal-500"
                 placeholder="Add an adaptation option..."
               />
               <button
                 type="button"
                 onClick={addAdaptation}
-                className="px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg hover:bg-cyan-500/30 transition-colors"
+                className="px-4 py-2 bg-teal-500/20 text-teal-600 rounded-lg hover:bg-teal-500/30 transition-colors"
               >
                 Add
               </button>
@@ -224,13 +222,13 @@ function LessonPlanEditModal({
                 {adaptationOptions.map((option, i) => (
                   <span
                     key={i}
-                    className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm flex items-center gap-2"
+                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm flex items-center gap-2"
                   >
                     {option}
                     <button
                       type="button"
                       onClick={() => removeAdaptation(i)}
-                      className="text-slate-500 hover:text-red-400"
+                      className="text-teal-500 hover:text-red-400"
                     >
                       ×
                     </button>
@@ -242,7 +240,7 @@ function LessonPlanEditModal({
 
           {/* Independent Study Effort */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-teal-700 mb-2">
               Independent Study Effort (minutes)
             </label>
             <input
@@ -251,24 +249,24 @@ function LessonPlanEditModal({
               onChange={(e) => setEstimatedEffort(parseInt(e.target.value) || 120)}
               min="30"
               max="300"
-              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full px-4 py-3 bg-teal-50/50 border border-slate-600 rounded-lg text-teal-800 placeholder-slate-500 focus:outline-none focus:border-teal-500"
               placeholder="120"
             />
           </div>
         </div>
 
-        <div className="p-6 border-t border-slate-700 flex justify-end gap-3">
+        <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
           <button
             onClick={onCancel}
             disabled={isSaving}
-            className="px-5 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+            className="px-5 py-2.5 text-teal-600 hover:text-teal-800 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || !lessonTitle.trim()}
-            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-cyan-400 hover:to-blue-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
           >
             {isSaving ? (
               <>
@@ -285,6 +283,188 @@ function LessonPlanEditModal({
   );
 }
 
+// Progress Panel Component - Shows detailed job status
+function GenerationProgressPanel({
+  status,
+  isExpanded,
+  onToggle,
+  error,
+  onRetry,
+  retryCount,
+  maxRetries,
+}: {
+  status: any;
+  isExpanded: boolean;
+  onToggle: () => void;
+  error: string | null;
+  onRetry: () => void;
+  retryCount: number;
+  maxRetries: number;
+}) {
+  if (!status) return null;
+
+  const progressPercentage = status.totalModules > 0
+    ? Math.round((status.modulesGenerated / status.totalModules) * 100)
+    : 0;
+
+  const isGenerating = status.status === 'in_progress' || status.jobs?.active > 0;
+  const hasFailed = status.status === 'failed' || status.jobs?.failed > 0;
+
+  return (
+    <div className={`rounded-xl border transition-all ${
+      hasFailed 
+        ? 'bg-red-500/10 border-red-500/30' 
+        : isGenerating 
+          ? 'bg-teal-500/10 border-teal-500/30' 
+          : 'bg-emerald-500/10 border-emerald-500/30'
+    }`}>
+      {/* Simple Progress Bar (Always Visible) */}
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            {isGenerating ? (
+              <div className="w-8 h-8 rounded-full bg-teal-500/20 flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : hasFailed ? (
+              <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            )}
+            <div>
+              <p className={`font-medium ${hasFailed ? 'text-red-400' : isGenerating ? 'text-teal-600' : 'text-emerald-400'}`}>
+                {hasFailed ? 'Generation Failed' : isGenerating ? 'Generating...' : 'Generation Complete'}
+              </p>
+              <p className="text-xs text-teal-600">
+                {status.modulesGenerated} of {status.totalModules} modules complete
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-lg font-bold ${hasFailed ? 'text-red-400' : isGenerating ? 'text-teal-600' : 'text-emerald-400'}`}>
+              {progressPercentage}%
+            </span>
+            <button
+              onClick={onToggle}
+              className="p-1 hover:bg-white/10 rounded transition-colors"
+              title={isExpanded ? 'Collapse details' : 'Expand details'}
+            >
+              <svg 
+                className={`w-5 h-5 text-teal-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="relative h-2 bg-teal-100 rounded-full overflow-hidden">
+          <div
+            className={`absolute inset-y-0 left-0 transition-all duration-500 ${
+              hasFailed 
+                ? 'bg-red-500' 
+                : isGenerating 
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-500' 
+                  : 'bg-emerald-500'
+            }`}
+            style={{ width: `${progressPercentage}%` }}
+          />
+          {isGenerating && (
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+          )}
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mt-3 flex items-center justify-between bg-red-500/10 rounded-lg p-3">
+            <p className="text-sm text-red-400">{error}</p>
+            <button
+              onClick={onRetry}
+              className="px-3 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded text-sm font-medium transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Retry indicator */}
+        {retryCount > 0 && retryCount <= maxRetries && !error && (
+          <p className="text-xs text-amber-400 mt-2">
+            Connection issue. Retrying... ({retryCount}/{maxRetries})
+          </p>
+        )}
+      </div>
+
+      {/* Detailed Status (Expandable) */}
+      {isExpanded && status.jobs && (
+        <div className="px-4 pb-4 border-t border-teal-200/50 pt-4">
+          <div className="grid grid-cols-4 gap-3 mb-4">
+            <div className="bg-white/50 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-teal-800">{status.jobs.total}</p>
+              <p className="text-xs text-teal-500">Total Jobs</p>
+            </div>
+            <div className="bg-white/50 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-teal-600">{status.jobs.active}</p>
+              <p className="text-xs text-teal-500">Active</p>
+            </div>
+            <div className="bg-white/50 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-emerald-400">{status.jobs.completed}</p>
+              <p className="text-xs text-teal-500">Completed</p>
+            </div>
+            <div className="bg-white/50 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-red-400">{status.jobs.failed}</p>
+              <p className="text-xs text-teal-500">Failed</p>
+            </div>
+          </div>
+
+          {/* Job Details */}
+          {status.jobs.details && status.jobs.details.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-teal-600 font-medium mb-2">Job Details:</p>
+              {status.jobs.details.map((job: any) => (
+                <div
+                  key={job.jobId}
+                  className={`flex items-center justify-between p-2 rounded text-xs ${
+                    job.state === 'active' 
+                      ? 'bg-teal-500/10 text-teal-600' 
+                      : job.state === 'completed'
+                        ? 'bg-emerald-500/10 text-emerald-400'
+                        : job.state === 'failed'
+                          ? 'bg-red-500/10 text-red-400'
+                          : 'bg-white/50 text-teal-600'
+                  }`}
+                >
+                  <span>Module {job.moduleIndex + 1}</span>
+                  <span className="capitalize">{job.state}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Estimated Time */}
+          {isGenerating && (
+            <p className="text-xs text-teal-600 mt-3 text-center">
+              Estimated time remaining: ~{(status.totalModules - status.modulesGenerated) * 5} minutes
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   const submitStep10 = useSubmitStep10();
   const approveStep10 = useApproveStep10();
@@ -292,17 +472,123 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
   const [generatingModuleId, setGeneratingModuleId] = useState<string | null>(null);
-  const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
-
+  const [isProgressExpanded, setIsProgressExpanded] = useState(false);
+  
   // Edit state for lesson plans
   const [editingLesson, setEditingLesson] = useState<LessonPlan | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  const isCurrentlyGenerating = isGenerating(workflow._id, 10) || submitStep10.isPending;
+  // Track if we've already shown completion notification
+  const hasShownCompletionRef = useRef(false);
 
-  const handleGenerate = async () => {
+  // Use the Step 10 status hook for polling
+  const {
+    status: step10Status,
+    loading: statusLoading,
+    error: statusError,
+    isPolling,
+    isGenerationActive,
+    startPolling,
+    stopPolling: _stopPolling,
+    retry: retryPolling,
+    retryCount,
+    maxRetries,
+    refresh: refreshStatus,
+  } = useStep10Status(workflow._id, {
+    pollInterval: 10000, // 10 seconds
+    maxRetries: 3,
+    autoStart: true,
+    onComplete: () => {
+      // Only show notification once
+      if (!hasShownCompletionRef.current) {
+        hasShownCompletionRef.current = true;
+        toast.success(
+          'Module Generation Complete!',
+          'All modules have been generated successfully. Refreshing data...'
+        );
+        // Auto-refresh the workflow data
+        setTimeout(() => {
+          onRefresh();
+        }, 1000);
+      }
+    },
+    onFailed: (errorMsg) => {
+      toast.error(
+        'Generation Failed',
+        errorMsg || 'An error occurred during generation. Please try again.'
+      );
+      setGeneratingModuleId(null);
+    },
+  });
+
+  // Detect ongoing generation on mount
+  useEffect(() => {
+    const detectOngoingGeneration = async () => {
+      if (step10Status?.status === 'in_progress' || step10Status?.jobs?.active > 0) {
+        // Find which module is being generated
+        const activeJob = step10Status.jobs?.details?.find(
+          (j: any) => j.state === 'active' || j.state === 'waiting'
+        );
+        if (activeJob) {
+          const moduleIndex = activeJob.moduleIndex;
+          const module = workflow.step4?.modules?.[moduleIndex];
+          if (module) {
+            setGeneratingModuleId(module.id);
+            toast.info(
+              'Generation in Progress',
+              `Module ${moduleIndex + 1} is currently being generated...`
+            );
+          }
+        }
+      }
+    };
+
+    detectOngoingGeneration();
+  }, [step10Status, workflow.step4?.modules]);
+
+  // Sync generation state with backend status
+  useEffect(() => {
+    if (step10Status) {
+      const isActive = step10Status.status === 'in_progress' || 
+                      (step10Status.jobs?.active > 0);
+      
+      if (!isActive && generatingModuleId) {
+        // Generation finished, clear local state
+        setGeneratingModuleId(null);
+      }
+    }
+  }, [step10Status, generatingModuleId]);
+
+  // Handle module generation
+  const handleGenerateModule = useCallback(async (moduleId: string, moduleIndex: number) => {
     setError(null);
+    setGeneratingModuleId(moduleId);
+    hasShownCompletionRef.current = false;
 
+    try {
+      console.log('[Step10] Starting generation for module:', moduleId, 'index:', moduleIndex);
+      
+      // Call the API to start generation
+      await submitStep10.mutateAsync(workflow._id);
+
+      // Start polling to track progress (don't mark as complete immediately!)
+      startPolling();
+      
+      toast.info(
+        'Generation Started',
+        `Module ${moduleIndex + 1} generation has started. This may take 2-5 minutes.`
+      );
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to start generation';
+      console.error('[Step10] Failed to start generation:', err);
+      setError(errorMessage);
+      setGeneratingModuleId(null);
+      toast.error('Generation Failed', errorMessage);
+    }
+  }, [workflow._id, submitStep10, startPolling]);
+
+  // Legacy handleGenerate for the main button
+  const handleGenerate = useCallback(async () => {
     const nextModuleIndex = workflow.step10?.moduleLessonPlans?.length || 0;
     const nextModule = workflow.step4?.modules?.[nextModuleIndex];
 
@@ -311,23 +597,8 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
       return;
     }
 
-    setGeneratingModuleId(nextModule.id);
-    startGeneration(workflow._id, 10, 300); // 5 minutes estimated per module
-
-    try {
-      await submitStep10.mutateAsync(workflow._id);
-
-      // Generation started in background - user will manually refresh to check progress
-      completeGeneration(workflow._id, 10);
-      setGeneratingModuleId(null);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate lesson plans';
-      console.error('Failed to generate lesson plans:', err);
-      failGeneration(workflow._id, 10, errorMessage);
-      setError(errorMessage);
-      setGeneratingModuleId(null);
-    }
-  };
+    await handleGenerateModule(nextModule.id, nextModuleIndex);
+  }, [workflow.step10?.moduleLessonPlans?.length, workflow.step4?.modules, handleGenerateModule]);
 
   // Handle editing a lesson plan
   const handleEditLesson = (lesson: LessonPlan) => {
@@ -366,13 +637,17 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
       // Close modal first
       setEditingLesson(null);
 
+      toast.success('Lesson Plan Saved', 'Your changes have been saved successfully.');
+
       // Force refresh the workflow data
       console.log('[Step10] Refreshing workflow data...');
       await onRefresh();
       console.log('[Step10] ✅ Refresh complete');
     } catch (err) {
       console.error('[Step10] ❌ Error saving lesson plan:', err);
-      setError(err instanceof Error ? err.message : 'Failed to save lesson plan');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save lesson plan';
+      setError(errorMessage);
+      toast.error('Save Failed', errorMessage);
     } finally {
       setIsSavingEdit(false);
     }
@@ -388,10 +663,12 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
     setError(null);
     try {
       await approveStep10.mutateAsync(workflow._id);
+      toast.success('Step 10 Approved!', 'Proceeding to PowerPoint generation...');
       onComplete();
     } catch (err: any) {
       console.error('Failed to approve Step 10:', err);
       setError(err.message || 'Failed to approve Step 10');
+      toast.error('Approval Failed', err.message || 'Failed to approve Step 10');
     }
   };
 
@@ -412,8 +689,14 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   // Check if generation is incomplete
   const totalModules = workflow.step4?.modules?.length || 0;
   const completedModules = workflow.step10?.moduleLessonPlans?.length || 0;
-  const isIncomplete = hasStep10Data && completedModules < totalModules;
+  const _isIncomplete = hasStep10Data && completedModules < totalModules;
   const isAllModulesComplete = hasStep10Data && completedModules >= totalModules;
+
+  // Determine if currently generating (from either local state or backend status)
+  const isCurrentlyGenerating = generatingModuleId !== null || 
+                                isGenerationActive || 
+                                submitStep10.isPending ||
+                                step10Status?.status === 'in_progress';
 
   // Auto-select first module if none selected
   useEffect(() => {
@@ -456,7 +739,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                   <h3 className="text-lg font-semibold text-red-400 mb-1">
                     Step 9 Approval Required
                   </h3>
-                  <p className="text-slate-300 text-sm">
+                  <p className="text-teal-700 text-sm">
                     You must approve Step 9 (Glossary) before proceeding to Step 10. Please go back
                     to Step 9 and click the "Approve" button.
                   </p>
@@ -466,8 +749,8 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
           )}
 
           {/* About This Step */}
-          <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 rounded-xl p-5">
-            <h3 className="text-cyan-400 font-semibold mb-3 flex items-center gap-2">
+          <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-teal-500/30 rounded-xl p-5">
+            <h3 className="text-teal-600 font-semibold mb-3 flex items-center gap-2">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
@@ -478,17 +761,17 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
               </svg>
               Step 10: Lesson Plans Generation
             </h3>
-            <p className="text-sm text-slate-300 mb-4">
+            <p className="text-sm text-teal-700 mb-4">
               Generate detailed lesson plans for each module with activity sequences, materials, and
               instructor notes. PowerPoint decks will be generated in Step 11 after approval.
             </p>
 
             {/* What Will Be Generated */}
-            <div className="bg-slate-900/50 rounded-lg p-4 mb-4">
-              <p className="text-slate-400 font-medium mb-3">What Will Be Generated:</p>
-              <div className="bg-slate-800/50 rounded p-3">
-                <p className="text-cyan-400 font-medium mb-2">📚 Lesson Plans</p>
-                <ul className="text-slate-400 space-y-1">
+            <div className="bg-teal-50/50 rounded-lg p-4 mb-4">
+              <p className="text-teal-600 font-medium mb-3">What Will Be Generated:</p>
+              <div className="bg-white/50 rounded p-3">
+                <p className="text-teal-600 font-medium mb-2">📚 Lesson Plans</p>
+                <ul className="text-teal-600 space-y-1">
                   <li>• Lesson objectives from MLOs</li>
                   <li>• Activity sequences with timings</li>
                   <li>• Teaching methods & materials</li>
@@ -499,7 +782,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
               </div>
               <div className="mt-3 bg-orange-500/10 border border-orange-500/30 rounded p-3">
                 <p className="text-orange-400 font-medium mb-1 text-xs">📊 PPT Generation</p>
-                <p className="text-slate-400 text-xs">
+                <p className="text-teal-600 text-xs">
                   PowerPoint slide decks will be generated in Step 11 after you approve these lesson
                   plans.
                 </p>
@@ -507,31 +790,31 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
             </div>
 
             {/* Context Sources */}
-            <div className="bg-slate-900/50 rounded-lg p-4">
-              <p className="text-slate-400 font-medium mb-3">
+            <div className="bg-teal-50/50 rounded-lg p-4">
+              <p className="text-teal-600 font-medium mb-3">
                 Using Context From All Previous Steps:
               </p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Step 1: Program Foundation
                 </span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Step 2: Competencies
                 </span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">Step 3: PLOs</span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">Step 3: PLOs</span>
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Step 4: Modules & MLOs
                 </span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Steps 5-6: Sources & Readings
                 </span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Step 7: Assessments
                 </span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Step 8: Case Studies
                 </span>
-                <span className="px-2 py-1 bg-slate-800 rounded text-slate-300">
+                <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Step 9: Glossary
                 </span>
               </div>
@@ -549,29 +832,42 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
           <button
             onClick={handleGenerate}
             disabled={isCurrentlyGenerating || !isStep9Approved}
-            className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-4 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-cyan-400 hover:to-blue-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isCurrentlyGenerating ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Generating Lesson Plans & PPTs...
+                Generating Lesson Plans...
               </span>
             ) : !isStep9Approved ? (
               '🔒 Approve Step 9 First'
             ) : (
-              '📚 Generate Lesson Plans & PowerPoints'
+              '📚 Generate Lesson Plans'
             )}
           </button>
         </div>
       ) : (
         // Display Generated Lesson Plans
         <div className="space-y-6">
+          {/* Generation Progress Panel - Show when generating or has status */}
+          {(isCurrentlyGenerating || step10Status) && step10Status && (
+            <GenerationProgressPanel
+              status={step10Status}
+              isExpanded={isProgressExpanded}
+              onToggle={() => setIsProgressExpanded(!isProgressExpanded)}
+              error={statusError}
+              onRetry={retryPolling}
+              retryCount={retryCount}
+              maxRetries={maxRetries}
+            />
+          )}
+
           {/* Module Generation List - Show all modules with individual controls */}
-          <div className="bg-slate-900/50 rounded-lg p-6 border border-slate-700">
-            <h3 className="text-xl font-bold text-white mb-4">Module Generation Progress</h3>
-            <p className="text-sm text-slate-400 mb-6">
-              Generate lesson plans and PowerPoint decks for each module individually. Each module
-              takes 2-5 minutes to generate.
+          <div className="bg-teal-50/50 rounded-lg p-6 border border-teal-200">
+            <h3 className="text-xl font-bold text-teal-800 mb-4">Module Generation Progress</h3>
+            <p className="text-sm text-teal-600 mb-6">
+              Generate lesson plans for each module individually. Each module takes 2-5 minutes to
+              generate.
             </p>
 
             <div className="space-y-4">
@@ -580,9 +876,10 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                   (m) => m.moduleId === module.id
                 );
                 const isComplete = !!modulePlan;
-                const isGenerating =
-                  generatingModuleId === module.id ||
-                  (generatingModuleId === 'next' && !isComplete && index === completedModules);
+                const isThisModuleGenerating = generatingModuleId === module.id ||
+                  (step10Status?.jobs?.details?.some(
+                    (j: any) => j.moduleIndex === index && (j.state === 'active' || j.state === 'waiting')
+                  ));
                 const canGenerate =
                   !isComplete && !isCurrentlyGenerating && index === completedModules;
 
@@ -592,11 +889,11 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                     className={`rounded-lg border p-4 transition-all ${
                       isComplete
                         ? 'bg-emerald-500/10 border-emerald-500/30'
-                        : isGenerating
-                          ? 'bg-cyan-500/10 border-cyan-500/30'
+                        : isThisModuleGenerating
+                          ? 'bg-teal-500/10 border-teal-500/30'
                           : canGenerate
-                            ? 'bg-slate-800/50 border-slate-600'
-                            : 'bg-slate-800/30 border-slate-700/50 opacity-60'
+                            ? 'bg-white/50 border-slate-600'
+                            : 'bg-white/30 border-teal-200/50 opacity-60'
                     }`}
                   >
                     <div className="flex items-start gap-4">
@@ -618,8 +915,8 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                               />
                             </svg>
                           </div>
-                        ) : isGenerating ? (
-                          <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center">
+                        ) : isThisModuleGenerating ? (
+                          <div className="w-10 h-10 rounded-full bg-teal-500/20 flex items-center justify-center">
                             <div className="w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
                           </div>
                         ) : canGenerate ? (
@@ -627,9 +924,9 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                             <span className="text-xl">📚</span>
                           </div>
                         ) : (
-                          <div className="w-10 h-10 rounded-full bg-slate-700/50 flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-full bg-teal-100/50 flex items-center justify-center">
                             <svg
-                              className="w-6 h-6 text-slate-500"
+                              className="w-6 h-6 text-teal-500"
                               fill="none"
                               viewBox="0 0 24 24"
                               stroke="currentColor"
@@ -649,11 +946,11 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-4 mb-2">
                           <div className="flex-1">
-                            <h4 className="text-white font-semibold text-lg mb-1">
+                            <h4 className="text-teal-800 font-semibold text-lg mb-1">
                               Module {index + 1}: {module.code}
                             </h4>
-                            <p className="text-slate-400 text-sm mb-2">{module.title}</p>
-                            <div className="flex items-center gap-4 text-xs text-slate-500">
+                            <p className="text-teal-600 text-sm mb-2">{module.title}</p>
+                            <div className="flex items-center gap-4 text-xs text-teal-500">
                               <span>{module.contactHours}h contact hours</span>
                               {modulePlan && (
                                 <>
@@ -663,7 +960,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                                   </span>
                                   <span>•</span>
                                   <span className="text-orange-400">
-                                    {modulePlan.pptDecks.length} PPT decks
+                                    {modulePlan.pptDecks?.length || 0} PPT decks
                                   </span>
                                 </>
                               )}
@@ -679,19 +976,21 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                               >
                                 View Details
                               </button>
-                            ) : isGenerating ? (
-                              <div className="px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg text-sm font-medium">
+                            ) : isThisModuleGenerating ? (
+                              <div className="px-4 py-2 bg-teal-500/20 text-teal-600 rounded-lg text-sm font-medium flex items-center gap-2">
+                                <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
                                 Generating...
                               </div>
                             ) : canGenerate ? (
                               <button
-                                onClick={handleGenerate}
-                                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-lg transition-all text-sm font-medium"
+                                onClick={() => handleGenerateModule(module.id, index)}
+                                disabled={isCurrentlyGenerating}
+                                className="px-4 py-2 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-cyan-400 hover:to-blue-500 text-teal-800 rounded-lg transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 Generate Now
                               </button>
                             ) : (
-                              <div className="px-4 py-2 bg-slate-700/50 text-slate-500 rounded-lg text-sm font-medium">
+                              <div className="px-4 py-2 bg-teal-100/50 text-teal-500 rounded-lg text-sm font-medium">
                                 Locked
                               </div>
                             )}
@@ -699,15 +998,14 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                         </div>
 
                         {/* Progress indicator for generating module */}
-                        {isGenerating && (
-                          <div className="mt-3 bg-slate-800/50 rounded-lg p-3">
-                            <div className="flex items-center gap-2 text-sm text-cyan-400 mb-2">
+                        {isThisModuleGenerating && (
+                          <div className="mt-3 bg-white/50 rounded-lg p-3">
+                            <div className="flex items-center gap-2 text-sm text-teal-600 mb-2">
                               <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-                              <span>Generating lesson plans and PPT decks...</span>
+                              <span>Generating lesson plans...</span>
                             </div>
-                            <p className="text-xs text-slate-500">
-                              This will take 2-5 minutes. You can wait here or come back later -
-                              progress is saved automatically.
+                            <p className="text-xs text-teal-500">
+                              This will take 2-5 minutes. Status updates every 10 seconds.
                             </p>
                           </div>
                         )}
@@ -718,24 +1016,37 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
               })}
             </div>
 
-            {/* Manual Refresh Button - Always visible when generation is in progress */}
-            <div className="mt-6 pt-6 border-t border-slate-700">
+            {/* Manual Refresh Button */}
+            <div className="mt-6 pt-6 border-t border-teal-200">
               <button
-                onClick={onRefresh}
-                className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2"
+                onClick={() => {
+                  refreshStatus();
+                  onRefresh();
+                }}
+                disabled={statusLoading}
+                className="w-full py-3 bg-teal-100 hover:bg-teal-200 text-teal-800 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-                Refresh to Check Progress
+                {statusLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Refreshing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    Refresh Status
+                  </>
+                )}
               </button>
-              <p className="text-xs text-slate-500 text-center mt-2">
-                Click after starting generation to check if the module has completed
+              <p className="text-xs text-teal-500 text-center mt-2">
+                {isPolling ? 'Auto-refreshing every 10 seconds' : 'Click to check for updates'}
               </p>
             </div>
           </div>
@@ -746,12 +1057,12 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
               className={`border rounded-xl p-6 text-center ${
                 isApproved
                   ? 'bg-gradient-to-r from-emerald-500/20 to-green-500/20 border-emerald-500/30'
-                  : 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border-cyan-500/30'
+                  : 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border-teal-500/30'
               }`}
             >
               <div
                 className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${
-                  isApproved ? 'bg-emerald-500/20' : 'bg-cyan-500/20'
+                  isApproved ? 'bg-emerald-500/20' : 'bg-teal-500/20'
                 }`}
               >
                 {isApproved ? (
@@ -770,7 +1081,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                   </svg>
                 ) : (
                   <svg
-                    className="w-8 h-8 text-cyan-400"
+                    className="w-8 h-8 text-teal-600"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -788,7 +1099,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
               {isApproved ? (
                 <>
                   <h3 className="text-xl font-bold text-emerald-400 mb-2">✅ Step 10 Approved!</h3>
-                  <p className="text-slate-300 mb-4">
+                  <p className="text-teal-700 mb-4">
                     All lesson plans have been approved. Proceed to Step 11 to generate PowerPoint
                     slide decks for each lesson.
                   </p>
@@ -798,15 +1109,15 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                 </>
               ) : (
                 <>
-                  <h3 className="text-xl font-bold text-cyan-400 mb-2">🎉 All Modules Complete!</h3>
-                  <p className="text-slate-300 mb-4">
+                  <h3 className="text-xl font-bold text-teal-600 mb-2">🎉 All Modules Complete!</h3>
+                  <p className="text-teal-700 mb-4">
                     All lesson plans have been generated. Review the content and approve to proceed
                     to Step 11 for PowerPoint generation.
                   </p>
                   <button
                     onClick={handleApprove}
                     disabled={approveStep10.isPending}
-                    className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mx-auto"
+                    className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mx-auto"
                   >
                     {approveStep10.isPending ? (
                       <>
@@ -839,38 +1150,38 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Overall Stats */}
           <div className="grid grid-cols-5 gap-4">
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
-              <p className="text-3xl font-bold text-white">
+            <div className="bg-teal-50/50 rounded-xl p-4 border border-teal-200 text-center">
+              <p className="text-3xl font-bold text-teal-800">
                 {workflow.step10?.summary?.totalLessons || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Total Lessons</p>
+              <p className="text-xs text-teal-500 mt-1">Total Lessons</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
-              <p className="text-3xl font-bold text-cyan-400">
+            <div className="bg-teal-50/50 rounded-xl p-4 border border-teal-200 text-center">
+              <p className="text-3xl font-bold text-teal-600">
                 {workflow.step10?.summary?.totalContactHours || 0}h
               </p>
-              <p className="text-xs text-slate-500 mt-1">Contact Hours</p>
+              <p className="text-xs text-teal-500 mt-1">Contact Hours</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-teal-50/50 rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-purple-400">
                 {workflow.step10?.summary?.caseStudiesIncluded || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Case Studies</p>
+              <p className="text-xs text-teal-500 mt-1">Case Studies</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-teal-50/50 rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-amber-400">
                 {workflow.step10?.summary?.formativeChecksIncluded || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Formative Checks</p>
+              <p className="text-xs text-teal-500 mt-1">Formative Checks</p>
             </div>
-            <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 text-center">
+            <div className="bg-teal-50/50 rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-orange-400">
                 {workflow.step10?.moduleLessonPlans?.reduce(
-                  (sum, m) => sum + m.pptDecks.length,
+                  (sum, m) => sum + (m.pptDecks?.length || 0),
                   0
                 ) || 0}
               </p>
-              <p className="text-xs text-slate-500 mt-1">PPT Decks</p>
+              <p className="text-xs text-teal-500 mt-1">PPT Decks</p>
             </div>
           </div>
 
@@ -913,64 +1224,64 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
             </div>
           )}
 
-          {/* Download options removed - now shown on Final Review page after clicking "Complete & Review" */}
-
           {/* Module Selection */}
-          <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-            <h4 className="text-white font-medium mb-3">Select Module</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {workflow.step10?.moduleLessonPlans?.map((module) => (
-                <button
-                  key={module.moduleId}
-                  onClick={() => {
-                    setSelectedModule(module.moduleId);
-                    setSelectedLesson(null);
-                  }}
-                  className={`p-4 rounded-lg border text-left transition-all ${
-                    selectedModule === module.moduleId
-                      ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600'
-                  }`}
-                >
-                  <div className="font-medium mb-1">{module.moduleCode}</div>
-                  <div className="text-sm opacity-80 mb-2">{module.moduleTitle}</div>
-                  <div className="flex items-center gap-3 text-xs">
-                    <span>{module.totalLessons} lessons</span>
-                    <span>•</span>
-                    <span>{module.totalContactHours}h</span>
-                  </div>
-                </button>
-              ))}
+          {hasStep10Data && (
+            <div className="bg-teal-50/50 rounded-lg p-4 border border-teal-200">
+              <h4 className="text-teal-800 font-medium mb-3">Select Module to View</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {workflow.step10?.moduleLessonPlans?.map((module) => (
+                  <button
+                    key={module.moduleId}
+                    onClick={() => {
+                      setSelectedModule(module.moduleId);
+                      setSelectedLesson(null);
+                    }}
+                    className={`p-4 rounded-lg border text-left transition-all ${
+                      selectedModule === module.moduleId
+                        ? 'bg-teal-500/20 border-teal-500 text-teal-600'
+                        : 'bg-white border-teal-200 text-teal-700 hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="font-medium mb-1">{module.moduleCode}</div>
+                    <div className="text-sm opacity-80 mb-2">{module.moduleTitle}</div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span>{module.totalLessons} lessons</span>
+                      <span>•</span>
+                      <span>{module.totalContactHours}h</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Module Details */}
           {currentModule && (
             <div className="space-y-4">
-              <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
-                <h3 className="text-xl font-bold text-white mb-2">
+              <div className="bg-teal-50/50 rounded-lg p-5 border border-teal-200">
+                <h3 className="text-xl font-bold text-teal-800 mb-2">
                   {currentModule.moduleCode}: {currentModule.moduleTitle}
                 </h3>
-                <div className="flex items-center gap-4 text-sm text-slate-400">
+                <div className="flex items-center gap-4 text-sm text-teal-600">
                   <span>{currentModule.totalLessons} Lessons</span>
                   <span>•</span>
                   <span>{currentModule.totalContactHours} Contact Hours</span>
                   <span>•</span>
-                  <span>{currentModule.pptDecks.length} PPT Decks</span>
+                  <span>{currentModule.pptDecks?.length || 0} PPT Decks</span>
                 </div>
               </div>
 
               {/* Lesson List */}
-              <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
-                <h4 className="text-white font-medium mb-4">Lessons</h4>
+              <div className="bg-teal-50/50 rounded-lg p-5 border border-teal-200">
+                <h4 className="text-teal-800 font-medium mb-4">Lessons</h4>
                 <div className="space-y-3">
                   {currentModule.lessons.map((lesson) => (
                     <div
                       key={lesson.lessonId}
                       className={`w-full p-4 rounded-lg border transition-all ${
                         selectedLesson === lesson.lessonId
-                          ? 'bg-cyan-500/20 border-cyan-500'
-                          : 'bg-slate-800 border-slate-700 hover:border-slate-600'
+                          ? 'bg-teal-500/20 border-teal-500'
+                          : 'bg-white border-teal-200 hover:border-slate-600'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -979,21 +1290,21 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                           className="flex-1 text-left"
                         >
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-white font-medium">
+                            <span className="text-teal-800 font-medium">
                               Lesson {lesson.lessonNumber}: {lesson.lessonTitle}
                             </span>
                             <span className="text-xs px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded">
                               {lesson.bloomLevel}
                             </span>
                           </div>
-                          <div className="text-sm text-slate-400 mb-2">
-                            {lesson.duration} minutes • {lesson.activities.length} activities
+                          <div className="text-sm text-teal-600 mb-2">
+                            {lesson.duration} minutes • {lesson.activities?.length || 0} activities
                           </div>
                           <div className="flex flex-wrap gap-2 text-xs">
-                            {lesson.linkedMLOs.map((mlo) => (
+                            {lesson.linkedMLOs?.map((mlo) => (
                               <span
                                 key={mlo}
-                                className="px-2 py-0.5 bg-slate-700 rounded text-slate-300"
+                                className="px-2 py-0.5 bg-teal-100 rounded text-teal-700"
                               >
                                 {mlo}
                               </span>
@@ -1003,7 +1314,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleEditLesson(lesson)}
-                            className="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
+                            className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-600 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
                             title="Edit lesson"
                           >
                             <svg
@@ -1022,7 +1333,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                             Edit
                           </button>
                           <svg
-                            className={`w-5 h-5 text-slate-400 transition-transform ${
+                            className={`w-5 h-5 text-teal-600 transition-transform ${
                               selectedLesson === lesson.lessonId ? 'rotate-90' : ''
                             }`}
                             fill="none"
@@ -1044,153 +1355,133 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
               </div>
 
               {/* PowerPoint Decks for Module */}
-              <div className="bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-xl p-5">
-                <h4 className="text-orange-400 font-medium mb-4 flex items-center gap-2">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                    />
-                  </svg>
-                  PowerPoint Decks ({currentModule.pptDecks.length})
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {currentModule.pptDecks.map((deck) => {
-                    const lesson = currentModule.lessons.find((l) => l.lessonId === deck.lessonId);
-                    return (
-                      <div key={deck.deckId} className="bg-slate-900/50 rounded-lg p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <p className="text-white font-medium text-sm">
-                              Lesson {lesson?.lessonNumber || '?'}
-                            </p>
-                            <p className="text-xs text-slate-400">{deck.slideCount} slides</p>
-                          </div>
-                          <span className="text-xl">📊</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {deck.pptxPath && (
-                            <a
-                              href={deck.pptxPath}
-                              download
-                              className="flex items-center gap-1 px-2 py-1 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded text-xs transition-colors"
-                              title="Download PPTX (Editable)"
-                            >
-                              <svg
-                                className="w-3 h-3"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3 3m0 0l-3-3m3 3V8"
-                                />
-                              </svg>
-                              PPTX
-                            </a>
-                          )}
-                          {deck.pdfPath && (
-                            <a
-                              href={deck.pdfPath}
-                              download
-                              className="flex items-center gap-1 px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded text-xs transition-colors"
-                              title="Download PDF (Read-only)"
-                            >
-                              <svg
-                                className="w-3 h-3"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3 3m0 0l-3-3m3 3V8"
-                                />
-                              </svg>
-                              PDF
-                            </a>
-                          )}
-                          {deck.imagesPath && (
-                            <a
-                              href={deck.imagesPath}
-                              download
-                              className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded text-xs transition-colors"
-                              title="Download Images (LMS Compatible)"
-                            >
-                              <svg
-                                className="w-3 h-3"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                />
-                              </svg>
-                              IMG
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-4 bg-slate-900/50 rounded-lg p-3 text-xs text-slate-400">
-                  <p className="flex items-start gap-2">
-                    <svg
-                      className="w-4 h-4 mt-0.5 flex-shrink-0"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
+              {currentModule.pptDecks && currentModule.pptDecks.length > 0 && (
+                <div className="bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-xl p-5">
+                  <h4 className="text-orange-400 font-medium mb-4 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
                       />
                     </svg>
-                    <span>
-                      PowerPoint decks are automatically adapted based on your delivery mode
-                      (online, in-person, hybrid) with appropriate visual density and engagement
-                      elements.
-                    </span>
-                  </p>
+                    PowerPoint Decks ({currentModule.pptDecks.length})
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {currentModule.pptDecks.map((deck) => {
+                      const lesson = currentModule.lessons.find((l) => l.lessonId === deck.lessonId);
+                      return (
+                        <div key={deck.deckId} className="bg-teal-50/50 rounded-lg p-4">
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <p className="text-teal-800 font-medium text-sm">
+                                Lesson {lesson?.lessonNumber || '?'}
+                              </p>
+                              <p className="text-xs text-teal-600">{deck.slideCount} slides</p>
+                            </div>
+                            <span className="text-xl">📊</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {deck.pptxPath && (
+                              <a
+                                href={deck.pptxPath}
+                                download
+                                className="flex items-center gap-1 px-2 py-1 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded text-xs transition-colors"
+                                title="Download PPTX (Editable)"
+                              >
+                                <svg
+                                  className="w-3 h-3"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3 3m0 0l-3-3m3 3V8"
+                                  />
+                                </svg>
+                                PPTX
+                              </a>
+                            )}
+                            {deck.pdfPath && (
+                              <a
+                                href={deck.pdfPath}
+                                download
+                                className="flex items-center gap-1 px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded text-xs transition-colors"
+                                title="Download PDF (Read-only)"
+                              >
+                                <svg
+                                  className="w-3 h-3"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3 3m0 0l-3-3m3 3V8"
+                                  />
+                                </svg>
+                                PDF
+                              </a>
+                            )}
+                            {deck.imagesPath && (
+                              <a
+                                href={deck.imagesPath}
+                                download
+                                className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded text-xs transition-colors"
+                                title="Download Images (LMS Compatible)"
+                              >
+                                <svg
+                                  className="w-3 h-3"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                  />
+                                </svg>
+                                IMG
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
           {/* Lesson Details */}
           {currentLesson && (
             <div className="space-y-4">
-              <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 rounded-xl p-6">
+              <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-teal-500/30 rounded-xl p-6">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <h3 className="text-2xl font-bold text-white mb-3">
+                    <h3 className="text-2xl font-bold text-teal-800 mb-3">
                       Lesson {currentLesson.lessonNumber}: {currentLesson.lessonTitle}
                     </h3>
-                    <div className="flex items-center gap-4 text-sm text-slate-300 mb-4">
+                    <div className="flex items-center gap-4 text-sm text-teal-700 mb-4">
                       <span>⏱️ {currentLesson.duration} minutes</span>
                       <span>•</span>
                       <span>📊 {currentLesson.bloomLevel}</span>
                       <span>•</span>
-                      <span>🎯 {currentLesson.linkedMLOs.length} MLOs</span>
+                      <span>🎯 {currentLesson.linkedMLOs?.length || 0} MLOs</span>
                     </div>
                   </div>
                   <button
                     onClick={() => handleEditLesson(currentLesson)}
-                    className="px-4 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+                    className="px-4 py-2 bg-teal-500/20 hover:bg-teal-500/30 text-teal-600 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path
@@ -1205,162 +1496,170 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                 </div>
 
                 {/* Objectives */}
-                <div className="bg-slate-900/50 rounded-lg p-4 mb-4">
-                  <h4 className="text-cyan-400 font-medium mb-2">Learning Objectives</h4>
-                  <ul className="space-y-1 text-sm text-slate-300">
-                    {currentLesson.objectives.map((obj, i) => (
+                <div className="bg-teal-50/50 rounded-lg p-4 mb-4">
+                  <h4 className="text-teal-600 font-medium mb-2">Learning Objectives</h4>
+                  <ul className="space-y-1 text-sm text-teal-700">
+                    {currentLesson.objectives?.map((obj, i) => (
                       <li key={i}>• {obj}</li>
                     ))}
                   </ul>
                 </div>
 
                 {/* Activity Sequence */}
-                <div className="bg-slate-900/50 rounded-lg p-4">
-                  <h4 className="text-cyan-400 font-medium mb-3">Activity Sequence</h4>
-                  <div className="space-y-3">
-                    {currentLesson.activities.map((activity) => (
-                      <div key={activity.activityId} className="bg-slate-800/50 rounded p-3">
-                        <div className="flex items-start justify-between gap-3 mb-2">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-white font-medium">{activity.title}</span>
-                              <span className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded">
-                                {activity.type.replace('_', ' ')}
-                              </span>
+                {currentLesson.activities && currentLesson.activities.length > 0 && (
+                  <div className="bg-teal-50/50 rounded-lg p-4">
+                    <h4 className="text-teal-600 font-medium mb-3">Activity Sequence</h4>
+                    <div className="space-y-3">
+                      {currentLesson.activities.map((activity) => (
+                        <div key={activity.activityId} className="bg-white/50 rounded p-3">
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-teal-800 font-medium">{activity.title}</span>
+                                <span className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded">
+                                  {activity.type?.replace('_', ' ')}
+                                </span>
+                              </div>
+                              <p className="text-sm text-teal-600">{activity.description}</p>
                             </div>
-                            <p className="text-sm text-slate-400">{activity.description}</p>
+                            <span className="text-sm text-teal-600 font-medium whitespace-nowrap">
+                              {activity.duration} min
+                            </span>
                           </div>
-                          <span className="text-sm text-cyan-400 font-medium whitespace-nowrap">
-                            {activity.duration} min
-                          </span>
+                          {activity.teachingMethod && (
+                            <div className="text-xs text-teal-500">
+                              Method: {activity.teachingMethod}
+                            </div>
+                          )}
                         </div>
-                        {activity.teachingMethod && (
-                          <div className="text-xs text-slate-500">
-                            Method: {activity.teachingMethod}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Materials */}
-              <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
-                <h4 className="text-white font-medium mb-3">Required Materials</h4>
-                <div className="space-y-3">
-                  {currentLesson.materials.pptDeckRef && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-orange-400">📊</span>
-                      <span className="text-slate-300">
-                        PowerPoint: {currentLesson.materials.pptDeckRef}
-                      </span>
-                    </div>
-                  )}
-                  {currentLesson.materials.caseFiles.length > 0 && (
-                    <div>
-                      <p className="text-sm text-slate-400 mb-1">Case Files:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {currentLesson.materials.caseFiles.map((file, i) => (
-                          <span
-                            key={i}
-                            className="text-xs px-2 py-1 bg-slate-800 rounded text-slate-300"
-                          >
-                            {file}
-                          </span>
-                        ))}
+              {currentLesson.materials && (
+                <div className="bg-teal-50/50 rounded-lg p-5 border border-teal-200">
+                  <h4 className="text-teal-800 font-medium mb-3">Required Materials</h4>
+                  <div className="space-y-3">
+                    {currentLesson.materials.pptDeckRef && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-orange-400">📊</span>
+                        <span className="text-teal-700">
+                          PowerPoint: {currentLesson.materials.pptDeckRef}
+                        </span>
                       </div>
-                    </div>
-                  )}
-                  {currentLesson.materials.readingReferences.length > 0 && (
-                    <div>
-                      <p className="text-sm text-slate-400 mb-1">Reading References:</p>
-                      <div className="space-y-1">
-                        {currentLesson.materials.readingReferences.map((ref, i) => (
-                          <div key={i} className="text-xs text-slate-300">
-                            • {ref.authors.join(', ')} ({ref.year}). {ref.title}
-                          </div>
-                        ))}
+                    )}
+                    {currentLesson.materials.caseFiles && currentLesson.materials.caseFiles.length > 0 && (
+                      <div>
+                        <p className="text-sm text-teal-600 mb-1">Case Files:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {currentLesson.materials.caseFiles.map((file, i) => (
+                            <span
+                              key={i}
+                              className="text-xs px-2 py-1 bg-white rounded text-teal-700"
+                            >
+                              {file}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Instructor Notes */}
-              <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
-                <h4 className="text-white font-medium mb-3">Instructor Notes</h4>
-                <div className="space-y-3 text-sm">
-                  {currentLesson.instructorNotes.pedagogicalGuidance && (
-                    <div>
-                      <p className="text-cyan-400 font-medium mb-1">Pedagogical Guidance:</p>
-                      <p className="text-slate-300">
-                        {currentLesson.instructorNotes.pedagogicalGuidance}
-                      </p>
-                    </div>
-                  )}
-                  {currentLesson.instructorNotes.pacingSuggestions && (
-                    <div>
-                      <p className="text-cyan-400 font-medium mb-1">Pacing Suggestions:</p>
-                      <p className="text-slate-300">
-                        {currentLesson.instructorNotes.pacingSuggestions}
-                      </p>
-                    </div>
-                  )}
-                  {currentLesson.instructorNotes.adaptationOptions.length > 0 && (
-                    <div>
-                      <p className="text-cyan-400 font-medium mb-1">Adaptation Options:</p>
-                      <ul className="text-slate-300 space-y-1">
-                        {currentLesson.instructorNotes.adaptationOptions.map((opt, i) => (
-                          <li key={i}>• {opt}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Independent Study */}
-              <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
-                <h4 className="text-white font-medium mb-3">Independent Study</h4>
-                <div className="space-y-3">
-                  {currentLesson.independentStudy.coreReadings.length > 0 && (
-                    <div>
-                      <p className="text-sm text-cyan-400 font-medium mb-2">Core Readings:</p>
-                      <div className="space-y-2">
-                        {currentLesson.independentStudy.coreReadings.map((reading, i) => (
-                          <div key={i} className="text-xs bg-slate-800/50 rounded p-2">
-                            <p className="text-slate-300 mb-1">{reading.citation}</p>
-                            <p className="text-slate-500">
-                              Est. {reading.estimatedMinutes} minutes
-                            </p>
-                          </div>
-                        ))}
+                    )}
+                    {currentLesson.materials.readingReferences && currentLesson.materials.readingReferences.length > 0 && (
+                      <div>
+                        <p className="text-sm text-teal-600 mb-1">Reading References:</p>
+                        <div className="space-y-1">
+                          {currentLesson.materials.readingReferences.map((ref, i) => (
+                            <div key={i} className="text-xs text-teal-700">
+                              • {ref.authors?.join(', ')} ({ref.year}). {ref.title}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {currentLesson.independentStudy.supplementaryReadings.length > 0 && (
-                    <div>
-                      <p className="text-sm text-slate-400 font-medium mb-2">
-                        Supplementary Readings:
-                      </p>
-                      <div className="space-y-2">
-                        {currentLesson.independentStudy.supplementaryReadings.map((reading, i) => (
-                          <div key={i} className="text-xs bg-slate-800/50 rounded p-2">
-                            <p className="text-slate-300 mb-1">{reading.citation}</p>
-                            <p className="text-slate-500">
-                              Est. {reading.estimatedMinutes} minutes
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <div className="text-sm text-slate-400">
-                    Total estimated effort: {currentLesson.independentStudy.estimatedEffort} minutes
+                    )}
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* Instructor Notes */}
+              {currentLesson.instructorNotes && (
+                <div className="bg-teal-50/50 rounded-lg p-5 border border-teal-200">
+                  <h4 className="text-teal-800 font-medium mb-3">Instructor Notes</h4>
+                  <div className="space-y-3 text-sm">
+                    {currentLesson.instructorNotes.pedagogicalGuidance && (
+                      <div>
+                        <p className="text-teal-600 font-medium mb-1">Pedagogical Guidance:</p>
+                        <p className="text-teal-700">
+                          {currentLesson.instructorNotes.pedagogicalGuidance}
+                        </p>
+                      </div>
+                    )}
+                    {currentLesson.instructorNotes.pacingSuggestions && (
+                      <div>
+                        <p className="text-teal-600 font-medium mb-1">Pacing Suggestions:</p>
+                        <p className="text-teal-700">
+                          {currentLesson.instructorNotes.pacingSuggestions}
+                        </p>
+                      </div>
+                    )}
+                    {currentLesson.instructorNotes.adaptationOptions && currentLesson.instructorNotes.adaptationOptions.length > 0 && (
+                      <div>
+                        <p className="text-teal-600 font-medium mb-1">Adaptation Options:</p>
+                        <ul className="text-teal-700 space-y-1">
+                          {currentLesson.instructorNotes.adaptationOptions.map((opt, i) => (
+                            <li key={i}>• {opt}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Independent Study */}
+              {currentLesson.independentStudy && (
+                <div className="bg-teal-50/50 rounded-lg p-5 border border-teal-200">
+                  <h4 className="text-teal-800 font-medium mb-3">Independent Study</h4>
+                  <div className="space-y-3">
+                    {currentLesson.independentStudy.coreReadings && currentLesson.independentStudy.coreReadings.length > 0 && (
+                      <div>
+                        <p className="text-sm text-teal-600 font-medium mb-2">Core Readings:</p>
+                        <div className="space-y-2">
+                          {currentLesson.independentStudy.coreReadings.map((reading, i) => (
+                            <div key={i} className="text-xs bg-white/50 rounded p-2">
+                              <p className="text-teal-700 mb-1">{reading.citation}</p>
+                              <p className="text-teal-500">
+                                Est. {reading.estimatedMinutes} minutes
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {currentLesson.independentStudy.supplementaryReadings && currentLesson.independentStudy.supplementaryReadings.length > 0 && (
+                      <div>
+                        <p className="text-sm text-teal-600 font-medium mb-2">
+                          Supplementary Readings:
+                        </p>
+                        <div className="space-y-2">
+                          {currentLesson.independentStudy.supplementaryReadings.map((reading, i) => (
+                            <div key={i} className="text-xs bg-white/50 rounded p-2">
+                              <p className="text-teal-700 mb-1">{reading.citation}</p>
+                              <p className="text-teal-500">
+                                Est. {reading.estimatedMinutes} minutes
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="text-sm text-teal-600">
+                      Total estimated effort: {currentLesson.independentStudy.estimatedEffort} minutes
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Case Study Activity */}
               {currentLesson.caseStudyActivity && (
@@ -1368,23 +1667,23 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                   <h4 className="text-purple-400 font-medium mb-3">Case Study Activity</h4>
                   <div className="space-y-3 text-sm">
                     <div>
-                      <p className="text-white font-medium">
+                      <p className="text-teal-800 font-medium">
                         {currentLesson.caseStudyActivity.caseTitle}
                       </p>
-                      <p className="text-slate-400 text-xs mt-1">
+                      <p className="text-teal-600 text-xs mt-1">
                         {currentLesson.caseStudyActivity.activityType} •{' '}
                         {currentLesson.caseStudyActivity.duration} min
                       </p>
                     </div>
                     <div>
                       <p className="text-purple-400 font-medium mb-1">Learning Purpose:</p>
-                      <p className="text-slate-300">
+                      <p className="text-teal-700">
                         {currentLesson.caseStudyActivity.learningPurpose}
                       </p>
                     </div>
                     <div>
                       <p className="text-purple-400 font-medium mb-1">Instructor Instructions:</p>
-                      <p className="text-slate-300">
+                      <p className="text-teal-700">
                         {currentLesson.caseStudyActivity.instructorInstructions}
                       </p>
                     </div>
@@ -1393,20 +1692,20 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
               )}
 
               {/* Formative Checks */}
-              {currentLesson.formativeChecks.length > 0 && (
-                <div className="bg-slate-900/50 rounded-lg p-5 border border-slate-700">
-                  <h4 className="text-white font-medium mb-3">Formative Checks</h4>
+              {currentLesson.formativeChecks && currentLesson.formativeChecks.length > 0 && (
+                <div className="bg-teal-50/50 rounded-lg p-5 border border-teal-200">
+                  <h4 className="text-teal-800 font-medium mb-3">Formative Checks</h4>
                   <div className="space-y-3">
                     {currentLesson.formativeChecks.map((check) => (
-                      <div key={check.checkId} className="bg-slate-800/50 rounded p-3">
+                      <div key={check.checkId} className="bg-white/50 rounded p-3">
                         <div className="flex items-start justify-between gap-3 mb-2">
-                          <p className="text-sm text-white flex-1">{check.question}</p>
+                          <p className="text-sm text-teal-800 flex-1">{check.question}</p>
                           <span className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded whitespace-nowrap">
                             {check.type}
                           </span>
                         </div>
                         {check.options && (
-                          <div className="space-y-1 text-xs text-slate-400 mb-2">
+                          <div className="space-y-1 text-xs text-teal-600 mb-2">
                             {check.options.map((opt, i) => (
                               <div
                                 key={i}
@@ -1419,163 +1718,11 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                           </div>
                         )}
                         {check.explanation && (
-                          <p className="text-xs text-slate-500 mt-2">💡 {check.explanation}</p>
+                          <p className="text-xs text-teal-500 mt-2">💡 {check.explanation}</p>
                         )}
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {/* PowerPoint Deck */}
-              {currentModule && (
-                <div className="bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-orange-400 font-medium flex items-center gap-2">
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                        />
-                      </svg>
-                      PowerPoint Deck
-                    </h4>
-                  </div>
-
-                  {(() => {
-                    const pptDeck = currentModule.pptDecks.find(
-                      (deck) => deck.lessonId === currentLesson.lessonId
-                    );
-
-                    if (!pptDeck) {
-                      return (
-                        <p className="text-slate-400 text-sm">
-                          No PowerPoint deck available for this lesson.
-                        </p>
-                      );
-                    }
-
-                    return (
-                      <div className="space-y-4">
-                        <div className="bg-slate-900/50 rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <p className="text-white font-medium">
-                                Lesson {currentLesson.lessonNumber} Slides
-                              </p>
-                              <p className="text-sm text-slate-400">{pptDeck.slideCount} slides</p>
-                            </div>
-                            <span className="text-2xl">📊</span>
-                          </div>
-
-                          {/* Download Options */}
-                          <div className="space-y-2">
-                            <p className="text-xs text-slate-500 mb-2">Download Formats:</p>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                              {pptDeck.pptxPath && (
-                                <a
-                                  href={pptDeck.pptxPath}
-                                  download
-                                  className="flex items-center justify-center gap-2 px-3 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg transition-colors text-sm"
-                                >
-                                  <svg
-                                    className="w-4 h-4"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3 3m0 0l-3-3m3 3V8"
-                                    />
-                                  </svg>
-                                  PPTX (Editable)
-                                </a>
-                              )}
-                              {pptDeck.pdfPath && (
-                                <a
-                                  href={pptDeck.pdfPath}
-                                  download
-                                  className="flex items-center justify-center gap-2 px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors text-sm"
-                                >
-                                  <svg
-                                    className="w-4 h-4"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3 3m0 0l-3-3m3 3V8"
-                                    />
-                                  </svg>
-                                  PDF (Read-only)
-                                </a>
-                              )}
-                              {pptDeck.imagesPath && (
-                                <a
-                                  href={pptDeck.imagesPath}
-                                  download
-                                  className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded-lg transition-colors text-sm"
-                                >
-                                  <svg
-                                    className="w-4 h-4"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                    />
-                                  </svg>
-                                  Images (LMS)
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Preview Note */}
-                        <div className="bg-slate-900/50 rounded-lg p-3 text-xs text-slate-400">
-                          <p className="flex items-start gap-2">
-                            <svg
-                              className="w-4 h-4 mt-0.5 flex-shrink-0"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                              />
-                            </svg>
-                            <span>
-                              PowerPoint decks are automatically generated based on the lesson plan
-                              content, including objectives, key concepts, case studies, and
-                              formative checks. Download to view and customize for your teaching
-                              needs.
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })()}
                 </div>
               )}
             </div>
@@ -1589,20 +1736,20 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-6 border-t border-slate-700">
+          <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
               onClick={handleGenerate}
-              disabled={submitStep10.isPending || isAllModulesComplete}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={submitStep10.isPending || isAllModulesComplete || isCurrentlyGenerating}
+              className="px-4 py-2 text-teal-600 hover:text-teal-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isAllModulesComplete ? 'All Modules Generated' : 'Regenerate Lesson Plans'}
+              {isAllModulesComplete ? 'All Modules Generated' : 'Generate Next Module'}
             </button>
 
             {isAllModulesComplete && !isApproved && (
               <button
                 onClick={handleApprove}
                 disabled={approveStep10.isPending}
-                className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {approveStep10.isPending ? (
                   <>
