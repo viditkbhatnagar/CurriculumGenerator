@@ -4,10 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSubmitStep10, useApproveStep10 } from '@/hooks/useWorkflow';
 import { useStep10Status } from '@/hooks/useStep10Status';
 import { api } from '@/lib/api';
-import {
-  CurriculumWorkflow,
-  LessonPlan,
-} from '@/types/workflow';
+import { CurriculumWorkflow, LessonPlan } from '@/types/workflow';
 import { EditTarget } from './EditWithAIButton';
 import { toast } from '@/stores/toastStore';
 
@@ -303,21 +300,22 @@ function GenerationProgressPanel({
 }) {
   if (!status) return null;
 
-  const progressPercentage = status.totalModules > 0
-    ? Math.round((status.modulesGenerated / status.totalModules) * 100)
-    : 0;
+  const progressPercentage =
+    status.totalModules > 0 ? Math.round((status.modulesGenerated / status.totalModules) * 100) : 0;
 
-  const isGenerating = status.status === 'in_progress' || status.jobs?.active > 0;
-  const hasFailed = status.status === 'failed' || status.jobs?.failed > 0;
+  const isGenerating = status.status === 'in_progress' || (status.jobs?.active ?? 0) > 0;
+  const hasFailed = status.status === 'failed' || (status.jobs?.failed ?? 0) > 0;
 
   return (
-    <div className={`rounded-xl border transition-all ${
-      hasFailed 
-        ? 'bg-red-500/10 border-red-500/30' 
-        : isGenerating 
-          ? 'bg-teal-500/10 border-teal-500/30' 
-          : 'bg-emerald-500/10 border-emerald-500/30'
-    }`}>
+    <div
+      className={`rounded-xl border transition-all ${
+        hasFailed
+          ? 'bg-red-500/10 border-red-500/30'
+          : isGenerating
+            ? 'bg-teal-500/10 border-teal-500/30'
+            : 'bg-emerald-500/10 border-emerald-500/30'
+      }`}
+    >
       {/* Simple Progress Bar (Always Visible) */}
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
@@ -328,20 +326,46 @@ function GenerationProgressPanel({
               </div>
             ) : hasFailed ? (
               <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center">
-                <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-5 h-5 text-red-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </div>
             ) : (
               <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <svg
+                  className="w-5 h-5 text-emerald-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
                 </svg>
               </div>
             )}
             <div>
-              <p className={`font-medium ${hasFailed ? 'text-red-400' : isGenerating ? 'text-teal-600' : 'text-emerald-400'}`}>
-                {hasFailed ? 'Generation Failed' : isGenerating ? 'Generating...' : 'Generation Complete'}
+              <p
+                className={`font-medium ${hasFailed ? 'text-red-400' : isGenerating ? 'text-teal-600' : 'text-emerald-400'}`}
+              >
+                {hasFailed
+                  ? 'Generation Failed'
+                  : isGenerating
+                    ? 'Generating...'
+                    : 'Generation Complete'}
               </p>
               <p className="text-xs text-teal-600">
                 {status.modulesGenerated} of {status.totalModules} modules complete
@@ -349,7 +373,9 @@ function GenerationProgressPanel({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-lg font-bold ${hasFailed ? 'text-red-400' : isGenerating ? 'text-teal-600' : 'text-emerald-400'}`}>
+            <span
+              className={`text-lg font-bold ${hasFailed ? 'text-red-400' : isGenerating ? 'text-teal-600' : 'text-emerald-400'}`}
+            >
               {progressPercentage}%
             </span>
             <button
@@ -357,13 +383,18 @@ function GenerationProgressPanel({
               className="p-1 hover:bg-white/10 rounded transition-colors"
               title={isExpanded ? 'Collapse details' : 'Expand details'}
             >
-              <svg 
-                className={`w-5 h-5 text-teal-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-                fill="none" 
-                viewBox="0 0 24 24" 
+              <svg
+                className={`w-5 h-5 text-teal-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
                 stroke="currentColor"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </button>
           </div>
@@ -373,10 +404,10 @@ function GenerationProgressPanel({
         <div className="relative h-2 bg-teal-100 rounded-full overflow-hidden">
           <div
             className={`absolute inset-y-0 left-0 transition-all duration-500 ${
-              hasFailed 
-                ? 'bg-red-500' 
-                : isGenerating 
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-500' 
+              hasFailed
+                ? 'bg-red-500'
+                : isGenerating
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-500'
                   : 'bg-emerald-500'
             }`}
             style={{ width: `${progressPercentage}%` }}
@@ -437,8 +468,8 @@ function GenerationProgressPanel({
                 <div
                   key={job.jobId}
                   className={`flex items-center justify-between p-2 rounded text-xs ${
-                    job.state === 'active' 
-                      ? 'bg-teal-500/10 text-teal-600' 
+                    job.state === 'active'
+                      ? 'bg-teal-500/10 text-teal-600'
                       : job.state === 'completed'
                         ? 'bg-emerald-500/10 text-emerald-400'
                         : job.state === 'failed'
@@ -456,7 +487,8 @@ function GenerationProgressPanel({
           {/* Estimated Time */}
           {isGenerating && (
             <p className="text-xs text-teal-600 mt-3 text-center">
-              Estimated time remaining: ~{(status.totalModules - status.modulesGenerated) * 5} minutes
+              Estimated time remaining: ~{(status.totalModules - status.modulesGenerated) * 5}{' '}
+              minutes
             </p>
           )}
         </div>
@@ -473,7 +505,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
   const [generatingModuleId, setGeneratingModuleId] = useState<string | null>(null);
   const [isProgressExpanded, setIsProgressExpanded] = useState(false);
-  
+
   // Edit state for lesson plans
   const [editingLesson, setEditingLesson] = useState<LessonPlan | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -524,9 +556,9 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   // Detect ongoing generation on mount
   useEffect(() => {
     const detectOngoingGeneration = async () => {
-      if (step10Status?.status === 'in_progress' || step10Status?.jobs?.active > 0) {
+      if (step10Status?.status === 'in_progress' || (step10Status?.jobs?.active ?? 0) > 0) {
         // Find which module is being generated
-        const activeJob = step10Status.jobs?.details?.find(
+        const activeJob = step10Status?.jobs?.details?.find(
           (j: any) => j.state === 'active' || j.state === 'waiting'
         );
         if (activeJob) {
@@ -549,9 +581,9 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   // Sync generation state with backend status
   useEffect(() => {
     if (step10Status) {
-      const isActive = step10Status.status === 'in_progress' || 
-                      (step10Status.jobs?.active > 0);
-      
+      const isActive =
+        step10Status.status === 'in_progress' || (step10Status.jobs?.active ?? 0) > 0;
+
       if (!isActive && generatingModuleId) {
         // Generation finished, clear local state
         setGeneratingModuleId(null);
@@ -560,32 +592,35 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   }, [step10Status, generatingModuleId]);
 
   // Handle module generation
-  const handleGenerateModule = useCallback(async (moduleId: string, moduleIndex: number) => {
-    setError(null);
-    setGeneratingModuleId(moduleId);
-    hasShownCompletionRef.current = false;
+  const handleGenerateModule = useCallback(
+    async (moduleId: string, moduleIndex: number) => {
+      setError(null);
+      setGeneratingModuleId(moduleId);
+      hasShownCompletionRef.current = false;
 
-    try {
-      console.log('[Step10] Starting generation for module:', moduleId, 'index:', moduleIndex);
-      
-      // Call the API to start generation
-      await submitStep10.mutateAsync(workflow._id);
+      try {
+        console.log('[Step10] Starting generation for module:', moduleId, 'index:', moduleIndex);
 
-      // Start polling to track progress (don't mark as complete immediately!)
-      startPolling();
-      
-      toast.info(
-        'Generation Started',
-        `Module ${moduleIndex + 1} generation has started. This may take 2-5 minutes.`
-      );
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to start generation';
-      console.error('[Step10] Failed to start generation:', err);
-      setError(errorMessage);
-      setGeneratingModuleId(null);
-      toast.error('Generation Failed', errorMessage);
-    }
-  }, [workflow._id, submitStep10, startPolling]);
+        // Call the API to start generation
+        await submitStep10.mutateAsync(workflow._id);
+
+        // Start polling to track progress (don't mark as complete immediately!)
+        startPolling();
+
+        toast.info(
+          'Generation Started',
+          `Module ${moduleIndex + 1} generation has started. This may take 2-5 minutes.`
+        );
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to start generation';
+        console.error('[Step10] Failed to start generation:', err);
+        setError(errorMessage);
+        setGeneratingModuleId(null);
+        toast.error('Generation Failed', errorMessage);
+      }
+    },
+    [workflow._id, submitStep10, startPolling]
+  );
 
   // Legacy handleGenerate for the main button
   const handleGenerate = useCallback(async () => {
@@ -672,7 +707,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
     }
   };
 
-  const hasStep10Data = workflow.step10 && workflow.step10.moduleLessonPlans?.length > 0;
+  const hasStep10Data = workflow.step10 && (workflow.step10.moduleLessonPlans?.length ?? 0) > 0;
   const validation = workflow.step10?.validation;
   const isApproved = !!workflow.step10?.approvedAt;
 
@@ -693,10 +728,11 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   const isAllModulesComplete = hasStep10Data && completedModules >= totalModules;
 
   // Determine if currently generating (from either local state or backend status)
-  const isCurrentlyGenerating = generatingModuleId !== null || 
-                                isGenerationActive || 
-                                submitStep10.isPending ||
-                                step10Status?.status === 'in_progress';
+  const isCurrentlyGenerating =
+    generatingModuleId !== null ||
+    isGenerationActive ||
+    submitStep10.isPending ||
+    step10Status?.status === 'in_progress';
 
   // Auto-select first module if none selected
   useEffect(() => {
@@ -814,9 +850,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                 <span className="px-2 py-1 bg-white rounded text-teal-700">
                   Step 8: Case Studies
                 </span>
-                <span className="px-2 py-1 bg-white rounded text-teal-700">
-                  Step 9: Glossary
-                </span>
+                <span className="px-2 py-1 bg-white rounded text-teal-700">Step 9: Glossary</span>
               </div>
             </div>
           </div>
@@ -876,10 +910,12 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                   (m) => m.moduleId === module.id
                 );
                 const isComplete = !!modulePlan;
-                const isThisModuleGenerating = generatingModuleId === module.id ||
-                  (step10Status?.jobs?.details?.some(
-                    (j: any) => j.moduleIndex === index && (j.state === 'active' || j.state === 'waiting')
-                  ));
+                const isThisModuleGenerating =
+                  generatingModuleId === module.id ||
+                  step10Status?.jobs?.details?.some(
+                    (j: any) =>
+                      j.moduleIndex === index && (j.state === 'active' || j.state === 'waiting')
+                  );
                 const canGenerate =
                   !isComplete && !isCurrentlyGenerating && index === completedModules;
 
@@ -1370,7 +1406,9 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {currentModule.pptDecks.map((deck) => {
-                      const lesson = currentModule.lessons.find((l) => l.lessonId === deck.lessonId);
+                      const lesson = currentModule.lessons.find(
+                        (l) => l.lessonId === deck.lessonId
+                      );
                       return (
                         <div key={deck.deckId} className="bg-teal-50/50 rounded-lg p-4">
                           <div className="flex items-start justify-between mb-3">
@@ -1551,33 +1589,35 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                         </span>
                       </div>
                     )}
-                    {currentLesson.materials.caseFiles && currentLesson.materials.caseFiles.length > 0 && (
-                      <div>
-                        <p className="text-sm text-teal-600 mb-1">Case Files:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {currentLesson.materials.caseFiles.map((file, i) => (
-                            <span
-                              key={i}
-                              className="text-xs px-2 py-1 bg-white rounded text-teal-700"
-                            >
-                              {file}
-                            </span>
-                          ))}
+                    {currentLesson.materials.caseFiles &&
+                      currentLesson.materials.caseFiles.length > 0 && (
+                        <div>
+                          <p className="text-sm text-teal-600 mb-1">Case Files:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {currentLesson.materials.caseFiles.map((file, i) => (
+                              <span
+                                key={i}
+                                className="text-xs px-2 py-1 bg-white rounded text-teal-700"
+                              >
+                                {file}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {currentLesson.materials.readingReferences && currentLesson.materials.readingReferences.length > 0 && (
-                      <div>
-                        <p className="text-sm text-teal-600 mb-1">Reading References:</p>
-                        <div className="space-y-1">
-                          {currentLesson.materials.readingReferences.map((ref, i) => (
-                            <div key={i} className="text-xs text-teal-700">
-                              • {ref.authors?.join(', ')} ({ref.year}). {ref.title}
-                            </div>
-                          ))}
+                      )}
+                    {currentLesson.materials.readingReferences &&
+                      currentLesson.materials.readingReferences.length > 0 && (
+                        <div>
+                          <p className="text-sm text-teal-600 mb-1">Reading References:</p>
+                          <div className="space-y-1">
+                            {currentLesson.materials.readingReferences.map((ref, i) => (
+                              <div key={i} className="text-xs text-teal-700">
+                                • {ref.authors?.join(', ')} ({ref.year}). {ref.title}
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                   </div>
                 </div>
               )}
@@ -1603,16 +1643,17 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                         </p>
                       </div>
                     )}
-                    {currentLesson.instructorNotes.adaptationOptions && currentLesson.instructorNotes.adaptationOptions.length > 0 && (
-                      <div>
-                        <p className="text-teal-600 font-medium mb-1">Adaptation Options:</p>
-                        <ul className="text-teal-700 space-y-1">
-                          {currentLesson.instructorNotes.adaptationOptions.map((opt, i) => (
-                            <li key={i}>• {opt}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                    {currentLesson.instructorNotes.adaptationOptions &&
+                      currentLesson.instructorNotes.adaptationOptions.length > 0 && (
+                        <div>
+                          <p className="text-teal-600 font-medium mb-1">Adaptation Options:</p>
+                          <ul className="text-teal-700 space-y-1">
+                            {currentLesson.instructorNotes.adaptationOptions.map((opt, i) => (
+                              <li key={i}>• {opt}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                   </div>
                 </div>
               )}
@@ -1622,40 +1663,45 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                 <div className="bg-teal-50/50 rounded-lg p-5 border border-teal-200">
                   <h4 className="text-teal-800 font-medium mb-3">Independent Study</h4>
                   <div className="space-y-3">
-                    {currentLesson.independentStudy.coreReadings && currentLesson.independentStudy.coreReadings.length > 0 && (
-                      <div>
-                        <p className="text-sm text-teal-600 font-medium mb-2">Core Readings:</p>
-                        <div className="space-y-2">
-                          {currentLesson.independentStudy.coreReadings.map((reading, i) => (
-                            <div key={i} className="text-xs bg-white/50 rounded p-2">
-                              <p className="text-teal-700 mb-1">{reading.citation}</p>
-                              <p className="text-teal-500">
-                                Est. {reading.estimatedMinutes} minutes
-                              </p>
-                            </div>
-                          ))}
+                    {currentLesson.independentStudy.coreReadings &&
+                      currentLesson.independentStudy.coreReadings.length > 0 && (
+                        <div>
+                          <p className="text-sm text-teal-600 font-medium mb-2">Core Readings:</p>
+                          <div className="space-y-2">
+                            {currentLesson.independentStudy.coreReadings.map((reading, i) => (
+                              <div key={i} className="text-xs bg-white/50 rounded p-2">
+                                <p className="text-teal-700 mb-1">{reading.citation}</p>
+                                <p className="text-teal-500">
+                                  Est. {reading.estimatedMinutes} minutes
+                                </p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {currentLesson.independentStudy.supplementaryReadings && currentLesson.independentStudy.supplementaryReadings.length > 0 && (
-                      <div>
-                        <p className="text-sm text-teal-600 font-medium mb-2">
-                          Supplementary Readings:
-                        </p>
-                        <div className="space-y-2">
-                          {currentLesson.independentStudy.supplementaryReadings.map((reading, i) => (
-                            <div key={i} className="text-xs bg-white/50 rounded p-2">
-                              <p className="text-teal-700 mb-1">{reading.citation}</p>
-                              <p className="text-teal-500">
-                                Est. {reading.estimatedMinutes} minutes
-                              </p>
-                            </div>
-                          ))}
+                      )}
+                    {currentLesson.independentStudy.supplementaryReadings &&
+                      currentLesson.independentStudy.supplementaryReadings.length > 0 && (
+                        <div>
+                          <p className="text-sm text-teal-600 font-medium mb-2">
+                            Supplementary Readings:
+                          </p>
+                          <div className="space-y-2">
+                            {currentLesson.independentStudy.supplementaryReadings.map(
+                              (reading, i) => (
+                                <div key={i} className="text-xs bg-white/50 rounded p-2">
+                                  <p className="text-teal-700 mb-1">{reading.citation}</p>
+                                  <p className="text-teal-500">
+                                    Est. {reading.estimatedMinutes} minutes
+                                  </p>
+                                </div>
+                              )
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                     <div className="text-sm text-teal-600">
-                      Total estimated effort: {currentLesson.independentStudy.estimatedEffort} minutes
+                      Total estimated effort: {currentLesson.independentStudy.estimatedEffort}{' '}
+                      minutes
                     </div>
                   </div>
                 </div>
