@@ -4,7 +4,7 @@
  */
 
 // Workflow step identifiers
-export type WorkflowStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+export type WorkflowStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
 // Step statuses
 export type StepStatus = 'pending' | 'in_progress' | 'completed' | 'approved' | 'revision_needed';
@@ -33,6 +33,10 @@ export type WorkflowStatus =
   | 'step10_complete'
   | 'step11_pending'
   | 'step11_complete'
+  | 'step12_pending'
+  | 'step12_complete'
+  | 'step13_pending'
+  | 'step13_complete'
   | 'review_pending'
   | 'published';
 
@@ -1492,6 +1496,181 @@ export interface Step11PPTGeneration {
 }
 
 // =============================================================================
+// STEP 12: ASSIGNMENT PACKS (3 delivery variants per module)
+// =============================================================================
+
+export type AssignmentDeliveryVariant = 'in_person' | 'self_study' | 'hybrid';
+
+export interface AssignmentOverview {
+  title: string;
+  moduleCode: string;
+  assignmentType: string;
+  weighting: string;
+  groupOrIndividual: string;
+  submissionFormat: string;
+}
+
+export interface AssessedLearningOutcome {
+  mloId: string;
+  mloStatement: string;
+  linkedPLOs: string[];
+}
+
+export interface AssignmentBrief {
+  studentFacingIntro: string;
+  workplaceContext: string;
+  stepByStepInstructions: string[];
+  deliverables: string[];
+}
+
+export interface RubricCriterion {
+  criterionName: string;
+  linkedMLOs: string[];
+  fail: string;
+  pass: string;
+  merit: string;
+  distinction: string;
+  weight: number;
+}
+
+export interface EvidenceRequirement {
+  artefactType: string;
+  wordCountOrDuration: string;
+  fileType: string;
+}
+
+export interface AssignmentPack {
+  assignmentId: string;
+  deliveryVariant: AssignmentDeliveryVariant;
+  overview: AssignmentOverview;
+  assessedOutcomes: AssessedLearningOutcome[];
+  brief: AssignmentBrief;
+  rubric: RubricCriterion[];
+  evidenceRequirements: EvidenceRequirement[];
+  academicIntegrity: string;
+  accessibilityOptions: string;
+}
+
+export interface ModuleAssignmentPacks {
+  moduleId: string;
+  moduleCode: string;
+  moduleTitle: string;
+  variants: {
+    in_person: AssignmentPack;
+    self_study: AssignmentPack;
+    hybrid: AssignmentPack;
+  };
+}
+
+export interface Step12AssignmentPacks {
+  moduleAssignmentPacks: ModuleAssignmentPacks[];
+  validation: {
+    allModulesHavePacks: boolean;
+    allVariantsPresent: boolean;
+    allMLOsCovered: boolean;
+    allRubricsValid: boolean;
+  };
+  summary: {
+    totalModules: number;
+    totalAssignmentPacks: number;
+    variantsPerModule: number;
+  };
+  generatedAt: string;
+  validatedAt?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+}
+
+// =============================================================================
+// STEP 13: SUMMATIVE EXAM
+// =============================================================================
+
+export interface ExamOverview {
+  examTitle: string;
+  duration: string;
+  totalMarks: number;
+  sectionBreakdown: string;
+  conditions: string;
+}
+
+export interface SectionAQuestion {
+  questionId: string;
+  type: 'mcq' | 'short_answer';
+  questionText: string;
+  options?: string[];
+  correctAnswer: string;
+  marks: number;
+  linkedMLOs: string[];
+  linkedPLOs: string[];
+  rationale: string;
+}
+
+export interface SectionBScenario {
+  scenarioId: string;
+  scenarioText: string;
+  questions: {
+    questionId: string;
+    questionText: string;
+    marks: number;
+    modelAnswer: string;
+    linkedMLOs: string[];
+    linkedPLOs: string[];
+  }[];
+  totalMarks: number;
+}
+
+export interface SectionCTask {
+  taskId: string;
+  taskDescription: string;
+  instructions: string;
+  marks: number;
+  modelAnswer: string;
+  assessmentCriteria: string[];
+  linkedMLOs: string[];
+  linkedPLOs: string[];
+}
+
+export interface ExamMarkingScheme {
+  totalMarks: number;
+  passMark: number;
+  meritThreshold: number;
+  distinctionThreshold: number;
+  sectionWeights: {
+    sectionA: number;
+    sectionB?: number;
+    sectionC: number;
+  };
+}
+
+export interface Step13SummativeExam {
+  overview: ExamOverview;
+  sectionA: SectionAQuestion[];
+  sectionB?: SectionBScenario[];
+  sectionBIncluded: boolean;
+  sectionC: SectionCTask[];
+  markingScheme: ExamMarkingScheme;
+  integrityAndSecurity: string;
+  accessibilityProvisions: string;
+  validation: {
+    allPLOsCovered: boolean;
+    marksAddUp: boolean;
+    sectionBalanceValid: boolean;
+    modelAnswersComplete: boolean;
+  };
+  summary: {
+    totalQuestions: number;
+    totalMarks: number;
+    sectionACount: number;
+    sectionBCount: number;
+    sectionCCount: number;
+  };
+  generatedAt: string;
+  validatedAt?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+}
+
+// =============================================================================
 // WORKFLOW PROGRESS
 // =============================================================================
 export interface StepProgress {
@@ -1527,6 +1706,8 @@ export interface CurriculumWorkflow {
   step9?: Step9Glossary;
   step10?: Step10LessonPlans;
   step11?: Step11PPTGeneration;
+  step12?: Step12AssignmentPacks;
+  step13?: Step13SummativeExam;
 
   // Metadata
   createdAt: string;
@@ -1637,6 +1818,8 @@ export const STEP_NAMES: Record<WorkflowStep, string> = {
   9: 'Glossary',
   10: 'Lesson Plans',
   11: 'PPT Generation',
+  12: 'Assignment Packs',
+  13: 'Summative Exam',
 };
 
 export const STEP_DESCRIPTIONS: Record<WorkflowStep, string> = {
@@ -1651,6 +1834,8 @@ export const STEP_DESCRIPTIONS: Record<WorkflowStep, string> = {
   9: 'Auto-generate glossary from all curriculum content',
   10: 'Generate detailed lesson plans for all modules',
   11: 'Generate PowerPoint slide decks for all lessons',
+  12: 'Generate assignment packs with briefs, rubrics & marking guides for all delivery modes',
+  13: 'Generate formal summative exam with MCQs, scenarios & applied tasks',
 };
 
 export const ESTIMATED_TIMES: Record<WorkflowStep, string> = {
@@ -1665,6 +1850,8 @@ export const ESTIMATED_TIMES: Record<WorkflowStep, string> = {
   9: '5 min (auto)',
   10: '10-15 min',
   11: '10-15 min',
+  12: '15-20 min',
+  13: '5-10 min',
 };
 
 export const BLOOM_LEVELS: BloomLevel[] = [

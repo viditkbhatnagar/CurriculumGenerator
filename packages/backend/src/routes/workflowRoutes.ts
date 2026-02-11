@@ -27,6 +27,7 @@ import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { wordExportService } from '../services/wordExportService';
 import { analyticsStorageService } from '../services/analyticsStorageService';
 import { lessonPlanService } from '../services/lessonPlanService';
+import { addStepJob, getStepJobStatus, stepQueue, removeStepJob } from '../queues/stepQueue';
 
 const router = Router();
 
@@ -290,31 +291,28 @@ router.get('/:id/progress', async (req: Request, res: Response) => {
 router.post('/:id/step1', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
     const {
       programTitle,
       programDescription,
       academicLevel,
-      // Credit Framework
       isCreditAwarding,
       creditSystem,
       credits,
       totalHours,
       customContactPercent,
-      // Target Learner Profile (structured v2.2)
-      targetLearner, // Legacy: single string or object
+      targetLearner,
       targetLearnerAgeRange,
       targetLearnerEducationalBackground,
       targetLearnerIndustrySector,
       targetLearnerExperienceLevel,
-      // Delivery
       deliveryMode,
       deliveryDescription,
-      // Labour Market
       programPurpose,
       jobRoles,
     } = req.body;
 
-    // Minimal validation for saving draft - only require program title
+    // Minimal validation stays synchronous
     if (!programTitle || programTitle.length < 3) {
       return res.status(400).json({
         success: false,
@@ -322,16 +320,14 @@ router.post('/:id/step1', validateJWT, loadUser, async (req: Request, res: Respo
       });
     }
 
-    // Filter out empty job roles - handle both string and object formats
     const filteredJobRoles = (jobRoles || []).filter((role: any) => {
       if (typeof role === 'string') {
         return role && role.trim();
       }
-      // Object format: { title, description, tasks }
       return role && role.title && role.title.trim();
     });
 
-    const workflow = await workflowService.processStep1(id, {
+    const inputData = {
       programTitle,
       programDescription: programDescription || '',
       academicLevel: academicLevel || 'certificate',
@@ -340,17 +336,42 @@ router.post('/:id/step1', validateJWT, loadUser, async (req: Request, res: Respo
       credits: credits || 60,
       totalHours,
       customContactPercent,
-      // Pass structured target learner fields
       targetLearnerAgeRange: targetLearnerAgeRange || '',
       targetLearnerEducationalBackground: targetLearnerEducationalBackground || '',
       targetLearnerIndustrySector: targetLearnerIndustrySector || '',
       targetLearnerExperienceLevel: targetLearnerExperienceLevel || 'professional',
-      targetLearner: targetLearner, // Legacy support
+      targetLearner: targetLearner,
       deliveryMode: deliveryMode || 'hybrid_blended',
       deliveryDescription: deliveryDescription || '',
       programPurpose: programPurpose || '',
       jobRoles: filteredJobRoles,
-    });
+    };
+
+    if (stepQueue) {
+      const existingStatus = await getStepJobStatus(1, id);
+      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+        return res.status(202).json({
+          success: true,
+          data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 1 },
+          message: 'Step 1 generation already in progress.',
+        });
+      }
+
+      await removeStepJob(1, id);
+      const job = await addStepJob(1, id, userId, inputData);
+      if (!job) {
+        return res.status(500).json({ success: false, error: 'Failed to queue job' });
+      }
+
+      return res.status(202).json({
+        success: true,
+        data: { jobId: job.id, status: 'queued', stepNumber: 1 },
+        message: 'Step 1 generation queued. Poll status endpoint for updates.',
+      });
+    }
+
+    // Fallback: synchronous processing
+    const workflow = await workflowService.processStep1(id, inputData);
 
     res.json({
       success: true,
@@ -471,13 +492,35 @@ router.post('/:id/step1/approve', validateJWT, loadUser, async (req: Request, re
 router.post('/:id/step2', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
     const { benchmarkPrograms, industryFrameworks, institutionalFrameworks } = req.body;
 
-    const workflow = await workflowService.processStep2(id, {
-      benchmarkPrograms,
-      industryFrameworks,
-      institutionalFrameworks,
-    });
+    const inputData = { benchmarkPrograms, industryFrameworks, institutionalFrameworks };
+
+    if (stepQueue) {
+      const existingStatus = await getStepJobStatus(2, id);
+      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+        return res.status(202).json({
+          success: true,
+          data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 2 },
+          message: 'Step 2 generation already in progress.',
+        });
+      }
+
+      await removeStepJob(2, id);
+      const job = await addStepJob(2, id, userId, inputData);
+      if (!job) {
+        return res.status(500).json({ success: false, error: 'Failed to queue job' });
+      }
+
+      return res.status(202).json({
+        success: true,
+        data: { jobId: job.id, status: 'queued', stepNumber: 2 },
+        message: 'Step 2 generation queued. Poll status endpoint for updates.',
+      });
+    }
+
+    const workflow = await workflowService.processStep2(id, inputData);
 
     res.json({
       success: true,
@@ -640,6 +683,7 @@ router.post('/:id/step2/approve', validateJWT, loadUser, async (req: Request, re
 router.post('/:id/step3', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
     const {
       bloomLevels,
       priorityCompetencies,
@@ -650,7 +694,7 @@ router.post('/:id/step3', validateJWT, loadUser, async (req: Request, res: Respo
       avoidVerbs,
     } = req.body;
 
-    // Validation
+    // Validation stays synchronous
     if (!bloomLevels || bloomLevels.length < 2) {
       return res.status(400).json({
         success: false,
@@ -665,7 +709,7 @@ router.post('/:id/step3', validateJWT, loadUser, async (req: Request, res: Respo
       });
     }
 
-    const workflow = await workflowService.processStep3(id, {
+    const inputData = {
       bloomLevels,
       priorityCompetencies: priorityCompetencies || [],
       outcomeEmphasis: outcomeEmphasis || 'mixed',
@@ -673,7 +717,32 @@ router.post('/:id/step3', validateJWT, loadUser, async (req: Request, res: Respo
       contextConstraints,
       preferredVerbs,
       avoidVerbs,
-    });
+    };
+
+    if (stepQueue) {
+      const existingStatus = await getStepJobStatus(3, id);
+      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+        return res.status(202).json({
+          success: true,
+          data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 3 },
+          message: 'Step 3 generation already in progress.',
+        });
+      }
+
+      await removeStepJob(3, id);
+      const job = await addStepJob(3, id, userId, inputData);
+      if (!job) {
+        return res.status(500).json({ success: false, error: 'Failed to queue job' });
+      }
+
+      return res.status(202).json({
+        success: true,
+        data: { jobId: job.id, status: 'queued', stepNumber: 3 },
+        message: 'Step 3 generation queued. Poll status endpoint for updates.',
+      });
+    }
+
+    const workflow = await workflowService.processStep3(id, inputData);
 
     res.json({
       success: true,
@@ -801,6 +870,30 @@ router.post('/:id/step3/approve', validateJWT, loadUser, async (req: Request, re
 router.post('/:id/step4', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
+
+    if (stepQueue) {
+      const existingStatus = await getStepJobStatus(4, id);
+      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+        return res.status(202).json({
+          success: true,
+          data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 4 },
+          message: 'Step 4 generation already in progress.',
+        });
+      }
+
+      await removeStepJob(4, id);
+      const job = await addStepJob(4, id, userId);
+      if (!job) {
+        return res.status(500).json({ success: false, error: 'Failed to queue job' });
+      }
+
+      return res.status(202).json({
+        success: true,
+        data: { jobId: job.id, status: 'queued', stepNumber: 4 },
+        message: 'Step 4 generation queued. Poll status endpoint for updates.',
+      });
+    }
 
     const workflow = await workflowService.processStep4(id);
 
@@ -998,38 +1091,56 @@ router.post('/:id/step4/approve', validateJWT, loadUser, async (req: Request, re
  * POST /api/v3/workflow/:id/step5
  * Submit Step 5: Generate Topic Sources
  */
-router.post(
-  '/:id/step5',
-  validateJWT,
-  loadUser,
-  extendTimeout(600000),
-  async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
+router.post('/:id/step5', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
 
-      const workflow = await workflowService.processStep5(id);
+    if (stepQueue) {
+      const existingStatus = await getStepJobStatus(5, id);
+      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+        return res.status(202).json({
+          success: true,
+          data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 5 },
+          message: 'Step 5 generation already in progress.',
+        });
+      }
 
-      res.json({
+      await removeStepJob(5, id);
+      const job = await addStepJob(5, id, userId);
+      if (!job) {
+        return res.status(500).json({ success: false, error: 'Failed to queue job' });
+      }
+
+      return res.status(202).json({
         success: true,
-        data: {
-          step5: workflow.step5,
-          currentStep: workflow.currentStep,
-          status: workflow.status,
-          agiCompliant: workflow.step5?.agiCompliant,
-        },
-        message: workflow.step5?.agiCompliant
-          ? 'Step 5 complete. AGI-compliant sources generated. Ready for Step 6: Reading Lists.'
-          : 'Step 5 complete but has compliance issues. Review required.',
-      });
-    } catch (error) {
-      loggingService.error('Error processing Step 5', { error, workflowId: req.params.id });
-      res.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to process Step 5',
+        data: { jobId: job.id, status: 'queued', stepNumber: 5 },
+        message: 'Step 5 generation queued. Poll status endpoint for updates.',
       });
     }
+
+    const workflow = await workflowService.processStep5(id);
+
+    res.json({
+      success: true,
+      data: {
+        step5: workflow.step5,
+        currentStep: workflow.currentStep,
+        status: workflow.status,
+        agiCompliant: workflow.step5?.agiCompliant,
+      },
+      message: workflow.step5?.agiCompliant
+        ? 'Step 5 complete. AGI-compliant sources generated. Ready for Step 6: Reading Lists.'
+        : 'Step 5 complete but has compliance issues. Review required.',
+    });
+  } catch (error) {
+    loggingService.error('Error processing Step 5', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process Step 5',
+    });
   }
-);
+});
 
 /**
  * PUT /api/v3/workflow/:id/step5/source/:sourceId
@@ -1153,35 +1264,53 @@ router.post('/:id/step5/approve', validateJWT, loadUser, async (req: Request, re
  * POST /api/v3/workflow/:id/step6
  * Submit Step 6: Generate Reading Lists
  */
-router.post(
-  '/:id/step6',
-  validateJWT,
-  loadUser,
-  extendTimeout(600000),
-  async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
+router.post('/:id/step6', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
 
-      const workflow = await workflowService.processStep6(id);
+    if (stepQueue) {
+      const existingStatus = await getStepJobStatus(6, id);
+      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+        return res.status(202).json({
+          success: true,
+          data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 6 },
+          message: 'Step 6 generation already in progress.',
+        });
+      }
 
-      res.json({
+      await removeStepJob(6, id);
+      const job = await addStepJob(6, id, userId);
+      if (!job) {
+        return res.status(500).json({ success: false, error: 'Failed to queue job' });
+      }
+
+      return res.status(202).json({
         success: true,
-        data: {
-          step6: workflow.step6,
-          currentStep: workflow.currentStep,
-          status: workflow.status,
-        },
-        message: 'Step 6 complete. Reading lists generated. Ready for Step 7: Assessments.',
-      });
-    } catch (error) {
-      loggingService.error('Error processing Step 6', { error, workflowId: req.params.id });
-      res.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to process Step 6',
+        data: { jobId: job.id, status: 'queued', stepNumber: 6 },
+        message: 'Step 6 generation queued. Poll status endpoint for updates.',
       });
     }
+
+    const workflow = await workflowService.processStep6(id);
+
+    res.json({
+      success: true,
+      data: {
+        step6: workflow.step6,
+        currentStep: workflow.currentStep,
+        status: workflow.status,
+      },
+      message: 'Step 6 complete. Reading lists generated. Ready for Step 7: Assessments.',
+    });
+  } catch (error) {
+    loggingService.error('Error processing Step 6', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process Step 6',
+    });
   }
-);
+});
 
 /**
  * PUT /api/v3/workflow/:id/step6/reading/:readingId
@@ -1316,109 +1445,121 @@ router.post('/:id/step6/approve', validateJWT, loadUser, async (req: Request, re
  * POST /api/v3/workflow/:id/step7
  * Submit Step 7: Comprehensive Assessment Generation (Assessment Generator Contract)
  */
-router.post(
-  '/:id/step7',
-  validateJWT,
-  loadUser,
-  extendTimeout(1800000), // 30 minutes for comprehensive assessment generation (can take 30-40 min for large curricula)
-  async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
+router.post('/:id/step7', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
 
-      // Extract user preferences from request body with defaults
-      const userPreferences = {
-        assessmentStructure: req.body.assessmentStructure || 'both_formative_and_summative',
-        assessmentBalance: req.body.assessmentBalance || 'blended_mix',
-        certificationStyles: req.body.certificationStyles || ['None'],
-        academicTypes: req.body.academicTypes || ['None'],
-        summativeFormat: req.body.summativeFormat || 'mixed_format',
-        userDefinedSummativeDescription: req.body.userDefinedSummativeDescription,
-        formativeTypesPerUnit: req.body.formativeTypesPerUnit || [
-          'Short quizzes',
-          'MCQ knowledge checks',
-        ],
-        formativePerModule: Number(req.body.formativePerModule) || 2,
-        weightages: {
-          formative: req.body.weightages?.formative ? Number(req.body.weightages.formative) : 30,
-          summative: req.body.weightages?.summative ? Number(req.body.weightages.summative) : 70,
-        },
-        assessmentMappingStrategy: 'hybrid',
-        higherOrderPloPolicy: req.body.higherOrderPloPolicy || 'yes',
-        higherOrderPloRules: req.body.higherOrderPloRules,
-        useRealWorldScenarios: req.body.useRealWorldScenarios !== false, // default true
-        alignToWorkplacePerformance: req.body.alignToWorkplacePerformance !== false, // default true
-        integratedRealWorldSummative: req.body.integratedRealWorldSummative !== false, // default true
-        generateSampleQuestions: true, // Always true per contract
-      };
+    // Extract user preferences from request body with defaults
+    const userPreferences = {
+      assessmentStructure: req.body.assessmentStructure || 'both_formative_and_summative',
+      assessmentBalance: req.body.assessmentBalance || 'blended_mix',
+      certificationStyles: req.body.certificationStyles || ['None'],
+      academicTypes: req.body.academicTypes || ['None'],
+      summativeFormat: req.body.summativeFormat || 'mixed_format',
+      userDefinedSummativeDescription: req.body.userDefinedSummativeDescription,
+      formativeTypesPerUnit: req.body.formativeTypesPerUnit || [
+        'Short quizzes',
+        'MCQ knowledge checks',
+      ],
+      formativePerModule: Number(req.body.formativePerModule) || 2,
+      weightages: {
+        formative: req.body.weightages?.formative ? Number(req.body.weightages.formative) : 30,
+        summative: req.body.weightages?.summative ? Number(req.body.weightages.summative) : 70,
+      },
+      assessmentMappingStrategy: 'hybrid',
+      higherOrderPloPolicy: req.body.higherOrderPloPolicy || 'yes',
+      higherOrderPloRules: req.body.higherOrderPloRules,
+      useRealWorldScenarios: req.body.useRealWorldScenarios !== false,
+      alignToWorkplacePerformance: req.body.alignToWorkplacePerformance !== false,
+      integratedRealWorldSummative: req.body.integratedRealWorldSummative !== false,
+      generateSampleQuestions: true,
+    };
 
-      loggingService.info('[Step 7] Received preferences', {
-        formativePerModule: userPreferences.formativePerModule,
-        type: typeof userPreferences.formativePerModule,
-        raw: req.body.formativePerModule,
+    // Validation stays synchronous
+    if (
+      isNaN(userPreferences.formativePerModule) ||
+      userPreferences.formativePerModule < 1 ||
+      userPreferences.formativePerModule > 5
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: 'Formative assessments per module must be between 1 and 5',
       });
+    }
 
-      // Validation
-      if (
-        isNaN(userPreferences.formativePerModule) ||
-        userPreferences.formativePerModule < 1 ||
-        userPreferences.formativePerModule > 5
-      ) {
+    if (userPreferences.assessmentStructure === 'both_formative_and_summative') {
+      const totalWeight =
+        (userPreferences.weightages.formative || 0) + (userPreferences.weightages.summative || 0);
+      if (Math.abs(totalWeight - 100) > 0.1) {
         return res.status(400).json({
           success: false,
-          error: 'Formative assessments per module must be between 1 and 5',
+          error: 'Formative and summative weightages must sum to 100%',
+        });
+      }
+    }
+
+    if (stepQueue) {
+      const existingStatus = await getStepJobStatus(7, id);
+      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+        return res.status(202).json({
+          success: true,
+          data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 7 },
+          message: 'Step 7 generation already in progress.',
         });
       }
 
-      // Validate weightages sum to 100 if both formative and summative
-      if (userPreferences.assessmentStructure === 'both_formative_and_summative') {
-        const totalWeight =
-          (userPreferences.weightages.formative || 0) + (userPreferences.weightages.summative || 0);
-        if (Math.abs(totalWeight - 100) > 0.1) {
-          return res.status(400).json({
-            success: false,
-            error: 'Formative and summative weightages must sum to 100%',
-          });
-        }
+      await removeStepJob(7, id);
+      const job = await addStepJob(7, id, userId, userPreferences);
+      if (!job) {
+        return res.status(500).json({ success: false, error: 'Failed to queue job' });
       }
 
-      loggingService.info('Starting Step 7 comprehensive assessment generation', {
-        workflowId: id,
-        structure: userPreferences.assessmentStructure,
-        formativePerModule: userPreferences.formativePerModule,
-      });
-
-      const workflow = await workflowService.processStep7(id, userPreferences);
-
-      res.json({
+      return res.status(202).json({
         success: true,
-        data: {
-          step7: workflow.step7,
-          currentStep: workflow.currentStep,
-          status: workflow.status,
-          summary: {
-            formativeCount: workflow.step7?.formativeAssessments?.length || 0,
-            summativeCount: workflow.step7?.summativeAssessments?.length || 0,
-            sampleQuestionsTotal:
-              (workflow.step7?.sampleQuestions?.mcq?.length || 0) +
-              (workflow.step7?.sampleQuestions?.sjt?.length || 0) +
-              (workflow.step7?.sampleQuestions?.caseQuestions?.length || 0) +
-              (workflow.step7?.sampleQuestions?.essayPrompts?.length || 0) +
-              (workflow.step7?.sampleQuestions?.practicalTasks?.length || 0),
-          },
-        },
-        message:
-          'Step 7 complete. Comprehensive assessments generated. Ready for Step 8: Case Studies.',
-      });
-    } catch (error) {
-      loggingService.error('Error processing Step 7', { error, workflowId: req.params.id });
-      res.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to process Step 7',
-        details: error instanceof Error ? error.stack : undefined,
+        data: { jobId: job.id, status: 'queued', stepNumber: 7 },
+        message: 'Step 7 generation queued. Poll status endpoint for updates.',
       });
     }
+
+    // Fallback: synchronous processing
+    loggingService.info('Starting Step 7 comprehensive assessment generation', {
+      workflowId: id,
+      structure: userPreferences.assessmentStructure,
+      formativePerModule: userPreferences.formativePerModule,
+    });
+
+    const workflow = await workflowService.processStep7(id, userPreferences);
+
+    res.json({
+      success: true,
+      data: {
+        step7: workflow.step7,
+        currentStep: workflow.currentStep,
+        status: workflow.status,
+        summary: {
+          formativeCount: workflow.step7?.formativeAssessments?.length || 0,
+          summativeCount: workflow.step7?.summativeAssessments?.length || 0,
+          sampleQuestionsTotal:
+            (workflow.step7?.sampleQuestions?.mcq?.length || 0) +
+            (workflow.step7?.sampleQuestions?.sjt?.length || 0) +
+            (workflow.step7?.sampleQuestions?.caseQuestions?.length || 0) +
+            (workflow.step7?.sampleQuestions?.essayPrompts?.length || 0) +
+            (workflow.step7?.sampleQuestions?.practicalTasks?.length || 0),
+        },
+      },
+      message:
+        'Step 7 complete. Comprehensive assessments generated. Ready for Step 8: Case Studies.',
+    });
+  } catch (error) {
+    loggingService.error('Error processing Step 7', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process Step 7',
+      details: error instanceof Error ? error.stack : undefined,
+    });
   }
-);
+});
 
 /**
  * DELETE /api/v3/workflow/:id/step7
@@ -1722,35 +1863,53 @@ router.put(
  * POST /api/v3/workflow/:id/step8
  * Submit Step 8: Generate Case Studies
  */
-router.post(
-  '/:id/step8',
-  validateJWT,
-  loadUser,
-  extendTimeout(600000),
-  async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
+router.post('/:id/step8', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
 
-      const workflow = await workflowService.processStep8(id);
+    if (stepQueue) {
+      const existingStatus = await getStepJobStatus(8, id);
+      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+        return res.status(202).json({
+          success: true,
+          data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 8 },
+          message: 'Step 8 generation already in progress.',
+        });
+      }
 
-      res.json({
+      await removeStepJob(8, id);
+      const job = await addStepJob(8, id, userId);
+      if (!job) {
+        return res.status(500).json({ success: false, error: 'Failed to queue job' });
+      }
+
+      return res.status(202).json({
         success: true,
-        data: {
-          step8: workflow.step8,
-          currentStep: workflow.currentStep,
-          status: workflow.status,
-        },
-        message: 'Step 8 complete. Case studies generated. Ready for Step 9: Glossary.',
-      });
-    } catch (error) {
-      loggingService.error('Error processing Step 8', { error, workflowId: req.params.id });
-      res.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to process Step 8',
+        data: { jobId: job.id, status: 'queued', stepNumber: 8 },
+        message: 'Step 8 generation queued. Poll status endpoint for updates.',
       });
     }
+
+    const workflow = await workflowService.processStep8(id);
+
+    res.json({
+      success: true,
+      data: {
+        step8: workflow.step8,
+        currentStep: workflow.currentStep,
+        status: workflow.status,
+      },
+      message: 'Step 8 complete. Case studies generated. Ready for Step 9: Glossary.',
+    });
+  } catch (error) {
+    loggingService.error('Error processing Step 8', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process Step 8',
+    });
   }
-);
+});
 
 /**
  * PUT /api/v3/workflow/:id/step8/case/:caseId
@@ -1882,36 +2041,59 @@ router.post('/:id/step8/approve', validateJWT, loadUser, async (req: Request, re
  * POST /api/v3/workflow/:id/step9
  * Submit Step 9: Generate Glossary (Automatic - No SME Input)
  */
-router.post(
-  '/:id/step9',
-  validateJWT,
-  loadUser,
-  extendTimeout(600000),
-  async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
+router.post('/:id/step9', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
 
-      const workflow = await workflowService.processStep9(id);
+    // If queue is available, use background processing
+    if (stepQueue) {
+      // Check for already-running job
+      const existingStatus = await getStepJobStatus(9, id);
+      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+        return res.status(202).json({
+          success: true,
+          data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 9 },
+          message: 'Step 9 generation already in progress.',
+        });
+      }
 
-      res.json({
+      // Remove old completed/failed job to allow re-submission
+      await removeStepJob(9, id);
+
+      const job = await addStepJob(9, id, userId);
+      if (!job) {
+        return res.status(500).json({ success: false, error: 'Failed to queue job' });
+      }
+
+      return res.status(202).json({
         success: true,
-        data: {
-          step9: workflow.step9,
-          currentStep: workflow.currentStep,
-          status: workflow.status,
-          totalTerms: workflow.step9?.totalTerms,
-        },
-        message: 'Step 9 complete. Glossary auto-generated. Workflow complete!',
-      });
-    } catch (error) {
-      loggingService.error('Error processing Step 9', { error, workflowId: req.params.id });
-      res.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to process Step 9',
+        data: { jobId: job.id, status: 'queued', stepNumber: 9 },
+        message: 'Step 9 generation queued. Poll status endpoint for updates.',
       });
     }
+
+    // Fallback: synchronous processing (local dev without Redis)
+    const workflow = await workflowService.processStep9(id);
+
+    res.json({
+      success: true,
+      data: {
+        step9: workflow.step9,
+        currentStep: workflow.currentStep,
+        status: workflow.status,
+        totalTerms: workflow.step9?.totalTerms,
+      },
+      message: 'Step 9 complete. Glossary auto-generated. Workflow complete!',
+    });
+  } catch (error) {
+    loggingService.error('Error processing Step 9', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process Step 9',
+    });
   }
-);
+});
 
 /**
  * PUT /api/v3/workflow/:id/step9/term/:termId
@@ -2930,9 +3112,9 @@ router.post('/:id/step11/approve', validateJWT, loadUser, async (req: Request, r
       allCitationsValid: true,
     };
 
-    // Update workflow status
-    workflow.currentStep = 11;
-    workflow.status = 'step11_complete';
+    // Update workflow status — advance to Step 12
+    workflow.currentStep = 12;
+    workflow.status = 'step12_pending';
 
     // Update step progress
     const step11Progress = workflow.stepProgress.find((p) => p.step === 11);
@@ -2948,11 +3130,24 @@ router.post('/:id/step11/approve', validateJWT, loadUser, async (req: Request, r
       });
     }
 
+    // Initialize Step 12 progress
+    const step12Progress = workflow.stepProgress.find((p) => p.step === 12);
+    if (step12Progress) {
+      step12Progress.status = 'in_progress';
+      step12Progress.startedAt = new Date();
+    } else {
+      workflow.stepProgress.push({
+        step: 12,
+        status: 'in_progress',
+        startedAt: new Date(),
+      });
+    }
+
     workflow.markModified('step11');
     workflow.markModified('stepProgress');
     await workflow.save();
 
-    loggingService.info('Step 11 approved successfully', {
+    loggingService.info('Step 11 approved successfully, advancing to Step 12', {
       workflowId: id,
       totalModules: completedModules,
       totalPPTDecks: workflow.step11.summary?.totalPPTDecks || 0,
@@ -2966,13 +3161,390 @@ router.post('/:id/step11/approve', validateJWT, loadUser, async (req: Request, r
         currentStep: workflow.currentStep,
         summary: workflow.step11.summary,
       },
-      message: 'Step 11 approved! Curriculum is ready for final review.',
+      message: 'Step 11 approved! Now at Step 12: Assignment Packs.',
     });
   } catch (error) {
     loggingService.error('Error approving Step 11', { error, workflowId: req.params.id });
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to approve Step 11',
+    });
+  }
+});
+
+// ============================================================================
+// STEP 12: ASSIGNMENT PACKS ROUTES
+// ============================================================================
+
+/**
+ * POST /api/v3/workflow/:id/step12
+ * Submit Step 12: Generate Assignment Packs for all modules (3 delivery variants each)
+ */
+router.post('/:id/step12', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
+
+    loggingService.info('Step 12 Assignment Pack generation requested', { workflowId: id });
+
+    const existingWorkflow = await CurriculumWorkflow.findById(id);
+    if (!existingWorkflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+
+    if (!existingWorkflow.step11 || existingWorkflow.currentStep < 11) {
+      return res.status(400).json({
+        success: false,
+        error: 'Step 11 must be completed before generating assignment packs',
+      });
+    }
+
+    // Try background queue first
+    try {
+      const { queueAllRemainingStep12Modules } = await import('../queues/step12Queue');
+      const jobs = await queueAllRemainingStep12Modules(id, userId);
+
+      if (jobs.length > 0) {
+        loggingService.info('Step 12 jobs queued', { workflowId: id, jobCount: jobs.length });
+
+        return res.status(202).json({
+          success: true,
+          data: {
+            jobId: String(jobs[0].id),
+            status: 'queued',
+            message: 'Assignment pack generation started in background',
+          },
+        });
+      }
+    } catch (queueError) {
+      loggingService.warn('Step 12 queue unavailable, falling back to sync', {
+        error: queueError instanceof Error ? queueError.message : String(queueError),
+      });
+    }
+
+    // Sync fallback
+    const updatedWorkflow = await workflowService.processStep12NextModule(id);
+    res.json({
+      success: true,
+      data: updatedWorkflow.step12,
+    });
+  } catch (error) {
+    loggingService.error('Error processing Step 12', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process Step 12',
+    });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/step12/next-module
+ * Generate assignment packs for the next module
+ */
+router.post(
+  '/:id/step12/next-module',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const userId = (req as any).user?.id || (req as any).user?.userId;
+
+      // Try background queue first
+      try {
+        const { queueAllRemainingStep12Modules } = await import('../queues/step12Queue');
+        const jobs = await queueAllRemainingStep12Modules(id, userId);
+
+        if (jobs.length > 0) {
+          return res.status(202).json({
+            success: true,
+            data: {
+              jobId: String(jobs[0].id),
+              status: 'queued',
+              message: 'Next module assignment pack generation started',
+            },
+          });
+        }
+      } catch (queueError) {
+        loggingService.warn('Step 12 queue unavailable, falling back to sync');
+      }
+
+      // Sync fallback
+      const updatedWorkflow = await workflowService.processStep12NextModule(id);
+      res.json({
+        success: true,
+        data: updatedWorkflow.step12,
+      });
+    } catch (error) {
+      loggingService.error('Error processing Step 12 next module', {
+        error,
+        workflowId: req.params.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate next module',
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/v3/workflow/:id/step12/status
+ * Get Step 12 generation status
+ */
+router.get('/:id/step12/status', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const workflow = await CurriculumWorkflow.findById(id);
+
+    if (!workflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+
+    const totalModules = workflow.step4?.modules?.length || 0;
+    const completedModules = workflow.step12?.moduleAssignmentPacks?.length || 0;
+
+    // Check queue status
+    let queueStatus = null;
+    try {
+      const { getAllStep12Jobs } = await import('../queues/step12Queue');
+      const jobs = await getAllStep12Jobs(id);
+      if (jobs.length > 0) {
+        const latestJob = jobs[jobs.length - 1];
+        const state = await latestJob.getState();
+        queueStatus = {
+          jobId: String(latestJob.id),
+          state,
+          progress: latestJob.progress(),
+          moduleIndex: latestJob.data.moduleIndex,
+        };
+      }
+    } catch {
+      // Queue not available
+    }
+
+    res.json({
+      success: true,
+      data: {
+        totalModules,
+        completedModules,
+        allComplete: completedModules >= totalModules,
+        totalAssignmentPacks: completedModules * 3,
+        queueStatus,
+        step12Data: workflow.step12
+          ? {
+              summary: workflow.step12.summary,
+              validation: workflow.step12.validation,
+            }
+          : null,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get status',
+    });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/step12/approve
+ * Approve Step 12 and advance to Step 13
+ */
+router.post('/:id/step12/approve', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    loggingService.info('Approving Step 12', { workflowId: id });
+
+    const workflow = await CurriculumWorkflow.findById(id);
+    if (!workflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+
+    if (!workflow.step12 || !workflow.step12.moduleAssignmentPacks) {
+      return res.status(400).json({
+        success: false,
+        error: 'Step 12 must be generated before approval',
+      });
+    }
+
+    const totalModules = workflow.step4?.modules?.length || 0;
+    const completedModules = workflow.step12.moduleAssignmentPacks.length;
+
+    if (completedModules < totalModules) {
+      return res.status(400).json({
+        success: false,
+        error: `All module assignment packs must be generated before approval. ${completedModules}/${totalModules} modules complete.`,
+      });
+    }
+
+    workflow.step12.approvedAt = new Date();
+
+    // Advance to Step 13
+    workflow.currentStep = 13;
+    workflow.status = 'step13_pending';
+
+    const step12Progress = workflow.stepProgress.find((p) => p.step === 12);
+    if (step12Progress) {
+      step12Progress.completedAt = new Date();
+      step12Progress.status = 'approved';
+    }
+
+    // Initialize Step 13 progress
+    const step13Progress = workflow.stepProgress.find((p) => p.step === 13);
+    if (step13Progress) {
+      step13Progress.status = 'in_progress';
+      step13Progress.startedAt = new Date();
+    }
+
+    workflow.markModified('step12');
+    workflow.markModified('stepProgress');
+    await workflow.save();
+
+    loggingService.info('Step 12 approved, advancing to Step 13', {
+      workflowId: id,
+      totalModules: completedModules,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        approvedAt: workflow.step12.approvedAt,
+        status: workflow.status,
+        currentStep: workflow.currentStep,
+        summary: workflow.step12.summary,
+      },
+      message: 'Step 12 approved! Now at Step 13: Summative Exam.',
+    });
+  } catch (error) {
+    loggingService.error('Error approving Step 12', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to approve Step 12',
+    });
+  }
+});
+
+// ============================================================================
+// STEP 13: SUMMATIVE EXAM ROUTES
+// ============================================================================
+
+/**
+ * POST /api/v3/workflow/:id/step13
+ * Submit Step 13: Generate Summative Exam Package
+ */
+router.post('/:id/step13', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
+
+    loggingService.info('Step 13 Summative Exam generation requested', { workflowId: id });
+
+    const existingWorkflow = await CurriculumWorkflow.findById(id);
+    if (!existingWorkflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+
+    if (!existingWorkflow.step12 || existingWorkflow.currentStep < 12) {
+      return res.status(400).json({
+        success: false,
+        error: 'Step 12 must be completed before generating summative exam',
+      });
+    }
+
+    // Try background queue (generic stepQueue)
+    try {
+      const { addStepJob, stepQueue } = await import('../queues/stepQueue');
+      if (stepQueue) {
+        const job = await addStepJob(13, id, userId);
+        if (job) {
+          return res.status(202).json({
+            success: true,
+            data: {
+              jobId: String(job.id),
+              status: 'queued',
+              message: 'Summative exam generation started in background',
+            },
+          });
+        }
+      }
+    } catch (queueError) {
+      loggingService.warn('Step 13 queue unavailable, falling back to sync');
+    }
+
+    // Sync fallback
+    const updatedWorkflow = await workflowService.processStep13(id);
+    res.json({
+      success: true,
+      data: updatedWorkflow.step13,
+    });
+  } catch (error) {
+    loggingService.error('Error processing Step 13', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to process Step 13',
+    });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/step13/approve
+ * Approve Step 13 — workflow is now complete
+ */
+router.post('/:id/step13/approve', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    loggingService.info('Approving Step 13', { workflowId: id });
+
+    const workflow = await CurriculumWorkflow.findById(id);
+    if (!workflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+
+    if (!workflow.step13) {
+      return res.status(400).json({
+        success: false,
+        error: 'Step 13 must be generated before approval',
+      });
+    }
+
+    workflow.step13.approvedAt = new Date();
+
+    workflow.currentStep = 13;
+    workflow.status = 'step13_complete';
+
+    const step13Progress = workflow.stepProgress.find((p) => p.step === 13);
+    if (step13Progress) {
+      step13Progress.completedAt = new Date();
+      step13Progress.status = 'approved';
+    }
+
+    workflow.markModified('step13');
+    workflow.markModified('stepProgress');
+    await workflow.save();
+
+    loggingService.info('Step 13 approved', {
+      workflowId: id,
+      totalQuestions: workflow.step13.summary?.totalQuestions || 0,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        approvedAt: workflow.step13.approvedAt,
+        status: workflow.status,
+        currentStep: workflow.currentStep,
+        summary: workflow.step13.summary,
+      },
+      message: 'Step 13 approved! Curriculum is ready for final review and publication.',
+    });
+  } catch (error) {
+    loggingService.error('Error approving Step 13', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to approve Step 13',
     });
   }
 });
@@ -2991,17 +3563,16 @@ router.post('/:id/complete', validateJWT, loadUser, async (req: Request, res: Re
     }
 
     if (
-      workflow.currentStep < 11 ||
-      !workflow.step10 ||
-      !workflow.step10.moduleLessonPlans ||
-      workflow.step10.moduleLessonPlans.length === 0 ||
-      !workflow.step11 ||
-      !workflow.step11.modulePPTDecks ||
-      workflow.step11.modulePPTDecks.length === 0
+      workflow.currentStep < 13 ||
+      !workflow.step12 ||
+      !workflow.step12.moduleAssignmentPacks ||
+      workflow.step12.moduleAssignmentPacks.length === 0 ||
+      !workflow.step13
     ) {
       return res.status(400).json({
         success: false,
-        error: 'All 11 steps must be completed first, including lesson plans and PPT generation',
+        error:
+          'All 13 steps must be completed first, including assignment packs and summative exam',
       });
     }
 
@@ -4483,5 +5054,89 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
     });
   }
 });
+
+// ============================================================================
+// GENERIC STEP STATUS ENDPOINT (Steps 1-9)
+// ============================================================================
+
+/**
+ * GET /api/v3/workflow/:id/step/:stepNumber/status
+ * Poll background job status for any step 1-9
+ */
+router.get(
+  '/:id/step/:stepNumber/status',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, stepNumber } = req.params;
+      const step = parseInt(stepNumber, 10);
+
+      if (step < 1 || step > 9) {
+        return res.status(400).json({
+          success: false,
+          error: 'Step number must be between 1 and 9',
+        });
+      }
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+
+      const jobStatus = await getStepJobStatus(step, id);
+      const stepKey = `step${step}` as string;
+      const stepData = (workflow as any)[stepKey];
+      const hasData = !!stepData && Object.keys(stepData).length > 0;
+
+      // Determine overall status
+      let overallStatus: 'pending' | 'queued' | 'processing' | 'completed' | 'failed' = 'pending';
+      if (jobStatus) {
+        if (jobStatus.state === 'completed') overallStatus = 'completed';
+        else if (jobStatus.state === 'active') overallStatus = 'processing';
+        else if (jobStatus.state === 'waiting' || jobStatus.state === 'delayed')
+          overallStatus = 'queued';
+        else if (jobStatus.state === 'failed') overallStatus = 'failed';
+      } else if (hasData) {
+        overallStatus = 'completed';
+      }
+
+      res.json({
+        success: true,
+        data: {
+          workflowId: id,
+          stepNumber: step,
+          status: overallStatus,
+          hasData,
+          job: jobStatus
+            ? {
+                jobId: jobStatus.jobId,
+                state: jobStatus.state,
+                progress: jobStatus.progress,
+                attemptsMade: jobStatus.attemptsMade,
+                failedReason: jobStatus.failedReason,
+                processedOn: jobStatus.processedOn,
+                finishedOn: jobStatus.finishedOn,
+              }
+            : null,
+          stepData:
+            overallStatus === 'completed'
+              ? {
+                  currentStep: workflow.currentStep,
+                  workflowStatus: workflow.status,
+                }
+              : null,
+        },
+      });
+    } catch (error) {
+      loggingService.error('Error getting step status', {
+        error: error instanceof Error ? error.message : String(error),
+        workflowId: req.params.id,
+        stepNumber: req.params.stepNumber,
+      });
+      res.status(500).json({ success: false, error: 'Failed to get step status' });
+    }
+  }
+);
 
 export default router;

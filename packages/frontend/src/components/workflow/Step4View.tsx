@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSubmitStep4, useApproveStep4 } from '@/hooks/useWorkflow';
 import { api } from '@/lib/api';
+import { useStepStatus } from '@/hooks/useStepStatus';
+import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import {
   CurriculumWorkflow,
   Module,
@@ -618,6 +620,27 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
   const approveStep4 = useApproveStep4();
   const [error, setError] = useState<string | null>(null);
 
+  const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+
+  // Background job polling for Step 4
+  const {
+    status: stepStatus,
+    startPolling,
+    isPolling,
+    isGenerationActive: isQueueActive,
+  } = useStepStatus(workflow._id, 4, {
+    pollInterval: 10000,
+    autoStart: true,
+    onComplete: () => {
+      completeGeneration(workflow._id, 4);
+      onRefresh();
+    },
+    onFailed: (err) => {
+      failGeneration(workflow._id, 4, err);
+      setError(err);
+    },
+  });
+
   // Edit state for modules and MLOs
   const [editingModule, setEditingModule] = useState<Module | null>(null);
   const [editingMlo, setEditingMlo] = useState<MLO | null>(null);
@@ -625,13 +648,30 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
   const [editingMloModuleCode, setEditingMloModuleCode] = useState<string>('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
+  const isCurrentlyGenerating =
+    isGenerating(workflow._id, 4) || submitStep4.isPending || isPolling || isQueueActive;
+
+  // Check for completion when data appears
+  useEffect(() => {
+    if (workflow.step4 && workflow.step4.modules?.length > 0) {
+      completeGeneration(workflow._id, 4);
+    }
+  }, [workflow.step4, workflow._id, completeGeneration]);
+
   const handleGenerate = async () => {
     setError(null);
     try {
-      await submitStep4.mutateAsync(workflow._id);
-      onRefresh();
+      startGeneration(workflow._id, 4);
+      const response = await submitStep4.mutateAsync(workflow._id);
+      if ((response as any)?.data?.jobId) {
+        startPolling();
+      } else {
+        completeGeneration(workflow._id, 4);
+        onRefresh();
+      }
     } catch (err: any) {
       console.error('Failed to generate course framework:', err);
+      failGeneration(workflow._id, 4, err.message || 'Failed to generate course framework');
       setError(err.message || 'Failed to generate course framework');
     }
   };
@@ -744,7 +784,28 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      {!hasStep4Data ? (
+      {isCurrentlyGenerating && !hasStep4Data && (
+        <div className="mb-6 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 border-[3px] border-green-500 border-t-transparent rounded-full animate-spin" />
+            <div>
+              <h3 className="text-lg font-semibold text-teal-800">
+                Generating Course Framework...
+              </h3>
+              <p className="text-sm text-teal-600">
+                This may take 90 seconds. You can navigate away and come back.
+              </p>
+            </div>
+          </div>
+          <GenerationProgressBar
+            workflowId={workflow._id}
+            step={4}
+            queueStatus={stepStatus?.status}
+          />
+        </div>
+      )}
+
+      {!hasStep4Data && !isCurrentlyGenerating ? (
         // Generation Form
         <div className="space-y-6">
           {/* About This Step */}

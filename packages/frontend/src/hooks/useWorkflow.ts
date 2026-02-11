@@ -599,6 +599,109 @@ export function useStep11Status(id: string) {
 }
 
 // =============================================================================
+// STEP 12: ASSIGNMENT PACKS (module-by-module generation)
+// =============================================================================
+
+export function useSubmitStep12() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response: WorkflowResponse = await fetchAPI(`${WORKFLOW_BASE}/${id}/step12`, {
+        method: 'POST',
+      });
+      return response;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    },
+  });
+}
+
+export function useSubmitStep12NextModule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response: WorkflowResponse = await fetchAPI(
+        `${WORKFLOW_BASE}/${id}/step12/next-module`,
+        {
+          method: 'POST',
+        }
+      );
+      return response;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    },
+  });
+}
+
+export function useApproveStep12() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetchAPI(`${WORKFLOW_BASE}/${id}/step12/approve`, {
+        method: 'POST',
+      });
+      return response;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    },
+  });
+}
+
+export function useStep12Status(id: string) {
+  return useQuery({
+    queryKey: ['workflow', id, 'step12-status'],
+    queryFn: async () => {
+      const response = await fetchAPI(`${WORKFLOW_BASE}/${id}/step12/status`);
+      return response.data;
+    },
+    enabled: !!id,
+    refetchInterval: 10000,
+  });
+}
+
+// =============================================================================
+// STEP 13: SUMMATIVE EXAM
+// =============================================================================
+
+export function useSubmitStep13() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response: WorkflowResponse = await fetchAPI(`${WORKFLOW_BASE}/${id}/step13`, {
+        method: 'POST',
+      });
+      return response;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    },
+  });
+}
+
+export function useApproveStep13() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetchAPI(`${WORKFLOW_BASE}/${id}/step13/approve`, {
+        method: 'POST',
+      });
+      return response;
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    },
+  });
+}
+
+// =============================================================================
 // WORKFLOW COMPLETION & EXPORT
 // =============================================================================
 
@@ -650,7 +753,7 @@ export function useNextWorkflowAction(workflow?: CurriculumWorkflow) {
   // Check if step is approved
   const stepProgress = workflow.stepProgress.find((p) => p.step === step);
   if (stepProgress?.status === 'approved') {
-    if (step < 11) {
+    if (step < 13) {
       return { type: 'generate', step: step + 1 };
     }
     return { type: 'complete' };
@@ -675,10 +778,12 @@ export function useRemainingTime(currentStep: number): string {
     9: 5,
     10: 15,
     11: 15,
+    12: 20,
+    13: 10,
   };
 
   let remaining = 0;
-  for (let i = currentStep; i <= 11; i++) {
+  for (let i = currentStep; i <= 13; i++) {
     remaining += stepTimes[i] || 0;
   }
 

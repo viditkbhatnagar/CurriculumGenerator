@@ -3,9 +3,9 @@ import axios from 'axios';
 // Use NEXT_PUBLIC_API_URL from environment, fallback to localhost for development
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-// Default 30 minute timeout for long-running LLM requests (curriculum generation)
-// Step 7 assessment generation can take 30-40 minutes for large curricula
-const REQUEST_TIMEOUT = 1800000; // 30 minutes
+// 60 second timeout - all long-running operations now use background queues
+// and return 202 immediately, so we only need enough time for the initial request
+const REQUEST_TIMEOUT = 60000; // 60 seconds
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -60,7 +60,7 @@ export async function fetchAPI(endpoint: string, options?: RequestInit) {
   // Use relative URL if no base URL (production with proxy)
   const url = API_BASE_URL ? `${API_BASE_URL}${endpoint}` : endpoint;
 
-  // Create AbortController with 30-minute timeout for long-running LLM requests
+  // Create AbortController with timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 

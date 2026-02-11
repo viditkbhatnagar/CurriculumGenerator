@@ -12,6 +12,7 @@ import {
   SourceType,
 } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import { useStepStatus } from '@/hooks/useStepStatus';
 import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 
 interface Props {
@@ -97,12 +98,16 @@ function SourceEditModal({
   const [citation, setCitation] = useState(source.citation || '');
   const [doi, setDoi] = useState(source.doi || '');
   const [url, setUrl] = useState(source.url || '');
-  const [category, setCategory] = useState<SourceCategory>(source.category || 'peer_reviewed_journal');
-  const [type, setType] = useState<SourceType>(source.type || 'academic');
-  const [complexityLevel, setComplexityLevel] = useState<'introductory' | 'intermediate' | 'advanced'>(
-    (source.complexityLevel as 'introductory' | 'intermediate' | 'advanced') || 'intermediate'
+  const [category, setCategory] = useState<SourceCategory>(
+    source.category || 'peer_reviewed_journal'
   );
-  const [accessStatus, setAccessStatus] = useState<SourceAccessStatus>(source.accessStatus || 'verified_accessible');
+  const [type, setType] = useState<SourceType>(source.type || 'academic');
+  const [complexityLevel, setComplexityLevel] = useState<
+    'introductory' | 'intermediate' | 'advanced'
+  >((source.complexityLevel as 'introductory' | 'intermediate' | 'advanced') || 'intermediate');
+  const [accessStatus, setAccessStatus] = useState<SourceAccessStatus>(
+    source.accessStatus || 'verified_accessible'
+  );
   const [authorsInput, setAuthorsInput] = useState('');
 
   const handleSave = () => {
@@ -140,7 +145,7 @@ function SourceEditModal({
             Edit <span className="text-amber-400">Source</span>
           </h3>
         </div>
-        
+
         <div className="p-6 space-y-5">
           {/* Title */}
           <div>
@@ -239,10 +244,14 @@ function SourceEditModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-teal-700 mb-2">Complexity Level</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">
+                Complexity Level
+              </label>
               <select
                 value={complexityLevel}
-                onChange={(e) => setComplexityLevel(e.target.value as 'introductory' | 'intermediate' | 'advanced')}
+                onChange={(e) =>
+                  setComplexityLevel(e.target.value as 'introductory' | 'intermediate' | 'advanced')
+                }
                 className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-amber-500"
               >
                 <option value="introductory">Introductory</option>
@@ -639,10 +648,7 @@ function SourceCard({
               <p className="text-xs text-teal-500 mb-1">Supports MLOs:</p>
               <div className="flex flex-wrap gap-1">
                 {source.linkedMLOs.map((mlo) => (
-                  <span
-                    key={mlo}
-                    className="text-xs px-2 py-0.5 bg-teal-100 rounded text-teal-700"
-                  >
+                  <span key={mlo} className="text-xs px-2 py-0.5 bg-teal-100 rounded text-teal-700">
                     {mlo}
                   </span>
                 ))}
@@ -722,7 +728,7 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
   const [sourceStatuses, setSourceStatuses] = useState<Record<string, SourceStatus>>({});
   const [replacementSources, setReplacementSources] = useState<Record<string, Source[]>>({});
   const [isRequestingReplacement, setIsRequestingReplacement] = useState(false);
-  
+
   // Edit state for sources
   const [editingSource, setEditingSource] = useState<Source | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -755,7 +761,7 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
       setIsRequestingReplacement(false);
     }
   };
-  
+
   // Handle editing a source
   const handleEditSource = (source: Source) => {
     setEditingSource(source);
@@ -765,30 +771,33 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
   const handleSaveSource = async (updatedSource: Source) => {
     setIsSavingEdit(true);
     setError(null);
-    
+
     console.log('Saving source:', updatedSource);
     console.log('Workflow ID:', workflow._id);
     console.log('Source ID:', updatedSource.id);
-    
+
     try {
-      const response = await api.put(`/api/v3/workflow/${workflow._id}/step5/source/${updatedSource.id}`, {
-        title: updatedSource.title,
-        authors: updatedSource.authors,
-        year: updatedSource.year,
-        citation: updatedSource.citation,
-        doi: updatedSource.doi,
-        url: updatedSource.url,
-        category: updatedSource.category,
-        type: updatedSource.type,
-        complexityLevel: updatedSource.complexityLevel,
-        accessStatus: updatedSource.accessStatus,
-      });
-      
+      const response = await api.put(
+        `/api/v3/workflow/${workflow._id}/step5/source/${updatedSource.id}`,
+        {
+          title: updatedSource.title,
+          authors: updatedSource.authors,
+          year: updatedSource.year,
+          citation: updatedSource.citation,
+          doi: updatedSource.doi,
+          url: updatedSource.url,
+          category: updatedSource.category,
+          type: updatedSource.type,
+          complexityLevel: updatedSource.complexityLevel,
+          accessStatus: updatedSource.accessStatus,
+        }
+      );
+
       console.log('Save response:', response.data);
-      
+
       // Close modal first
       setEditingSource(null);
-      
+
       // Force refresh the workflow data
       console.log('Refreshing workflow data...');
       await onRefresh();
@@ -806,14 +815,34 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
   const handleCancelSourceEdit = () => {
     setEditingSource(null);
   };
-  
+
   const submitStep5 = useSubmitStep5();
   const approveStep5 = useApproveStep5();
   const [error, setError] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
 
-  const isCurrentlyGenerating = isGenerating(workflow._id, 5) || submitStep5.isPending;
+  // Background job polling for Step 5
+  const {
+    status: stepStatus,
+    startPolling,
+    isPolling,
+    isGenerationActive: isQueueActive,
+  } = useStepStatus(workflow._id, 5, {
+    pollInterval: 10000,
+    autoStart: true,
+    onComplete: () => {
+      completeGeneration(workflow._id, 5);
+      onRefresh();
+    },
+    onFailed: (err) => {
+      failGeneration(workflow._id, 5, err);
+      setError(err);
+    },
+  });
+
+  const isCurrentlyGenerating =
+    isGenerating(workflow._id, 5) || submitStep5.isPending || isPolling || isQueueActive;
 
   // Check for completion when data appears
   useEffect(() => {
@@ -824,11 +853,15 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
 
   const handleGenerate = async () => {
     setError(null);
-    startGeneration(workflow._id, 5, 120); // 2 minutes estimated
+    startGeneration(workflow._id, 5, 120);
     try {
-      await submitStep5.mutateAsync(workflow._id);
-      completeGeneration(workflow._id, 5);
-      onRefresh();
+      const response = await submitStep5.mutateAsync(workflow._id);
+      if ((response as any)?.data?.jobId) {
+        startPolling();
+      } else {
+        completeGeneration(workflow._id, 5);
+        onRefresh();
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate sources';
       console.error('Failed to generate sources:', err);
@@ -876,7 +909,11 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
               </p>
             </div>
           </div>
-          <GenerationProgressBar workflowId={workflow._id} step={5} />
+          <GenerationProgressBar
+            workflowId={workflow._id}
+            step={5}
+            queueStatus={stepStatus?.status}
+          />
         </div>
       )}
 
@@ -1122,11 +1159,7 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
             </h3>
             <div className="space-y-3">
               {displayedSources.map((source) => (
-                <SourceCard 
-                  key={source.id} 
-                  source={source} 
-                  onEdit={handleEditSource}
-                />
+                <SourceCard key={source.id} source={source} onEdit={handleEditSource} />
               ))}
             </div>
           </div>
@@ -1180,7 +1213,7 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
           )}
         </div>
       )}
-      
+
       {/* Source Edit Modal */}
       {editingSource && (
         <SourceEditModal

@@ -10,6 +10,7 @@ import {
   ReadingComplexity,
 } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import { useStepStatus } from '@/hooks/useStepStatus';
 import { EditTarget } from './EditWithAIButton';
 
 interface Props {
@@ -79,16 +80,24 @@ function ReadingEditModal({
   const [url, setUrl] = useState(reading.url || '');
   const [category, setCategory] = useState<'core' | 'supplementary'>(reading.category || 'core');
   const [contentType, setContentType] = useState(reading.contentType || 'textbook_chapter');
-  const [readingType, setReadingType] = useState<'academic' | 'applied' | 'industry'>(reading.readingType || 'academic');
-  const [complexity, setComplexity] = useState<ReadingComplexity>(reading.complexity || 'intermediate');
-  const [estimatedReadingMinutes, setEstimatedReadingMinutes] = useState(reading.estimatedReadingMinutes || 0);
+  const [readingType, setReadingType] = useState<'academic' | 'applied' | 'industry'>(
+    reading.readingType || 'academic'
+  );
+  const [complexity, setComplexity] = useState<ReadingComplexity>(
+    reading.complexity || 'intermediate'
+  );
+  const [estimatedReadingMinutes, setEstimatedReadingMinutes] = useState(
+    reading.estimatedReadingMinutes || 0
+  );
   const [specificChapters, setSpecificChapters] = useState(reading.specificChapters || '');
   const [pageRange, setPageRange] = useState(reading.pageRange || '');
   const [sectionNames, setSectionNames] = useState<string[]>(reading.sectionNames || []);
   const [notes, setNotes] = useState(reading.notes || '');
   const [suggestedWeek, setSuggestedWeek] = useState(reading.suggestedWeek || '');
   const [linkedMLOs, setLinkedMLOs] = useState<string[]>(reading.linkedMLOs || []);
-  const [assessmentRelevance, setAssessmentRelevance] = useState<'high' | 'medium' | 'low'>(reading.assessmentRelevance || 'medium');
+  const [assessmentRelevance, setAssessmentRelevance] = useState<'high' | 'medium' | 'low'>(
+    reading.assessmentRelevance || 'medium'
+  );
   const [authorsInput, setAuthorsInput] = useState('');
   const [sectionInput, setSectionInput] = useState('');
   const [mloInput, setMloInput] = useState('');
@@ -158,7 +167,7 @@ function ReadingEditModal({
             Edit <span className="text-blue-400">Reading Item</span>
           </h3>
         </div>
-        
+
         <div className="p-6 space-y-5">
           {/* Title */}
           <div>
@@ -257,7 +266,9 @@ function ReadingEditModal({
               <label className="block text-sm font-medium text-teal-700 mb-2">Reading Type</label>
               <select
                 value={readingType}
-                onChange={(e) => setReadingType(e.target.value as 'academic' | 'applied' | 'industry')}
+                onChange={(e) =>
+                  setReadingType(e.target.value as 'academic' | 'applied' | 'industry')
+                }
                 className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-blue-500"
               >
                 <option value="academic">Academic</option>
@@ -282,7 +293,9 @@ function ReadingEditModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-teal-700 mb-2">Reading Time (minutes)</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">
+                Reading Time (minutes)
+              </label>
               <input
                 type="number"
                 value={estimatedReadingMinutes}
@@ -295,7 +308,9 @@ function ReadingEditModal({
           {/* Specific Assignment Details */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-teal-700 mb-2">Specific Chapters</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">
+                Specific Chapters
+              </label>
               <input
                 type="text"
                 value={specificChapters}
@@ -370,10 +385,14 @@ function ReadingEditModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-teal-700 mb-2">Assessment Relevance</label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">
+                Assessment Relevance
+              </label>
               <select
                 value={assessmentRelevance}
-                onChange={(e) => setAssessmentRelevance(e.target.value as 'high' | 'medium' | 'low')}
+                onChange={(e) =>
+                  setAssessmentRelevance(e.target.value as 'high' | 'medium' | 'low')
+                }
                 className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-blue-500"
               >
                 <option value="high">High</option>
@@ -502,7 +521,13 @@ function ReadingEditModal({
 }
 
 // Reading Item Card
-function ReadingCard({ reading, onEdit }: { reading: ReadingItem; onEdit?: (reading: ReadingItem) => void }) {
+function ReadingCard({
+  reading,
+  onEdit,
+}: {
+  reading: ReadingItem;
+  onEdit?: (reading: ReadingItem) => void;
+}) {
   const [_expanded, _setExpanded] = useState(false);
   const contentConfig =
     CONTENT_TYPE_CONFIG[(reading as any).contentType] || CONTENT_TYPE_CONFIG.other;
@@ -581,9 +606,7 @@ function ReadingCard({ reading, onEdit }: { reading: ReadingItem; onEdit?: (read
         )}
 
         {/* Citation */}
-        <p className="text-xs text-teal-500 font-mono bg-teal-50 p-2 rounded">
-          {reading.citation}
-        </p>
+        <p className="text-xs text-teal-500 font-mono bg-teal-50 p-2 rounded">{reading.citation}</p>
 
         {/* Clickable Links */}
         {(reading.doi || reading.url) && (
@@ -791,12 +814,32 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
-  
+
+  // Background job polling for Step 6
+  const {
+    status: stepStatus,
+    startPolling,
+    isPolling,
+    isGenerationActive: isQueueActive,
+  } = useStepStatus(workflow._id, 6, {
+    pollInterval: 10000,
+    autoStart: true,
+    onComplete: () => {
+      completeGeneration(workflow._id, 6);
+      onRefresh();
+    },
+    onFailed: (err) => {
+      failGeneration(workflow._id, 6, err);
+      setError(err);
+    },
+  });
+
   // Edit state for reading items
   const [editingReading, setEditingReading] = useState<ReadingItem | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  const isCurrentlyGenerating = isGenerating(workflow._id, 6) || submitStep6.isPending;
+  const isCurrentlyGenerating =
+    isGenerating(workflow._id, 6) || submitStep6.isPending || isPolling || isQueueActive;
 
   // Check for completion when data appears
   useEffect(() => {
@@ -810,11 +853,15 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
 
   const handleGenerate = async () => {
     setError(null);
-    startGeneration(workflow._id, 6, 60); // 60 seconds estimated
+    startGeneration(workflow._id, 6, 60);
     try {
-      await submitStep6.mutateAsync(workflow._id);
-      completeGeneration(workflow._id, 6);
-      onRefresh();
+      const response = await submitStep6.mutateAsync(workflow._id);
+      if ((response as any)?.data?.jobId) {
+        startPolling();
+      } else {
+        completeGeneration(workflow._id, 6);
+        onRefresh();
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate reading lists';
       console.error('Failed to generate reading lists:', err);
@@ -834,7 +881,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
       setError(errorMessage);
     }
   };
-  
+
   // Handle editing a reading item
   const handleEditReading = (reading: ReadingItem) => {
     setEditingReading(reading);
@@ -844,38 +891,41 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
   const handleSaveReading = async (updatedReading: ReadingItem) => {
     setIsSavingEdit(true);
     setError(null);
-    
+
     console.log('Saving reading item:', updatedReading);
     console.log('Workflow ID:', workflow._id);
     console.log('Reading ID:', updatedReading.id);
-    
+
     try {
-      const response = await api.put(`/api/v3/workflow/${workflow._id}/step6/reading/${updatedReading.id}`, {
-        title: updatedReading.title,
-        authors: updatedReading.authors,
-        year: updatedReading.year,
-        citation: updatedReading.citation,
-        doi: updatedReading.doi,
-        url: updatedReading.url,
-        category: updatedReading.category,
-        contentType: updatedReading.contentType,
-        readingType: updatedReading.readingType,
-        complexity: updatedReading.complexity,
-        estimatedReadingMinutes: updatedReading.estimatedReadingMinutes,
-        specificChapters: updatedReading.specificChapters,
-        pageRange: updatedReading.pageRange,
-        sectionNames: updatedReading.sectionNames,
-        notes: updatedReading.notes,
-        suggestedWeek: updatedReading.suggestedWeek,
-        linkedMLOs: updatedReading.linkedMLOs,
-        assessmentRelevance: updatedReading.assessmentRelevance,
-      });
-      
+      const response = await api.put(
+        `/api/v3/workflow/${workflow._id}/step6/reading/${updatedReading.id}`,
+        {
+          title: updatedReading.title,
+          authors: updatedReading.authors,
+          year: updatedReading.year,
+          citation: updatedReading.citation,
+          doi: updatedReading.doi,
+          url: updatedReading.url,
+          category: updatedReading.category,
+          contentType: updatedReading.contentType,
+          readingType: updatedReading.readingType,
+          complexity: updatedReading.complexity,
+          estimatedReadingMinutes: updatedReading.estimatedReadingMinutes,
+          specificChapters: updatedReading.specificChapters,
+          pageRange: updatedReading.pageRange,
+          sectionNames: updatedReading.sectionNames,
+          notes: updatedReading.notes,
+          suggestedWeek: updatedReading.suggestedWeek,
+          linkedMLOs: updatedReading.linkedMLOs,
+          assessmentRelevance: updatedReading.assessmentRelevance,
+        }
+      );
+
       console.log('Save response:', response.data);
-      
+
       // Close modal first
       setEditingReading(null);
-      
+
       // Force refresh the workflow data
       console.log('Refreshing workflow data...');
       await onRefresh();
@@ -923,7 +973,11 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
               </p>
             </div>
           </div>
-          <GenerationProgressBar workflowId={workflow._id} step={6} />
+          <GenerationProgressBar
+            workflowId={workflow._id}
+            step={6}
+            queueStatus={stepStatus?.status}
+          />
         </div>
       )}
 
@@ -1178,11 +1232,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
               </h3>
               <div className="space-y-3">
                 {coreReadings.map((reading) => (
-                  <ReadingCard 
-                    key={reading.id} 
-                    reading={reading} 
-                    onEdit={handleEditReading}
-                  />
+                  <ReadingCard key={reading.id} reading={reading} onEdit={handleEditReading} />
                 ))}
               </div>
             </div>
@@ -1197,11 +1247,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
               </h3>
               <div className="space-y-3">
                 {supplementaryReadings.map((reading) => (
-                  <ReadingCard 
-                    key={reading.id} 
-                    reading={reading} 
-                    onEdit={handleEditReading}
-                  />
+                  <ReadingCard key={reading.id} reading={reading} onEdit={handleEditReading} />
                 ))}
               </div>
             </div>
@@ -1256,7 +1302,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
           )}
         </div>
       )}
-      
+
       {/* Reading Edit Modal */}
       {editingReading && (
         <ReadingEditModal

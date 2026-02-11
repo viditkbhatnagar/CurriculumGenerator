@@ -138,7 +138,7 @@ export class PPTGenerationService {
       const prompt = this.buildOpenAIPrompt(moduleData, curriculumData);
 
       const systemPrompt =
-        'You are an expert educational content designer creating PowerPoint presentations. Return ONLY valid JSON, no markdown formatting.';
+        'You are an academic self-study teaching-materials production engine creating delivery-ready PowerPoint content for asynchronous learning. Generate 8-15 slides per lesson, designed to be understood without instructor narration. UK academic conventions, professional tone, no emojis. Return ONLY valid JSON, no markdown formatting.';
 
       loggingService.info('Calling OpenAI with enhanced settings', {
         promptLength: prompt.length,
@@ -228,7 +228,12 @@ export class PPTGenerationService {
       ? moduleData.topics.map((t: any) => `${t.title} (${t.hours}h)`)
       : [];
 
-    return `You are an expert educational content designer with deep knowledge of curriculum development and pedagogical best practices. Create a comprehensive, professional PowerPoint presentation structure for this curriculum module using your intelligence and expertise.
+    return `You are an academic self-study teaching-materials production engine. Your task is to generate DELIVERY-READY POWERPOINT CONTENT at the LESSON LEVEL for the module provided.
+
+DO NOT invent new lessons. DO NOT merge or split lessons. DO NOT introduce new learning outcomes or content.
+Your role is to CONVERT EACH EXISTING LESSON into a SELF-CONTAINED PPT suitable for ASYNCHRONOUS LEARNING.
+
+The learner must be able to understand each lesson WITHOUT instructor narration.
 
 **FULL CURRICULUM CONTEXT:**
 Program: ${programTitle}
@@ -279,50 +284,45 @@ ${
     : 'Not specified'
 }
 
-**YOUR TASK:**
-Create an INTELLIGENT, COMPREHENSIVE PowerPoint presentation with 10-18 slides (use your judgment based on module complexity and content richness).
+**PPT SCOPE & LENGTH:**
+- One PPT per lesson
+- 8-15 slides per lesson
+- Designed to be completed in the stated lesson duration
+- Learner must be able to understand the lesson WITHOUT instructor narration
 
-**REQUIRED CONTENT STRUCTURE:**
-1. **Title Slide** - Module code, title, program context
-2. **Module Overview** - Hours, credits, prerequisites, phase, learning path
-3. **Program Context** - How this module fits into the overall program and PLOs
-4. **Learning Outcomes (MLOs)** - All outcomes with Bloom levels, grouped logically
-5. **Key Topics (3-6 slides)** - Deep dive into each major topic area with:
-   - Core concepts and theories
-   - Practical applications
-   - Real-world examples relevant to target learners
-6. **Learning Activities** - Contact and independent activities with clear learning value
-7. **Assessment Approach** - How students will be evaluated (if applicable)
-8. **Study Tips & Resources** - Practical guidance for students
-9. **Summary & Next Steps** - Key takeaways and pathway forward
+**REQUIRED SLIDE STRUCTURE (per lesson):**
+1. **Lesson Cover** - Program title, module title, lesson title, lesson duration
+2. **Lesson Orientation** - What this lesson covers, lesson learning objectives (exact wording), how this lesson is used (watch, practice, check)
+3. **Core Content Slides** (2-6 slides) - Key concepts, definitions or frameworks, visual descriptions (e.g. "Diagram showing..."), plain-language explanations
+4. **Worked Examples** - Annotated examples, before/after comparisons, step-by-step walkthroughs
+5. **Practice & Reflection** - Short practice prompts, scenario questions, reflection or self-check questions
+6. **Assessment Connection** - Which assignment(s) this lesson supports, what learners should pay attention to, common mistakes to avoid
+7. **Lesson Close** - Key takeaways, what comes next
 
-**AI INTELLIGENCE REQUIREMENTS:**
-- **Analyze the module content** and identify the most important concepts
-- **Create logical groupings** of related topics (don't just list them)
-- **Add pedagogical value**: Explain WHY concepts matter, not just WHAT they are
-- **Include practical examples** relevant to the target learner profile
-- **Show progression**: Early slides should build foundation, later slides show application
-- **Use appropriate Bloom taxonomy** language matching the learning outcomes
-- **Consider delivery mode** (online/blended/in-person) in your slide design
-- **Make connections** between topics, activities, and outcomes
+**ACCESSIBILITY REQUIREMENTS:**
+- Plain language throughout
+- Slide text readable without audio
+- Avoid dense paragraphs
+- Logical slide progression
 
 **SLIDE DESIGN GUIDELINES:**
-- Use clear, concise bullet points (3-7 per slide, never more than 7)
+- Slide titles in sentence case
+- Maximum 6 bullets per slide
 - Each slide should have ONE main idea or concept
-- Include detailed speaker notes with teaching tips and additional context
+- UK academic tone, professional language
+- No emojis, no marketing language
 - Vary slide types strategically:
   - "bullets" for lists and key points
   - "table" for comparisons or structured information
-  - "two_column" for contrasting concepts or contact vs. independent work
+  - "two_column" for contrasting concepts
   - "content" for paragraphs or detailed explanations
-- Professional academic tone appropriate for ${academicLevel} level
-- Titles should be action-oriented and descriptive (not generic)
 
-**SPEAKER NOTES REQUIREMENTS:**
-- Add comprehensive speaker notes for teaching staff
-- Include examples, discussion prompts, and teaching tips
-- Suggest time allocations for key activities
-- Highlight common student misconceptions or challenges
+**STUDY NOTES (replaces speaker notes):**
+- Add comprehensive study notes for self-study learners
+- Include deeper explanations, worked examples, and practical tips
+- Suggest time allocations for key learning activities
+- Highlight common misconceptions and how to avoid them
+- Reference relevant readings and resources
 
 **OUTPUT FORMAT (JSON):**
 {
@@ -333,7 +333,7 @@ Create an INTELLIGENT, COMPREHENSIVE PowerPoint presentation with 10-18 slides (
       "type": "title|content|table|two_column|bullets",
       "title": "slide title",
       "content": "string or array of bullet points",
-      "notes": "speaker notes (optional)"
+      "notes": "study notes for self-study learners (required for every slide)"
     }
   ]
 }
@@ -886,7 +886,7 @@ Return ONLY valid JSON, no markdown formatting.`;
       deliveryMode: context.deliveryMode,
       generatedAt: new Date(),
       validation: {
-        slideCountValid: slides.length >= 15 && slides.length <= 35,
+        slideCountValid: slides.length >= 8 && slides.length <= 15,
         mlosCovered: this.validateMLOCoverage(lesson, slides),
         citationsValid: this.validateCitations(lesson, context),
         glossaryTermsDefined: this.validateGlossaryTermsInGeneration(lesson, context),

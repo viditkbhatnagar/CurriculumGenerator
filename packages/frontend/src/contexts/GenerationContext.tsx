@@ -48,6 +48,8 @@ export const STEP_ESTIMATED_DURATIONS: Record<number, number> = {
   7: 120, // Assessments - complex MCQ generation
   8: 180, // Case Studies - very complex
   9: 45, // Glossary - moderate
+  12: 240, // Assignment Packs - 3 variants per module
+  13: 120, // Summative Exam - single generation
 };
 
 const GenerationContext = createContext<GenerationContextType | null>(null);
@@ -219,15 +221,37 @@ export function useGeneration() {
   return context;
 }
 
+// Queue status label mapping
+function getQueueStatusLabel(queueStatus?: string | null): { label: string; color: string } | null {
+  if (!queueStatus) return null;
+  switch (queueStatus) {
+    case 'queued':
+    case 'waiting':
+      return { label: 'Queued', color: 'text-amber-500' };
+    case 'processing':
+    case 'active':
+      return { label: 'Processing', color: 'text-cyan-500' };
+    case 'completed':
+      return { label: 'Completed', color: 'text-emerald-500' };
+    case 'failed':
+      return { label: 'Failed', color: 'text-red-500' };
+    default:
+      return null;
+  }
+}
+
 // Progress Bar Component
 export function GenerationProgressBar({
   workflowId,
   step,
   showTimeEstimate = true,
+  queueStatus,
 }: {
   workflowId: string;
   step: number;
   showTimeEstimate?: boolean;
+  /** Real-time queue status from useStepStatus hook (e.g. 'queued', 'processing', 'completed') */
+  queueStatus?: string | null;
 }) {
   const { isGenerating, getElapsedTime, getProgress, getGenerationState } = useGeneration();
 
@@ -239,6 +263,7 @@ export function GenerationProgressBar({
   const progress = getProgress(workflowId, step);
   const state = getGenerationState(workflowId, step);
   const estimated = state?.estimatedDuration || 60;
+  const statusInfo = getQueueStatusLabel(queueStatus);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -248,6 +273,21 @@ export function GenerationProgressBar({
 
   return (
     <div className="w-full space-y-2">
+      {/* Queue status badge */}
+      {statusInfo && (
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-1.5 text-xs font-medium ${statusInfo.color}`}
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-current" />
+            </span>
+            {statusInfo.label}
+          </span>
+        </div>
+      )}
+
       {/* Progress bar */}
       <div className="relative h-3 bg-slate-700 rounded-full overflow-hidden">
         <div

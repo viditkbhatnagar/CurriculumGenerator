@@ -11,6 +11,7 @@ import {
   CaseDifficulty,
 } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import { useStepStatus } from '@/hooks/useStepStatus';
 import { EditTarget } from './EditWithAIButton';
 
 interface Props {
@@ -792,11 +793,31 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
   const [filterType, setFilterType] = useState<CaseType | 'all'>('all');
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
 
+  // Background job polling for Step 8
+  const {
+    status: stepStatus,
+    startPolling,
+    isPolling,
+    isGenerationActive: isQueueActive,
+  } = useStepStatus(workflow._id, 8, {
+    pollInterval: 10000,
+    autoStart: true,
+    onComplete: () => {
+      completeGeneration(workflow._id, 8);
+      onRefresh();
+    },
+    onFailed: (err) => {
+      failGeneration(workflow._id, 8, err);
+      setError(err);
+    },
+  });
+
   // Edit state for case studies
   const [editingCaseStudy, setEditingCaseStudy] = useState<CaseStudy | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  const isCurrentlyGenerating = isGenerating(workflow._id, 8) || submitStep8.isPending;
+  const isCurrentlyGenerating =
+    isGenerating(workflow._id, 8) || submitStep8.isPending || isPolling || isQueueActive;
 
   // Check for completion when data appears
   useEffect(() => {
@@ -810,11 +831,15 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
 
   const handleGenerateProposals = async () => {
     setError(null);
-    startGeneration(workflow._id, 8, 180); // 3 minutes estimated for case studies
+    startGeneration(workflow._id, 8, 180);
     try {
-      await submitStep8.mutateAsync(workflow._id);
-      completeGeneration(workflow._id, 8);
-      onRefresh();
+      const response = await submitStep8.mutateAsync(workflow._id);
+      if ((response as any)?.data?.jobId) {
+        startPolling();
+      } else {
+        completeGeneration(workflow._id, 8);
+        onRefresh();
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate case studies';
       console.error('Failed to generate case studies:', err);
@@ -941,7 +966,11 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
               </p>
             </div>
           </div>
-          <GenerationProgressBar workflowId={workflow._id} step={8} />
+          <GenerationProgressBar
+            workflowId={workflow._id}
+            step={8}
+            queueStatus={stepStatus?.status}
+          />
         </div>
       )}
 

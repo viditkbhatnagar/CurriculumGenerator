@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useSubmitStep3, useApproveStep3 } from '@/hooks/useWorkflow';
+import { useStepStatus } from '@/hooks/useStepStatus';
+import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import { api } from '@/lib/api';
 import {
   CurriculumWorkflow,
@@ -111,13 +113,15 @@ function PLOEditModal({
             Edit <span className="text-purple-400">PLO {index + 1}</span>
           </h3>
         </div>
-        
+
         <div className="p-6 space-y-5">
           {/* Statement */}
           <div>
             <label className="block text-sm font-medium text-teal-700 mb-2">
               PLO Statement
-              <span className={`ml-2 text-xs ${wordCount <= 25 ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <span
+                className={`ml-2 text-xs ${wordCount <= 25 ? 'text-emerald-400' : 'text-amber-400'}`}
+              >
                 ({wordCount}/25 words)
               </span>
             </label>
@@ -155,9 +159,7 @@ function PLOEditModal({
 
           {/* Verb */}
           <div>
-            <label className="block text-sm font-medium text-teal-700 mb-2">
-              Bloom's Verb
-            </label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Bloom's Verb</label>
             <input
               type="text"
               value={verb}
@@ -414,6 +416,27 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
   const submitStep3 = useSubmitStep3();
   const approveStep3 = useApproveStep3();
 
+  const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+
+  // Background job polling for Step 3
+  const {
+    status: stepStatus,
+    startPolling,
+    isPolling,
+    isGenerationActive: isQueueActive,
+  } = useStepStatus(workflow._id, 3, {
+    pollInterval: 10000,
+    autoStart: true,
+    onComplete: () => {
+      completeGeneration(workflow._id, 3);
+      onRefresh();
+    },
+    onFailed: (err) => {
+      failGeneration(workflow._id, 3, err);
+      setError(err);
+    },
+  });
+
   // Form state
   const [formData, setFormData] = useState<Step3FormData>({
     bloomLevels: ['apply', 'analyze'],
@@ -429,7 +452,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
 
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Edit state for PLOs
   const [editingPlo, setEditingPlo] = useState<PLO | null>(null);
   const [editingPloIndex, setEditingPloIndex] = useState<number>(-1);
@@ -470,6 +493,16 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
     }));
   };
 
+  const isCurrentlyGenerating =
+    isGenerating(workflow._id, 3) || submitStep3.isPending || isPolling || isQueueActive;
+
+  // Check for completion when data appears
+  useEffect(() => {
+    if (workflow.step3 && (workflow.step3.outcomes?.length || 0) > 0) {
+      completeGeneration(workflow._id, 3);
+    }
+  }, [workflow.step3, workflow._id, completeGeneration]);
+
   const handleGenerate = async () => {
     setError(null);
 
@@ -482,13 +515,20 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
     }
 
     try {
-      await submitStep3.mutateAsync({
+      startGeneration(workflow._id, 3);
+      const response = await submitStep3.mutateAsync({
         id: workflow._id,
         data: formData,
       });
-      onRefresh();
+      if ((response as any)?.data?.jobId) {
+        startPolling();
+      } else {
+        completeGeneration(workflow._id, 3);
+        onRefresh();
+      }
     } catch (err: any) {
       console.error('Failed to generate PLOs:', err);
+      failGeneration(workflow._id, 3, err.message || 'Failed to generate PLOs');
       setError(err.message || 'Failed to generate PLOs');
     }
   };
@@ -514,20 +554,23 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
   const handleSavePlo = async (updatedPlo: PLO) => {
     setIsSavingEdit(true);
     setError(null);
-    
+
     console.log('Saving PLO:', updatedPlo);
-    
+
     try {
-      const response = await api.put(`/api/v3/workflow/${workflow._id}/step3/plo/${updatedPlo.id}`, {
-        statement: updatedPlo.statement,
-        verb: updatedPlo.verb,
-        bloomLevel: updatedPlo.bloomLevel,
-        assessmentAlignment: updatedPlo.assessmentAlignment,
-        jobTaskMapping: updatedPlo.jobTaskMapping,
-      });
-      
+      const response = await api.put(
+        `/api/v3/workflow/${workflow._id}/step3/plo/${updatedPlo.id}`,
+        {
+          statement: updatedPlo.statement,
+          verb: updatedPlo.verb,
+          bloomLevel: updatedPlo.bloomLevel,
+          assessmentAlignment: updatedPlo.assessmentAlignment,
+          jobTaskMapping: updatedPlo.jobTaskMapping,
+        }
+      );
+
       console.log('Save response:', response.data);
-      
+
       // Close modal and refresh data
       setEditingPlo(null);
       setEditingPloIndex(-1);
@@ -556,7 +599,26 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      {!hasStep3Data ? (
+      {isCurrentlyGenerating && !hasStep3Data && (
+        <div className="mb-6 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            <div>
+              <h3 className="text-lg font-semibold text-teal-800">Generating PLOs...</h3>
+              <p className="text-sm text-teal-600">
+                This may take 45 seconds. You can navigate away and come back.
+              </p>
+            </div>
+          </div>
+          <GenerationProgressBar
+            workflowId={workflow._id}
+            step={3}
+            queueStatus={stepStatus?.status}
+          />
+        </div>
+      )}
+
+      {!hasStep3Data && !isCurrentlyGenerating ? (
         // Generation Form
         <div className="space-y-8">
           {/* About This Step */}
@@ -1002,7 +1064,13 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
             </h3>
             <div className="space-y-4">
               {workflow.step3?.outcomes?.map((plo, index) => (
-                <PLOCard key={plo.id} plo={plo} index={index} onEdit={onOpenCanvas} onInlineEdit={handleEditPlo} />
+                <PLOCard
+                  key={plo.id}
+                  plo={plo}
+                  index={index}
+                  onEdit={onOpenCanvas}
+                  onInlineEdit={handleEditPlo}
+                />
               ))}
             </div>
           </div>

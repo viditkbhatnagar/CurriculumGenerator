@@ -25,6 +25,8 @@ import Step8View from '@/components/workflow/Step8View';
 import Step9View from '@/components/workflow/Step9View';
 import Step10View from '@/components/workflow/Step10View';
 import Step11View from '@/components/workflow/Step11View';
+import Step12View from '@/components/workflow/Step12View';
+import Step13View from '@/components/workflow/Step13View';
 import FinalReviewView from '@/components/workflow/FinalReviewView';
 import CanvasChatbot from '@/components/workflow/CanvasChatbot';
 import { EditTarget } from '@/components/workflow/EditWithAIButton';
@@ -138,6 +140,26 @@ const STEP_ICONS: Record<WorkflowStep, React.ReactNode> = {
         strokeLinejoin="round"
         strokeWidth={2}
         d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+      />
+    </svg>
+  ),
+  12: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+      />
+    </svg>
+  ),
+  13: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
       />
     </svg>
   ),
@@ -292,7 +314,7 @@ export default function WorkflowDetailPage() {
   const handleStepComplete = () => {
     refetch();
     // If we just completed a step, move to next
-    if (currentStep < 11) {
+    if (currentStep < 13) {
       setActiveStep((currentStep + 1) as WorkflowStep);
     }
   };
@@ -347,6 +369,10 @@ export default function WorkflowDetailPage() {
         return <Step10View {...stepProps} />;
       case 11:
         return <Step11View {...stepProps} />;
+      case 12:
+        return <Step12View {...stepProps} />;
+      case 13:
+        return <Step13View {...stepProps} />;
       default:
         return null;
     }
@@ -388,23 +414,21 @@ export default function WorkflowDetailPage() {
               <div>
                 <h1 className="text-xl font-bold text-teal-800">{workflow.projectName}</h1>
                 <p className="text-teal-600 text-sm">
-                  Step {workflow.currentStep} of 11 •{' '}
+                  Step {workflow.currentStep} of 13 •{' '}
                   {progress?.estimatedTimeRemaining || '~2.5 hours'} remaining
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {workflow.currentStep === 11 &&
-                workflow.step11?.modulePPTDecks &&
-                workflow.step11.modulePPTDecks.length > 0 && (
-                  <button
-                    onClick={handleCompleteWorkflow}
-                    disabled={completeWorkflow.isPending}
-                    className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-white font-medium rounded-lg transition-all shadow-lg shadow-teal-500/20"
-                  >
-                    {completeWorkflow.isPending ? 'Completing...' : 'Complete & Review'}
-                  </button>
-                )}
+              {workflow.currentStep === 13 && workflow.step13 && (
+                <button
+                  onClick={handleCompleteWorkflow}
+                  disabled={completeWorkflow.isPending}
+                  className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-white font-medium rounded-lg transition-all shadow-lg shadow-teal-500/20"
+                >
+                  {completeWorkflow.isPending ? 'Completing...' : 'Complete & Review'}
+                </button>
+              )}
               {workflow.currentStep >= 9 && workflow.step9 && (
                 <button
                   onClick={() => router.push(`/workflow/${id}/ppt`)}
@@ -451,7 +475,7 @@ export default function WorkflowDetailPage() {
             </div>
             <div className="relative">
               <nav className="p-2 max-h-[calc(100vh-200px)] overflow-y-auto scrollbar-thin scrollbar-track-teal-50 scrollbar-thumb-teal-200 hover:scrollbar-thumb-teal-300">
-                {([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as WorkflowStep[]).map((step) => {
+                {([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] as WorkflowStep[]).map((step) => {
                   const stepProgress = workflow.stepProgress.find((p) => p.step === step);
                   const isAccessible = isStepAccessible(step);
                   const isCurrent = workflow.currentStep === step;

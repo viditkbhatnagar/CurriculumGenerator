@@ -1,6 +1,6 @@
 /**
  * CurriculumWorkflow Model
- * Implements the 11-Step AI-Integrated Curriculum Generator Workflow v2.3
+ * Implements the 13-Step AI-Integrated Curriculum Generator Workflow v2.4
  *
  * Steps:
  * 1. Program Foundation (15-20 min)
@@ -14,8 +14,10 @@
  * 9. Glossary - Auto-Generated (5 min)
  * 10. Lesson Plans (15-20 min)
  * 11. PPT Generation (15-20 min)
+ * 12. Assignment Packs - 3 delivery variants per module (15-25 min)
+ * 13. Summative Exam Package (10-15 min)
  *
- * Total: 2-3 hours of SME time
+ * Total: 3-4 hours of SME time
  */
 
 import mongoose, { Schema, Document } from 'mongoose';
@@ -293,6 +295,237 @@ export interface Step11PPTGeneration {
 }
 
 // ============================================================================
+// STEP 12 INTERFACES - Assignment Packs (3 delivery variants per module)
+// ============================================================================
+
+export type AssignmentDeliveryVariant = 'in_person' | 'self_study' | 'hybrid';
+
+export interface AssignmentOverview {
+  title: string;
+  moduleCode: string;
+  moduleTitle: string;
+  assignmentType: string;
+  weighting: number;
+  groupOrIndividual: 'individual' | 'group' | 'either';
+  submissionFormat: string;
+  deliveryVariant: AssignmentDeliveryVariant;
+}
+
+export interface AssessedLearningOutcome {
+  mloId: string;
+  mloStatement: string;
+  linkedPLOs: string[];
+}
+
+export interface AssignmentBrief {
+  studentFacingIntro: string;
+  workplaceContext: string;
+  stepByStepInstructions: string[];
+  deliverables: string[];
+}
+
+export interface RubricCriterion {
+  criterionName: string;
+  linkedMLOs: string[];
+  fail: string;
+  pass: string;
+  merit: string;
+  distinction: string;
+  weight: number;
+}
+
+export interface EvidenceRequirement {
+  artefactType: string;
+  wordCountOrDuration: string;
+  fileType: string;
+  additionalNotes?: string;
+}
+
+export interface AssignmentPack {
+  assignmentId: string;
+  deliveryVariant: AssignmentDeliveryVariant;
+  overview: AssignmentOverview;
+  assessedOutcomes: AssessedLearningOutcome[];
+  brief: AssignmentBrief;
+  rubric: RubricCriterion[];
+  evidenceRequirements: EvidenceRequirement[];
+  academicIntegrity: string;
+  accessibilityOptions: string;
+}
+
+export interface ModuleAssignmentPacks {
+  moduleId: string;
+  moduleCode: string;
+  moduleTitle: string;
+  variants: {
+    in_person: AssignmentPack;
+    self_study: AssignmentPack;
+    hybrid: AssignmentPack;
+  };
+}
+
+export interface Step12AssignmentPacks {
+  moduleAssignmentPacks: ModuleAssignmentPacks[];
+
+  validation: {
+    allModulesHaveAssignments: boolean;
+    allVariantsGenerated: boolean;
+    allMLOsCovered: boolean;
+    allRubricsComplete: boolean;
+  };
+
+  summary: {
+    totalModules: number;
+    totalAssignmentPacks: number;
+    averageCriteriaPerRubric: number;
+  };
+
+  generatedAt: Date;
+  validatedAt?: Date;
+  approvedAt?: Date;
+  approvedBy?: string;
+}
+
+// ============================================================================
+// STEP 13 INTERFACES - Summative Exam Package
+// ============================================================================
+
+export interface ExamOverview {
+  examTitle: string;
+  credentialName: string;
+  examPurpose: string;
+  totalWeighting: number;
+  totalDuration: string;
+  deliveryModes: string[];
+  permittedMaterials: string;
+  totalMarks: number;
+  sectionBreakdown: Array<{
+    section: string;
+    marks: number;
+    questionCount: number;
+    timeAllocation: string;
+    plosAssessed: string[];
+  }>;
+}
+
+export interface SectionAQuestion {
+  questionId: string;
+  type: 'mcq' | 'short_answer';
+  questionText: string;
+  options?: string[];
+  correctAnswer: string;
+  marks: number;
+  linkedMLOs: string[];
+  linkedPLOs: string[];
+  rationale: string;
+  bloomLevel: string;
+}
+
+export interface SectionBScenario {
+  scenarioId: string;
+  scenarioText: string;
+  workplaceContext: string;
+  questions: Array<{
+    questionId: string;
+    questionText: string;
+    marks: number;
+    modelAnswer: string;
+    linkedMLOs: string[];
+    linkedPLOs: string[];
+  }>;
+  totalMarks: number;
+}
+
+export interface SectionCTask {
+  taskId: string;
+  taskDescription: string;
+  instructions: string[];
+  marks: number;
+  modelAnswer: string;
+  assessmentCriteria: string[];
+  linkedMLOs: string[];
+  linkedPLOs: string[];
+}
+
+export interface ExamMarkingScheme {
+  sectionA: Array<{
+    questionId: string;
+    modelAnswer: string;
+    markAllocation: string;
+    performanceThresholds: {
+      fail: string;
+      pass: string;
+      merit: string;
+      distinction: string;
+    };
+  }>;
+  sectionB?: Array<{
+    scenarioId: string;
+    markAllocation: string;
+    modelAnswers: Array<{
+      questionId: string;
+      modelAnswer: string;
+      marks: number;
+    }>;
+    performanceThresholds: {
+      fail: string;
+      pass: string;
+      merit: string;
+      distinction: string;
+    };
+  }>;
+  sectionC?: Array<{
+    taskId: string;
+    modelAnswer: string;
+    markAllocation: string;
+    performanceThresholds: {
+      fail: string;
+      pass: string;
+      merit: string;
+      distinction: string;
+    };
+  }>;
+}
+
+export interface Step13SummativeExam {
+  overview: ExamOverview;
+
+  sectionA: SectionAQuestion[];
+
+  // Section B is CONDITIONAL — only for hybrid/in-person, NOT self-study
+  sectionB?: SectionBScenario[];
+  sectionBIncluded: boolean;
+
+  sectionC?: SectionCTask[];
+
+  markingScheme: ExamMarkingScheme;
+
+  integrityAndSecurity: string;
+  accessibilityProvisions: string;
+
+  validation: {
+    totalMarksCorrect: boolean;
+    allSectionsPresent: boolean;
+    allPLOsCovered: boolean;
+    markingSchemeComplete: boolean;
+  };
+
+  summary: {
+    totalQuestions: number;
+    totalMarks: number;
+    sectionAMarks: number;
+    sectionBMarks: number;
+    sectionCMarks: number;
+    deliveryModeUsed: string;
+  };
+
+  generatedAt: Date;
+  validatedAt?: Date;
+  approvedAt?: Date;
+  approvedBy?: string;
+}
+
+// ============================================================================
 // INTERFACES
 // ============================================================================
 
@@ -302,7 +535,7 @@ export interface ICurriculumWorkflow extends Document {
   createdBy: mongoose.Types.ObjectId;
 
   // Current State
-  currentStep: number; // 1-11
+  currentStep: number; // 1-13
   status: string;
 
   // Step 1: Program Foundation
@@ -828,6 +1061,12 @@ export interface ICurriculumWorkflow extends Document {
   // Step 11: PPT Generation (Separate step for timeout prevention)
   step11?: Step11PPTGeneration;
 
+  // Step 12: Assignment Packs (3 delivery variants per module)
+  step12?: Step12AssignmentPacks;
+
+  // Step 13: Summative Exam Package
+  step13?: Step13SummativeExam;
+
   // Step Progress Tracking
   stepProgress: Array<{
     step: number;
@@ -878,7 +1117,7 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
     currentStep: {
       type: Number,
       min: 1,
-      max: 11,
+      max: 13,
       default: 1,
       required: true,
       index: true,
@@ -910,6 +1149,10 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
         'step10_complete',
         'step11_pending',
         'step11_complete',
+        'step12_pending',
+        'step12_complete',
+        'step13_pending',
+        'step13_complete',
         'review_pending',
         'published',
       ],
@@ -984,6 +1227,18 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
       default: undefined,
     },
 
+    // Step 12: Assignment Packs (3 delivery variants per module)
+    step12: {
+      type: Schema.Types.Mixed,
+      default: undefined,
+    },
+
+    // Step 13: Summative Exam Package
+    step13: {
+      type: Schema.Types.Mixed,
+      default: undefined,
+    },
+
     // Step Progress
     stepProgress: [
       {
@@ -1039,15 +1294,24 @@ CurriculumWorkflowSchema.pre('save', function (next) {
       { step: 9, status: 'pending' },
       { step: 10, status: 'pending' },
       { step: 11, status: 'pending' },
+      { step: 12, status: 'pending' },
+      { step: 13, status: 'pending' },
     ];
   }
 
-  // Migrate existing workflows that don't have step 11
-  // This ensures old workflows can access the new Step 11
+  // Migrate existing workflows that don't have newer steps
   if (this.stepProgress && this.stepProgress.length > 0) {
     const hasStep11 = this.stepProgress.some((p: any) => p.step === 11);
     if (!hasStep11) {
       this.stepProgress.push({ step: 11, status: 'pending' });
+    }
+    const hasStep12 = this.stepProgress.some((p: any) => p.step === 12);
+    if (!hasStep12) {
+      this.stepProgress.push({ step: 12, status: 'pending' });
+    }
+    const hasStep13 = this.stepProgress.some((p: any) => p.step === 13);
+    if (!hasStep13) {
+      this.stepProgress.push({ step: 13, status: 'pending' });
     }
   }
 
@@ -1056,7 +1320,7 @@ CurriculumWorkflowSchema.pre('save', function (next) {
 
 // Advance to next step
 CurriculumWorkflowSchema.methods.advanceStep = async function (): Promise<void> {
-  if (this.currentStep >= 11) {
+  if (this.currentStep >= 13) {
     throw new Error('Already at final step');
   }
 
@@ -1109,7 +1373,7 @@ CurriculumWorkflowSchema.methods.calculateProgress = function (): number {
   const completedSteps = this.stepProgress.filter(
     (p: any) => p.status === 'completed' || p.status === 'approved'
   ).length;
-  return Math.round((completedSteps / 11) * 100);
+  return Math.round((completedSteps / 13) * 100);
 };
 
 // Virtual for duration

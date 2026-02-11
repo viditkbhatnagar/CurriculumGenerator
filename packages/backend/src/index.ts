@@ -397,6 +397,14 @@ async function startServer() {
       loggingService.warn('Failed to initialize Step 10 queue', { error: String(error) });
     }
 
+    // Initialize generic step queue (Steps 1-9)
+    try {
+      await import('./queues/stepQueue');
+      loggingService.info('Generic step queue initialized');
+    } catch (error) {
+      loggingService.warn('Failed to initialize generic step queue', { error: String(error) });
+    }
+
     // Start HTTP server
     httpServer.listen(PORT, () => {
       loggingService.info('Server started successfully', {
@@ -510,6 +518,16 @@ async function gracefulShutdown(signal: string) {
       loggingService.info('Step 10 queue closed');
     } catch (error) {
       loggingService.error('Error closing Step 10 queue', error);
+      exitCode = 1;
+    }
+
+    // Close generic step queue
+    try {
+      const { closeStepQueue } = await import('./queues/stepQueue');
+      await closeStepQueue();
+      loggingService.info('Generic step queue closed');
+    } catch (error) {
+      loggingService.error('Error closing generic step queue', error);
       exitCode = 1;
     }
 

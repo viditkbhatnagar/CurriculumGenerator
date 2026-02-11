@@ -199,6 +199,10 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
     'step10_complete',
     'step11_pending',
     'step11_complete',
+    'step12_pending',
+    'step12_complete',
+    'step13_pending',
+    'step13_complete',
     'review_pending',
     'published',
   ];
@@ -326,9 +330,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                 </span>
                 <span className="px-2 py-1 bg-white rounded text-teal-700">Step 3: PLOs</span>
                 <span className="px-2 py-1 bg-white rounded text-teal-700">Step 4: MLOs</span>
-                <span className="px-2 py-1 bg-white rounded text-teal-700">
-                  Step 9: Glossary
-                </span>
+                <span className="px-2 py-1 bg-white rounded text-teal-700">Step 9: Glossary</span>
                 <span className="px-2 py-1 bg-cyan-500/20 text-teal-600 rounded">
                   Step 10: Lesson Plans
                 </span>
@@ -619,9 +621,9 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
 
               {isApproved ? (
                 <>
-                  <h3 className="text-xl font-bold text-emerald-400 mb-2">✅ Step 11 Approved!</h3>
+                  <h3 className="text-xl font-bold text-emerald-400 mb-2">Step 11 Approved!</h3>
                   <p className="text-teal-700 mb-4">
-                    All PowerPoint decks have been approved. Your curriculum is now complete!
+                    All PowerPoint decks have been approved. Proceed to Step 12 - Assignment Packs.
                   </p>
                   <div className="flex items-center justify-center gap-4 mb-4">
                     <button
@@ -655,7 +657,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                     </button>
                   </div>
                   <p className="text-emerald-400 text-sm animate-pulse">
-                    ↑ Click "Complete & Review" button above to finalize
+                    Continue to Step 12 to generate Assignment Packs
                   </p>
                 </>
               ) : (

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep1, useApproveStep1 } from '@/hooks/useWorkflow';
+import { useStepStatus } from '@/hooks/useStepStatus';
+import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import {
   CurriculumWorkflow,
   Step1FormData,
@@ -35,6 +37,30 @@ const EMPTY_JOB_ROLE: JobRole = {
 export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
   const submitStep1 = useSubmitStep1();
   const approveStep1 = useApproveStep1();
+
+  const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+
+  // Background job polling for Step 1
+  const {
+    status: stepStatus,
+    startPolling,
+    isPolling,
+    isGenerationActive: isQueueActive,
+  } = useStepStatus(workflow._id, 1, {
+    pollInterval: 10000,
+    autoStart: true,
+    onComplete: () => {
+      completeGeneration(workflow._id, 1);
+      onRefresh();
+    },
+    onFailed: (err) => {
+      failGeneration(workflow._id, 1, err);
+      setError(err);
+    },
+  });
+
+  const isCurrentlyGenerating =
+    isGenerating(workflow._id, 1) || submitStep1.isPending || isPolling || isQueueActive;
 
   // Track if form has been initialized to prevent resets
   const isInitialized = useRef(false);
@@ -207,7 +233,8 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
       }));
 
     try {
-      await submitStep1.mutateAsync({
+      startGeneration(workflow._id, 1);
+      const response = await submitStep1.mutateAsync({
         id: workflow._id,
         data: {
           ...formData,
@@ -215,9 +242,15 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
           totalHours: calculations.totalHours,
         },
       });
-      onRefresh();
+      if ((response as any)?.data?.jobId) {
+        startPolling();
+      } else {
+        completeGeneration(workflow._id, 1);
+        onRefresh();
+      }
     } catch (err: any) {
       console.error('Failed to submit Step 1:', err);
+      failGeneration(workflow._id, 1, err.message || 'Failed to save draft');
       setError(err.message || 'Failed to save draft');
     }
   };
@@ -349,6 +382,27 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
+      {isCurrentlyGenerating && (
+        <div className="mb-6 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 border-3 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+            <div>
+              <h3 className="text-lg font-semibold text-teal-800">
+                Generating Program Foundation...
+              </h3>
+              <p className="text-sm text-teal-600">
+                This may take 30 seconds. You can navigate away and come back.
+              </p>
+            </div>
+          </div>
+          <GenerationProgressBar
+            workflowId={workflow._id}
+            step={1}
+            queueStatus={stepStatus?.status}
+          />
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* ============================================================ */}
         {/* SECTION 1: PROGRAM IDENTITY & DESCRIPTION */}

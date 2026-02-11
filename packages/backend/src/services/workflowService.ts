@@ -3604,7 +3604,7 @@ CRITICAL VALIDATION:
     freshWorkflow.step11.validation = {
       allLessonsHavePPTs: pptDecksCount >= allLessonsCount,
       allSlideCountsValid: allPPTDecks.every(
-        (deck) => deck.slideCount >= 15 && deck.slideCount <= 35
+        (deck) => deck.slideCount >= 8 && deck.slideCount <= 15
       ),
       allMLOsCovered: true, // Simplified validation
       allCitationsValid: true, // Simplified validation
@@ -3709,6 +3709,320 @@ CRITICAL VALIDATION:
       },
       generatedAt: new Date(),
     };
+  }
+
+  // ==========================================================================
+  // STEP 12: ASSIGNMENT PACKS
+  // ==========================================================================
+
+  /**
+   * Process Step 12: Generate Assignment Packs for all modules (full sync)
+   */
+  async processStep12(workflowId: string): Promise<ICurriculumWorkflow> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow || !workflow.step11) {
+      throw new Error('Workflow not found or Step 11 not complete');
+    }
+
+    loggingService.info('Processing Step 12: Assignment Packs (full)', { workflowId });
+
+    const { assignmentPackService } = await import('./assignmentPackService');
+    const modules = workflow.step4?.modules || [];
+    const context = this.buildStep12Context(workflow);
+
+    const moduleAssignmentPacks: any[] = [];
+
+    for (const mod of modules) {
+      const moduleContext = {
+        moduleId: mod.id,
+        moduleCode: mod.moduleCode,
+        moduleTitle: mod.title,
+        mlos: (mod.mlos || []).map((mlo: any) => ({
+          id: mlo.id,
+          statement: mlo.statement,
+          bloomLevel: mlo.bloomLevel,
+          linkedPLOs: mlo.linkedPLOs || [],
+        })),
+        totalHours: mod.totalHours,
+        contactHours: mod.contactHours,
+        independentHours: mod.independentHours ?? mod.selfStudyHours,
+      };
+
+      const packs = await assignmentPackService.generateModuleAssignmentPacks(
+        moduleContext,
+        context
+      );
+      moduleAssignmentPacks.push(packs);
+    }
+
+    const totalCriteria = moduleAssignmentPacks.reduce((sum, m) => {
+      const variants = [m.variants.in_person, m.variants.self_study, m.variants.hybrid];
+      return sum + variants.reduce((vSum: number, v: any) => vSum + (v.rubric?.length || 0), 0);
+    }, 0);
+
+    workflow.step12 = {
+      moduleAssignmentPacks,
+      validation: {
+        allModulesHaveAssignments: moduleAssignmentPacks.length === modules.length,
+        allVariantsGenerated: moduleAssignmentPacks.every(
+          (m: any) => m.variants.in_person && m.variants.self_study && m.variants.hybrid
+        ),
+        allMLOsCovered: true,
+        allRubricsComplete: totalCriteria > 0,
+      },
+      summary: {
+        totalModules: moduleAssignmentPacks.length,
+        totalAssignmentPacks: moduleAssignmentPacks.length * 3,
+        averageCriteriaPerRubric:
+          moduleAssignmentPacks.length > 0
+            ? Math.round(totalCriteria / (moduleAssignmentPacks.length * 3))
+            : 0,
+      },
+      generatedAt: new Date(),
+    };
+
+    workflow.currentStep = 12;
+    workflow.status = 'step12_complete';
+
+    const step12Progress = workflow.stepProgress.find((p) => p.step === 12);
+    if (step12Progress) {
+      step12Progress.status = 'completed';
+      step12Progress.startedAt = step12Progress.startedAt || new Date();
+      step12Progress.completedAt = new Date();
+    }
+
+    await workflow.save();
+
+    loggingService.info('Step 12 processed', {
+      workflowId,
+      totalModules: moduleAssignmentPacks.length,
+      totalPacks: moduleAssignmentPacks.length * 3,
+    });
+
+    return workflow;
+  }
+
+  /**
+   * Process Step 12: Generate Assignment Packs for the NEXT module only
+   * Module-by-module to prevent timeouts (3 variants per module)
+   */
+  async processStep12NextModule(workflowId: string): Promise<ICurriculumWorkflow> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow || !workflow.step11) {
+      throw new Error('Workflow not found or Step 11 not complete');
+    }
+
+    const modules = workflow.step4?.modules || [];
+    const totalModules = modules.length;
+
+    if (totalModules === 0) {
+      throw new Error('No modules found in Step 4. Complete Step 4 first.');
+    }
+
+    const existingModules = workflow.step12?.moduleAssignmentPacks?.length || 0;
+    const expectedModuleIndex = existingModules;
+
+    loggingService.info('Processing Step 12: Next Module', {
+      workflowId,
+      existingModules,
+      totalModules,
+      nextModuleIndex: expectedModuleIndex,
+    });
+
+    if (existingModules >= totalModules) {
+      loggingService.info('All module assignment packs already generated', {
+        workflowId,
+        existingModules,
+        totalModules,
+      });
+      return workflow;
+    }
+
+    const moduleToProcess = modules[expectedModuleIndex];
+    if (!moduleToProcess) {
+      throw new Error(`Module at index ${expectedModuleIndex} not found`);
+    }
+
+    // Check if already generated
+    const existingModule = workflow.step12?.moduleAssignmentPacks?.find(
+      (m: any) => m.moduleId === moduleToProcess.id
+    );
+    if (existingModule) {
+      loggingService.info('Module assignment packs already exist, skipping', {
+        workflowId,
+        moduleId: moduleToProcess.id,
+      });
+      return workflow;
+    }
+
+    const { assignmentPackService } = await import('./assignmentPackService');
+    const context = this.buildStep12Context(workflow);
+
+    const moduleContext = {
+      moduleId: moduleToProcess.id,
+      moduleCode: moduleToProcess.moduleCode,
+      moduleTitle: moduleToProcess.title,
+      mlos: (moduleToProcess.mlos || []).map((mlo: any) => ({
+        id: mlo.id,
+        statement: mlo.statement,
+        bloomLevel: mlo.bloomLevel,
+        linkedPLOs: mlo.linkedPLOs || [],
+      })),
+      totalHours: moduleToProcess.totalHours,
+      contactHours: moduleToProcess.contactHours,
+      independentHours: moduleToProcess.independentHours ?? moduleToProcess.selfStudyHours,
+    };
+
+    const startTime = Date.now();
+    const packs = await assignmentPackService.generateModuleAssignmentPacks(moduleContext, context);
+    const duration = Date.now() - startTime;
+
+    loggingService.info('Module assignment packs generated', {
+      workflowId,
+      moduleCode: moduleToProcess.moduleCode,
+      durationMs: duration,
+    });
+
+    // Re-fetch workflow for race condition safety
+    const freshWorkflow = await CurriculumWorkflow.findById(workflowId);
+    if (!freshWorkflow) {
+      throw new Error('Workflow not found after generation');
+    }
+
+    const alreadyExists = freshWorkflow.step12?.moduleAssignmentPacks?.find(
+      (m: any) => m.moduleId === moduleToProcess.id
+    );
+    if (alreadyExists) {
+      loggingService.warn('Module assignment packs added by another process, skipping', {
+        workflowId,
+        moduleId: moduleToProcess.id,
+      });
+      return freshWorkflow;
+    }
+
+    // Initialize step12 if needed
+    if (!freshWorkflow.step12) {
+      freshWorkflow.step12 = {
+        moduleAssignmentPacks: [],
+        validation: {
+          allModulesHaveAssignments: false,
+          allVariantsGenerated: false,
+          allMLOsCovered: false,
+          allRubricsComplete: false,
+        },
+        summary: {
+          totalModules: 0,
+          totalAssignmentPacks: 0,
+          averageCriteriaPerRubric: 0,
+        },
+        generatedAt: new Date(),
+      };
+    }
+
+    freshWorkflow.step12.moduleAssignmentPacks.push(packs);
+
+    // Update summary
+    const newModulesCount = freshWorkflow.step12.moduleAssignmentPacks.length;
+    freshWorkflow.step12.summary = {
+      totalModules: newModulesCount,
+      totalAssignmentPacks: newModulesCount * 3,
+      averageCriteriaPerRubric: 0, // Simplified
+    };
+
+    // Update validation
+    freshWorkflow.step12.validation = {
+      allModulesHaveAssignments: newModulesCount >= totalModules,
+      allVariantsGenerated: freshWorkflow.step12.moduleAssignmentPacks.every(
+        (m: any) => m.variants?.in_person && m.variants?.self_study && m.variants?.hybrid
+      ),
+      allMLOsCovered: true,
+      allRubricsComplete: true,
+    };
+
+    // Mark complete if all modules done
+    if (newModulesCount >= totalModules) {
+      freshWorkflow.currentStep = 12;
+      freshWorkflow.status = 'step12_complete';
+
+      const step12Progress = freshWorkflow.stepProgress.find((p) => p.step === 12);
+      if (step12Progress) {
+        step12Progress.status = 'completed';
+        step12Progress.startedAt = step12Progress.startedAt || new Date();
+        step12Progress.completedAt = new Date();
+      }
+    }
+
+    freshWorkflow.markModified('step12');
+    await freshWorkflow.save();
+
+    loggingService.info('Next module assignment packs saved', {
+      workflowId,
+      modulesGenerated: newModulesCount,
+      totalModules,
+    });
+
+    return freshWorkflow;
+  }
+
+  private buildStep12Context(workflow: ICurriculumWorkflow) {
+    return {
+      programTitle: workflow.step1?.programTitle || 'Program',
+      programDescription: workflow.step1?.programDescription || '',
+      academicLevel: workflow.step1?.academicLevel || 'certificate',
+      deliveryMode: workflow.step1?.delivery?.mode || 'online',
+      creditFramework: workflow.step1?.creditFramework || {},
+      targetLearner: workflow.step1?.targetLearner || 'General',
+      plos: (workflow.step3?.outcomes || []).map((o: any) => ({
+        id: o.id,
+        statement: o.statement,
+        bloomLevel: o.bloomLevel,
+      })),
+      assessmentStrategy: workflow.step7?.userPreferences || {},
+      caseStudies: workflow.step8?.caseStudies || [],
+      glossaryEntries: workflow.step9?.entries || [],
+    };
+  }
+
+  // ==========================================================================
+  // STEP 13: SUMMATIVE EXAM
+  // ==========================================================================
+
+  /**
+   * Process Step 13: Generate Summative Exam Package
+   * Single generation (not module-by-module)
+   */
+  async processStep13(workflowId: string): Promise<ICurriculumWorkflow> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow || !workflow.step12) {
+      throw new Error('Workflow not found or Step 12 not complete');
+    }
+
+    loggingService.info('Processing Step 13: Summative Exam', { workflowId });
+
+    const { summativeExamService } = await import('./summativeExamService');
+    const examResult = await summativeExamService.generateSummativeExam(workflow);
+
+    workflow.step13 = examResult;
+    workflow.currentStep = 13;
+    workflow.status = 'step13_complete';
+
+    const step13Progress = workflow.stepProgress.find((p) => p.step === 13);
+    if (step13Progress) {
+      step13Progress.status = 'completed';
+      step13Progress.startedAt = step13Progress.startedAt || new Date();
+      step13Progress.completedAt = new Date();
+    }
+
+    await workflow.save();
+
+    loggingService.info('Step 13 processed', {
+      workflowId,
+      totalQuestions: examResult.summary.totalQuestions,
+      totalMarks: examResult.summary.totalMarks,
+      sectionBIncluded: examResult.sectionBIncluded,
+    });
+
+    return workflow;
   }
 
   // ==========================================================================

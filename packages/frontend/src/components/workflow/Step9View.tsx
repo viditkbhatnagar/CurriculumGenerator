@@ -5,6 +5,7 @@ import { useSubmitStep9, useApproveStep9 } from '@/hooks/useWorkflow';
 import { api } from '@/lib/api';
 import { CurriculumWorkflow, GlossaryTerm, ModuleTermList, TermPriority } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import { useStepStatus } from '@/hooks/useStepStatus';
 import { EditTarget } from './EditWithAIButton';
 
 interface Props {
@@ -678,11 +679,32 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
   const [justGenerated, setJustGenerated] = useState(false);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
 
+  // Background job polling for Step 9
+  const {
+    status: stepStatus,
+    startPolling,
+    isPolling,
+    isGenerationActive: isQueueActive,
+  } = useStepStatus(workflow._id, 9, {
+    pollInterval: 10000,
+    autoStart: true, // Detect ongoing generation on mount
+    onComplete: () => {
+      completeGeneration(workflow._id, 9);
+      onRefresh();
+      setJustGenerated(true);
+    },
+    onFailed: (err) => {
+      failGeneration(workflow._id, 9, err);
+      setError(err);
+    },
+  });
+
   // Edit state for glossary terms
   const [editingTerm, setEditingTerm] = useState<GlossaryTerm | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  const isCurrentlyGenerating = isGenerating(workflow._id, 9) || submitStep9.isPending;
+  const isCurrentlyGenerating =
+    isGenerating(workflow._id, 9) || submitStep9.isPending || isPolling || isQueueActive;
 
   // Check for completion when data appears
   useEffect(() => {
@@ -693,12 +715,19 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
 
   const handleGenerate = async () => {
     setError(null);
-    startGeneration(workflow._id, 9, 45); // 45 seconds estimated
+    startGeneration(workflow._id, 9, 45);
     try {
-      await submitStep9.mutateAsync(workflow._id);
-      completeGeneration(workflow._id, 9);
-      await onRefresh();
-      setJustGenerated(true);
+      const response = await submitStep9.mutateAsync(workflow._id);
+      // Check if async (202 with jobId) or sync (200 with data)
+      if ((response as any)?.data?.jobId) {
+        // Async: start polling for completion
+        startPolling();
+      } else {
+        // Sync fallback: generation already completed
+        completeGeneration(workflow._id, 9);
+        await onRefresh();
+        setJustGenerated(true);
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate glossary';
       console.error('Failed to generate glossary:', err);
@@ -816,7 +845,11 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
               </p>
             </div>
           </div>
-          <GenerationProgressBar workflowId={workflow._id} step={9} />
+          <GenerationProgressBar
+            workflowId={workflow._id}
+            step={9}
+            queueStatus={stepStatus?.status}
+          />
         </div>
       )}
 

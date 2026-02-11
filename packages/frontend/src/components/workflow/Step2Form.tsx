@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep2, useApproveStep2 } from '@/hooks/useWorkflow';
+import { useStepStatus } from '@/hooks/useStepStatus';
+import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import { api } from '@/lib/api';
 import { CurriculumWorkflow, KSCItem, BenchmarkProgram, KSCImportance } from '@/types/workflow';
 
@@ -108,7 +110,9 @@ function KSCEditModal({
 }) {
   const [statement, setStatement] = useState(item.statement);
   const [description, setDescription] = useState(item.description || '');
-  const [importance, setImportance] = useState<KSCImportance>(item.importance as KSCImportance || 'essential');
+  const [importance, setImportance] = useState<KSCImportance>(
+    (item.importance as KSCImportance) || 'essential'
+  );
 
   const typeLabels = {
     knowledge: 'Knowledge',
@@ -139,7 +143,7 @@ function KSCEditModal({
             Edit <span className={typeColors[type]}>{typeLabels[type]}</span> Item
           </h3>
         </div>
-        
+
         <div className="p-6 space-y-5">
           {/* Statement/Title */}
           <div>
@@ -171,9 +175,7 @@ function KSCEditModal({
 
           {/* Importance */}
           <div>
-            <label className="block text-sm font-medium text-teal-700 mb-2">
-              Importance Level
-            </label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Importance Level</label>
             <div className="flex gap-3">
               <button
                 type="button"
@@ -203,9 +205,7 @@ function KSCEditModal({
           {/* Source (read-only) */}
           {item.source && (
             <div>
-              <label className="block text-sm font-medium text-teal-700 mb-2">
-                Source
-              </label>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Source</label>
               <p className="text-sm text-teal-500 bg-teal-50/50 px-4 py-3 rounded-lg">
                 {item.source}
               </p>
@@ -307,6 +307,27 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
   const approveStep2 = useApproveStep2();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+
+  // Background job polling for Step 2
+  const {
+    status: stepStatus,
+    startPolling,
+    isPolling,
+    isGenerationActive: isQueueActive,
+  } = useStepStatus(workflow._id, 2, {
+    pollInterval: 10000,
+    autoStart: true,
+    onComplete: () => {
+      completeGeneration(workflow._id, 2);
+      onRefresh();
+    },
+    onFailed: (err) => {
+      failGeneration(workflow._id, 2, err);
+      setError(err);
+    },
+  });
+
   // Form state for inputs
   const [benchmarks, setBenchmarks] = useState<BenchmarkProgram[]>([{ ...EMPTY_BENCHMARK }]);
   const [selectedFrameworks, setSelectedFrameworks] = useState<string[]>([]);
@@ -317,7 +338,9 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
   const [uploadedFrameworks, setUploadedFrameworks] = useState<UploadedFramework[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [editingItem, setEditingItem] = useState<KSCItem | null>(null);
-  const [editingItemType, setEditingItemType] = useState<'knowledge' | 'skill' | 'competency' | null>(null);
+  const [editingItemType, setEditingItemType] = useState<
+    'knowledge' | 'skill' | 'competency' | null
+  >(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -398,13 +421,26 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
     }
   }, [workflow.step2]);
 
+  const isCurrentlyGenerating =
+    isGenerating(workflow._id, 2) || submitStep2.isPending || isPolling || isQueueActive;
+
+  // Check for completion when data appears
+  useEffect(() => {
+    if (
+      workflow.step2 &&
+      (workflow.step2.totalItems > 0 || (workflow.step2.knowledgeItems?.length || 0) > 0)
+    ) {
+      completeGeneration(workflow._id, 2);
+    }
+  }, [workflow.step2, workflow._id, completeGeneration]);
+
   const handleGenerate = async () => {
     setError(null);
     try {
-      // Filter out empty benchmarks
+      startGeneration(workflow._id, 2);
       const validBenchmarks = benchmarks.filter((b) => b.programName.trim());
 
-      await submitStep2.mutateAsync({
+      const response = await submitStep2.mutateAsync({
         id: workflow._id,
         data: {
           benchmarkPrograms: validBenchmarks,
@@ -423,9 +459,15 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
           })),
         },
       });
-      onRefresh();
+      if ((response as any)?.data?.jobId) {
+        startPolling();
+      } else {
+        completeGeneration(workflow._id, 2);
+        onRefresh();
+      }
     } catch (err: any) {
       console.error('Failed to generate KSC:', err);
+      failGeneration(workflow._id, 2, err.message || 'Failed to generate competency framework');
       setError(err.message || 'Failed to generate competency framework');
     }
   };
@@ -451,24 +493,27 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
   const handleSaveEdit = async (updatedItem: KSCItem) => {
     setIsSavingEdit(true);
     setError(null);
-    
+
     console.log('Saving KSC item:', updatedItem);
     console.log('Workflow ID:', workflow._id);
     console.log('Item ID:', updatedItem.id);
-    
+
     try {
-      const response = await api.put(`/api/v3/workflow/${workflow._id}/step2/ksa/${updatedItem.id}`, {
-        statement: updatedItem.statement,
-        description: updatedItem.description,
-        importance: updatedItem.importance,
-      });
-      
+      const response = await api.put(
+        `/api/v3/workflow/${workflow._id}/step2/ksa/${updatedItem.id}`,
+        {
+          statement: updatedItem.statement,
+          description: updatedItem.description,
+          importance: updatedItem.importance,
+        }
+      );
+
       console.log('Save response:', response.data);
-      
+
       // Close modal first
       setEditingItem(null);
       setEditingItemType(null);
-      
+
       // Force refresh the workflow data
       console.log('Refreshing workflow data...');
       await onRefresh();
@@ -541,7 +586,26 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      {!hasStep2Data ? (
+      {isCurrentlyGenerating && !hasStep2Data && (
+        <div className="mb-6 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/30 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <div>
+              <h3 className="text-lg font-semibold text-teal-800">Generating KSC Framework...</h3>
+              <p className="text-sm text-teal-600">
+                This may take a minute. You can navigate away and come back.
+              </p>
+            </div>
+          </div>
+          <GenerationProgressBar
+            workflowId={workflow._id}
+            step={2}
+            queueStatus={stepStatus?.status}
+          />
+        </div>
+      )}
+
+      {!hasStep2Data && !isCurrentlyGenerating ? (
         // Generation Form
         <div className="space-y-8">
           {/* About This Step */}
@@ -980,7 +1044,12 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             </h3>
             <div className="space-y-3">
               {step2Data?.knowledgeItems?.map((item: KSCItem) => (
-                <KSCCard key={item.id} item={item} type="knowledge" onEdit={(item) => handleEditItem(item, 'knowledge')} />
+                <KSCCard
+                  key={item.id}
+                  item={item}
+                  type="knowledge"
+                  onEdit={(item) => handleEditItem(item, 'knowledge')}
+                />
               ))}
             </div>
           </section>
@@ -996,7 +1065,12 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             </h3>
             <div className="space-y-3">
               {step2Data?.skillItems?.map((item: KSCItem) => (
-                <KSCCard key={item.id} item={item} type="skill" onEdit={(item) => handleEditItem(item, 'skill')} />
+                <KSCCard
+                  key={item.id}
+                  item={item}
+                  type="skill"
+                  onEdit={(item) => handleEditItem(item, 'skill')}
+                />
               ))}
             </div>
           </section>
@@ -1012,7 +1086,12 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             </h3>
             <div className="space-y-3">
               {competencyItems.map((item: KSCItem) => (
-                <KSCCard key={item.id} item={item} type="competency" onEdit={(item) => handleEditItem(item, 'competency')} />
+                <KSCCard
+                  key={item.id}
+                  item={item}
+                  type="competency"
+                  onEdit={(item) => handleEditItem(item, 'competency')}
+                />
               ))}
             </div>
           </section>
@@ -1026,10 +1105,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
                   <p className="text-sm text-teal-600 mb-2">Programs Analyzed:</p>
                   <div className="flex flex-wrap gap-2">
                     {step2Data.benchmarkingReport.programsAnalyzed.map((p: any, i: number) => (
-                      <span
-                        key={i}
-                        className="px-2 py-1 bg-white text-teal-700 rounded text-xs"
-                      >
+                      <span key={i} className="px-2 py-1 bg-white text-teal-700 rounded text-xs">
                         {typeof p === 'string' ? p : p.programName}
                         {typeof p === 'object' && p.institution && ` (${p.institution})`}
                       </span>
