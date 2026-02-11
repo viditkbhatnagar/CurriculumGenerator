@@ -60,7 +60,7 @@ const config: Config = {
   },
   redis: {
     url: process.env.REDIS_URL || '', // Empty string means Redis is disabled
-    tls: process.env.REDIS_TLS === 'true' || process.env.NODE_ENV === 'production', // Enable TLS for Render Redis in production
+    tls: process.env.REDIS_TLS === 'true' || (process.env.REDIS_URL || '').startsWith('rediss://'), // TLS only when explicitly set or using rediss:// protocol
     maxRetries: parseInt(process.env.REDIS_MAX_RETRIES || '3', 10),
     retryDelay: parseInt(process.env.REDIS_RETRY_DELAY || '1000', 10),
   },
