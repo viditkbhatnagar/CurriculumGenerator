@@ -431,10 +431,14 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     if (step10.moduleLessonPlans?.length) {
       contentChildren.push(this.createH2('10.3 Module Lesson Plans'));
 
-      for (const modulePlan of step10.moduleLessonPlans) {
+      for (let modIdx = 0; modIdx < step10.moduleLessonPlans.length; modIdx++) {
+        const modulePlan = step10.moduleLessonPlans[modIdx];
+        const modCode = modulePlan.moduleCode || modulePlan.code || `M${modIdx + 1}`;
         // Module header
         contentChildren.push(
-          this.createH3(`${modulePlan.moduleCode}: ${modulePlan.moduleTitle || 'Untitled Module'}`),
+          this.createH3(
+            `${modCode}: ${modulePlan.moduleTitle || modulePlan.title || 'Untitled Module'}`
+          ),
           new Paragraph({
             children: [
               new TextRun({
@@ -601,7 +605,11 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
               const materials: string[] = [];
               if (lesson.materials.pptDeckRef) {
-                materials.push(`PPT Deck: ${lesson.materials.pptDeckRef}`);
+                const deckRef = String(lesson.materials.pptDeckRef).replace(
+                  /^undefined-/,
+                  `${modCode}-`
+                );
+                materials.push(`PPT Deck: ${deckRef}`);
               }
               if (lesson.materials.caseFiles?.length) {
                 materials.push(`Case Files: ${lesson.materials.caseFiles.join(', ')}`);
@@ -821,7 +829,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
               new TableRow({
                 children: [
                   this.createTableCell(String(deck.lessonNumber || '-')),
-                  this.createTableCell(deck.deckId || '-'),
+                  this.createTableCell((deck.deckId || '-').replace(/^undefined-/, `${modCode}-`)),
                   this.createTableCell(String(deck.slideCount || 0)),
                   this.createTableCell(formats.join(', ') || 'Not exported'),
                 ],

@@ -3106,9 +3106,7 @@ CRITICAL VALIDATION:
     const existingModules = completedModuleIds.size;
 
     // Find the actual next ungenerated module
-    const expectedModuleIndex = modules.findIndex(
-      (m: any) => !completedModuleIds.has(m.id)
-    );
+    const expectedModuleIndex = modules.findIndex((m: any) => !completedModuleIds.has(m.id));
 
     loggingService.info('Processing Step 10: Next Module - Initial Check', {
       workflowId,
@@ -3335,9 +3333,8 @@ CRITICAL VALIDATION:
     );
 
     // Update workflow status if all modules are complete
-    const newModulesCount = new Set(
-      workflow.step10.moduleLessonPlans.map((m: any) => m.moduleId)
-    ).size;
+    const newModulesCount = new Set(workflow.step10.moduleLessonPlans.map((m: any) => m.moduleId))
+      .size;
     if (newModulesCount >= totalModules) {
       workflow.currentStep = 10;
       workflow.status = 'step10_complete';
@@ -3439,9 +3436,7 @@ CRITICAL VALIDATION:
       (workflow.step11?.modulePPTDecks || []).map((m) => m.moduleId)
     );
     const existingModules = completedModuleIds.size;
-    const expectedModuleIndex = lessonPlans.findIndex(
-      (m) => !completedModuleIds.has(m.moduleId)
-    );
+    const expectedModuleIndex = lessonPlans.findIndex((m) => !completedModuleIds.has(m.moduleId));
 
     loggingService.info('Processing Step 11: Next Module - Initial Check', {
       workflowId,
@@ -3835,9 +3830,7 @@ CRITICAL VALIDATION:
       (workflow.step12?.moduleAssignmentPacks || []).map((m: any) => m.moduleId)
     );
     const existingModules = completedModuleIds.size;
-    const expectedModuleIndex = modules.findIndex(
-      (m: any) => !completedModuleIds.has(m.id)
-    );
+    const expectedModuleIndex = modules.findIndex((m: any) => !completedModuleIds.has(m.id));
 
     loggingService.info('Processing Step 12: Next Module', {
       workflowId,
@@ -6452,9 +6445,9 @@ Begin output now.`;
       programLearningOutcomes: step3?.outcomes || [],
 
       // Step 4: Course Framework (modules with MLOs)
-      modules: (step4?.modules || []).map((mod: any) => ({
+      modules: (step4?.modules || []).map((mod: any, idx: number) => ({
         id: mod.id,
-        moduleCode: mod.moduleCode,
+        moduleCode: mod.moduleCode || mod.code || `M${idx + 1}`,
         title: mod.title,
         sequenceOrder: mod.sequenceOrder,
         totalHours: mod.totalHours,
