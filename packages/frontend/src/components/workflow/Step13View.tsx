@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep13, useApproveStep13 } from '@/hooks/useWorkflow';
 import { useStepStatus } from '@/hooks/useStepStatus';
 import {
@@ -20,47 +20,95 @@ interface Props {
 export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
   const submitStep13 = useSubmitStep13();
   const approveStep13 = useApproveStep13();
-  const { status: stepStatusData } = useStepStatus(workflow._id, 13);
+  const { startGeneration, completeGeneration, failGeneration, isGenerating, getGenerationState } =
+    useGeneration();
+  const { status: stepStatusData, startPolling: startStatusPolling } = useStepStatus(
+    workflow._id,
+    13,
+    {
+      autoStart: true,
+      pollInterval: 10000,
+      onComplete: () => {
+        completeGeneration(workflow._id, 13);
+        onRefresh();
+      },
+      onFailed: (errorMsg) => {
+        failGeneration(workflow._id, 13, errorMsg);
+      },
+    }
+  );
   const queueStatus = stepStatusData?.status || null;
   const [error, setError] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     sectionA: true,
   });
   const [expandedQuestions, setExpandedQuestions] = useState<Record<string, boolean>>({});
-  const { startGeneration, completeGeneration, failGeneration, isGenerating, getGenerationState } =
-    useGeneration();
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-clear stale generation state (stuck > 15 min without data)
-  const genState = getGenerationState(workflow._id, 13);
-  const isStale =
-    genState?.status === 'generating' &&
-    !workflow.step13 &&
-    Date.now() - genState.startTime > 15 * 60 * 1000;
-  if (isStale) {
-    failGeneration(workflow._id, 13, 'Generation timed out. Please try again.');
-  }
+  // Detect stale generation or queue failure (in useEffect, not during render)
+  useEffect(() => {
+    const genState = getGenerationState(workflow._id, 13);
+    if (!genState || genState.status !== 'generating') return;
 
-  // Also detect job failure from queue status
-  if (genState?.status === 'generating' && queueStatus === 'failed') {
-    failGeneration(workflow._id, 13, 'Generation failed in background queue. Please try again.');
-  }
+    // Auto-fail if stuck > 20 minutes without data
+    if (!workflow.step13 && Date.now() - genState.startTime > 20 * 60 * 1000) {
+      failGeneration(workflow._id, 13, 'Generation timed out. Please try again.');
+      return;
+    }
 
-  const isCurrentlyGenerating = isGenerating(workflow._id, 13) || submitStep13.isPending;
+    // Auto-fail if queue reports failure
+    if (queueStatus === 'failed') {
+      failGeneration(workflow._id, 13, 'Generation failed in background queue. Please try again.');
+    }
+  }, [workflow._id, workflow.step13, queueStatus, getGenerationState, failGeneration]);
+
+  // Complete generation when workflow data arrives
+  useEffect(() => {
+    if (workflow.step13 && isGenerating(workflow._id, 13)) {
+      completeGeneration(workflow._id, 13);
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    }
+  }, [workflow.step13, workflow._id, isGenerating, completeGeneration]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
+
+  // Show generating UI if local state OR backend job is active
+  const isCurrentlyGenerating =
+    isGenerating(workflow._id, 13) ||
+    submitStep13.isPending ||
+    queueStatus === 'processing' ||
+    queueStatus === 'queued';
 
   const handleGenerate = async () => {
     if (isCurrentlyGenerating) return;
     setError(null);
     startGeneration(workflow._id, 13, 900);
+    startStatusPolling();
 
     try {
       await submitStep13.mutateAsync(workflow._id);
-      // Poll for completion
-      const pollInterval = setInterval(async () => {
+      // Also refresh workflow data periodically to detect step13 data arrival
+      pollIntervalRef.current = setInterval(async () => {
         await onRefresh();
       }, 15000);
-
-      // Clear after 10 minutes max
-      setTimeout(() => clearInterval(pollInterval), 600000);
+      // Clear after 25 minutes (Step 13 can take up to 20 min)
+      setTimeout(
+        () => {
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+        },
+        25 * 60 * 1000
+      );
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate summative exam';
       console.error('Failed to generate exam:', err);
@@ -68,11 +116,6 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
       setError(errorMessage);
     }
   };
-
-  // Complete generation when data arrives
-  if (workflow.step13 && isGenerating(workflow._id, 13)) {
-    completeGeneration(workflow._id, 13);
-  }
 
   const handleApprove = async () => {
     setError(null);
