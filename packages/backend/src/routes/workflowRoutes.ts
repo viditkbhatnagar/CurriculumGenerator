@@ -2795,7 +2795,7 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
         workflowId: id,
       });
 
-      const totalModules = lessonPlans.length;
+      const totalModules = new Set(lessonPlans.map((m: any) => m.moduleId)).size;
       const existingModules = completedModuleIds.size;
 
       // Check if already complete
@@ -2920,7 +2920,7 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
     const jobs = await queueAllRemainingStep11Modules(id, userId);
 
     const modulesGenerated = completedModuleIds.size;
-    const totalModules = lessonPlans.length;
+    const totalModules = new Set(lessonPlans.map((m: any) => m.moduleId)).size;
 
     loggingService.info('Step 11 jobs queued', {
       workflowId: id,
@@ -2985,7 +2985,7 @@ router.post(
 
       // Check how many modules are already generated (unique count)
       const nextModuleLessonPlans = workflow.step10?.moduleLessonPlans || [];
-      const totalModules = nextModuleLessonPlans.length;
+      const totalModules = new Set(nextModuleLessonPlans.map((m: any) => m.moduleId)).size;
       const nextModuleCompletedIds = new Set(
         (workflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
       );
@@ -3094,7 +3094,7 @@ router.get('/:id/step11/status', validateJWT, loadUser, async (req: Request, res
     );
 
     const statusLessonPlans = workflow.step10?.moduleLessonPlans || [];
-    const totalModules = statusLessonPlans.length;
+    const totalModules = new Set(statusLessonPlans.map((m: any) => m.moduleId)).size;
     const statusCompletedIds = new Set(
       (workflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
     );
@@ -3164,7 +3164,7 @@ router.post('/:id/step11/approve', validateJWT, loadUser, async (req: Request, r
       });
     }
 
-    const totalModules = workflow.step10?.moduleLessonPlans?.length || 0;
+    const totalModules = new Set((workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)).size;
     const completedModules = new Set(workflow.step11.modulePPTDecks.map((m: any) => m.moduleId)).size;
 
     if (completedModules < totalModules) {

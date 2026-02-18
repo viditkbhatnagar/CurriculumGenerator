@@ -96,7 +96,7 @@ if (step11Queue) {
 
       // Get lesson plans from Step 10
       const lessonPlans = workflow.step10?.moduleLessonPlans || [];
-      const totalModules = lessonPlans.length;
+      const totalModules = new Set(lessonPlans.map((m: any) => m.moduleId)).size;
       if (totalModules === 0) {
         throw new Error('No lesson plans found in Step 10. Complete Step 10 first.');
       }
