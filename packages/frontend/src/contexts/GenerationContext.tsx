@@ -89,7 +89,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
 
   // Update timer for progress tracking
   useEffect(() => {
-    const hasActiveGenerations = Object.values(generations).some((g) => g.status === 'generating');
+    const hasActiveGenerations = Object.values(generations).some((g) => g?.status === 'generating');
 
     if (hasActiveGenerations && !timerRef.current) {
       timerRef.current = setInterval(() => {
@@ -147,10 +147,13 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
 
   const failGeneration = useCallback((workflowId: string, step: number, error: string) => {
     const key = getKey(workflowId, step);
-    setGenerations((prev) => ({
-      ...prev,
-      [key]: prev[key] ? { ...prev[key], status: 'error', error } : prev[key],
-    }));
+    setGenerations((prev) => {
+      if (!prev[key]) return prev; // Don't create entries for non-existent keys
+      return {
+        ...prev,
+        [key]: { ...prev[key], status: 'error' as const, error },
+      };
+    });
   }, []);
 
   const isGenerating = useCallback(
