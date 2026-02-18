@@ -27,7 +27,23 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
     sectionA: true,
   });
   const [expandedQuestions, setExpandedQuestions] = useState<Record<string, boolean>>({});
-  const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
+  const { startGeneration, completeGeneration, failGeneration, isGenerating, getGenerationState } =
+    useGeneration();
+
+  // Auto-clear stale generation state (stuck > 15 min without data)
+  const genState = getGenerationState(workflow._id, 13);
+  const isStale =
+    genState?.status === 'generating' &&
+    !workflow.step13 &&
+    Date.now() - genState.startTime > 15 * 60 * 1000;
+  if (isStale) {
+    failGeneration(workflow._id, 13, 'Generation timed out. Please try again.');
+  }
+
+  // Also detect job failure from queue status
+  if (genState?.status === 'generating' && queueStatus === 'failed') {
+    failGeneration(workflow._id, 13, 'Generation failed in background queue. Please try again.');
+  }
 
   const isCurrentlyGenerating = isGenerating(workflow._id, 13) || submitStep13.isPending;
 
