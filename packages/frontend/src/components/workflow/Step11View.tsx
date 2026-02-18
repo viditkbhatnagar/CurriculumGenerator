@@ -129,19 +129,16 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
 
     setError(null);
 
-    const totalModules = workflow.step10?.moduleLessonPlans?.length || 0;
-    const existingModules = workflow.step11?.modulePPTDecks?.length || 0;
-    const nextModuleIndex = existingModules;
+    const lessonPlans = workflow.step10?.moduleLessonPlans || [];
+    const completedModuleIdSet = new Set(
+      workflow.step11?.modulePPTDecks?.map((m) => m.moduleId) || []
+    );
 
-    if (nextModuleIndex >= totalModules) {
-      setError('All PPTs already generated');
-      return;
-    }
-
-    const nextModule = workflow.step10?.moduleLessonPlans?.[nextModuleIndex];
+    // Find the first module that hasn't been generated yet
+    const nextModule = lessonPlans.find((m) => !completedModuleIdSet.has(m.moduleId));
 
     if (!nextModule) {
-      setError('No more modules to generate PPTs for');
+      setError('All PPTs already generated');
       return;
     }
 
@@ -412,6 +409,21 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
       ) : (
         // Display Generated PPT Decks
         <div className="space-y-6">
+          {/* Local error display (e.g., mutation failures, validation errors) */}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center justify-between">
+              <p className="text-red-400">{error}</p>
+              <button
+                onClick={() => setError(null)}
+                className="text-red-400 hover:text-red-300 ml-4 flex-shrink-0"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+
           {/* Module Generation List */}
           <div className="bg-teal-50/50 rounded-lg p-6 border border-teal-200">
             <h3 className="text-xl font-bold text-teal-800 mb-4">PPT Generation Progress</h3>

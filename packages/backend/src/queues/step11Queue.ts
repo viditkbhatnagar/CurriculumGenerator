@@ -95,12 +95,17 @@ if (step11Queue) {
       }
 
       // Get lesson plans from Step 10
-      const totalModules = workflow.step10?.moduleLessonPlans?.length || 0;
+      const lessonPlans = workflow.step10?.moduleLessonPlans || [];
+      const totalModules = lessonPlans.length;
       if (totalModules === 0) {
         throw new Error('No lesson plans found in Step 10. Complete Step 10 first.');
       }
 
-      const existingModules = workflow.step11?.modulePPTDecks?.length || 0;
+      // Use unique moduleId count to handle potential duplicates in modulePPTDecks
+      const completedModuleIds = new Set(
+        (workflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
+      );
+      const existingModules = lessonPlans.filter((m: any) => completedModuleIds.has(m.moduleId)).length;
 
       // Check if this module is already generated
       if (existingModules > moduleIndex) {
@@ -141,7 +146,10 @@ if (step11Queue) {
 
       await job.progress(90);
 
-      const newModulesCount = updatedWorkflow.step11?.modulePPTDecks?.length || 0;
+      const newCompletedIds = new Set(
+        (updatedWorkflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
+      );
+      const newModulesCount = lessonPlans.filter((m: any) => newCompletedIds.has(m.moduleId)).length;
       const allComplete = newModulesCount >= totalModules;
 
       loggingService.info('Module PPT generation complete', {
@@ -308,9 +316,13 @@ export async function queueAllRemainingStep11Modules(
     throw new Error('Workflow not found');
   }
 
-  // Get total modules from Step 10 lesson plans
-  const totalModules = workflow.step10?.moduleLessonPlans?.length || 0;
-  const existingModules = workflow.step11?.modulePPTDecks?.length || 0;
+  // Get total modules from Step 10 lesson plans, count unique completed modules
+  const lessonPlans = workflow.step10?.moduleLessonPlans || [];
+  const totalModules = lessonPlans.length;
+  const completedModuleIds = new Set(
+    (workflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
+  );
+  const existingModules = lessonPlans.filter((m: any) => completedModuleIds.has(m.moduleId)).length;
 
   const jobs: Job<Step11JobData>[] = [];
 

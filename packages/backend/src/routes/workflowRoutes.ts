@@ -2769,10 +2769,24 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
       });
     }
 
+    // Clear any stale lastError from previous attempts so the frontend doesn't
+    // immediately cancel the new generation based on an old error
+    if (existingWorkflow.step11?.lastError) {
+      existingWorkflow.step11.lastError = undefined;
+      existingWorkflow.markModified('step11');
+      await existingWorkflow.save();
+    }
+
     // Import queue functions
     const { queueAllRemainingStep11Modules, getAllStep11Jobs, step11Queue } = await import(
       '../queues/step11Queue'
     );
+
+    // Helper: count unique completed modules by matching step10 moduleIds
+    const completedModuleIds = new Set(
+      (existingWorkflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
+    );
+    const lessonPlans = existingWorkflow.step10?.moduleLessonPlans || [];
 
     // Check if Redis/queue is available
     if (!step11Queue) {
@@ -2781,8 +2795,8 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
         workflowId: id,
       });
 
-      const totalModules = existingWorkflow.step10?.moduleLessonPlans?.length || 0;
-      const existingModules = existingWorkflow.step11?.modulePPTDecks?.length || 0;
+      const totalModules = lessonPlans.length;
+      const existingModules = lessonPlans.filter((m: any) => completedModuleIds.has(m.moduleId)).length;
 
       // Check if already complete
       if (existingModules >= totalModules) {
@@ -2864,7 +2878,7 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
       });
     }
 
-    // Check if jobs are already in progress
+    // Check if jobs are already in progress, and clean up stale completed/failed ones
     const existingJobs = await getAllStep11Jobs(id);
     const jobStates = await Promise.all(
       existingJobs.map(async (job: any) => ({
@@ -2872,6 +2886,19 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
         state: await job.getState(),
       }))
     );
+
+    // Remove stale completed/failed jobs to prevent interference
+    const staleJobs = jobStates.filter(({ state }) =>
+      ['completed', 'failed'].includes(state)
+    );
+    for (const { job: staleJob } of staleJobs) {
+      try {
+        await staleJob.remove();
+      } catch (_e) {
+        // Ignore removal errors for already-removed jobs
+      }
+    }
+
     const activeJobs = jobStates.filter(({ state }) =>
       ['waiting', 'active', 'delayed'].includes(state)
     );
@@ -2882,8 +2909,8 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
         data: {
           message: 'PPT generation already in progress',
           jobsQueued: activeJobs.length,
-          modulesGenerated: existingWorkflow.step11?.modulePPTDecks?.length || 0,
-          totalModules: existingWorkflow.step10?.moduleLessonPlans?.length || 0,
+          modulesGenerated: completedModuleIds.size,
+          totalModules: lessonPlans.length,
         },
         message: 'Step 11 PPT generation is already in progress. Check status for updates.',
       });
@@ -2892,8 +2919,8 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
     // Queue the remaining modules
     const jobs = await queueAllRemainingStep11Modules(id, userId);
 
-    const modulesGenerated = existingWorkflow.step11?.modulePPTDecks?.length || 0;
-    const totalModules = existingWorkflow.step10?.moduleLessonPlans?.length || 0;
+    const modulesGenerated = completedModuleIds.size;
+    const totalModules = lessonPlans.length;
 
     loggingService.info('Step 11 jobs queued', {
       workflowId: id,
@@ -2956,9 +2983,13 @@ router.post(
         });
       }
 
-      // Check how many modules are already generated
-      const totalModules = workflow.step10?.moduleLessonPlans?.length || 0;
-      const existingModules = workflow.step11?.modulePPTDecks?.length || 0;
+      // Check how many modules are already generated (unique count)
+      const nextModuleLessonPlans = workflow.step10?.moduleLessonPlans || [];
+      const totalModules = nextModuleLessonPlans.length;
+      const nextModuleCompletedIds = new Set(
+        (workflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
+      );
+      const existingModules = nextModuleLessonPlans.filter((m: any) => nextModuleCompletedIds.has(m.moduleId)).length;
 
       if (existingModules >= totalModules) {
         return res.json({
@@ -2982,7 +3013,10 @@ router.post(
       // Generate the next module PPT
       const updatedWorkflow = await workflowService.processStep11NextModule(id);
 
-      const newModulesCount = updatedWorkflow.step11?.modulePPTDecks?.length || 0;
+      const newCompletedIds = new Set(
+        (updatedWorkflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
+      );
+      const newModulesCount = nextModuleLessonPlans.filter((m: any) => newCompletedIds.has(m.moduleId)).length;
       const allComplete = newModulesCount >= totalModules;
 
       loggingService.info('Next module PPT generation complete', {
@@ -3059,8 +3093,12 @@ router.get('/:id/step11/status', validateJWT, loadUser, async (req: Request, res
       })
     );
 
-    const totalModules = workflow.step10?.moduleLessonPlans?.length || 0;
-    const modulesGenerated = workflow.step11?.modulePPTDecks?.length || 0;
+    const statusLessonPlans = workflow.step10?.moduleLessonPlans || [];
+    const totalModules = statusLessonPlans.length;
+    const statusCompletedIds = new Set(
+      (workflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
+    );
+    const modulesGenerated = statusLessonPlans.filter((m: any) => statusCompletedIds.has(m.moduleId)).length;
     const allComplete = modulesGenerated >= totalModules;
 
     const activeJobs = jobStatuses.filter((j) =>
