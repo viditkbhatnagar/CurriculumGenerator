@@ -94,12 +94,23 @@ if (step10Queue) {
         throw new Error('Workflow not found');
       }
 
-      const totalModules = workflow.step4?.modules?.length || 0;
-      const existingModules = workflow.step10?.moduleLessonPlans?.length || 0;
+      const modules = workflow.step4?.modules || [];
+      const totalModules = new Set(modules.map((m: any) => m.id)).size;
 
-      // Check if this module is already generated
-      if (existingModules > moduleIndex) {
-        loggingService.info('Module already generated, skipping', {
+      // Use unique moduleId set for counting
+      const completedModuleIds = new Set(
+        (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+      );
+      const existingModules = completedModuleIds.size;
+
+      // Find the actual next ungenerated module
+      const nextModuleIndex = modules.findIndex(
+        (m: any) => !completedModuleIds.has(m.id)
+      );
+
+      // Check if all modules are already generated
+      if (nextModuleIndex === -1) {
+        loggingService.info('All module lesson plans already generated, skipping', {
           workflowId,
           moduleIndex,
           existingModules,
@@ -110,25 +121,19 @@ if (step10Queue) {
           moduleIndex,
           modulesGenerated: existingModules,
           totalModules,
-          allComplete: existingModules >= totalModules,
+          allComplete: true,
           totalLessons: workflow.step10?.summary?.totalLessons || 0,
           totalContactHours: workflow.step10?.summary?.totalContactHours || 0,
         };
       }
 
-      // Check if we should generate this module
-      if (moduleIndex !== existingModules) {
-        throw new Error(
-          `Cannot generate module ${moduleIndex + 1}. Expected module ${existingModules + 1}`
-        );
-      }
-
       await job.progress(10);
 
       // Generate the next module
-      loggingService.info('Generating module', {
+      loggingService.info('Generating lesson plans for module', {
         workflowId,
-        moduleNumber: moduleIndex + 1,
+        moduleNumber: nextModuleIndex + 1,
+        moduleId: modules[nextModuleIndex]?.id,
         totalModules,
       });
 
@@ -136,7 +141,10 @@ if (step10Queue) {
 
       await job.progress(90);
 
-      const newModulesCount = updatedWorkflow.step10?.moduleLessonPlans?.length || 0;
+      const newCompletedIds = new Set(
+        (updatedWorkflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+      );
+      const newModulesCount = newCompletedIds.size;
       const allComplete = newModulesCount >= totalModules;
 
       loggingService.info('Module generation complete', {
@@ -150,13 +158,19 @@ if (step10Queue) {
 
       await job.progress(100);
 
-      // If not all complete, queue the next module
+      // If not all complete, find and queue the next ungenerated module
       if (!allComplete) {
-        await addStep10Job(workflowId, moduleIndex + 1, job.data.userId);
-        loggingService.info('Queued next module', {
-          workflowId,
-          nextModuleIndex: moduleIndex + 1,
-        });
+        const nextUngenIndex = modules.findIndex(
+          (m: any) => !newCompletedIds.has(m.id)
+        );
+        if (nextUngenIndex !== -1) {
+          await addStep10Job(workflowId, nextUngenIndex, job.data.userId);
+          loggingService.info('Queued next module for lesson plans', {
+            workflowId,
+            nextModuleIndex: nextUngenIndex,
+            nextModuleId: modules[nextUngenIndex]?.id,
+          });
+        }
       }
 
       return {
@@ -273,15 +287,20 @@ export async function queueAllRemainingModules(
     throw new Error('Workflow not found');
   }
 
-  const totalModules = workflow.step4?.modules?.length || 0;
-  const existingModules = workflow.step10?.moduleLessonPlans?.length || 0;
+  // Find the first ungenerated module by scanning step4 modules
+  const modules = workflow.step4?.modules || [];
+  const completedModuleIds = new Set(
+    (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+  );
+  const nextModuleIndex = modules.findIndex(
+    (m: any) => !completedModuleIds.has(m.id)
+  );
 
   const jobs: Job<Step10JobData>[] = [];
 
-  // Queue only the next module (not all remaining)
-  // The job processor will automatically queue the next one after completion
-  if (existingModules < totalModules) {
-    const job = await addStep10Job(workflowId, existingModules, userId);
+  // Queue only the next ungenerated module (auto-chaining handles the rest)
+  if (nextModuleIndex !== -1) {
+    const job = await addStep10Job(workflowId, nextModuleIndex, userId);
     if (job) {
       jobs.push(job);
     }

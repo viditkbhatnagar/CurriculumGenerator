@@ -2269,8 +2269,13 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
         workflowId: id,
       });
 
-      const existingModules = existingWorkflow.step10?.moduleLessonPlans?.length || 0;
-      const totalModules = existingWorkflow.step4?.modules?.length || 0;
+      const step10CompletedIds = new Set(
+        (existingWorkflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+      );
+      const existingModules = step10CompletedIds.size;
+      const totalModules = new Set(
+        (existingWorkflow.step4?.modules || []).map((m: any) => m.id)
+      ).size;
 
       // Check if already complete
       if (existingModules >= totalModules) {
@@ -2294,7 +2299,9 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
         .then((result) => {
           loggingService.info('Step 10 module generation completed successfully', {
             workflowId: id,
-            modulesGenerated: result.step10?.moduleLessonPlans?.length || 0,
+            modulesGenerated: new Set(
+              (result.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+            ).size,
             totalModules,
             moduleJustCompleted: existingModules + 1,
           });
@@ -2336,8 +2343,12 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
         data: {
           message: 'Generation already in progress',
           jobsQueued: activeJobs.length,
-          modulesGenerated: existingWorkflow.step10?.moduleLessonPlans?.length || 0,
-          totalModules: existingWorkflow.step4?.modules?.length || 0,
+          modulesGenerated: new Set(
+            (existingWorkflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+          ).size,
+          totalModules: new Set(
+            (existingWorkflow.step4?.modules || []).map((m: any) => m.id)
+          ).size,
         },
         message: 'Step 10 generation is already in progress. Check status for updates.',
       });
@@ -2346,8 +2357,12 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
     // Queue the remaining modules
     const jobs = await queueAllRemainingModules(id, userId);
 
-    const modulesGenerated = existingWorkflow.step10?.moduleLessonPlans?.length || 0;
-    const totalModules = existingWorkflow.step4?.modules?.length || 0;
+    const modulesGenerated = new Set(
+      (existingWorkflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+    ).size;
+    const totalModules = new Set(
+      (existingWorkflow.step4?.modules || []).map((m: any) => m.id)
+    ).size;
 
     loggingService.info('Step 10 jobs queued', {
       workflowId: id,
@@ -2412,8 +2427,13 @@ router.post(
       }
 
       // Check how many modules are already generated
-      const existingModules = workflow.step10?.moduleLessonPlans?.length || 0;
-      const totalModules = workflow.step4?.modules?.length || 0;
+      const nmCompletedIds = new Set(
+        (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+      );
+      const existingModules = nmCompletedIds.size;
+      const totalModules = new Set(
+        (workflow.step4?.modules || []).map((m: any) => m.id)
+      ).size;
 
       if (existingModules >= totalModules) {
         return res.json({
@@ -2437,7 +2457,9 @@ router.post(
       // Generate the next module
       const updatedWorkflow = await workflowService.processStep10NextModule(id);
 
-      const newModulesCount = updatedWorkflow.step10?.moduleLessonPlans?.length || 0;
+      const newModulesCount = new Set(
+        (updatedWorkflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+      ).size;
       const allComplete = newModulesCount >= totalModules;
 
       loggingService.info('Next module generation complete', {
@@ -2514,8 +2536,12 @@ router.get('/:id/step10/status', validateJWT, loadUser, async (req: Request, res
       })
     );
 
-    const modulesGenerated = workflow.step10?.moduleLessonPlans?.length || 0;
-    const totalModules = workflow.step4?.modules?.length || 0;
+    const modulesGenerated = new Set(
+      (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+    ).size;
+    const totalModules = new Set(
+      (workflow.step4?.modules || []).map((m: any) => m.id)
+    ).size;
     const allComplete = modulesGenerated >= totalModules;
 
     const activeJobs = jobStatuses.filter((j) =>
@@ -2627,8 +2653,12 @@ router.post('/:id/step10/approve', validateJWT, loadUser, async (req: Request, r
       });
     }
 
-    const totalModules = workflow.step4?.modules?.length || 0;
-    const completedModules = workflow.step10.moduleLessonPlans.length;
+    const totalModules = new Set(
+      (workflow.step4?.modules || []).map((m: any) => m.id)
+    ).size;
+    const completedModules = new Set(
+      workflow.step10.moduleLessonPlans.map((m: any) => m.moduleId)
+    ).size;
 
     if (completedModules < totalModules) {
       return res.status(400).json({
@@ -5145,10 +5175,10 @@ router.get(
       const { id, stepNumber } = req.params;
       const step = parseInt(stepNumber, 10);
 
-      if (step < 1 || step > 9) {
+      if (step < 1 || (step > 9 && step !== 13)) {
         return res.status(400).json({
           success: false,
-          error: 'Step number must be between 1 and 9',
+          error: 'Step number must be between 1 and 9, or 13',
         });
       }
 

@@ -3096,17 +3096,28 @@ CRITICAL VALIDATION:
       throw new Error('Workflow not found or Step 9 not complete');
     }
 
-    const existingModules = workflow.step10?.moduleLessonPlans?.length || 0;
-    const totalModules = workflow.step4?.modules?.length || 0;
+    const modules = workflow.step4?.modules || [];
+    const totalModules = new Set(modules.map((m: any) => m.id)).size;
+
+    // Use unique moduleId set for counting
+    const completedModuleIds = new Set(
+      (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+    );
+    const existingModules = completedModuleIds.size;
+
+    // Find the actual next ungenerated module
+    const expectedModuleIndex = modules.findIndex(
+      (m: any) => !completedModuleIds.has(m.id)
+    );
 
     loggingService.info('Processing Step 10: Next Module - Initial Check', {
       workflowId,
       existingModules,
       totalModules,
-      nextModuleIndex: existingModules,
+      nextModuleIndex: expectedModuleIndex,
     });
 
-    if (existingModules >= totalModules) {
+    if (expectedModuleIndex === -1) {
       loggingService.info('All modules already generated', {
         workflowId,
         existingModules,
@@ -3117,7 +3128,7 @@ CRITICAL VALIDATION:
 
     loggingService.info('Processing Step 10: Next Module', {
       workflowId,
-      moduleNumber: existingModules + 1,
+      moduleNumber: expectedModuleIndex + 1,
       totalModules,
     });
 
@@ -3233,7 +3244,7 @@ CRITICAL VALIDATION:
     const context = this.buildWorkflowContext(workflow);
 
     // Get the next module to generate
-    const nextModuleIndex = existingModules;
+    const nextModuleIndex = expectedModuleIndex;
     const module = context.modules[nextModuleIndex];
 
     if (!module) {
@@ -3324,7 +3335,9 @@ CRITICAL VALIDATION:
     );
 
     // Update workflow status if all modules are complete
-    const newModulesCount = workflow.step10.moduleLessonPlans.length;
+    const newModulesCount = new Set(
+      workflow.step10.moduleLessonPlans.map((m: any) => m.moduleId)
+    ).size;
     if (newModulesCount >= totalModules) {
       workflow.currentStep = 10;
       workflow.status = 'step10_complete';

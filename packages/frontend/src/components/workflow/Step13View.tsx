@@ -34,7 +34,7 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
   const handleGenerate = async () => {
     if (isCurrentlyGenerating) return;
     setError(null);
-    startGeneration(workflow._id, 13, 120);
+    startGeneration(workflow._id, 13, 900);
 
     try {
       await submitStep13.mutateAsync(workflow._id);
