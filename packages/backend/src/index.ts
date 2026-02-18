@@ -405,6 +405,22 @@ async function startServer() {
       loggingService.warn('Failed to initialize generic step queue', { error: String(error) });
     }
 
+    // Initialize Step 11 background job queue (PPT generation)
+    try {
+      await import('./queues/step11Queue');
+      loggingService.info('Step 11 PPT generation queue initialized');
+    } catch (error) {
+      loggingService.warn('Failed to initialize Step 11 queue', { error: String(error) });
+    }
+
+    // Initialize Step 12 background job queue (Assignment packs)
+    try {
+      await import('./queues/step12Queue');
+      loggingService.info('Step 12 assignment packs queue initialized');
+    } catch (error) {
+      loggingService.warn('Failed to initialize Step 12 queue', { error: String(error) });
+    }
+
     // Start HTTP server
     httpServer.listen(PORT, () => {
       loggingService.info('Server started successfully', {
@@ -528,6 +544,26 @@ async function gracefulShutdown(signal: string) {
       loggingService.info('Generic step queue closed');
     } catch (error) {
       loggingService.error('Error closing generic step queue', error);
+      exitCode = 1;
+    }
+
+    // Close Step 11 queue
+    try {
+      const { closeStep11Queue } = await import('./queues/step11Queue');
+      await closeStep11Queue();
+      loggingService.info('Step 11 queue closed');
+    } catch (error) {
+      loggingService.error('Error closing Step 11 queue', error);
+      exitCode = 1;
+    }
+
+    // Close Step 12 queue
+    try {
+      const { closeStep12Queue } = await import('./queues/step12Queue');
+      await closeStep12Queue();
+      loggingService.info('Step 12 queue closed');
+    } catch (error) {
+      loggingService.error('Error closing Step 12 queue', error);
       exitCode = 1;
     }
 

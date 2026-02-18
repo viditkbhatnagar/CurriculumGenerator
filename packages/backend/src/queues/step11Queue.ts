@@ -197,7 +197,7 @@ if (step11Queue) {
     });
   });
 
-  step11Queue.on('failed', (job: Job<Step11JobData>, error: Error) => {
+  step11Queue.on('failed', async (job: Job<Step11JobData>, error: Error) => {
     loggingService.error('Step 11 job failed', {
       jobId: job.id,
       workflowId: job.data.workflowId,
@@ -206,6 +206,36 @@ if (step11Queue) {
       attempts: job.attemptsMade,
       maxAttempts: job.opts.attempts,
     });
+    // Persist error to workflow document so frontend can detect it
+    try {
+      const workflow = await CurriculumWorkflow.findById(job.data.workflowId);
+      if (workflow) {
+        if (!workflow.step11) {
+          workflow.step11 = {
+            modulePPTDecks: [],
+            validation: {
+              allLessonsHavePPTs: false,
+              allSlideCountsValid: false,
+              allMLOsCovered: false,
+              allCitationsValid: false,
+            },
+            summary: { totalPPTDecks: 0, totalSlides: 0, averageSlidesPerLesson: 0 },
+            generatedAt: new Date(),
+          };
+        }
+        workflow.step11.lastError = {
+          message: error.message,
+          moduleIndex: job.data.moduleIndex,
+          timestamp: new Date(),
+        };
+        workflow.markModified('step11');
+        await workflow.save();
+      }
+    } catch (dbErr) {
+      loggingService.error('Failed to persist Step 11 job error', {
+        error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+      });
+    }
   });
 
   step11Queue.on('stalled', (job: Job<Step11JobData>) => {

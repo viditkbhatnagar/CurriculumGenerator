@@ -15,7 +15,7 @@ interface Props {
 export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
   const submitStep11 = useSubmitStep11();
   const approveStep11 = useApproveStep11();
-  const { data: _statusData, refetch: _refetchStatus } = useStep11Status(workflow._id);
+  const { data: statusData, refetch: refetchStatus } = useStep11Status(workflow._id);
   const [error, setError] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [generatingModuleId, setGeneratingModuleId] = useState<string | null>(null);
@@ -35,8 +35,6 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
     for (let i = 0; i < lessonPlans.length; i++) {
       if (moduleIds.has(lessonPlans[i]?.moduleId)) {
         count++;
-      } else {
-        break;
       }
     }
     return count;
@@ -45,21 +43,64 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
   const prevModuleCountRef = useRef<number>(getUniqueCompletedCount());
 
   useEffect(() => {
+    if (!generatingModuleId) return;
+
+    // Check if the module we're waiting for is already complete
+    const moduleAlreadyComplete = workflow.step11?.modulePPTDecks?.some(
+      (m) => m.moduleId === generatingModuleId
+    );
+    if (moduleAlreadyComplete) {
+      setGeneratingModuleId(null);
+      completeGeneration(workflow._id, 11);
+      return;
+    }
+
+    // Check if there's an error from the backend
+    if (workflow.step11?.lastError) {
+      setError(
+        `PPT generation failed for module ${workflow.step11.lastError.moduleIndex + 1}: ${workflow.step11.lastError.message}`
+      );
+      setGeneratingModuleId(null);
+      failGeneration(workflow._id, 11, workflow.step11.lastError.message);
+      return;
+    }
+
+    // Fallback: count-based check
     const currentModuleCount = getUniqueCompletedCount();
-    // If a new module was added while we were generating, clear the generating state
-    if (generatingModuleId && currentModuleCount > prevModuleCountRef.current) {
+    if (currentModuleCount > prevModuleCountRef.current) {
       setGeneratingModuleId(null);
       completeGeneration(workflow._id, 11);
     }
-    // Update the ref for next comparison
     prevModuleCountRef.current = currentModuleCount;
   }, [
     workflow.step11?.modulePPTDecks,
+    workflow.step11?.lastError,
     workflow.step10?.moduleLessonPlans,
     generatingModuleId,
     completeGeneration,
+    failGeneration,
     workflow._id,
   ]);
+
+  // Clear stale GenerationContext state on mount/status update
+  useEffect(() => {
+    if (!isGenerating(workflow._id, 11) || generatingModuleId || submitStep11.isPending) return;
+
+    // Wait until statusData is loaded before evaluating backend job state
+    if (statusData == null) return;
+
+    const hasActiveBackendJobs = statusData?.jobs?.active > 0;
+    const hasError = !!workflow.step11?.lastError;
+
+    // If no active backend jobs and we're not actively submitting, clear stale context
+    if (!hasActiveBackendJobs) {
+      if (hasError) {
+        failGeneration(workflow._id, 11, workflow.step11!.lastError!.message);
+      } else {
+        completeGeneration(workflow._id, 11);
+      }
+    }
+  }, [statusData, workflow.step11?.lastError]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-poll when generation is in progress (reduced frequency to prevent server overload)
   useEffect(() => {
@@ -67,10 +108,17 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
 
     const pollInterval = setInterval(() => {
       onRefresh(); // This should trigger a workflow refetch
+      refetchStatus(); // Also refetch job status
     }, 15000); // Poll every 15 seconds to avoid overwhelming the server
 
     return () => clearInterval(pollInterval);
-  }, [generatingModuleId, onRefresh]);
+  }, [generatingModuleId, onRefresh, refetchStatus]);
+
+  const handleRetry = async () => {
+    setError(null);
+    // Clear the lastError from backend by triggering a fresh generation
+    await handleGenerate();
+  };
 
   const handleGenerate = async () => {
     // Prevent multiple simultaneous generation requests
@@ -213,14 +261,12 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
   const totalModules = workflow.step10?.moduleLessonPlans?.length || 0;
   const completedModuleIds = new Set(workflow.step11?.modulePPTDecks?.map((m) => m.moduleId) || []);
 
-  // Count how many step10 modules have corresponding step11 PPTs (in order)
+  // Count how many step10 modules have corresponding step11 PPTs
   let completedModules = 0;
   for (let i = 0; i < totalModules; i++) {
     const moduleId = workflow.step10?.moduleLessonPlans?.[i]?.moduleId;
     if (moduleId && completedModuleIds.has(moduleId)) {
       completedModules++;
-    } else {
-      break; // Stop at first incomplete module
     }
   }
 
@@ -573,6 +619,53 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
               </p>
             </div>
           </div>
+
+          {/* Error Banner with Retry */}
+          {(workflow.step11?.lastError || (statusData?.jobs?.failed > 0 && !isCurrentlyGenerating)) && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-5">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                  <svg
+                    className="w-6 h-6 text-red-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-red-400 mb-1">
+                    PPT Generation Failed
+                  </h3>
+                  <p className="text-teal-700 text-sm">
+                    {workflow.step11?.lastError?.message ||
+                      'A background job failed. Click Retry to attempt generation again.'}
+                  </p>
+                </div>
+                <button
+                  onClick={handleRetry}
+                  disabled={isCurrentlyGenerating}
+                  className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  Retry
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Completion Banner */}
           {isAllModulesComplete && (

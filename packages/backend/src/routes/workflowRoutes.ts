@@ -2811,7 +2811,7 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
             moduleJustCompleted: existingModules + 1,
           });
         })
-        .catch((err) => {
+        .catch(async (err) => {
           loggingService.error('Step 11 module PPT generation failed in background', {
             workflowId: id,
             moduleNumber: existingModules + 1,
@@ -2819,6 +2819,36 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
             error: err instanceof Error ? err.message : String(err),
             stack: err instanceof Error ? err.stack : undefined,
           });
+          // Persist error to workflow document so frontend can detect it
+          try {
+            const errorWorkflow = await CurriculumWorkflow.findById(id);
+            if (errorWorkflow) {
+              if (!errorWorkflow.step11) {
+                errorWorkflow.step11 = {
+                  modulePPTDecks: [],
+                  validation: {
+                    allLessonsHavePPTs: false,
+                    allSlideCountsValid: false,
+                    allMLOsCovered: false,
+                    allCitationsValid: false,
+                  },
+                  summary: { totalPPTDecks: 0, totalSlides: 0, averageSlidesPerLesson: 0 },
+                  generatedAt: new Date(),
+                };
+              }
+              errorWorkflow.step11.lastError = {
+                message: err instanceof Error ? err.message : String(err),
+                moduleIndex: existingModules,
+                timestamp: new Date(),
+              };
+              errorWorkflow.markModified('step11');
+              await errorWorkflow.save();
+            }
+          } catch (dbErr) {
+            loggingService.error('Failed to persist Step 11 error', {
+              error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+            });
+          }
         });
 
       // Return immediately with status
@@ -2836,10 +2866,15 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
 
     // Check if jobs are already in progress
     const existingJobs = await getAllStep11Jobs(id);
-    const activeJobs = existingJobs.filter((job: any) => {
-      const state = job.getState ? job.getState() : 'unknown';
-      return ['waiting', 'active', 'delayed'].includes(state);
-    });
+    const jobStates = await Promise.all(
+      existingJobs.map(async (job: any) => ({
+        job,
+        state: await job.getState(),
+      }))
+    );
+    const activeJobs = jobStates.filter(({ state }) =>
+      ['waiting', 'active', 'delayed'].includes(state)
+    );
 
     if (activeJobs.length > 0) {
       return res.json({

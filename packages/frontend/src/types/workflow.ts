@@ -1489,6 +1489,12 @@ export interface Step11PPTGeneration {
     averageSlidesPerLesson: number;
   };
 
+  lastError?: {
+    message: string;
+    moduleIndex: number;
+    timestamp: string;
+  };
+
   generatedAt: Date;
   validatedAt?: Date;
   approvedAt?: Date;

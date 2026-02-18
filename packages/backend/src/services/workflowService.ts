@@ -3623,6 +3623,11 @@ CRITICAL VALIDATION:
       }
     }
 
+    // Clear any previous error since generation succeeded
+    if (freshWorkflow.step11.lastError) {
+      freshWorkflow.step11.lastError = undefined;
+    }
+
     // Save workflow
     freshWorkflow.markModified('step11');
     await freshWorkflow.save();
