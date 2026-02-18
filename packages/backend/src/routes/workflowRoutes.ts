@@ -3796,6 +3796,9 @@ router.get('/:id/export/word', async (req: Request, res: Response) => {
       step8: workflow.step8,
       step9: workflow.step9,
       step10: workflow.step10,
+      step11: workflow.step11,
+      step12: workflow.step12,
+      step13: workflow.step13,
       createdAt: workflow.createdAt?.toISOString(),
       updatedAt: workflow.updatedAt?.toISOString(),
     };
@@ -3860,6 +3863,9 @@ router.get('/:id/export/pdf', async (req: Request, res: Response) => {
       step8: workflow.step8,
       step9: workflow.step9,
       step10: workflow.step10,
+      step11: workflow.step11,
+      step12: workflow.step12,
+      step13: workflow.step13,
       createdAt: workflow.createdAt?.toISOString(),
       updatedAt: workflow.updatedAt?.toISOString(),
     };
