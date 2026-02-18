@@ -1595,7 +1595,15 @@ export interface ExamOverview {
   examTitle: string;
   duration: string;
   totalMarks: number;
-  sectionBreakdown: string;
+  sectionBreakdown:
+    | string
+    | Array<{
+        section: string;
+        marks: number;
+        questionCount: number;
+        timeAllocation: string;
+        plosAssessed: string[];
+      }>;
   conditions: string;
 }
 

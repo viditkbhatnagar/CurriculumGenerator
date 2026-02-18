@@ -413,7 +413,13 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
                 </div>
                 <div>
                   <span className="text-teal-500">Sections:</span>
-                  <p className="text-teal-800 font-medium">{exam.overview.sectionBreakdown}</p>
+                  <p className="text-teal-800 font-medium">
+                    {Array.isArray(exam.overview.sectionBreakdown)
+                      ? exam.overview.sectionBreakdown
+                          .map((s) => `${s.section} (${s.marks} marks)`)
+                          .join(', ')
+                      : exam.overview.sectionBreakdown}
+                  </p>
                 </div>
                 <div>
                   <span className="text-teal-500">Conditions:</span>
