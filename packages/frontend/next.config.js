@@ -4,6 +4,11 @@ const nextConfig = {
   transpilePackages: ['@curriculum-app/shared-types'],
   output: 'standalone',
 
+  // Ignore ESLint warnings during production builds (lint runs separately in CI)
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   // Environment variables validation
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000',
