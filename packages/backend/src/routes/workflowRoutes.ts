@@ -3374,8 +3374,8 @@ router.get('/:id/step12/status', validateJWT, loadUser, async (req: Request, res
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
 
-    const totalModules = workflow.step4?.modules?.length || 0;
-    const completedModules = workflow.step12?.moduleAssignmentPacks?.length || 0;
+    const totalModules = new Set((workflow.step4?.modules || []).map((m: any) => m.id)).size;
+    const completedModules = new Set((workflow.step12?.moduleAssignmentPacks || []).map((m: any) => m.moduleId)).size;
 
     // Check queue status
     let queueStatus = null;
@@ -3442,8 +3442,8 @@ router.post('/:id/step12/approve', validateJWT, loadUser, async (req: Request, r
       });
     }
 
-    const totalModules = workflow.step4?.modules?.length || 0;
-    const completedModules = workflow.step12.moduleAssignmentPacks.length;
+    const totalModules = new Set((workflow.step4?.modules || []).map((m: any) => m.id)).size;
+    const completedModules = new Set(workflow.step12.moduleAssignmentPacks.map((m: any) => m.moduleId)).size;
 
     if (completedModules < totalModules) {
       return res.status(400).json({

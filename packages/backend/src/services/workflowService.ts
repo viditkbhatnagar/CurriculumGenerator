@@ -3811,14 +3811,20 @@ CRITICAL VALIDATION:
     }
 
     const modules = workflow.step4?.modules || [];
-    const totalModules = modules.length;
+    const totalModules = new Set(modules.map((m: any) => m.id)).size;
 
     if (totalModules === 0) {
       throw new Error('No modules found in Step 4. Complete Step 4 first.');
     }
 
-    const existingModules = workflow.step12?.moduleAssignmentPacks?.length || 0;
-    const expectedModuleIndex = existingModules;
+    // Use unique moduleId set to find the first ungenerated module
+    const completedModuleIds = new Set(
+      (workflow.step12?.moduleAssignmentPacks || []).map((m: any) => m.moduleId)
+    );
+    const existingModules = completedModuleIds.size;
+    const expectedModuleIndex = modules.findIndex(
+      (m: any) => !completedModuleIds.has(m.id)
+    );
 
     loggingService.info('Processing Step 12: Next Module', {
       workflowId,
@@ -3827,7 +3833,7 @@ CRITICAL VALIDATION:
       nextModuleIndex: expectedModuleIndex,
     });
 
-    if (existingModules >= totalModules) {
+    if (expectedModuleIndex === -1) {
       loggingService.info('All module assignment packs already generated', {
         workflowId,
         existingModules,
@@ -3837,21 +3843,6 @@ CRITICAL VALIDATION:
     }
 
     const moduleToProcess = modules[expectedModuleIndex];
-    if (!moduleToProcess) {
-      throw new Error(`Module at index ${expectedModuleIndex} not found`);
-    }
-
-    // Check if already generated
-    const existingModule = workflow.step12?.moduleAssignmentPacks?.find(
-      (m: any) => m.moduleId === moduleToProcess.id
-    );
-    if (existingModule) {
-      loggingService.info('Module assignment packs already exist, skipping', {
-        workflowId,
-        moduleId: moduleToProcess.id,
-      });
-      return workflow;
-    }
 
     const { assignmentPackService } = await import('./assignmentPackService');
     const context = this.buildStep12Context(workflow);
@@ -3919,8 +3910,10 @@ CRITICAL VALIDATION:
 
     freshWorkflow.step12.moduleAssignmentPacks.push(packs);
 
-    // Update summary
-    const newModulesCount = freshWorkflow.step12.moduleAssignmentPacks.length;
+    // Update summary — use unique moduleId count
+    const newModulesCount = new Set(
+      freshWorkflow.step12.moduleAssignmentPacks.map((m: any) => m.moduleId)
+    ).size;
     freshWorkflow.step12.summary = {
       totalModules: newModulesCount,
       totalAssignmentPacks: newModulesCount * 3,
