@@ -2273,9 +2273,8 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
         (existingWorkflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
       );
       const existingModules = step10CompletedIds.size;
-      const totalModules = new Set(
-        (existingWorkflow.step4?.modules || []).map((m: any) => m.id)
-      ).size;
+      const totalModules = new Set((existingWorkflow.step4?.modules || []).map((m: any) => m.id))
+        .size;
 
       // Check if already complete
       if (existingModules >= totalModules) {
@@ -2346,9 +2345,7 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
           modulesGenerated: new Set(
             (existingWorkflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
           ).size,
-          totalModules: new Set(
-            (existingWorkflow.step4?.modules || []).map((m: any) => m.id)
-          ).size,
+          totalModules: new Set((existingWorkflow.step4?.modules || []).map((m: any) => m.id)).size,
         },
         message: 'Step 10 generation is already in progress. Check status for updates.',
       });
@@ -2360,9 +2357,8 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
     const modulesGenerated = new Set(
       (existingWorkflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
     ).size;
-    const totalModules = new Set(
-      (existingWorkflow.step4?.modules || []).map((m: any) => m.id)
-    ).size;
+    const totalModules = new Set((existingWorkflow.step4?.modules || []).map((m: any) => m.id))
+      .size;
 
     loggingService.info('Step 10 jobs queued', {
       workflowId: id,
@@ -2431,9 +2427,7 @@ router.post(
         (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
       );
       const existingModules = nmCompletedIds.size;
-      const totalModules = new Set(
-        (workflow.step4?.modules || []).map((m: any) => m.id)
-      ).size;
+      const totalModules = new Set((workflow.step4?.modules || []).map((m: any) => m.id)).size;
 
       if (existingModules >= totalModules) {
         return res.json({
@@ -2539,9 +2533,7 @@ router.get('/:id/step10/status', validateJWT, loadUser, async (req: Request, res
     const modulesGenerated = new Set(
       (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
     ).size;
-    const totalModules = new Set(
-      (workflow.step4?.modules || []).map((m: any) => m.id)
-    ).size;
+    const totalModules = new Set((workflow.step4?.modules || []).map((m: any) => m.id)).size;
     const allComplete = modulesGenerated >= totalModules;
 
     const activeJobs = jobStatuses.filter((j) =>
@@ -2653,12 +2645,9 @@ router.post('/:id/step10/approve', validateJWT, loadUser, async (req: Request, r
       });
     }
 
-    const totalModules = new Set(
-      (workflow.step4?.modules || []).map((m: any) => m.id)
-    ).size;
-    const completedModules = new Set(
-      workflow.step10.moduleLessonPlans.map((m: any) => m.moduleId)
-    ).size;
+    const totalModules = new Set((workflow.step4?.modules || []).map((m: any) => m.id)).size;
+    const completedModules = new Set(workflow.step10.moduleLessonPlans.map((m: any) => m.moduleId))
+      .size;
 
     if (completedModules < totalModules) {
       return res.status(400).json({
@@ -2850,7 +2839,9 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
         .then((result) => {
           loggingService.info('Step 11 module PPT generation completed successfully', {
             workflowId: id,
-            modulesGenerated: new Set((result.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)).size,
+            modulesGenerated: new Set(
+              (result.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
+            ).size,
             totalModules,
             moduleJustCompleted: existingModules + 1,
           });
@@ -2918,9 +2909,7 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
     );
 
     // Remove stale completed/failed jobs to prevent interference
-    const staleJobs = jobStates.filter(({ state }) =>
-      ['completed', 'failed'].includes(state)
-    );
+    const staleJobs = jobStates.filter(({ state }) => ['completed', 'failed'].includes(state));
     for (const { job: staleJob } of staleJobs) {
       try {
         await staleJob.remove();
@@ -3194,8 +3183,11 @@ router.post('/:id/step11/approve', validateJWT, loadUser, async (req: Request, r
       });
     }
 
-    const totalModules = new Set((workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)).size;
-    const completedModules = new Set(workflow.step11.modulePPTDecks.map((m: any) => m.moduleId)).size;
+    const totalModules = new Set(
+      (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+    ).size;
+    const completedModules = new Set(workflow.step11.modulePPTDecks.map((m: any) => m.moduleId))
+      .size;
 
     if (completedModules < totalModules) {
       return res.status(400).json({
@@ -3405,7 +3397,9 @@ router.get('/:id/step12/status', validateJWT, loadUser, async (req: Request, res
     }
 
     const totalModules = new Set((workflow.step4?.modules || []).map((m: any) => m.id)).size;
-    const completedModules = new Set((workflow.step12?.moduleAssignmentPacks || []).map((m: any) => m.moduleId)).size;
+    const completedModules = new Set(
+      (workflow.step12?.moduleAssignmentPacks || []).map((m: any) => m.moduleId)
+    ).size;
 
     // Check queue status
     let queueStatus = null;
@@ -3473,7 +3467,9 @@ router.post('/:id/step12/approve', validateJWT, loadUser, async (req: Request, r
     }
 
     const totalModules = new Set((workflow.step4?.modules || []).map((m: any) => m.id)).size;
-    const completedModules = new Set(workflow.step12.moduleAssignmentPacks.map((m: any) => m.moduleId)).size;
+    const completedModules = new Set(
+      workflow.step12.moduleAssignmentPacks.map((m: any) => m.moduleId)
+    ).size;
 
     if (completedModules < totalModules) {
       return res.status(400).json({
@@ -3558,8 +3554,10 @@ router.post('/:id/step13', validateJWT, loadUser, async (req: Request, res: Resp
 
     // Try background queue (generic stepQueue)
     try {
-      const { addStepJob, stepQueue } = await import('../queues/stepQueue');
+      const { addStepJob, removeStepJob, stepQueue } = await import('../queues/stepQueue');
       if (stepQueue) {
+        // Remove old completed/failed job so we can re-submit with the same jobId
+        await removeStepJob(13, id);
         const job = await addStepJob(13, id, userId);
         if (job) {
           return res.status(202).json({

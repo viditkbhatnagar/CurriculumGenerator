@@ -45,22 +45,18 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
   const [expandedQuestions, setExpandedQuestions] = useState<Record<string, boolean>>({});
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Detect stale generation or queue failure (in useEffect, not during render)
+  // Detect stale generation (stuck > 20 min without data)
+  // Note: queue failure is handled by useStepStatus onFailed callback (transition-based),
+  // NOT by checking queueStatus here, because stale status from old jobs would
+  // immediately kill new generation attempts.
   useEffect(() => {
     const genState = getGenerationState(workflow._id, 13);
     if (!genState || genState.status !== 'generating') return;
 
-    // Auto-fail if stuck > 20 minutes without data
     if (!workflow.step13 && Date.now() - genState.startTime > 20 * 60 * 1000) {
       failGeneration(workflow._id, 13, 'Generation timed out. Please try again.');
-      return;
     }
-
-    // Auto-fail if queue reports failure
-    if (queueStatus === 'failed') {
-      failGeneration(workflow._id, 13, 'Generation failed in background queue. Please try again.');
-    }
-  }, [workflow._id, workflow.step13, queueStatus, getGenerationState, failGeneration]);
+  }, [workflow._id, workflow.step13, getGenerationState, failGeneration]);
 
   // Complete generation when workflow data arrives
   useEffect(() => {
@@ -91,10 +87,11 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
     if (isCurrentlyGenerating) return;
     setError(null);
     startGeneration(workflow._id, 13, 900);
-    startStatusPolling();
 
     try {
       await submitStep13.mutateAsync(workflow._id);
+      // Start polling AFTER POST succeeds (old job is now removed, new job is queued)
+      startStatusPolling();
       // Also refresh workflow data periodically to detect step13 data arrival
       pollIntervalRef.current = setInterval(async () => {
         await onRefresh();
