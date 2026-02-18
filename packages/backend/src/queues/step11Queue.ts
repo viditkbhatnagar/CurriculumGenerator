@@ -101,15 +101,20 @@ if (step11Queue) {
         throw new Error('No lesson plans found in Step 10. Complete Step 10 first.');
       }
 
-      // Use unique moduleId count to handle potential duplicates in modulePPTDecks
+      // Use unique moduleId set — completedModuleIds.size is the true count
       const completedModuleIds = new Set(
         (workflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
       );
-      const existingModules = lessonPlans.filter((m: any) => completedModuleIds.has(m.moduleId)).length;
+      const existingModules = completedModuleIds.size;
 
-      // Check if this module is already generated
-      if (existingModules > moduleIndex) {
-        loggingService.info('Module PPT already generated, skipping', {
+      // Find the actual next ungenerated module
+      const nextModuleIndex = lessonPlans.findIndex(
+        (m: any) => !completedModuleIds.has(m.moduleId)
+      );
+
+      // Check if all modules are already generated
+      if (nextModuleIndex === -1) {
+        loggingService.info('All module PPTs already generated, skipping', {
           workflowId,
           moduleIndex,
           existingModules,
@@ -120,25 +125,19 @@ if (step11Queue) {
           moduleIndex,
           modulesGenerated: existingModules,
           totalModules,
-          allComplete: existingModules >= totalModules,
+          allComplete: true,
           totalPPTDecks: workflow.step11?.summary?.totalPPTDecks || 0,
           totalSlides: workflow.step11?.summary?.totalSlides || 0,
         };
       }
 
-      // Check if we should generate this module
-      if (moduleIndex !== existingModules) {
-        throw new Error(
-          `Cannot generate PPT for module ${moduleIndex + 1}. Expected module ${existingModules + 1}`
-        );
-      }
-
       await job.progress(10);
 
-      // Generate PPT for the next module
+      // Generate PPT for the next ungenerated module
       loggingService.info('Generating PPT for module', {
         workflowId,
-        moduleNumber: moduleIndex + 1,
+        moduleNumber: nextModuleIndex + 1,
+        moduleId: lessonPlans[nextModuleIndex]?.moduleId,
         totalModules,
       });
 
@@ -149,7 +148,7 @@ if (step11Queue) {
       const newCompletedIds = new Set(
         (updatedWorkflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
       );
-      const newModulesCount = lessonPlans.filter((m: any) => newCompletedIds.has(m.moduleId)).length;
+      const newModulesCount = newCompletedIds.size;
       const allComplete = newModulesCount >= totalModules;
 
       loggingService.info('Module PPT generation complete', {
@@ -163,13 +162,19 @@ if (step11Queue) {
 
       await job.progress(100);
 
-      // If not all complete, queue the next module
+      // If not all complete, find and queue the next ungenerated module
       if (!allComplete) {
-        await addStep11Job(workflowId, moduleIndex + 1, job.data.userId);
-        loggingService.info('Queued next module for PPT', {
-          workflowId,
-          nextModuleIndex: moduleIndex + 1,
-        });
+        const nextUngenIndex = lessonPlans.findIndex(
+          (m: any) => !newCompletedIds.has(m.moduleId)
+        );
+        if (nextUngenIndex !== -1) {
+          await addStep11Job(workflowId, nextUngenIndex, job.data.userId);
+          loggingService.info('Queued next module for PPT', {
+            workflowId,
+            nextModuleIndex: nextUngenIndex,
+            nextModuleId: lessonPlans[nextUngenIndex]?.moduleId,
+          });
+        }
       }
 
       return {
@@ -316,20 +321,21 @@ export async function queueAllRemainingStep11Modules(
     throw new Error('Workflow not found');
   }
 
-  // Get total modules from Step 10 lesson plans, count unique completed modules
+  // Find the first ungenerated module by scanning lesson plans
   const lessonPlans = workflow.step10?.moduleLessonPlans || [];
-  const totalModules = lessonPlans.length;
   const completedModuleIds = new Set(
     (workflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
   );
-  const existingModules = lessonPlans.filter((m: any) => completedModuleIds.has(m.moduleId)).length;
+  const nextModuleIndex = lessonPlans.findIndex(
+    (m: any) => !completedModuleIds.has(m.moduleId)
+  );
 
   const jobs: Job<Step11JobData>[] = [];
 
-  // Queue only the next module (not all remaining)
+  // Queue only the next ungenerated module
   // The job processor will automatically queue the next one after completion
-  if (existingModules < totalModules) {
-    const job = await addStep11Job(workflowId, existingModules, userId);
+  if (nextModuleIndex !== -1) {
+    const job = await addStep11Job(workflowId, nextModuleIndex, userId);
     if (job) {
       jobs.push(job);
     }

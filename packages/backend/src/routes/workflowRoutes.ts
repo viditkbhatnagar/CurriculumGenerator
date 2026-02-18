@@ -2796,7 +2796,7 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
       });
 
       const totalModules = lessonPlans.length;
-      const existingModules = lessonPlans.filter((m: any) => completedModuleIds.has(m.moduleId)).length;
+      const existingModules = completedModuleIds.size;
 
       // Check if already complete
       if (existingModules >= totalModules) {
@@ -2820,7 +2820,7 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
         .then((result) => {
           loggingService.info('Step 11 module PPT generation completed successfully', {
             workflowId: id,
-            modulesGenerated: result.step11?.modulePPTDecks?.length || 0,
+            modulesGenerated: new Set((result.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)).size,
             totalModules,
             moduleJustCompleted: existingModules + 1,
           });
@@ -2989,7 +2989,7 @@ router.post(
       const nextModuleCompletedIds = new Set(
         (workflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
       );
-      const existingModules = nextModuleLessonPlans.filter((m: any) => nextModuleCompletedIds.has(m.moduleId)).length;
+      const existingModules = nextModuleCompletedIds.size;
 
       if (existingModules >= totalModules) {
         return res.json({
@@ -3016,7 +3016,7 @@ router.post(
       const newCompletedIds = new Set(
         (updatedWorkflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
       );
-      const newModulesCount = nextModuleLessonPlans.filter((m: any) => newCompletedIds.has(m.moduleId)).length;
+      const newModulesCount = newCompletedIds.size;
       const allComplete = newModulesCount >= totalModules;
 
       loggingService.info('Next module PPT generation complete', {
@@ -3098,7 +3098,7 @@ router.get('/:id/step11/status', validateJWT, loadUser, async (req: Request, res
     const statusCompletedIds = new Set(
       (workflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
     );
-    const modulesGenerated = statusLessonPlans.filter((m: any) => statusCompletedIds.has(m.moduleId)).length;
+    const modulesGenerated = statusCompletedIds.size;
     const allComplete = modulesGenerated >= totalModules;
 
     const activeJobs = jobStatuses.filter((j) =>
@@ -3165,7 +3165,7 @@ router.post('/:id/step11/approve', validateJWT, loadUser, async (req: Request, r
     }
 
     const totalModules = workflow.step10?.moduleLessonPlans?.length || 0;
-    const completedModules = workflow.step11.modulePPTDecks.length;
+    const completedModules = new Set(workflow.step11.modulePPTDecks.map((m: any) => m.moduleId)).size;
 
     if (completedModules < totalModules) {
       return res.status(400).json({

@@ -3421,8 +3421,14 @@ CRITICAL VALIDATION:
       throw new Error('No lesson plans found in Step 10. Complete Step 10 first.');
     }
 
-    const existingModules = workflow.step11?.modulePPTDecks?.length || 0;
-    const expectedModuleIndex = existingModules;
+    // Use unique moduleId set to find the first ungenerated module
+    const completedModuleIds = new Set(
+      (workflow.step11?.modulePPTDecks || []).map((m) => m.moduleId)
+    );
+    const existingModules = completedModuleIds.size;
+    const expectedModuleIndex = lessonPlans.findIndex(
+      (m) => !completedModuleIds.has(m.moduleId)
+    );
 
     loggingService.info('Processing Step 11: Next Module - Initial Check', {
       workflowId,
@@ -3431,7 +3437,7 @@ CRITICAL VALIDATION:
       nextModuleIndex: expectedModuleIndex,
     });
 
-    if (existingModules >= totalModules) {
+    if (expectedModuleIndex === -1) {
       loggingService.info('All module PPTs already generated', {
         workflowId,
         existingModules,
@@ -3442,22 +3448,6 @@ CRITICAL VALIDATION:
 
     // Get the next module to process
     const moduleToProcess = lessonPlans[expectedModuleIndex];
-    if (!moduleToProcess) {
-      throw new Error(`Module at index ${expectedModuleIndex} not found in lesson plans`);
-    }
-
-    // Check if this specific module is already generated (by moduleId)
-    const existingModule = workflow.step11?.modulePPTDecks?.find(
-      (m) => m.moduleId === moduleToProcess.moduleId
-    );
-    if (existingModule) {
-      loggingService.info('Module PPT already exists, skipping to avoid duplicate', {
-        workflowId,
-        moduleId: moduleToProcess.moduleId,
-        moduleCode: moduleToProcess.moduleCode,
-      });
-      return workflow;
-    }
 
     loggingService.info('Generating PPT for module', {
       workflowId,
@@ -3596,8 +3586,11 @@ CRITICAL VALIDATION:
         allPPTDecks.length > 0 ? Math.round(totalSlides / allPPTDecks.length) : 0,
     };
 
-    // Update validation
-    const newModulesCount = freshWorkflow.step11.modulePPTDecks.length;
+    // Update validation — use unique moduleId count
+    const newCompletedModuleIds = new Set(
+      freshWorkflow.step11.modulePPTDecks.map((m) => m.moduleId)
+    );
+    const newModulesCount = newCompletedModuleIds.size;
     const allLessonsCount = lessonPlans.reduce((sum, m) => sum + m.lessons.length, 0);
     const pptDecksCount = allPPTDecks.length;
 
