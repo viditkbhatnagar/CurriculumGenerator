@@ -25,6 +25,9 @@ interface WorkflowData {
   step8?: any;
   step9?: any;
   step10?: any;
+  step11?: any;
+  step12?: any;
+  step13?: any;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -847,6 +850,850 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   }
 
   /**
+   * Generate Step 12 (Assignment Packs) section
+   */
+  private async generateStep12Section(step12: any, contentChildren: any[]): Promise<void> {
+    if (!step12) return;
+
+    contentChildren.push(
+      new Paragraph({ children: [new PageBreak()] }),
+      this.createH1('12. Assignment Packs')
+    );
+
+    // Validation summary
+    if (step12.validation) {
+      contentChildren.push(this.createH2('12.1 Validation Summary'));
+
+      const validationRows = [
+        new TableRow({
+          children: [
+            this.createTableCell('Validation Check', { bold: true, shading: 'E8F5E9' }),
+            this.createTableCell('Result', { bold: true, shading: 'E8F5E9' }),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('All Modules Have Assignments'),
+            this.createTableCell(step12.validation.allModulesHaveAssignments ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('All Variants Generated'),
+            this.createTableCell(step12.validation.allVariantsGenerated ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('All MLOs Covered'),
+            this.createTableCell(step12.validation.allMLOsCovered ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('All Rubrics Complete'),
+            this.createTableCell(step12.validation.allRubricsComplete ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+      ];
+
+      contentChildren.push(
+        new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: validationRows }),
+        new Paragraph({ children: [], spacing: { after: 200 } })
+      );
+    }
+
+    // Summary stats
+    if (step12.summary) {
+      contentChildren.push(this.createH2('12.2 Summary'));
+      const summaryRows = [
+        new TableRow({
+          children: [
+            this.createTableCell('Metric', { bold: true, shading: 'E8F5E9' }),
+            this.createTableCell('Value', { bold: true, shading: 'E8F5E9' }),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Total Modules'),
+            this.createTableCell(String(step12.summary.totalModules || 0)),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Total Assignment Packs'),
+            this.createTableCell(String(step12.summary.totalAssignmentPacks || 0)),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Avg. Criteria per Rubric'),
+            this.createTableCell(String(step12.summary.averageCriteriaPerRubric || 0)),
+          ],
+        }),
+      ];
+
+      contentChildren.push(
+        new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: summaryRows }),
+        new Paragraph({ children: [], spacing: { after: 200 } })
+      );
+    }
+
+    // Module assignment packs
+    if (step12.moduleAssignmentPacks?.length) {
+      contentChildren.push(this.createH2('12.3 Module Assignment Packs'));
+
+      for (const modulePack of step12.moduleAssignmentPacks) {
+        contentChildren.push(
+          this.createH3(`${modulePack.moduleCode || ''} — ${modulePack.moduleTitle || ''}`)
+        );
+
+        const variants: [string, any][] = [
+          ['In-Person', modulePack.variants?.in_person],
+          ['Self-Study', modulePack.variants?.self_study],
+          ['Hybrid', modulePack.variants?.hybrid],
+        ];
+
+        for (const [variantLabel, variant] of variants) {
+          if (!variant) continue;
+
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Delivery Variant: ${variantLabel}`,
+                  bold: true,
+                  size: FONT_SIZES.H3,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { before: 200, after: 100, line: LINE_SPACING },
+            })
+          );
+
+          // Overview table
+          if (variant.overview) {
+            const overviewRows = [
+              new TableRow({
+                children: [
+                  this.createTableCell('Field', { bold: true, shading: 'FFF3E0' }),
+                  this.createTableCell('Details', { bold: true, shading: 'FFF3E0' }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  this.createTableCell('Title'),
+                  this.createTableCell(variant.overview.title || ''),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  this.createTableCell('Assignment Type'),
+                  this.createTableCell(variant.overview.assignmentType || ''),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  this.createTableCell('Weighting'),
+                  this.createTableCell(`${variant.overview.weighting || 0}%`),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  this.createTableCell('Group/Individual'),
+                  this.createTableCell(variant.overview.groupOrIndividual || ''),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  this.createTableCell('Submission Format'),
+                  this.createTableCell(variant.overview.submissionFormat || ''),
+                ],
+              }),
+            ];
+
+            contentChildren.push(
+              new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: overviewRows }),
+              new Paragraph({ children: [], spacing: { after: 100 } })
+            );
+          }
+
+          // Brief
+          if (variant.brief) {
+            if (variant.brief.studentFacingIntro) {
+              const formatted = await this.formatTextIntelligently(
+                variant.brief.studentFacingIntro,
+                'Assignment Brief Introduction'
+              );
+              if (formatted.paragraphs.length > 0) {
+                contentChildren.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: 'Brief:',
+                        bold: true,
+                        size: FONT_SIZES.BODY,
+                        font: FONT_FAMILY,
+                      }),
+                    ],
+                    spacing: { before: 100, after: 50, line: LINE_SPACING },
+                  }),
+                  ...this.createFormattedParagraphs(formatted.paragraphs)
+                );
+              }
+            }
+
+            if (variant.brief.deliverables?.length) {
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: 'Deliverables:',
+                      bold: true,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                    }),
+                  ],
+                  spacing: { before: 100, after: 50, line: LINE_SPACING },
+                }),
+                ...this.createFormattedParagraphs(variant.brief.deliverables, { isBullet: true })
+              );
+            }
+          }
+
+          // Rubric table
+          if (variant.rubric?.length) {
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: 'Rubric:',
+                    bold: true,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
+                  }),
+                ],
+                spacing: { before: 100, after: 50, line: LINE_SPACING },
+              })
+            );
+
+            const rubricHeaderRow = new TableRow({
+              children: [
+                this.createTableCell('Criterion', { bold: true, shading: 'E3F2FD' }),
+                this.createTableCell('Weight', { bold: true, shading: 'E3F2FD' }),
+                this.createTableCell('Fail', { bold: true, shading: 'FFEBEE' }),
+                this.createTableCell('Pass', { bold: true, shading: 'E8F5E9' }),
+                this.createTableCell('Merit', { bold: true, shading: 'FFF3E0' }),
+                this.createTableCell('Distinction', { bold: true, shading: 'E8EAF6' }),
+              ],
+            });
+
+            const rubricDataRows = variant.rubric.map(
+              (criterion: any) =>
+                new TableRow({
+                  children: [
+                    this.createTableCell(criterion.criterionName || ''),
+                    this.createTableCell(`${criterion.weight || 0}%`),
+                    this.createTableCell(criterion.fail || ''),
+                    this.createTableCell(criterion.pass || ''),
+                    this.createTableCell(criterion.merit || ''),
+                    this.createTableCell(criterion.distinction || ''),
+                  ],
+                })
+            );
+
+            contentChildren.push(
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: [rubricHeaderRow, ...rubricDataRows],
+              }),
+              new Paragraph({ children: [], spacing: { after: 100 } })
+            );
+          }
+
+          // Evidence requirements
+          if (variant.evidenceRequirements?.length) {
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: 'Evidence Requirements:',
+                    bold: true,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
+                  }),
+                ],
+                spacing: { before: 100, after: 50, line: LINE_SPACING },
+              }),
+              ...variant.evidenceRequirements.map(
+                (ev: any) =>
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: `• ${ev.artefactType || ''} — ${ev.wordCountOrDuration || ''} (${ev.fileType || ''})${ev.additionalNotes ? ': ' + ev.additionalNotes : ''}`,
+                        font: FONT_FAMILY,
+                        size: FONT_SIZES.BODY,
+                      }),
+                    ],
+                    spacing: { line: LINE_SPACING, ...PARA_SPACING },
+                  })
+              )
+            );
+          }
+
+          // Academic integrity
+          if (variant.academicIntegrity) {
+            const formatted = await this.formatTextIntelligently(
+              variant.academicIntegrity,
+              'Academic Integrity Statement'
+            );
+            if (formatted.paragraphs.length > 0) {
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: 'Academic Integrity:',
+                      bold: true,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                    }),
+                  ],
+                  spacing: { before: 100, after: 50, line: LINE_SPACING },
+                }),
+                ...this.createFormattedParagraphs(formatted.paragraphs)
+              );
+            }
+          }
+
+          contentChildren.push(new Paragraph({ children: [], spacing: { after: 200 } }));
+        }
+
+        // Spacing between modules
+        contentChildren.push(new Paragraph({ children: [], spacing: { after: 400 } }));
+      }
+    }
+  }
+
+  /**
+   * Generate Step 13 (Summative Exam) section
+   */
+  private async generateStep13Section(step13: any, contentChildren: any[]): Promise<void> {
+    if (!step13) return;
+
+    contentChildren.push(
+      new Paragraph({ children: [new PageBreak()] }),
+      this.createH1('13. Summative Exam')
+    );
+
+    // Exam overview
+    if (step13.overview) {
+      contentChildren.push(this.createH2('13.1 Exam Overview'));
+
+      const overviewRows = [
+        new TableRow({
+          children: [
+            this.createTableCell('Field', { bold: true, shading: 'E8EAF6' }),
+            this.createTableCell('Details', { bold: true, shading: 'E8EAF6' }),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Exam Title'),
+            this.createTableCell(step13.overview.examTitle || ''),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Total Marks'),
+            this.createTableCell(String(step13.overview.totalMarks || 0)),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Duration'),
+            this.createTableCell(step13.overview.totalDuration || step13.overview.duration || ''),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Permitted Materials'),
+            this.createTableCell(step13.overview.permittedMaterials || ''),
+          ],
+        }),
+      ];
+
+      contentChildren.push(
+        new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: overviewRows }),
+        new Paragraph({ children: [], spacing: { after: 200 } })
+      );
+
+      // Section breakdown table
+      if (step13.overview.sectionBreakdown?.length) {
+        contentChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Section Breakdown:',
+                bold: true,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+              }),
+            ],
+            spacing: { before: 100, after: 50, line: LINE_SPACING },
+          })
+        );
+
+        const breakdownHeaderRow = new TableRow({
+          children: [
+            this.createTableCell('Section', { bold: true, shading: 'E8EAF6' }),
+            this.createTableCell('Marks', { bold: true, shading: 'E8EAF6' }),
+            this.createTableCell('Questions', { bold: true, shading: 'E8EAF6' }),
+            this.createTableCell('Time Allocation', { bold: true, shading: 'E8EAF6' }),
+          ],
+        });
+
+        const breakdownRows = step13.overview.sectionBreakdown.map(
+          (s: any) =>
+            new TableRow({
+              children: [
+                this.createTableCell(s.section || ''),
+                this.createTableCell(String(s.marks || 0)),
+                this.createTableCell(String(s.questionCount || 0)),
+                this.createTableCell(s.timeAllocation || ''),
+              ],
+            })
+        );
+
+        contentChildren.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [breakdownHeaderRow, ...breakdownRows],
+          }),
+          new Paragraph({ children: [], spacing: { after: 200 } })
+        );
+      }
+    }
+
+    // Section A: MCQ / Short Answer
+    if (step13.sectionA?.length) {
+      contentChildren.push(this.createH2('13.2 Section A — Multiple Choice & Short Answer'));
+
+      for (let i = 0; i < step13.sectionA.length; i++) {
+        const q = step13.sectionA[i];
+        contentChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Q${i + 1}. ${q.questionText || ''}`,
+                bold: true,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+              }),
+              new TextRun({
+                text: `  [${q.marks || 0} mark${(q.marks || 0) !== 1 ? 's' : ''} — ${q.type === 'mcq' ? 'MCQ' : 'Short Answer'}]`,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+                italics: true,
+              }),
+            ],
+            spacing: { before: 150, after: 50, line: LINE_SPACING },
+          })
+        );
+
+        // MCQ options
+        if (q.type === 'mcq' && q.options?.length) {
+          const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F'];
+          for (let j = 0; j < q.options.length; j++) {
+            const isCorrect = q.options[j] === q.correctAnswer;
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `   ${optionLabels[j] || String(j + 1)}. ${q.options[j]}${isCorrect ? ' ✓' : ''}`,
+                    font: FONT_FAMILY,
+                    size: FONT_SIZES.BODY,
+                    bold: isCorrect,
+                  }),
+                ],
+                spacing: { line: LINE_SPACING, before: 20, after: 20 },
+              })
+            );
+          }
+        }
+
+        // Correct answer (for short answer)
+        if (q.type === 'short_answer' && q.correctAnswer) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Answer: ',
+                  bold: true,
+                  font: FONT_FAMILY,
+                  size: FONT_SIZES.BODY,
+                }),
+                new TextRun({ text: q.correctAnswer, font: FONT_FAMILY, size: FONT_SIZES.BODY }),
+              ],
+              spacing: { line: LINE_SPACING, before: 50, after: 50 },
+            })
+          );
+        }
+
+        // Rationale
+        if (q.rationale) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Rationale: ',
+                  bold: true,
+                  font: FONT_FAMILY,
+                  size: FONT_SIZES.BODY,
+                  italics: true,
+                }),
+                new TextRun({
+                  text: q.rationale,
+                  font: FONT_FAMILY,
+                  size: FONT_SIZES.BODY,
+                  italics: true,
+                }),
+              ],
+              spacing: { line: LINE_SPACING, before: 30, after: 100 },
+            })
+          );
+        }
+      }
+    }
+
+    // Section B: Scenario-Based (conditional)
+    if (step13.sectionBIncluded && step13.sectionB?.length) {
+      contentChildren.push(this.createH2('13.3 Section B — Scenario-Based Questions'));
+
+      for (let i = 0; i < step13.sectionB.length; i++) {
+        const scenario = step13.sectionB[i];
+        contentChildren.push(
+          this.createH3(`Scenario ${i + 1} (${scenario.totalMarks || 0} marks)`)
+        );
+
+        if (scenario.scenarioText) {
+          const formatted = await this.formatTextIntelligently(
+            scenario.scenarioText,
+            'Exam Scenario'
+          );
+          if (formatted.paragraphs.length > 0) {
+            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+          }
+        }
+
+        if (scenario.workplaceContext) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Workplace Context: ',
+                  bold: true,
+                  font: FONT_FAMILY,
+                  size: FONT_SIZES.BODY,
+                }),
+                new TextRun({
+                  text: scenario.workplaceContext,
+                  font: FONT_FAMILY,
+                  size: FONT_SIZES.BODY,
+                }),
+              ],
+              spacing: { line: LINE_SPACING, ...PARA_SPACING },
+            })
+          );
+        }
+
+        if (scenario.questions?.length) {
+          for (let j = 0; j < scenario.questions.length; j++) {
+            const sq = scenario.questions[j];
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `  ${String.fromCharCode(97 + j)}) ${sq.questionText || ''} [${sq.marks || 0} marks]`,
+                    font: FONT_FAMILY,
+                    size: FONT_SIZES.BODY,
+                  }),
+                ],
+                spacing: { line: LINE_SPACING, before: 50, after: 30 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: '     Model Answer: ',
+                    bold: true,
+                    font: FONT_FAMILY,
+                    size: FONT_SIZES.BODY,
+                    italics: true,
+                  }),
+                  new TextRun({
+                    text: sq.modelAnswer || '',
+                    font: FONT_FAMILY,
+                    size: FONT_SIZES.BODY,
+                    italics: true,
+                  }),
+                ],
+                spacing: { line: LINE_SPACING, before: 20, after: 80 },
+              })
+            );
+          }
+        }
+      }
+    }
+
+    // Section C: Extended Tasks
+    if (step13.sectionC?.length) {
+      contentChildren.push(
+        this.createH2(
+          step13.sectionBIncluded
+            ? '13.4 Section C — Extended Response Tasks'
+            : '13.3 Section C — Extended Response Tasks'
+        )
+      );
+
+      for (let i = 0; i < step13.sectionC.length; i++) {
+        const task = step13.sectionC[i];
+        contentChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Task ${i + 1}: ${task.taskDescription || ''}`,
+                bold: true,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+              }),
+              new TextRun({
+                text: `  [${task.marks || 0} marks]`,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+                italics: true,
+              }),
+            ],
+            spacing: { before: 150, after: 50, line: LINE_SPACING },
+          })
+        );
+
+        if (task.instructions?.length) {
+          contentChildren.push(
+            ...this.createFormattedParagraphs(task.instructions, { isNumbered: true })
+          );
+        }
+
+        if (task.assessmentCriteria?.length) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Assessment Criteria:',
+                  bold: true,
+                  font: FONT_FAMILY,
+                  size: FONT_SIZES.BODY,
+                }),
+              ],
+              spacing: { before: 80, after: 40, line: LINE_SPACING },
+            }),
+            ...this.createFormattedParagraphs(task.assessmentCriteria, { isBullet: true })
+          );
+        }
+
+        if (task.modelAnswer) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Model Answer: ',
+                  bold: true,
+                  font: FONT_FAMILY,
+                  size: FONT_SIZES.BODY,
+                  italics: true,
+                }),
+                new TextRun({
+                  text: task.modelAnswer,
+                  font: FONT_FAMILY,
+                  size: FONT_SIZES.BODY,
+                  italics: true,
+                }),
+              ],
+              spacing: { line: LINE_SPACING, before: 50, after: 150 },
+            })
+          );
+        }
+      }
+    }
+
+    // Marking Scheme
+    if (step13.markingScheme) {
+      const sectionNum = step13.sectionBIncluded ? '13.5' : '13.4';
+      contentChildren.push(this.createH2(`${sectionNum} Marking Scheme`));
+
+      // Section A marking
+      if (step13.markingScheme.sectionA?.length) {
+        contentChildren.push(this.createH3('Section A Marking'));
+        const markingHeaderRow = new TableRow({
+          children: [
+            this.createTableCell('Q#', { bold: true, shading: 'E8EAF6' }),
+            this.createTableCell('Model Answer', { bold: true, shading: 'E8EAF6' }),
+            this.createTableCell('Mark Allocation', { bold: true, shading: 'E8EAF6' }),
+          ],
+        });
+
+        const markingRows = step13.markingScheme.sectionA.map(
+          (m: any, idx: number) =>
+            new TableRow({
+              children: [
+                this.createTableCell(`Q${idx + 1}`),
+                this.createTableCell(m.modelAnswer || ''),
+                this.createTableCell(m.markAllocation || ''),
+              ],
+            })
+        );
+
+        contentChildren.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [markingHeaderRow, ...markingRows],
+          }),
+          new Paragraph({ children: [], spacing: { after: 200 } })
+        );
+      }
+
+      // Section B marking
+      if (step13.markingScheme.sectionB?.length) {
+        contentChildren.push(this.createH3('Section B Marking'));
+        for (const scenarioMark of step13.markingScheme.sectionB) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Scenario ${scenarioMark.scenarioId || ''}: ${scenarioMark.markAllocation || ''}`,
+                  font: FONT_FAMILY,
+                  size: FONT_SIZES.BODY,
+                }),
+              ],
+              spacing: { line: LINE_SPACING, ...PARA_SPACING },
+            })
+          );
+        }
+        contentChildren.push(new Paragraph({ children: [], spacing: { after: 200 } }));
+      }
+
+      // Section C marking
+      if (step13.markingScheme.sectionC?.length) {
+        contentChildren.push(this.createH3('Section C Marking'));
+        for (const taskMark of step13.markingScheme.sectionC) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Task ${taskMark.taskId || ''}: ${taskMark.markAllocation || ''}`,
+                  font: FONT_FAMILY,
+                  size: FONT_SIZES.BODY,
+                }),
+              ],
+              spacing: { line: LINE_SPACING, ...PARA_SPACING },
+            })
+          );
+          if (taskMark.modelAnswer) {
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: 'Model Answer: ',
+                    bold: true,
+                    font: FONT_FAMILY,
+                    size: FONT_SIZES.BODY,
+                    italics: true,
+                  }),
+                  new TextRun({
+                    text: taskMark.modelAnswer,
+                    font: FONT_FAMILY,
+                    size: FONT_SIZES.BODY,
+                    italics: true,
+                  }),
+                ],
+                spacing: { line: LINE_SPACING, before: 30, after: 80 },
+              })
+            );
+          }
+        }
+        contentChildren.push(new Paragraph({ children: [], spacing: { after: 200 } }));
+      }
+    }
+
+    // Integrity & Security
+    if (step13.integrityAndSecurity) {
+      const sectionNum = step13.sectionBIncluded ? '13.6' : '13.5';
+      contentChildren.push(this.createH2(`${sectionNum} Integrity & Security`));
+      const formatted = await this.formatTextIntelligently(
+        step13.integrityAndSecurity,
+        'Exam Integrity and Security'
+      );
+      if (formatted.paragraphs.length > 0) {
+        contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+      }
+    }
+
+    // Accessibility
+    if (step13.accessibilityProvisions) {
+      const sectionNum = step13.sectionBIncluded ? '13.7' : '13.6';
+      contentChildren.push(this.createH2(`${sectionNum} Accessibility Provisions`));
+      const formatted = await this.formatTextIntelligently(
+        step13.accessibilityProvisions,
+        'Exam Accessibility Provisions'
+      );
+      if (formatted.paragraphs.length > 0) {
+        contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+      }
+    }
+
+    // Validation summary
+    if (step13.validation) {
+      const sectionNum = step13.sectionBIncluded ? '13.8' : '13.7';
+      contentChildren.push(this.createH2(`${sectionNum} Validation`));
+
+      const validationRows = [
+        new TableRow({
+          children: [
+            this.createTableCell('Check', { bold: true, shading: 'E8EAF6' }),
+            this.createTableCell('Result', { bold: true, shading: 'E8EAF6' }),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Total Marks Correct'),
+            this.createTableCell(step13.validation.totalMarksCorrect ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('All Sections Present'),
+            this.createTableCell(step13.validation.allSectionsPresent ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('All PLOs Covered'),
+            this.createTableCell(step13.validation.allPLOsCovered ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            this.createTableCell('Marking Scheme Complete'),
+            this.createTableCell(step13.validation.markingSchemeComplete ? '✓ Pass' : '✗ Fail'),
+          ],
+        }),
+      ];
+
+      contentChildren.push(
+        new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: validationRows })
+      );
+    }
+  }
+
+  /**
    * Generate the complete Word document with intelligent formatting and progress tracking
    */
   async generateDocument(
@@ -871,6 +1718,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       workflow.step8,
       workflow.step9,
       workflow.step10,
+      workflow.step11,
+      workflow.step12,
+      workflow.step13,
     ].filter(Boolean).length;
 
     let sectionsCompleted = 0;
@@ -2353,6 +3203,93 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       reportProgress(
         'Step 10: Lesson Plans',
         `✓ Step 10 formatted (${sectionsCompleted}/${totalSections})`
+      );
+    }
+
+    // =========================================================================
+    // SECTION 11: POWERPOINT GENERATION (Reference Only)
+    // =========================================================================
+    if (workflow.step11) {
+      reportProgress(
+        'Step 11: PowerPoints',
+        `Formatting PowerPoint reference (${sectionsCompleted + 1}/${totalSections})...`
+      );
+
+      contentChildren.push(
+        new Paragraph({ children: [new PageBreak()] }),
+        this.createH1('11. PowerPoint Decks'),
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: 'PowerPoint presentation decks have been generated for each lesson across all modules. These are available as a separate download in ZIP format from the Final Review page.',
+              font: FONT_FAMILY,
+              size: FONT_SIZES.BODY,
+              italics: true,
+            }),
+          ],
+          spacing: { line: LINE_SPACING, ...PARA_SPACING },
+        })
+      );
+
+      // Show PPT inventory if step11 has module data
+      if (workflow.step11.modules?.length) {
+        for (const mod of workflow.step11.modules) {
+          contentChildren.push(
+            this.createH3(`${mod.moduleCode || ''} — ${mod.moduleTitle || mod.moduleName || ''}`),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `${mod.pptDecks?.length || mod.lessons?.length || 0} PowerPoint deck(s) generated`,
+                  font: FONT_FAMILY,
+                  size: FONT_SIZES.BODY,
+                }),
+              ],
+              spacing: { line: LINE_SPACING, ...PARA_SPACING },
+            })
+          );
+        }
+      }
+
+      sectionsCompleted++;
+      reportProgress(
+        'Step 11: PowerPoints',
+        `✓ Step 11 formatted (${sectionsCompleted}/${totalSections})`
+      );
+    }
+
+    // =========================================================================
+    // SECTION 12: ASSIGNMENT PACKS
+    // =========================================================================
+    if (workflow.step12) {
+      reportProgress(
+        'Step 12: Assignment Packs',
+        `Formatting assignment packs (${sectionsCompleted + 1}/${totalSections})...`
+      );
+
+      await this.generateStep12Section(workflow.step12, contentChildren);
+
+      sectionsCompleted++;
+      reportProgress(
+        'Step 12: Assignment Packs',
+        `✓ Step 12 formatted (${sectionsCompleted}/${totalSections})`
+      );
+    }
+
+    // =========================================================================
+    // SECTION 13: SUMMATIVE EXAM
+    // =========================================================================
+    if (workflow.step13) {
+      reportProgress(
+        'Step 13: Summative Exam',
+        `Formatting summative exam (${sectionsCompleted + 1}/${totalSections})...`
+      );
+
+      await this.generateStep13Section(workflow.step13, contentChildren);
+
+      sectionsCompleted++;
+      reportProgress(
+        'Step 13: Summative Exam',
+        `✓ Step 13 formatted (${sectionsCompleted}/${totalSections})`
       );
     }
 

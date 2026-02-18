@@ -137,15 +137,15 @@ export default function FinalReviewView({ workflow }: Props) {
         <h1 className="text-3xl font-bold text-teal-800 mb-3">🎉 Curriculum Complete!</h1>
         <p className="text-lg text-teal-700 mb-2">{workflow.projectName}</p>
         <p className="text-teal-600">
-          Your complete curriculum is ready for download. All 10 steps have been generated with
-          lesson plans and PowerPoint decks.
+          Your complete curriculum is ready for download. All 13 steps have been generated with
+          lesson plans, PowerPoint decks, assignment packs, and summative exam.
         </p>
       </div>
 
       {/* Curriculum Summary */}
       <div className="bg-white/50 rounded-xl border border-teal-200/50 p-6 mb-6">
         <h2 className="text-xl font-bold text-teal-800 mb-4">Curriculum Summary</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
           <div className="bg-slate-900/50 rounded-lg p-4 text-center">
             <p className="text-3xl font-bold text-teal-600">
               {workflow.step10?.moduleLessonPlans?.length || 0}
@@ -166,10 +166,24 @@ export default function FinalReviewView({ workflow }: Props) {
           </div>
           <div className="bg-slate-900/50 rounded-lg p-4 text-center">
             <p className="text-3xl font-bold text-orange-400">
-              {workflow.step10?.moduleLessonPlans?.reduce((sum, m) => sum + m.pptDecks.length, 0) ||
-                0}
+              {workflow.step10?.moduleLessonPlans?.reduce(
+                (sum: number, m: any) => sum + (m.pptDecks?.length || 0),
+                0
+              ) || 0}
             </p>
             <p className="text-sm text-teal-600 mt-1">PPT Decks</p>
+          </div>
+          <div className="bg-slate-900/50 rounded-lg p-4 text-center">
+            <p className="text-3xl font-bold text-amber-400">
+              {workflow.step12?.summary?.totalAssignmentPacks || 0}
+            </p>
+            <p className="text-sm text-teal-600 mt-1">Assignments</p>
+          </div>
+          <div className="bg-slate-900/50 rounded-lg p-4 text-center">
+            <p className="text-3xl font-bold text-red-400">
+              {workflow.step13?.summary?.totalQuestions || 0}
+            </p>
+            <p className="text-sm text-teal-600 mt-1">Exam Questions</p>
           </div>
         </div>
       </div>
@@ -193,7 +207,8 @@ export default function FinalReviewView({ workflow }: Props) {
           Download Complete Curriculum
         </h2>
         <p className="text-teal-600 text-sm mb-6">
-          Download your complete curriculum package with all 10 steps, lesson plans, and PPT files.
+          Download your complete curriculum package with all 13 steps, lesson plans, PPT files,
+          assignment packs, and summative exam.
         </p>
 
         {/* Download Buttons */}
@@ -223,7 +238,7 @@ export default function FinalReviewView({ workflow }: Props) {
                 {downloadingWord ? 'Generating Word Document...' : 'Download Word Document'}
               </div>
               <div className="text-sm opacity-90">
-                {downloadingWord ? 'Please wait, this may take a moment' : 'All 10 Steps (.docx)'}
+                {downloadingWord ? 'Please wait, this may take a moment' : 'All 13 Steps (.docx)'}
               </div>
             </div>
             <svg
@@ -261,7 +276,7 @@ export default function FinalReviewView({ workflow }: Props) {
                 {downloadingPDF ? 'Generating PDF...' : 'Download PDF'}
               </div>
               <div className="text-sm opacity-90">
-                {downloadingPDF ? 'Please wait, this may take a moment' : 'All 10 Steps (.pdf)'}
+                {downloadingPDF ? 'Please wait, this may take a moment' : 'All 13 Steps (.pdf)'}
               </div>
             </div>
             <svg
@@ -373,8 +388,9 @@ export default function FinalReviewView({ workflow }: Props) {
             <div>
               <p className="font-medium text-teal-800">Word Document (.docx)</p>
               <p className="text-teal-600">
-                Complete curriculum with all 10 steps: Program Foundation, Competencies, PLOs,
-                Modules, Sources, Readings, Assessments, Case Studies, Glossary, and Lesson Plans
+                Complete curriculum with all 13 steps: Program Foundation, Competencies, PLOs,
+                Modules, Sources, Readings, Assessments, Case Studies, Glossary, Lesson Plans,
+                PowerPoints, Assignment Packs, and Summative Exam
               </p>
             </div>
           </div>
