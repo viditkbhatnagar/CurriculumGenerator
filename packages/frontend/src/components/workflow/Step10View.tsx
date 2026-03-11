@@ -527,22 +527,22 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
     maxRetries,
     refresh: refreshStatus,
   } = useStep10Status(workflow._id, {
-    pollInterval: 10000, // 10 seconds
+    pollInterval: 10000,
     maxRetries: 3,
     autoStart: true,
     onComplete: () => {
-      // Only show notification once
       if (!hasShownCompletionRef.current) {
         hasShownCompletionRef.current = true;
         toast.success(
-          'Module Generation Complete!',
-          'All modules have been generated successfully. Refreshing data...'
+          'All Modules Generated!',
+          'All lesson plans have been generated successfully.'
         );
-        // Auto-refresh the workflow data
-        setTimeout(() => {
-          onRefresh();
-        }, 1000);
+        onRefresh();
       }
+    },
+    onModuleComplete: () => {
+      // Refresh workflow data after each individual module completes
+      onRefresh();
     },
     onFailed: (errorMsg) => {
       toast.error(
@@ -580,16 +580,21 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
 
   // Sync generation state with backend status
   useEffect(() => {
-    if (step10Status) {
+    if (step10Status && generatingModuleId) {
       const isActive =
         step10Status.status === 'in_progress' || (step10Status.jobs?.active ?? 0) > 0;
 
-      if (!isActive && generatingModuleId) {
-        // Generation finished, clear local state
-        setGeneratingModuleId(null);
+      if (!isActive) {
+        // Only clear generating state once the workflow data actually has the module
+        const hasModuleData = workflow.step10?.moduleLessonPlans?.some(
+          (m) => m.moduleId === generatingModuleId
+        );
+        if (hasModuleData || step10Status.status === 'failed') {
+          setGeneratingModuleId(null);
+        }
       }
     }
-  }, [step10Status, generatingModuleId]);
+  }, [step10Status, generatingModuleId, workflow.step10?.moduleLessonPlans]);
 
   // Handle module generation
   const handleGenerateModule = useCallback(
@@ -994,10 +999,6 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                                   <span className="text-emerald-400">
                                     {modulePlan.totalLessons} lessons generated
                                   </span>
-                                  <span>•</span>
-                                  <span className="text-orange-400">
-                                    {modulePlan.pptDecks?.length || 0} PPT decks
-                                  </span>
                                 </>
                               )}
                             </div>
@@ -1185,7 +1186,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
           )}
 
           {/* Overall Stats */}
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <div className="bg-teal-50/50 rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-teal-800">
                 {workflow.step10?.summary?.totalLessons || 0}
@@ -1209,15 +1210,6 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                 {workflow.step10?.summary?.formativeChecksIncluded || 0}
               </p>
               <p className="text-xs text-teal-500 mt-1">Formative Checks</p>
-            </div>
-            <div className="bg-teal-50/50 rounded-xl p-4 border border-teal-200 text-center">
-              <p className="text-3xl font-bold text-orange-400">
-                {workflow.step10?.moduleLessonPlans?.reduce(
-                  (sum, m) => sum + (m.pptDecks?.length || 0),
-                  0
-                ) || 0}
-              </p>
-              <p className="text-xs text-teal-500 mt-1">PPT Decks</p>
             </div>
           </div>
 
@@ -1302,8 +1294,6 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                   <span>{currentModule.totalLessons} Lessons</span>
                   <span>•</span>
                   <span>{currentModule.totalContactHours} Contact Hours</span>
-                  <span>•</span>
-                  <span>{currentModule.pptDecks?.length || 0} PPT Decks</span>
                 </div>
               </div>
 

@@ -42,110 +42,138 @@ interface UseStep10StatusOptions {
   maxRetries?: number;
   /** Whether to start polling immediately (default: true) */
   autoStart?: boolean;
-  /** Callback when generation completes */
+  /** Callback when ALL modules complete */
   onComplete?: () => void;
+  /** Callback when a single module completes (modulesGenerated increased) */
+  onModuleComplete?: () => void;
   /** Callback when generation fails */
   onFailed?: (error: string) => void;
 }
 
 export function useStep10Status(workflowId: string, options: UseStep10StatusOptions = {}) {
-  const {
-    pollInterval = 10000, // 10 seconds default
-    maxRetries = 3,
-    autoStart = true,
-    onComplete,
-    onFailed,
-  } = options;
+  const { pollInterval = 10000, maxRetries = 3, autoStart = true } = options;
 
   const [status, setStatus] = useState<Step10Status | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [isPolling, setIsPolling] = useState(false);
-
-  // Track if generation is actively in progress
   const [isGenerationActive, setIsGenerationActive] = useState(false);
+
+  // Stable refs for callbacks — prevents dependency chain instability
+  const onCompleteRef = useRef(options.onComplete);
+  const onModuleCompleteRef = useRef(options.onModuleComplete);
+  const onFailedRef = useRef(options.onFailed);
+
+  // Keep refs up to date
+  useEffect(() => {
+    onCompleteRef.current = options.onComplete;
+    onModuleCompleteRef.current = options.onModuleComplete;
+    onFailedRef.current = options.onFailed;
+  });
 
   // Refs for cleanup and tracking
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const previousStatusRef = useRef<string | null>(null);
   const hasNotifiedCompleteRef = useRef(false);
+  const prevModulesGeneratedRef = useRef<number | null>(null);
+  const statusRef = useRef<Step10Status | null>(null);
+  const retryCountRef = useRef(0);
 
-  // Fetch status from backend
-  const fetchStatus = useCallback(async (isRetry = false): Promise<boolean> => {
-    if (!workflowId) return false;
+  // Keep retryCountRef in sync
+  useEffect(() => {
+    retryCountRef.current = retryCount;
+  }, [retryCount]);
 
-    try {
-      setLoading(true);
-      if (!isRetry) {
-        setError(null);
-      }
+  // Fetch status from backend — stable deps (no callbacks in the array)
+  const fetchStatus = useCallback(
+    async (isRetry = false): Promise<Step10Status | null> => {
+      if (!workflowId) return null;
 
-      const response = await api.get(`/api/v3/workflow/${workflowId}/step10/status`);
-
-      if (response.data.success) {
-        const newStatus = response.data.data as Step10Status;
-        setStatus(newStatus);
-        setRetryCount(0); // Reset retry count on success
-        setError(null);
-
-        // Check if generation is active
-        const isActive = newStatus.status === 'in_progress' || 
-                        (newStatus.jobs?.active > 0) ||
-                        (newStatus.modulesGenerated < newStatus.totalModules && newStatus.jobs?.total > 0);
-        setIsGenerationActive(isActive);
-
-        // Check for status changes
-        const prevStatus = previousStatusRef.current;
-        previousStatusRef.current = newStatus.status;
-
-        // Notify on completion (only once)
-        if (newStatus.status === 'complete' && prevStatus === 'in_progress' && !hasNotifiedCompleteRef.current) {
-          hasNotifiedCompleteRef.current = true;
-          onComplete?.();
+      try {
+        setLoading(true);
+        if (!isRetry) {
+          setError(null);
         }
 
-        // Notify on failure
-        if (newStatus.status === 'failed' && prevStatus !== 'failed') {
-          const failedJob = newStatus.jobs?.details?.find(j => j.state === 'failed');
-          onFailed?.(failedJob?.failedReason || 'Generation failed');
+        const response = await api.get(`/api/v3/workflow/${workflowId}/step10/status`);
+
+        if (response.data.success) {
+          const newStatus = response.data.data as Step10Status;
+          setStatus(newStatus);
+          statusRef.current = newStatus;
+          setRetryCount(0);
+          retryCountRef.current = 0;
+          setError(null);
+
+          // Check if generation is active
+          const isActive =
+            newStatus.status === 'in_progress' ||
+            newStatus.jobs?.active > 0 ||
+            (newStatus.modulesGenerated < newStatus.totalModules && newStatus.jobs?.total > 0);
+          setIsGenerationActive(isActive);
+
+          // Detect per-module completion
+          const prevModules = prevModulesGeneratedRef.current;
+          prevModulesGeneratedRef.current = newStatus.modulesGenerated;
+          if (prevModules !== null && newStatus.modulesGenerated > prevModules) {
+            onModuleCompleteRef.current?.();
+          }
+
+          // Check for overall status transitions
+          const prevStatus = previousStatusRef.current;
+          previousStatusRef.current = newStatus.status;
+
+          // Notify on all-complete (only once per generation cycle)
+          if (
+            newStatus.status === 'complete' &&
+            prevStatus === 'in_progress' &&
+            !hasNotifiedCompleteRef.current
+          ) {
+            hasNotifiedCompleteRef.current = true;
+            onCompleteRef.current?.();
+          }
+
+          // Notify on failure
+          if (newStatus.status === 'failed' && prevStatus !== 'failed') {
+            const failedJob = newStatus.jobs?.details?.find((j) => j.state === 'failed');
+            onFailedRef.current?.(failedJob?.failedReason || 'Generation failed');
+          }
+
+          return newStatus;
+        } else {
+          throw new Error(response.data.error || 'Failed to fetch status');
         }
+      } catch (err: any) {
+        const errorMessage = err.response?.data?.error || err.message || 'Failed to fetch status';
 
-        return true;
-      } else {
-        throw new Error(response.data.error || 'Failed to fetch status');
-      }
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to fetch status';
-      
-      // Handle retry logic
-      if (retryCount < maxRetries) {
-        const nextRetryCount = retryCount + 1;
-        setRetryCount(nextRetryCount);
-        
-        // Exponential backoff: 2s, 4s, 8s
-        const backoffDelay = Math.pow(2, nextRetryCount) * 1000;
-        
-        console.log(`[Step10Status] Retry ${nextRetryCount}/${maxRetries} in ${backoffDelay}ms`);
-        
-        retryTimeoutRef.current = setTimeout(() => {
-          fetchStatus(true);
-        }, backoffDelay);
-        
-        return false;
-      } else {
-        // Max retries exceeded
-        setError(errorMessage);
-        setIsPolling(false);
-        return false;
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [workflowId, retryCount, maxRetries, onComplete, onFailed]);
+        if (retryCountRef.current < maxRetries) {
+          const nextRetryCount = retryCountRef.current + 1;
+          setRetryCount(nextRetryCount);
+          retryCountRef.current = nextRetryCount;
 
-  // Start polling
+          const backoffDelay = Math.pow(2, nextRetryCount) * 1000;
+          console.log(`[Step10Status] Retry ${nextRetryCount}/${maxRetries} in ${backoffDelay}ms`);
+
+          retryTimeoutRef.current = setTimeout(() => {
+            fetchStatus(true);
+          }, backoffDelay);
+
+          return null;
+        } else {
+          setError(errorMessage);
+          setIsPolling(false);
+          return null;
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [workflowId, maxRetries]
+  );
+
+  // Start polling — stable since fetchStatus is now stable
   const startPolling = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -153,7 +181,7 @@ export function useStep10Status(workflowId: string, options: UseStep10StatusOpti
 
     setIsPolling(true);
     hasNotifiedCompleteRef.current = false;
-    
+
     // Fetch immediately
     fetchStatus();
 
@@ -179,19 +207,21 @@ export function useStep10Status(workflowId: string, options: UseStep10StatusOpti
   // Manual retry after max retries exceeded
   const retry = useCallback(() => {
     setRetryCount(0);
+    retryCountRef.current = 0;
     setError(null);
     startPolling();
   }, [startPolling]);
 
-  // Auto-start polling and detect ongoing generation
+  // Auto-start: detect ongoing generation on mount
   useEffect(() => {
     if (!workflowId || !autoStart) return;
 
-    // Initial fetch to detect if generation is already in progress
-    fetchStatus().then((success) => {
-      if (success && status) {
-        // If generation is in progress, start polling
-        if (status.status === 'in_progress' || (status.jobs?.active > 0)) {
+    // Single initial fetch — use returned data directly (not stale closure)
+    fetchStatus().then((fetchedStatus) => {
+      if (fetchedStatus) {
+        const isActive =
+          fetchedStatus.status === 'in_progress' || (fetchedStatus.jobs?.active ?? 0) > 0;
+        if (isActive) {
           startPolling();
         }
       }
@@ -200,12 +230,11 @@ export function useStep10Status(workflowId: string, options: UseStep10StatusOpti
     return () => {
       stopPolling();
     };
-  }, [workflowId, autoStart, startPolling, stopPolling]);
+  }, [workflowId, autoStart, fetchStatus, startPolling, stopPolling]);
 
   // Stop polling when generation completes or fails
   useEffect(() => {
     if (status?.status === 'complete' || status?.status === 'failed') {
-      // Stop polling but keep the status
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -221,23 +250,16 @@ export function useStep10Status(workflowId: string, options: UseStep10StatusOpti
       : 0
     : 0;
 
-  // Estimate 5 minutes per remaining module
-  const estimatedTimeRemaining = status
-    ? (status.totalModules - status.modulesGenerated) * 5
-    : 0;
+  const estimatedTimeRemaining = status ? (status.totalModules - status.modulesGenerated) * 5 : 0;
 
-  // Get current active module index
   const activeModuleIndex = status?.jobs?.details?.find(
-    j => j.state === 'active' || j.state === 'waiting'
+    (j) => j.state === 'active' || j.state === 'waiting'
   )?.moduleIndex;
 
   return {
-    // Status data
     status,
     loading,
     error,
-    
-    // Derived state
     isPolling,
     isGenerationActive,
     progressPercentage,
@@ -245,8 +267,6 @@ export function useStep10Status(workflowId: string, options: UseStep10StatusOpti
     activeModuleIndex,
     retryCount,
     maxRetries,
-    
-    // Actions
     refresh: () => fetchStatus(),
     startPolling,
     stopPolling,
@@ -266,13 +286,14 @@ export async function checkOngoingGeneration(workflowId: string): Promise<{
 }> {
   try {
     const response = await api.get(`/api/v3/workflow/${workflowId}/step10/status`);
-    
+
     if (response.data.success) {
       const status = response.data.data as Step10Status;
-      const isGenerating = status.status === 'in_progress' || 
-                          (status.jobs?.active > 0) ||
-                          (status.jobs?.details?.some(j => j.state === 'waiting' || j.state === 'active'));
-      
+      const isGenerating =
+        status.status === 'in_progress' ||
+        status.jobs?.active > 0 ||
+        status.jobs?.details?.some((j) => j.state === 'waiting' || j.state === 'active');
+
       return {
         isGenerating,
         modulesGenerated: status.modulesGenerated,
@@ -283,7 +304,7 @@ export async function checkOngoingGeneration(workflowId: string): Promise<{
   } catch (error) {
     console.error('[checkOngoingGeneration] Error:', error);
   }
-  
+
   return {
     isGenerating: false,
     modulesGenerated: 0,
