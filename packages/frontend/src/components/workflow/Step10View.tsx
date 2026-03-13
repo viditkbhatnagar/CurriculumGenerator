@@ -726,9 +726,20 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   ];
   const isStep9Approved = validStatuses.includes(workflow.status);
 
-  // Check if generation is incomplete
+  // Build a lookup of completed modules — handles duplicates and supports
+  // matching by moduleId OR moduleCode (fallback for ID mismatches)
+  const completedModuleSet = new Set<string>();
+  const completedByCode = new Map<string, any>();
+  (workflow.step10?.moduleLessonPlans || []).forEach((mp: any) => {
+    if (mp.moduleId) completedModuleSet.add(mp.moduleId);
+    if (mp.moduleCode) completedByCode.set(mp.moduleCode, mp);
+  });
+
   const totalModules = workflow.step4?.modules?.length || 0;
-  const completedModules = workflow.step10?.moduleLessonPlans?.length || 0;
+  // Count unique modules that match a step4 module (by id or code)
+  const completedModules = (workflow.step4?.modules || []).filter(
+    (m) => completedModuleSet.has(m.id) || completedByCode.has(m.code)
+  ).length;
   const _isIncomplete = hasStep10Data && completedModules < totalModules;
   const isAllModulesComplete = hasStep10Data && completedModules >= totalModules;
 
@@ -911,9 +922,9 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
 
             <div className="space-y-4">
               {workflow.step4?.modules?.map((module, index) => {
-                const modulePlan = workflow.step10?.moduleLessonPlans?.find(
-                  (m) => m.moduleId === module.id
-                );
+                const modulePlan =
+                  workflow.step10?.moduleLessonPlans?.find((m) => m.moduleId === module.id) ||
+                  completedByCode.get(module.code);
                 const isComplete = !!modulePlan;
                 const isThisModuleGenerating =
                   generatingModuleId === module.id ||

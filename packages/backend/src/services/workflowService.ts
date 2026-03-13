@@ -3303,8 +3303,15 @@ CRITICAL VALIDATION:
       };
     }
 
-    // Add the new module to the workflow
-    workflow.step10.moduleLessonPlans.push(modulePlan);
+    // Add or replace the module in the workflow (progress callback may have already added it)
+    const existingIdx = workflow.step10.moduleLessonPlans.findIndex(
+      (m: any) => m.moduleId === modulePlan.moduleId
+    );
+    if (existingIdx >= 0) {
+      workflow.step10.moduleLessonPlans[existingIdx] = modulePlan;
+    } else {
+      workflow.step10.moduleLessonPlans.push(modulePlan);
+    }
 
     // Update summary
     const allLessons = workflow.step10.moduleLessonPlans.flatMap((m) => m.lessons);
