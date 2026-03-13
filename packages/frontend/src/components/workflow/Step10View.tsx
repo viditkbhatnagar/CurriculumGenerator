@@ -732,12 +732,12 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   const _isIncomplete = hasStep10Data && completedModules < totalModules;
   const isAllModulesComplete = hasStep10Data && completedModules >= totalModules;
 
-  // Determine if currently generating (from either local state or backend status)
+  // Determine if currently generating — only true when a job is actually running
   const isCurrentlyGenerating =
     generatingModuleId !== null ||
-    isGenerationActive ||
     submitStep10.isPending ||
-    step10Status?.status === 'in_progress';
+    step10Status?.status === 'in_progress' ||
+    (step10Status?.jobs?.active ?? 0) > 0;
 
   // Auto-select first module if none selected
   useEffect(() => {

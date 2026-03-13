@@ -107,11 +107,9 @@ export function useStep10Status(workflowId: string, options: UseStep10StatusOpti
           retryCountRef.current = 0;
           setError(null);
 
-          // Check if generation is active
-          const isActive =
-            newStatus.status === 'in_progress' ||
-            newStatus.jobs?.active > 0 ||
-            (newStatus.modulesGenerated < newStatus.totalModules && newStatus.jobs?.total > 0);
+          // Check if generation is active — only true when backend says in_progress
+          // or there are actually active/waiting jobs (NOT just because completed jobs exist)
+          const isActive = newStatus.status === 'in_progress' || (newStatus.jobs?.active ?? 0) > 0;
           setIsGenerationActive(isActive);
 
           // Detect per-module completion
