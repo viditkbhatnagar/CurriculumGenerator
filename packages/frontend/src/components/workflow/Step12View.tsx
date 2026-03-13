@@ -51,9 +51,19 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
     submitNextModule.isPending ||
     !!generatingModuleId;
 
-  // Track module count to detect completion
+  // Track module count to detect completion — use Set-based dedup + moduleCode fallback
+  const completedModuleIdSet = new Set(
+    (workflow.step12?.moduleAssignmentPacks || []).map((m) => m.moduleId)
+  );
+  const completedByCode12 = new Map<string, ModuleAssignmentPacks>();
+  (workflow.step12?.moduleAssignmentPacks || []).forEach((m) => {
+    if (m.moduleCode) completedByCode12.set(m.moduleCode, m);
+  });
+
   const getCompletedCount = () => {
-    return workflow.step12?.moduleAssignmentPacks?.length || 0;
+    return (workflow.step4?.modules || []).filter(
+      (m) => completedModuleIdSet.has(m.id) || completedByCode12.has(m.code)
+    ).length;
   };
 
   const prevModuleCountRef = useRef<number>(getCompletedCount());
@@ -86,14 +96,17 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
     setError(null);
 
     const totalModules = workflow.step4?.modules?.length || 0;
-    const existingModules = workflow.step12?.moduleAssignmentPacks?.length || 0;
+    const existingModules = getCompletedCount();
 
     if (existingModules >= totalModules) {
       setError('All assignment packs already generated');
       return;
     }
 
-    const nextModule = workflow.step4?.modules?.[existingModules];
+    // Find the first module that hasn't been generated yet (by ID or code)
+    const nextModule = workflow.step4?.modules?.find(
+      (m) => !completedModuleIdSet.has(m.id) && !completedByCode12.has(m.code)
+    );
     if (!nextModule) {
       setError('No more modules to generate');
       return;
@@ -137,7 +150,7 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
   const hasStep12Data = workflow.step12 && workflow.step12.moduleAssignmentPacks?.length > 0;
   const isApproved = !!workflow.step12?.approvedAt;
   const totalModules = workflow.step4?.modules?.length || 0;
-  const completedModules = workflow.step12?.moduleAssignmentPacks?.length || 0;
+  const completedModules = getCompletedCount();
   const isAllModulesComplete = hasStep12Data && completedModules >= totalModules;
 
   // Check if Step 11 is approved
@@ -298,9 +311,9 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
 
             <div className="space-y-4">
               {workflow.step4?.modules?.map((module, index) => {
-                const modulePacks = workflow.step12?.moduleAssignmentPacks?.find(
-                  (m) => m.moduleId === module.id
-                );
+                const modulePacks =
+                  workflow.step12?.moduleAssignmentPacks?.find((m) => m.moduleId === module.id) ||
+                  completedByCode12.get(module.code);
                 const isComplete = !!modulePacks;
                 const isGeneratingThis =
                   generatingModuleId === module.id ||

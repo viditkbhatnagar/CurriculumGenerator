@@ -30,10 +30,14 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
   // Use unique count based on step10 module matching
   const getUniqueCompletedCount = () => {
     const moduleIds = new Set(workflow.step11?.modulePPTDecks?.map((m) => m.moduleId) || []);
+    const moduleCodes = new Set(
+      workflow.step11?.modulePPTDecks?.map((m) => m.moduleCode).filter(Boolean) || []
+    );
     let count = 0;
     const lessonPlans = workflow.step10?.moduleLessonPlans || [];
     for (let i = 0; i < lessonPlans.length; i++) {
-      if (moduleIds.has(lessonPlans[i]?.moduleId)) {
+      const lp = lessonPlans[i];
+      if (lp && (moduleIds.has(lp.moduleId) || moduleCodes.has(lp.moduleCode))) {
         count++;
       }
     }
@@ -100,7 +104,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
         completeGeneration(workflow._id, 11);
       }
     }
-  }, [statusData, workflow.step11?.lastError]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [statusData, workflow.step11?.lastError]); // eslint-disable-line
 
   // Auto-poll when generation is in progress (reduced frequency to prevent server overload)
   useEffect(() => {
@@ -255,14 +259,19 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
 
   // Check completion status - count unique completed modules by matching with step10 moduleIds
   // This handles cases where there might be duplicate entries in step11.modulePPTDecks
+  // Also falls back to moduleCode matching for resilience against ID mismatches
   const totalModules = workflow.step10?.moduleLessonPlans?.length || 0;
   const completedModuleIds = new Set(workflow.step11?.modulePPTDecks?.map((m) => m.moduleId) || []);
+  const completedByCode = new Map<string, any>();
+  (workflow.step11?.modulePPTDecks || []).forEach((m) => {
+    if (m.moduleCode) completedByCode.set(m.moduleCode, m);
+  });
 
-  // Count how many step10 modules have corresponding step11 PPTs
+  // Count how many step10 modules have corresponding step11 PPTs (by ID or code fallback)
   let completedModules = 0;
   for (let i = 0; i < totalModules; i++) {
-    const moduleId = workflow.step10?.moduleLessonPlans?.[i]?.moduleId;
-    if (moduleId && completedModuleIds.has(moduleId)) {
+    const lp = workflow.step10?.moduleLessonPlans?.[i];
+    if (lp && (completedModuleIds.has(lp.moduleId) || completedByCode.has(lp.moduleCode))) {
       completedModules++;
     }
   }
@@ -418,7 +427,12 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                 className="text-red-400 hover:text-red-300 ml-4 flex-shrink-0"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -434,9 +448,9 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
 
             <div className="space-y-4">
               {workflow.step10?.moduleLessonPlans?.map((module, index) => {
-                const modulePPT = workflow.step11?.modulePPTDecks?.find(
-                  (m) => m.moduleId === module.moduleId
-                );
+                const modulePPT =
+                  workflow.step11?.modulePPTDecks?.find((m) => m.moduleId === module.moduleId) ||
+                  completedByCode.get(module.moduleCode);
                 const isComplete = !!modulePPT;
                 const isGenerating =
                   generatingModuleId === module.moduleId ||
@@ -521,7 +535,10 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                                   </span>
                                   <span>•</span>
                                   <span className="text-teal-600">
-                                    {modulePPT.pptDecks.reduce((sum, d) => sum + d.slideCount, 0)}{' '}
+                                    {modulePPT.pptDecks.reduce(
+                                      (sum: number, d: any) => sum + d.slideCount,
+                                      0
+                                    )}{' '}
                                     slides
                                   </span>
                                 </>
@@ -633,7 +650,8 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
           </div>
 
           {/* Error Banner with Retry */}
-          {(workflow.step11?.lastError || (statusData?.jobs?.failed > 0 && !isCurrentlyGenerating)) && (
+          {(workflow.step11?.lastError ||
+            (statusData?.jobs?.failed > 0 && !isCurrentlyGenerating)) && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-5">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
@@ -652,9 +670,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                   </svg>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-red-400 mb-1">
-                    PPT Generation Failed
-                  </h3>
+                  <h3 className="text-lg font-semibold text-red-400 mb-1">PPT Generation Failed</h3>
                   <p className="text-teal-700 text-sm">
                     {workflow.step11?.lastError?.message ||
                       'A background job failed. Click Retry to attempt generation again.'}
