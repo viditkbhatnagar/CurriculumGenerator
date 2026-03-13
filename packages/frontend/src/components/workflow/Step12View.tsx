@@ -82,6 +82,29 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
     workflow._id,
   ]);
 
+  // Clear stale GenerationContext state on mount/status update
+  useEffect(() => {
+    if (
+      !isGenerating(workflow._id, 12) ||
+      generatingModuleId ||
+      submitStep12.isPending ||
+      submitNextModule.isPending
+    )
+      return;
+
+    // Wait until statusData is loaded before evaluating backend state
+    if (_statusData == null) return;
+
+    const hasActiveBackendJobs =
+      (_statusData as any)?.queueStatus?.state === 'active' ||
+      (_statusData as any)?.queueStatus?.state === 'waiting';
+
+    // If no active backend jobs and we're not actively submitting, clear stale context
+    if (!hasActiveBackendJobs) {
+      completeGeneration(workflow._id, 12);
+    }
+  }, [_statusData]); // eslint-disable-line
+
   // Auto-poll during generation
   useEffect(() => {
     if (!generatingModuleId) return;
