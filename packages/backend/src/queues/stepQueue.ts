@@ -68,7 +68,12 @@ export { stepQueue };
 /**
  * Routes step number to the correct workflowService method
  */
-async function processStepJob(stepNumber: number, workflowId: string, input?: Record<string, any>) {
+async function processStepJob(
+  stepNumber: number,
+  workflowId: string,
+  input?: Record<string, any>,
+  onProgress?: (pct: number) => void
+) {
   switch (stepNumber) {
     case 1:
       return workflowService.processStep1(workflowId, input as any);
@@ -89,7 +94,7 @@ async function processStepJob(stepNumber: number, workflowId: string, input?: Re
     case 9:
       return workflowService.processStep9(workflowId);
     case 13:
-      return workflowService.processStep13(workflowId);
+      return workflowService.processStep13(workflowId, onProgress);
     default:
       throw new Error(`Unknown step number: ${stepNumber}`);
   }
@@ -109,9 +114,10 @@ if (stepQueue) {
 
     try {
       await job.progress(0);
-      await job.progress(10);
 
-      const updatedWorkflow = await processStepJob(stepNumber, workflowId, input);
+      const updatedWorkflow = await processStepJob(stepNumber, workflowId, input, (pct: number) => {
+        job.progress(pct);
+      });
 
       await job.progress(100);
 
@@ -197,10 +203,22 @@ export async function addStepJob(
 
   const jobId = `step${stepNumber}-${workflowId}`;
 
-  const job = await stepQueue.add(
-    { stepNumber, workflowId, userId, input },
-    { jobId, priority: 1 }
-  );
+  // Step 13 (summative exam) has 5 sequential LLM calls — give it more time
+  // but cap it to prevent infinite runs. Other steps are faster.
+  const isStep13 = stepNumber === 13;
+  const jobOptions: any = {
+    jobId,
+    priority: 1,
+    ...(isStep13
+      ? {
+          timeout: 1800000, // 30 min hard cap for Step 13 (GPT-5 takes 2-3 min per phase × 5 phases)
+          attempts: 2, // Only 1 retry (2 total attempts) — each attempt is ~5-8 min
+          backoff: { type: 'fixed' as const, delay: 10000 }, // 10s between retries
+        }
+      : {}),
+  };
+
+  const job = await stepQueue.add({ stepNumber, workflowId, userId, input }, jobOptions);
 
   loggingService.info('Step job queued', {
     jobId: String(job.id),

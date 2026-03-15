@@ -41,7 +41,7 @@ interface ExamContext {
 }
 
 export class SummativeExamService {
-  private readonly SECTION_TIMEOUT = 240000; // 4 minutes per section
+  private readonly SECTION_TIMEOUT = 300000; // 5 minutes per section — GPT-5 calls take 2-3 min
   private readonly MAX_TOKENS_SECTION_A = 16000;
   private readonly MAX_TOKENS_SECTION_B = 12000;
   private readonly MAX_TOKENS_SECTION_C = 10000;
@@ -49,11 +49,64 @@ export class SummativeExamService {
   private readonly INTER_CALL_DELAY = 1500;
 
   /**
-   * Generate the complete summative exam package
+   * Safely parse JSON from LLM response, handling truncated or malformed output
    */
-  async generateSummativeExam(workflow: ICurriculumWorkflow): Promise<Step13SummativeExam> {
+  private safeParseJSON(response: string, phase: string): any {
+    try {
+      return JSON.parse(response);
+    } catch (firstError) {
+      loggingService.warn(`Phase ${phase}: JSON parse failed, attempting repair`, {
+        responseLength: response.length,
+        firstChars: response.substring(0, 100),
+        lastChars: response.substring(response.length - 100),
+      });
+
+      // Try to repair truncated JSON by closing open brackets/braces
+      let repaired = response.trim();
+
+      // Remove trailing incomplete string values (cut mid-sentence)
+      repaired = repaired.replace(/,\s*"[^"]*":\s*"[^"]*$/g, '');
+      repaired = repaired.replace(/,\s*"[^"]*$/g, '');
+
+      // Count open/close brackets
+      const openBraces = (repaired.match(/{/g) || []).length;
+      const closeBraces = (repaired.match(/}/g) || []).length;
+      const openBrackets = (repaired.match(/\[/g) || []).length;
+      const closeBrackets = (repaired.match(/]/g) || []).length;
+
+      // Close any open arrays then objects
+      for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += ']';
+      for (let i = 0; i < openBraces - closeBraces; i++) repaired += '}';
+
+      try {
+        const parsed = JSON.parse(repaired);
+        loggingService.info(`Phase ${phase}: JSON repair succeeded`);
+        return parsed;
+      } catch (secondError) {
+        loggingService.error(`Phase ${phase}: JSON repair also failed`, {
+          responseLength: response.length,
+          error: secondError instanceof Error ? secondError.message : String(secondError),
+        });
+        throw new Error(
+          `Phase ${phase} returned invalid JSON (${response.length} chars). ` +
+            `This usually means the response was truncated due to token limits. ` +
+            `Original error: ${firstError instanceof Error ? firstError.message : String(firstError)}`
+        );
+      }
+    }
+  }
+
+  /**
+   * Generate the complete summative exam package
+   * @param onProgress - optional callback to report phase progress (0-100)
+   */
+  async generateSummativeExam(
+    workflow: ICurriculumWorkflow,
+    onProgress?: (pct: number) => void
+  ): Promise<Step13SummativeExam> {
     const context = this.buildExamContext(workflow);
     const includeSectionB = this.shouldIncludeSectionB(context.deliveryMode);
+    const report = (pct: number) => onProgress?.(pct);
 
     loggingService.info('Starting summative exam generation', {
       programTitle: context.programTitle,
@@ -64,12 +117,14 @@ export class SummativeExamService {
     });
 
     // Phase 1: Generate Overview + Section A
+    report(10);
     loggingService.info('Phase 1: Generating overview and Section A');
     const { overview, sectionA } = await this.generateOverviewAndSectionA(context, includeSectionB);
 
     await this.delay(this.INTER_CALL_DELAY);
 
     // Phase 2: Generate Section B (conditional)
+    report(30);
     let sectionB: SectionBScenario[] | undefined;
     if (includeSectionB) {
       loggingService.info('Phase 2: Generating Section B (scenario analysis)');
@@ -80,18 +135,21 @@ export class SummativeExamService {
     }
 
     // Phase 3: Generate Section C
+    report(50);
     loggingService.info('Phase 3: Generating Section C (applied tasks)');
     const sectionC = await this.generateSectionC(context);
 
     await this.delay(this.INTER_CALL_DELAY);
 
     // Phase 4: Generate Marking Scheme
+    report(70);
     loggingService.info('Phase 4: Generating marking scheme');
     const markingScheme = await this.generateMarkingScheme(sectionA, sectionB, sectionC, context);
 
     await this.delay(this.INTER_CALL_DELAY);
 
     // Phase 5: Generate Integrity and Accessibility
+    report(85);
     loggingService.info('Phase 5: Generating integrity and accessibility sections');
     const { integrityAndSecurity, accessibilityProvisions } = await this.generateMetadata(context);
 
@@ -269,7 +327,7 @@ Return ONLY valid JSON.`;
       timeout: this.SECTION_TIMEOUT,
     });
 
-    const parsed = JSON.parse(response);
+    const parsed = this.safeParseJSON(response, 'Overview+SectionA');
     return {
       overview: parsed.overview || {},
       sectionA: parsed.sectionA || [],
@@ -335,7 +393,7 @@ Return ONLY valid JSON.`;
       timeout: this.SECTION_TIMEOUT,
     });
 
-    const parsed = JSON.parse(response);
+    const parsed = this.safeParseJSON(response, 'SectionB');
     return parsed.sectionB || [];
   }
 
@@ -381,7 +439,7 @@ Return ONLY valid JSON.`;
       timeout: this.SECTION_TIMEOUT,
     });
 
-    const parsed = JSON.parse(response);
+    const parsed = this.safeParseJSON(response, 'SectionC');
     return parsed.sectionC || [];
   }
 
@@ -396,22 +454,30 @@ Return ONLY valid JSON.`;
 Style: Formal, professional. UK academic conventions.
 Return ONLY valid JSON.`;
 
-    const sectionASummary = sectionA
-      .map((q) => `${q.questionId}: ${q.questionText.substring(0, 100)}... (${q.marks} marks)`)
+    // Limit summaries to prevent token overflow — only include first 15 Section A questions
+    const sectionASlice = sectionA.slice(0, 15);
+    const sectionASummary = sectionASlice
+      .map((q) => `${q.questionId}: ${q.questionText.substring(0, 80)} (${q.marks}m, ${q.type})`)
       .join('\n');
+    if (sectionA.length > 15) {
+      loggingService.info('Marking scheme: truncated Section A summary', {
+        total: sectionA.length,
+        included: 15,
+      });
+    }
 
     const sectionBSummary = sectionB
       ? sectionB
           .map(
             (s) =>
-              `${s.scenarioId}: ${s.scenarioText.substring(0, 100)}... (${s.totalMarks} marks, ${s.questions.length} questions)`
+              `${s.scenarioId}: ${s.scenarioText.substring(0, 80)} (${s.totalMarks}m, ${s.questions.length}q)`
           )
           .join('\n')
       : 'N/A';
 
     const sectionCSummary = sectionC
       ? sectionC
-          .map((t) => `${t.taskId}: ${t.taskDescription.substring(0, 100)}... (${t.marks} marks)`)
+          .map((t) => `${t.taskId}: ${t.taskDescription.substring(0, 80)} (${t.marks}m)`)
           .join('\n')
       : 'N/A';
 
@@ -477,7 +543,7 @@ Return ONLY valid JSON.`;
       timeout: this.SECTION_TIMEOUT,
     });
 
-    const parsed = JSON.parse(response);
+    const parsed = this.safeParseJSON(response, 'MarkingScheme');
     return {
       sectionA: parsed.sectionA || [],
       sectionB: parsed.sectionB,
@@ -506,10 +572,10 @@ Return ONLY valid JSON.`;
     const response = await openaiService.generateContent(prompt, systemPrompt, {
       responseFormat: 'json_object',
       maxTokens: 4000,
-      timeout: 60000,
+      timeout: this.SECTION_TIMEOUT,
     });
 
-    const parsed = JSON.parse(response);
+    const parsed = this.safeParseJSON(response, 'Metadata');
     return {
       integrityAndSecurity: parsed.integrityAndSecurity || '',
       accessibilityProvisions: parsed.accessibilityProvisions || '',

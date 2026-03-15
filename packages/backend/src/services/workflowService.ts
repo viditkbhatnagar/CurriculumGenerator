@@ -3995,7 +3995,10 @@ CRITICAL VALIDATION:
    * Process Step 13: Generate Summative Exam Package
    * Single generation (not module-by-module)
    */
-  async processStep13(workflowId: string): Promise<ICurriculumWorkflow> {
+  async processStep13(
+    workflowId: string,
+    onProgress?: (pct: number) => void
+  ): Promise<ICurriculumWorkflow> {
     const workflow = await CurriculumWorkflow.findById(workflowId);
     if (!workflow || !workflow.step12) {
       throw new Error('Workflow not found or Step 12 not complete');
@@ -4004,7 +4007,7 @@ CRITICAL VALIDATION:
     loggingService.info('Processing Step 13: Summative Exam', { workflowId });
 
     const { summativeExamService } = await import('./summativeExamService');
-    const examResult = await summativeExamService.generateSummativeExam(workflow);
+    const examResult = await summativeExamService.generateSummativeExam(workflow, onProgress);
 
     workflow.step13 = examResult;
     workflow.currentStep = 13;
