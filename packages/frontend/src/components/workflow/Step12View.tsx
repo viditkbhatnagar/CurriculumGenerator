@@ -332,10 +332,36 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
             <h3 className="text-xl font-bold text-teal-800 mb-4">
               Assignment Pack Generation Progress
             </h3>
-            <p className="text-sm text-teal-600 mb-6">
-              Each module generates 3 assignment pack variants (In-Person, Self-Study, Hybrid). This
-              takes 3-5 minutes per module.
+            <p className="text-sm text-teal-600 mb-4">
+              Each module generates 3 assignment pack variants (In-Person, Self-Study, Hybrid).
+              Takes 3-5 minutes per module.
             </p>
+
+            {/* Generate All Button */}
+            {!isAllModulesComplete && !isCurrentlyGenerating && (
+              <button
+                onClick={handleGenerate}
+                disabled={submitNextModule.isPending}
+                className="w-full mb-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
+                </svg>
+                Generate All Remaining Packs ({totalModules - completedModules} modules)
+              </button>
+            )}
+            {isCurrentlyGenerating && (
+              <div className="w-full mb-6 py-3 bg-blue-500/10 border border-blue-500/30 text-blue-600 font-medium rounded-lg flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                Auto-generating all modules sequentially... ({completedModules}/{totalModules}{' '}
+                complete)
+              </div>
+            )}
 
             <div className="space-y-4">
               {workflow.step4?.modules?.map((module, index) => {
@@ -969,7 +995,11 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
               disabled={submitNextModule.isPending || isAllModulesComplete}
               className="px-4 py-2 text-teal-600 hover:text-teal-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isAllModulesComplete ? 'All Packs Generated' : 'Generate Next Module'}
+              {isAllModulesComplete
+                ? 'All Packs Generated'
+                : isCurrentlyGenerating
+                  ? 'Generating...'
+                  : `Generate All Remaining (${totalModules - completedModules} modules)`}
             </button>
 
             {isAllModulesComplete && !isApproved && (

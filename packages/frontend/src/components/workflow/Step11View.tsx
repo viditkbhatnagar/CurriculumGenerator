@@ -444,10 +444,36 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
           {/* Module Generation List */}
           <div className="bg-teal-50/50 rounded-lg p-6 border border-teal-200">
             <h3 className="text-xl font-bold text-teal-800 mb-4">PPT Generation Progress</h3>
-            <p className="text-sm text-teal-600 mb-6">
-              Generate PowerPoint slide decks for each module. Each module takes 2-3 minutes to
+            <p className="text-sm text-teal-600 mb-4">
+              Generate PowerPoint slide decks for each module. Each module takes 2-5 minutes to
               generate.
             </p>
+
+            {/* Generate All Button */}
+            {!isAllModulesComplete && !isCurrentlyGenerating && (
+              <button
+                onClick={handleGenerate}
+                disabled={submitStep11.isPending}
+                className="w-full mb-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
+                </svg>
+                Generate All Remaining PPTs ({totalModules - completedModules} modules)
+              </button>
+            )}
+            {isCurrentlyGenerating && (
+              <div className="w-full mb-6 py-3 bg-orange-500/10 border border-orange-500/30 text-orange-600 font-medium rounded-lg flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                Auto-generating all modules sequentially... ({completedModules}/{totalModules}{' '}
+                complete)
+              </div>
+            )}
 
             <div className="space-y-4">
               {workflow.step10?.moduleLessonPlans?.map((module, index) => {
@@ -1075,7 +1101,11 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
               disabled={submitStep11.isPending || isAllModulesComplete}
               className="px-4 py-2 text-teal-600 hover:text-teal-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isAllModulesComplete ? 'All PPTs Generated' : 'Generate Next Module PPT'}
+              {isAllModulesComplete
+                ? 'All PPTs Generated'
+                : isCurrentlyGenerating
+                  ? 'Generating...'
+                  : `Generate All Remaining PPTs (${totalModules - completedModules} modules)`}
             </button>
 
             {isAllModulesComplete && !isApproved && (
