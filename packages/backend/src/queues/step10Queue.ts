@@ -279,6 +279,17 @@ export async function queueAllRemainingModules(
     return [];
   }
 
+  // Check if there are already active or waiting jobs for this workflow
+  // Prevents double-queueing when user clicks generate while auto-chaining is active
+  const existingJobs = await step10Queue.getJobs(['active', 'waiting', 'delayed']);
+  const hasActiveJob = existingJobs.some((j) => j.data.workflowId === workflowId);
+  if (hasActiveJob) {
+    loggingService.info('Step 10 job already active/waiting for this workflow, skipping', {
+      workflowId,
+    });
+    return [];
+  }
+
   const workflow = await CurriculumWorkflow.findById(workflowId);
   if (!workflow) {
     throw new Error('Workflow not found');

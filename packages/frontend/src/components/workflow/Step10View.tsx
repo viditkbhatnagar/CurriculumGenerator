@@ -630,18 +630,27 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
     [workflow._id, submitStep10, startPolling]
   );
 
-  // Legacy handleGenerate for the main button
+  // Legacy handleGenerate for the main button — find the first ungenerated module
   const handleGenerate = useCallback(async () => {
-    const nextModuleIndex = workflow.step10?.moduleLessonPlans?.length || 0;
-    const nextModule = workflow.step4?.modules?.[nextModuleIndex];
+    const modules = workflow.step4?.modules || [];
+    const existingIds = new Set(
+      (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+    );
+    const existingCodes = new Set(
+      (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleCode).filter(Boolean)
+    );
+    // Find the first module that doesn't have a lesson plan yet
+    const nextModuleIndex = modules.findIndex(
+      (m) => !existingIds.has(m.id) && !existingCodes.has(m.code)
+    );
 
-    if (!nextModule) {
+    if (nextModuleIndex === -1) {
       setError('No more modules to generate');
       return;
     }
 
-    await handleGenerateModule(nextModule.id, nextModuleIndex);
-  }, [workflow.step10?.moduleLessonPlans?.length, workflow.step4?.modules, handleGenerateModule]);
+    await handleGenerateModule(modules[nextModuleIndex].id, nextModuleIndex);
+  }, [workflow.step4?.modules, workflow.step10?.moduleLessonPlans, handleGenerateModule]);
 
   // Handle editing a lesson plan
   const handleEditLesson = (lesson: LessonPlan) => {
@@ -938,8 +947,10 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                     (j: any) =>
                       j.moduleIndex === index && (j.state === 'active' || j.state === 'waiting')
                   );
+                // Module can generate if: not complete, nothing generating, and it's the next in sequence
+                // Use <= to allow generating any module up to the completed count (handles gap-filling)
                 const canGenerate =
-                  !isComplete && !isCurrentlyGenerating && index === completedModules;
+                  !isComplete && !isCurrentlyGenerating && index <= completedModules;
 
                 return (
                   <div

@@ -3303,21 +3303,51 @@ CRITICAL VALIDATION:
       };
     }
 
-    // Add or replace the module in the workflow (progress callback may have already added it)
-    const existingIdx = workflow.step10.moduleLessonPlans.findIndex(
+    // Re-fetch workflow FRESH from DB to avoid overwriting other modules' data
+    // The in-memory `workflow` object is stale after a 2-5 min generation
+    const freshWorkflow = await CurriculumWorkflow.findById(workflowId);
+    if (!freshWorkflow) {
+      throw new Error('Workflow not found after generation');
+    }
+
+    // Initialize step10 on fresh workflow if needed
+    if (!freshWorkflow.step10) {
+      freshWorkflow.step10 = {
+        moduleLessonPlans: [],
+        validation: {
+          allModulesHaveLessonPlans: false,
+          allLessonDurationsValid: false,
+          totalHoursMatch: false,
+          allMLOsCovered: false,
+          caseStudiesIntegrated: false,
+          assessmentsIntegrated: false,
+        },
+        summary: {
+          totalLessons: 0,
+          totalContactHours: 0,
+          averageLessonDuration: 0,
+          caseStudiesIncluded: 0,
+          formativeChecksIncluded: 0,
+        },
+        generatedAt: new Date(),
+      };
+    }
+
+    // Add or replace the module in the FRESH workflow
+    const existingIdx = freshWorkflow.step10.moduleLessonPlans.findIndex(
       (m: any) => m.moduleId === modulePlan.moduleId
     );
     if (existingIdx >= 0) {
-      workflow.step10.moduleLessonPlans[existingIdx] = modulePlan;
+      freshWorkflow.step10.moduleLessonPlans[existingIdx] = modulePlan;
     } else {
-      workflow.step10.moduleLessonPlans.push(modulePlan);
+      freshWorkflow.step10.moduleLessonPlans.push(modulePlan);
     }
 
-    // Update summary
-    const allLessons = workflow.step10.moduleLessonPlans.flatMap((m) => m.lessons);
-    workflow.step10.summary = {
+    // Update summary from fresh data
+    const allLessons = freshWorkflow.step10.moduleLessonPlans.flatMap((m) => m.lessons);
+    freshWorkflow.step10.summary = {
       totalLessons: allLessons.length,
-      totalContactHours: workflow.step10.moduleLessonPlans.reduce(
+      totalContactHours: freshWorkflow.step10.moduleLessonPlans.reduce(
         (sum, m) => sum + m.totalContactHours,
         0
       ),
@@ -3334,19 +3364,20 @@ CRITICAL VALIDATION:
 
     // Update validation
     const lessonPlanService2 = new LessonPlanService();
-    workflow.step10.validation = (lessonPlanService2 as any).validateLessonPlans(
-      workflow.step10.moduleLessonPlans,
+    freshWorkflow.step10.validation = (lessonPlanService2 as any).validateLessonPlans(
+      freshWorkflow.step10.moduleLessonPlans,
       context.modules
     );
 
     // Update workflow status if all modules are complete
-    const newModulesCount = new Set(workflow.step10.moduleLessonPlans.map((m: any) => m.moduleId))
-      .size;
+    const newModulesCount = new Set(
+      freshWorkflow.step10.moduleLessonPlans.map((m: any) => m.moduleId)
+    ).size;
     if (newModulesCount >= totalModules) {
-      workflow.currentStep = 10;
-      workflow.status = 'step10_complete';
+      freshWorkflow.currentStep = 10;
+      freshWorkflow.status = 'step10_complete';
 
-      const step10Progress = workflow.stepProgress.find((p) => p.step === 10);
+      const step10Progress = freshWorkflow.stepProgress.find((p) => p.step === 10);
       if (step10Progress) {
         step10Progress.status = 'completed';
         step10Progress.startedAt = step10Progress.startedAt || new Date();
@@ -3354,19 +3385,19 @@ CRITICAL VALIDATION:
       }
     }
 
-    // Save workflow
-    workflow.markModified('step10');
-    await workflow.save();
+    // Save fresh workflow
+    freshWorkflow.markModified('step10');
+    await freshWorkflow.save();
 
     loggingService.info('Next module saved to workflow', {
       workflowId,
       modulesGenerated: newModulesCount,
       totalModules,
-      totalLessons: workflow.step10.summary.totalLessons,
-      totalContactHours: workflow.step10.summary.totalContactHours,
+      totalLessons: freshWorkflow.step10.summary.totalLessons,
+      totalContactHours: freshWorkflow.step10.summary.totalContactHours,
     });
 
-    return workflow;
+    return freshWorkflow;
   }
 
   // ==========================================================================
