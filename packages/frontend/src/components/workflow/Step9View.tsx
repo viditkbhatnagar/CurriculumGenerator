@@ -808,14 +808,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
   };
 
   const hasStep9Data = workflow.step9 && workflow.step9.terms?.length > 0;
-  const isApproved =
-    workflow.status === 'step9_complete' ||
-    workflow.status === 'step10_pending' ||
-    workflow.status === 'step10_complete' ||
-    workflow.status === 'step11_pending' ||
-    workflow.status === 'step11_complete' ||
-    workflow.status === 'review_pending' ||
-    workflow.status === 'published';
+  const isApproved = !!workflow.step9?.approvedAt;
   const validation = workflow.step9?.validationReport;
 
   // Filter terms
@@ -930,14 +923,14 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
             </div>
           </div>
 
-          {/* Final Step Banner */}
+          {/* Step 9 Banner */}
           <div className="text-center py-8">
             <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-emerald-500/20 to-green-500/20 flex items-center justify-center">
-              <span className="text-4xl">🎉</span>
+              <span className="text-4xl">📖</span>
             </div>
-            <h3 className="text-xl font-semibold text-teal-800 mb-2">Final Step!</h3>
+            <h3 className="text-xl font-semibold text-teal-800 mb-2">Step 9: Glossary</h3>
             <p className="text-teal-600 mb-2">
-              Generate the glossary to complete your curriculum package
+              Generate the glossary before proceeding to lesson plans
             </p>
             <p className="text-xs text-teal-500">
               Typical size: Certificate (30-50 terms) | Diploma (50-80 terms)
