@@ -505,22 +505,24 @@ Return ONLY valid JSON, no markdown formatting.`;
       color: colors.white,
       align: 'center',
       valign: 'middle',
+      shrinkText: true,
     });
 
     if (slideData.content) {
-      // Ensure content is a string, handle arrays by joining
       const contentText = Array.isArray(slideData.content)
-        ? slideData.content.join(' ')
+        ? slideData.content.join(' | ')
         : String(slideData.content);
 
       slide.addText(contentText, {
         x: 0.5,
         y: 3.8,
         w: 9.0,
-        h: 0.5,
-        fontSize: 20,
+        h: 1.2,
+        fontSize: 18,
         color: colors.white,
         align: 'center',
+        valign: 'top',
+        shrinkText: true,
       });
     }
   }
@@ -545,7 +547,6 @@ Return ONLY valid JSON, no markdown formatting.`;
 
     // Content
     if (Array.isArray(slideData.content)) {
-      // Bullet points - ensure each item is a string
       const bulletPoints = slideData.content.map((item) => ({
         text: String(item),
         options: { bullet: true },
@@ -555,23 +556,25 @@ Return ONLY valid JSON, no markdown formatting.`;
         x: 0.75,
         y: 1.5,
         w: 8.5,
-        h: 4.0,
-        fontSize: 18,
+        h: 4.5,
+        fontSize: 16,
         color: colors.text,
-        lineSpacing: 24,
+        lineSpacingMultiple: 1.2,
+        shrinkText: true,
+        valign: 'top',
       });
     } else if (slideData.content) {
-      // Paragraph text - ensure it's a string
       const contentText = String(slideData.content);
       slide.addText(contentText, {
         x: 0.75,
         y: 1.5,
         w: 8.5,
-        h: 4.0,
-        fontSize: 18,
+        h: 4.5,
+        fontSize: 16,
         color: colors.text,
         align: 'left',
         valign: 'top',
+        shrinkText: true,
       });
     }
   }
@@ -601,11 +604,12 @@ Return ONLY valid JSON, no markdown formatting.`;
         x: 0.75,
         y: 1.5,
         w: 8.5,
-        fontSize: 14,
+        fontSize: 12,
         color: colors.text,
         border: { pt: 1, color: colors.secondary },
         fill: { color: colors.lightGray },
-        rowH: 0.5,
+        autoPage: true,
+        autoPageCharH: 0.4,
       });
     }
   }
@@ -646,8 +650,10 @@ Return ONLY valid JSON, no markdown formatting.`;
           y: 2.1,
           w: 4.0,
           h: 3.5,
-          fontSize: 16,
+          fontSize: 14,
           color: colors.text,
+          shrinkText: true,
+          valign: 'top',
         }
       );
     }
@@ -659,7 +665,7 @@ Return ONLY valid JSON, no markdown formatting.`;
         y: 1.5,
         w: 4.0,
         h: 0.5,
-        fontSize: 20,
+        fontSize: 18,
         bold: true,
         color: colors.secondary,
       });
@@ -671,8 +677,10 @@ Return ONLY valid JSON, no markdown formatting.`;
           y: 2.1,
           w: 4.0,
           h: 3.5,
-          fontSize: 16,
+          fontSize: 14,
           color: colors.text,
+          shrinkText: true,
+          valign: 'top',
         }
       );
     }
@@ -819,8 +827,316 @@ Return ONLY valid JSON, no markdown formatting.`;
    * @param context - PPTContext with program and module information
    * @returns PPTDeck with all slides
    */
+  /**
+   * Generate PPT for a single lesson using GPT-5.2 with high reasoning.
+   * Falls back to template-based generation if LLM fails.
+   */
   async generateLessonPPT(lesson: LessonPlan, context: PPTContext): Promise<PPTDeck> {
-    loggingService.info('Generating lesson-based PPT', {
+    loggingService.info('Generating lesson PPT via GPT-5.2', {
+      lessonId: lesson.lessonId,
+      lessonNumber: lesson.lessonNumber,
+      moduleCode: context.moduleCode,
+    });
+
+    try {
+      const slides = await this.generateLessonSlidesWithLLM(lesson, context);
+
+      const deck: PPTDeck = {
+        deckId: `${lesson.lessonId}-PPT`,
+        lessonId: lesson.lessonId,
+        moduleCode: context.moduleCode,
+        lessonNumber: lesson.lessonNumber,
+        lessonTitle: lesson.lessonTitle,
+        slides,
+        slideCount: slides.length,
+        deliveryMode: context.deliveryMode,
+        generatedAt: new Date(),
+        validation: {
+          slideCountValid: slides.length >= 8 && slides.length <= 15,
+          mlosCovered: this.validateMLOCoverage(lesson, slides),
+          citationsValid: this.validateCitations(lesson, context),
+          glossaryTermsDefined: this.validateGlossaryTermsInGeneration(lesson, context),
+        },
+      };
+
+      loggingService.info('Lesson PPT generated via LLM', {
+        lessonId: lesson.lessonId,
+        slideCount: deck.slideCount,
+      });
+
+      return deck;
+    } catch (error) {
+      loggingService.warn('LLM PPT generation failed, falling back to templates', {
+        lessonId: lesson.lessonId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return this.generateLessonPPTFallback(lesson, context);
+    }
+  }
+
+  /**
+   * Generate slides using GPT-5.2 with high reasoning for production-grade content
+   */
+  private async generateLessonSlidesWithLLM(
+    lesson: LessonPlan,
+    context: PPTContext
+  ): Promise<PPTSlide[]> {
+    const durationHours = Math.floor(lesson.duration / 60);
+    const durationMinutes = lesson.duration % 60;
+    const durationText =
+      durationHours > 0 ? `${durationHours}h ${durationMinutes}m` : `${durationMinutes} minutes`;
+
+    // Build glossary context
+    const glossaryText = context.glossaryEntries?.length
+      ? context.glossaryEntries
+          .slice(0, 20)
+          .map((g: any) => `${g.term}: ${g.definition}`)
+          .join('\n')
+      : 'No glossary entries available';
+
+    // Build activities context
+    const activitiesText =
+      lesson.activitySequence
+        ?.map(
+          (a: any) =>
+            `- ${a.activityType}: ${a.title || a.description || 'Activity'} (${a.duration || '?'}min)`
+        )
+        .join('\n') || 'No activities specified';
+
+    // Build objectives
+    const objectivesText =
+      lesson.objectives?.map((o, i) => `${i + 1}. ${o}`).join('\n') || 'No objectives specified';
+
+    // Build formative checks context
+    const formativeText = lesson.formativeChecks?.length
+      ? lesson.formativeChecks
+          .map(
+            (fc: any) =>
+              `- ${fc.type || 'Check'}: ${fc.question || fc.prompt || fc.description || 'N/A'}`
+          )
+          .join('\n')
+      : 'No formative checks';
+
+    // Build case study context
+    const caseStudyText = lesson.caseStudyActivity
+      ? `Title: ${lesson.caseStudyActivity.title || 'N/A'}\nDescription: ${lesson.caseStudyActivity.description || 'N/A'}\nQuestions: ${lesson.caseStudyActivity.discussionQuestions?.join('; ') || 'N/A'}`
+      : 'No case study for this lesson';
+
+    const systemPrompt = `You are a senior instructional designer and academic content developer creating production-grade PowerPoint slides for self-paced higher education learning materials.
+
+Each slide MUST contain TWO layers:
+1. Slide Content (concise bullets/tables for students)
+2. Instructor Notes (detailed teaching guidance, explanations, examples, probing questions)
+
+Professional UK academic tone. No emojis. No marketing language.
+Return ONLY valid JSON, no markdown.`;
+
+    const userPrompt = `Convert this lesson into a structured PowerPoint with 8-15 slides.
+
+**LESSON INFORMATION:**
+Title: ${lesson.lessonTitle}
+Lesson Number: ${lesson.lessonNumber}
+Duration: ${durationText}
+Bloom's Level: ${lesson.bloomLevel || 'N/A'}
+
+**LEARNING OBJECTIVES:**
+${objectivesText}
+
+**MODULE CONTEXT:**
+Program: ${context.programTitle}
+Module: ${context.moduleCode} — ${context.moduleTitle}
+Delivery Mode: ${context.deliveryMode}
+
+**ACTIVITY SEQUENCE:**
+${activitiesText}
+
+**CASE STUDY:**
+${caseStudyText}
+
+**FORMATIVE CHECKS:**
+${formativeText}
+
+**RELEVANT GLOSSARY TERMS:**
+${glossaryText}
+
+**REQUIRED SLIDE STRUCTURE:**
+1. Cover — Program title, module code & title, lesson title, duration
+2. Orientation — Learning objectives, how to use this lesson (watch, practice, check)
+3. Core Content (2-6 slides) — Key concepts, definitions, frameworks, plain-language explanations
+4. Worked Examples — Step-by-step walkthroughs, realistic scenarios, before/after comparisons
+5. Practice & Reflection — Scenario questions, short practice prompts, self-check
+6. Assessment Connection — Which assignment this lesson supports, common mistakes to avoid
+7. Summary — 3-5 key takeaways only
+
+**STRICT FORMATTING RULES:**
+- Maximum 6 bullets per slide. If you need more, create another slide.
+- Maximum 80 characters per bullet point. Be concise.
+- One core idea per slide. Never overcrowd.
+- Slide titles max 60 characters, sentence case.
+- Tables: max 4 columns, max 5 rows.
+- Two-column slides: max 4 items per column.
+
+**SLIDE TYPES:**
+- "title" for cover slide
+- "bullets" for lists and key points
+- "table" for comparisons or structured data
+- "two_column" for contrasting concepts (e.g., theory vs practice)
+- "content" for single paragraph explanations (max 3 sentences)
+
+**INSTRUCTOR NOTES MUST:**
+- Expand (not repeat) slide content
+- Be written as if speaking to learners
+- Include deeper explanations, mini-examples, probing questions
+- Highlight common misconceptions
+- Be usable by both human instructor and AI avatar narrator
+
+**SELF-CHECK:** Before returning, review each slide:
+- Is there ONE clear idea per slide?
+- Are bullets concise and non-repetitive?
+- Do notes ADD value beyond slide text?
+- Is the lesson understandable without an instructor?
+
+**OUTPUT FORMAT (JSON):**
+{
+  "slides": [
+    {
+      "type": "title|bullets|content|table|two_column",
+      "title": "slide title (max 60 chars)",
+      "content": "string for paragraphs OR array of strings for bullets (max 80 chars each)",
+      "table": { "headers": ["Col1", "Col2"], "rows": [["val1", "val2"]] },
+      "leftColumn": ["item1", "item2"],
+      "rightColumn": ["item1", "item2"],
+      "notes": "Detailed instructor/study notes (REQUIRED for every slide)"
+    }
+  ]
+}
+
+Return ONLY valid JSON.`;
+
+    const response = await openaiService.generateContent(userPrompt, systemPrompt, {
+      responseFormat: 'json_object',
+      maxTokens: 32000,
+      timeout: 600000, // 10 minutes for GPT-5.2 high thinking
+    });
+
+    // Parse with safe JSON parser
+    const parsed = (openaiService as any).safeParseJSON
+      ? (openaiService as any).safeParseJSON(response, 'PPT-LessonSlides')
+      : JSON.parse(response);
+
+    const rawSlides = parsed.slides || [];
+
+    // Post-process slides for quality and length limits
+    const processedSlides = this.postProcessSlides(rawSlides, lesson, context);
+
+    return processedSlides;
+  }
+
+  /**
+   * Post-process AI-generated slides to enforce formatting limits
+   */
+  private postProcessSlides(rawSlides: any[], lesson: LessonPlan, context: PPTContext): PPTSlide[] {
+    const processed: PPTSlide[] = [];
+
+    for (let i = 0; i < rawSlides.length; i++) {
+      const raw = rawSlides[i];
+      const slideNumber = i + 1;
+
+      // Truncate title
+      const title = raw.title ? String(raw.title).substring(0, 80) : `Slide ${slideNumber}`;
+
+      // Process content — truncate bullets
+      let content: string | string[] | undefined = raw.content;
+      if (Array.isArray(content)) {
+        // Split if more than 6 bullets
+        if (content.length > 6) {
+          const firstHalf = content
+            .slice(0, 6)
+            .map((b: string) =>
+              String(b).length > 100 ? String(b).substring(0, 97) + '...' : String(b)
+            );
+          const secondHalf = content
+            .slice(6)
+            .map((b: string) =>
+              String(b).length > 100 ? String(b).substring(0, 97) + '...' : String(b)
+            );
+
+          // Add first slide
+          processed.push({
+            slideNumber,
+            slideType: 'content',
+            title,
+            content: {
+              type: raw.type || 'bullets',
+              title,
+              content: firstHalf,
+              notes: raw.notes || '',
+            },
+            speakerNotes: raw.notes || '',
+          });
+
+          // Add overflow slide
+          processed.push({
+            slideNumber: slideNumber + 0.5, // Will be renumbered
+            slideType: 'content',
+            title: `${title} (continued)`,
+            content: {
+              type: raw.type || 'bullets',
+              title: `${title} (continued)`,
+              content: secondHalf,
+              notes: '',
+            },
+            speakerNotes: '',
+          });
+          continue;
+        }
+
+        content = content.map((b: string) =>
+          String(b).length > 100 ? String(b).substring(0, 97) + '...' : String(b)
+        );
+      } else if (typeof content === 'string') {
+        content = String(content);
+      }
+
+      // Map slide type
+      const typeMap: Record<string, PPTSlide['slideType']> = {
+        title: 'title',
+        bullets: 'content',
+        content: 'content',
+        table: 'content',
+        two_column: 'content',
+      };
+
+      processed.push({
+        slideNumber,
+        slideType: typeMap[raw.type] || 'content',
+        title,
+        content: {
+          type: raw.type || 'bullets',
+          title,
+          content,
+          table: raw.table,
+          leftColumn: raw.leftColumn,
+          rightColumn: raw.rightColumn,
+          notes: raw.notes || '',
+        },
+        speakerNotes: raw.notes || '',
+      });
+    }
+
+    // Renumber slides
+    processed.forEach((s, i) => {
+      s.slideNumber = i + 1;
+    });
+
+    return processed;
+  }
+
+  /**
+   * Fallback: Generate lesson PPT using templates (no LLM)
+   */
+  generateLessonPPTFallback(lesson: LessonPlan, context: PPTContext): PPTDeck {
+    loggingService.info('Generating lesson PPT via template fallback', {
       lessonId: lesson.lessonId,
       lessonNumber: lesson.lessonNumber,
       moduleCode: context.moduleCode,
@@ -829,23 +1145,17 @@ Return ONLY valid JSON, no markdown formatting.`;
     const slides: PPTSlide[] = [];
     let slideNumber = 1;
 
-    // 1. Title Slide (Requirement 6.2)
     slides.push(this.generateTitleSlide(lesson, context, slideNumber++));
-
-    // 2. Learning Objectives Slide (Requirement 6.3)
     slides.push(this.generateObjectivesSlide(lesson, context, slideNumber++));
 
-    // 3. Key Concepts Slides (Requirement 6.4)
     const conceptSlides = this.generateKeyConceptsSlides(lesson, context, slideNumber);
     slides.push(...conceptSlides);
     slideNumber += conceptSlides.length;
 
-    // 4. Instructional Content Slides (Requirement 6.5)
     const contentSlides = this.generateInstructionalContentSlides(lesson, context, slideNumber);
     slides.push(...contentSlides);
     slideNumber += contentSlides.length;
 
-    // 5. Case Study Slides (Requirement 6.6) - if applicable
     if (lesson.caseStudyActivity) {
       const caseSlides = this.generateCaseStudySlides(
         lesson.caseStudyActivity,
@@ -856,7 +1166,6 @@ Return ONLY valid JSON, no markdown formatting.`;
       slideNumber += caseSlides.length;
     }
 
-    // 6. Formative Check Slides (Requirement 7.1)
     if (lesson.formativeChecks && lesson.formativeChecks.length > 0) {
       const formativeSlides = this.generateFormativeCheckSlides(
         lesson.formativeChecks,
@@ -866,13 +1175,8 @@ Return ONLY valid JSON, no markdown formatting.`;
       slideNumber += formativeSlides.length;
     }
 
-    // 7. Summary Slide (Requirement 7.2)
     slides.push(this.generateSummarySlide(lesson, slideNumber++));
-
-    // 8. Independent Study Slide (Requirement 7.3)
     slides.push(this.generateIndependentStudySlide(lesson, slideNumber++));
-
-    // 9. References Slide (Requirement 7.4)
     slides.push(this.generateReferencesSlide(lesson, context, slideNumber++));
 
     const deck: PPTDeck = {
@@ -892,12 +1196,6 @@ Return ONLY valid JSON, no markdown formatting.`;
         glossaryTermsDefined: this.validateGlossaryTermsInGeneration(lesson, context),
       },
     };
-
-    loggingService.info('Lesson PPT generation complete', {
-      lessonId: lesson.lessonId,
-      slideCount: deck.slideCount,
-      validation: deck.validation,
-    });
 
     return deck;
   }
