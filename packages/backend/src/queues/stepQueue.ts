@@ -211,8 +211,8 @@ export async function addStepJob(
     priority: 1,
     ...(isStep13
       ? {
-          timeout: 1800000, // 30 min hard cap for Step 13 (GPT-5 takes 2-3 min per phase × 5 phases)
-          attempts: 2, // Only 1 retry (2 total attempts) — each attempt is ~5-8 min
+          timeout: 3600000, // 60 min hard cap for Step 13 (GPT-5.2 high thinking: 5-10 min per phase × 5 phases)
+          attempts: 2, // Only 1 retry (2 total attempts)
           backoff: { type: 'fixed' as const, delay: 10000 }, // 10s between retries
         }
       : {}),

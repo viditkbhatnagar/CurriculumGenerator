@@ -6,6 +6,7 @@ import { useStepStatus } from '@/hooks/useStepStatus';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import { api } from '@/lib/api';
 import { CurriculumWorkflow, KSCItem, BenchmarkProgram, KSCImportance } from '@/types/workflow';
+import StepDownloadButton from './StepDownloadButton';
 
 // Custom framework upload type
 interface UploadedFramework {
@@ -1164,6 +1165,13 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
                   </svg>
                   Approved
                 </span>
+              )}
+              {!!workflow.step2 && (
+                <StepDownloadButton
+                  workflowId={workflow._id}
+                  stepNumber={2}
+                  programName={workflow.projectName || workflow.step1?.programTitle || ''}
+                />
               )}
             </div>
           </div>

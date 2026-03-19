@@ -15,6 +15,7 @@ import {
   PracticalSample,
 } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import StepDownloadButton from './StepDownloadButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -932,10 +933,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                       .slice(-3)
                       .reverse()
                       .map((formative, idx) => (
-                        <div
-                          key={idx}
-                          className="bg-teal-50 p-3 rounded border border-teal-200"
-                        >
+                        <div key={idx} className="bg-teal-50 p-3 rounded border border-teal-200">
                           <p className="text-teal-800 font-medium text-sm">{formative.title}</p>
                           <p className="text-teal-600 text-xs mt-1">{formative.description}</p>
                           {formative.questions && formative.questions.length > 0 && (
@@ -976,9 +974,9 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
             </p>
             <div className="bg-white rounded-lg p-3 text-sm">
               <p className="text-teal-600">
-                <strong className="text-teal-800">Comprehensive Assessment Package:</strong> Formative
-                (low-stakes practice), Summative (graded components), Sample Questions (MCQ, SJT,
-                cases, essays, practicals), and LMS export formats.
+                <strong className="text-teal-800">Comprehensive Assessment Package:</strong>{' '}
+                Formative (low-stakes practice), Summative (graded components), Sample Questions
+                (MCQ, SJT, cases, essays, practicals), and LMS export formats.
               </p>
             </div>
           </div>
@@ -1870,6 +1868,13 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                   </svg>
                   Approved
                 </span>
+              )}
+              {!!workflow.step7 && (
+                <StepDownloadButton
+                  workflowId={workflow._id}
+                  stepNumber={7}
+                  programName={workflow.projectName || workflow.step1?.programTitle || ''}
+                />
               )}
             </div>
           </div>

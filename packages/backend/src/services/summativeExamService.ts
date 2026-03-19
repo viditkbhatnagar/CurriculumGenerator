@@ -41,7 +41,7 @@ interface ExamContext {
 }
 
 export class SummativeExamService {
-  private readonly SECTION_TIMEOUT = 300000; // 5 minutes per section — GPT-5 calls take 2-3 min
+  private readonly SECTION_TIMEOUT = 600000; // 10 minutes per section — GPT-5.2 high thinking needs more time
   private readonly MAX_TOKENS_SECTION_A = 16000;
   private readonly MAX_TOKENS_SECTION_B = 12000;
   private readonly MAX_TOKENS_SECTION_C = 10000;

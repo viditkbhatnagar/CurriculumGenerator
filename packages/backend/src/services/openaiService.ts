@@ -16,6 +16,7 @@ export interface OpenAIGenerateOptions {
   maxTokens?: number;
   timeout?: number;
   responseFormat?: 'text' | 'json_object';
+  reasoningEffort?: 'low' | 'medium' | 'high';
   // Note: temperature is not supported by GPT-5 (only default value 1 is allowed)
 }
 
@@ -227,9 +228,14 @@ export class OpenAIService {
     const {
       model = config.openai.chatModel, // Default: gpt-4o
       maxTokens = 16000, // gpt-4o supports up to 128k context, 16k output
-      timeout = this.defaultTimeout, // 20 minutes
+      timeout = this.defaultTimeout, // 60 minutes
       responseFormat = 'text', // Default to text, can be 'json_object'
     } = options;
+
+    // Resolve reasoning effort: explicit option > config > undefined
+    const reasoningEffort =
+      options.reasoningEffort ||
+      (model.includes('gpt-5') ? config.openai.reasoningEffort : undefined);
 
     const startTime = Date.now();
 
@@ -251,6 +257,12 @@ export class OpenAIService {
           requestBody.max_completion_tokens = maxTokens;
         } else {
           requestBody.max_tokens = maxTokens;
+        }
+
+        // GPT-5.x reasoning/thinking support (Chat Completions API)
+        if (reasoningEffort && model.includes('gpt-5')) {
+          requestBody.reasoning_effort = reasoningEffort;
+          console.log(`[OpenAI] Using reasoning_effort: ${reasoningEffort} for model: ${model}`);
         }
 
         // Add response_format if JSON is requested
@@ -343,6 +355,11 @@ export class OpenAIService {
       timeout = this.defaultTimeout,
     } = options;
 
+    // Resolve reasoning effort: explicit option > config > undefined
+    const reasoningEffort =
+      options.reasoningEffort ||
+      (model.includes('gpt-5') ? config.openai.reasoningEffort : undefined);
+
     const startTime = Date.now();
 
     return this.retryWithExponentialBackoff(async () => {
@@ -350,21 +367,25 @@ export class OpenAIService {
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
       try {
-        const response = await this.client.chat.completions.create(
-          {
-            model,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: prompt },
-            ],
-            max_completion_tokens: maxTokens,
-            response_format: { type: 'json_object' },
-          },
-          {
-            signal: controller.signal as any,
-            timeout: timeout, // Pass timeout to each request
-          }
-        );
+        const requestBody: any = {
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt },
+          ],
+          max_completion_tokens: maxTokens,
+          response_format: { type: 'json_object' },
+        };
+
+        // GPT-5.x reasoning/thinking support
+        if (reasoningEffort && model.includes('gpt-5')) {
+          requestBody.reasoning_effort = reasoningEffort;
+        }
+
+        const response = await this.client.chat.completions.create(requestBody, {
+          signal: controller.signal as any,
+          timeout: timeout, // Pass timeout to each request
+        });
 
         clearTimeout(timeoutId);
 
@@ -400,7 +421,7 @@ export class OpenAIService {
           })
           .catch((err) => loggingService.error('Failed to store cost analytics', { error: err }));
 
-        return JSON.parse(content) as T;
+        return this.safeParseJSON(content, 'generateStructuredContent') as T;
       } catch (error) {
         clearTimeout(timeoutId);
 
@@ -432,8 +453,13 @@ export class OpenAIService {
     const {
       model = config.openai.chatModel, // Default: gpt-5
       maxTokens = 128000, // GPT-5 supports large token outputs
-      timeout = this.defaultTimeout, // 20 minutes
+      timeout = this.defaultTimeout, // 60 minutes
     } = options;
+
+    // Resolve reasoning effort: explicit option > config > undefined
+    const reasoningEffort =
+      options.reasoningEffort ||
+      (model.includes('gpt-5') ? config.openai.reasoningEffort : undefined);
 
     return this.retryWithExponentialBackoff(async () => {
       const controller = new AbortController();
@@ -456,13 +482,15 @@ export class OpenAIService {
           requestBody.max_tokens = maxTokens;
         }
 
-        const stream = await this.client.chat.completions.create(
-          requestBody,
-          {
-            signal: controller.signal as any,
-            timeout: timeout, // Pass timeout to each request
-          }
-        );
+        // GPT-5.x reasoning/thinking support
+        if (reasoningEffort && model.includes('gpt-5')) {
+          requestBody.reasoning_effort = reasoningEffort;
+        }
+
+        const stream = await this.client.chat.completions.create(requestBody, {
+          signal: controller.signal as any,
+          timeout: timeout, // Pass timeout to each request
+        });
 
         for await (const chunk of stream) {
           const content = chunk.choices[0]?.delta?.content || '';
@@ -489,6 +517,55 @@ export class OpenAIService {
         throw error;
       }
     });
+  }
+
+  /**
+   * Safely parse JSON from LLM response, handling truncated or malformed output.
+   * GPT-5.2 thinking models frequently return truncated JSON when approaching token limits.
+   */
+  private safeParseJSON(response: string, context: string): any {
+    try {
+      return JSON.parse(response);
+    } catch (firstError) {
+      loggingService.warn(`[OpenAI] ${context}: JSON parse failed, attempting repair`, {
+        responseLength: response.length,
+        firstChars: response.substring(0, 100),
+        lastChars: response.substring(response.length - 100),
+      });
+
+      // Try to repair truncated JSON by closing open brackets/braces
+      let repaired = response.trim();
+
+      // Remove trailing incomplete string values (cut mid-sentence)
+      repaired = repaired.replace(/,\s*"[^"]*":\s*"[^"]*$/g, '');
+      repaired = repaired.replace(/,\s*"[^"]*$/g, '');
+
+      // Count open/close brackets
+      const openBraces = (repaired.match(/{/g) || []).length;
+      const closeBraces = (repaired.match(/}/g) || []).length;
+      const openBrackets = (repaired.match(/\[/g) || []).length;
+      const closeBrackets = (repaired.match(/]/g) || []).length;
+
+      // Close any open arrays then objects
+      for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += ']';
+      for (let i = 0; i < openBraces - closeBraces; i++) repaired += '}';
+
+      try {
+        const parsed = JSON.parse(repaired);
+        loggingService.info(`[OpenAI] ${context}: JSON repair succeeded`);
+        return parsed;
+      } catch (secondError) {
+        loggingService.error(`[OpenAI] ${context}: JSON repair also failed`, {
+          responseLength: response.length,
+          error: secondError instanceof Error ? secondError.message : String(secondError),
+        });
+        throw new Error(
+          `${context} returned invalid JSON (${response.length} chars). ` +
+            `This usually means the response was truncated due to token limits. ` +
+            `Original error: ${firstError instanceof Error ? firstError.message : String(firstError)}`
+        );
+      }
+    }
   }
 
   /**
@@ -577,6 +654,7 @@ export class OpenAIService {
     // Cost per 1K tokens (average of input/output)
     const costPer1kTokens: Record<string, number> = {
       // GPT-5 models (per 1K = per 1M / 1000)
+      'gpt-5.2': 0.00625, // GPT-5.2 with reasoning — similar pricing to GPT-5
       'gpt-5': 0.005625, // ($1.25 + $10) / 2 / 1000 = avg $5.625/1M = $0.005625/1K
       'gpt-5-mini': 0.001125, // ($0.25 + $2) / 2 / 1000 = avg $1.125/1M = $0.001125/1K
       'gpt-5-nano': 0.000225, // ($0.05 + $0.40) / 2 / 1000 = avg $0.225/1M = $0.000225/1K

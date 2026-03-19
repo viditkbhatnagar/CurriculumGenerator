@@ -14,6 +14,7 @@ import {
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import { useStepStatus } from '@/hooks/useStepStatus';
 import EditWithAIButton, { EditTarget } from './EditWithAIButton';
+import StepDownloadButton from './StepDownloadButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1202,6 +1203,13 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
                   </svg>
                   Approved
                 </span>
+              )}
+              {!!workflow.step5 && (
+                <StepDownloadButton
+                  workflowId={workflow._id}
+                  stepNumber={5}
+                  programName={workflow.projectName || workflow.step1?.programTitle || ''}
+                />
               )}
             </div>
           </div>

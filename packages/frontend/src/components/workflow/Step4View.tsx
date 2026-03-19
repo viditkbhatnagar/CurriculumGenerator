@@ -15,6 +15,7 @@ import {
   ModulePhase,
 } from '@/types/workflow';
 import EditWithAIButton, { EditTarget } from './EditWithAIButton';
+import StepDownloadButton from './StepDownloadButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1099,6 +1100,13 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                   </svg>
                   Approved
                 </span>
+              )}
+              {!!workflow.step4 && (
+                <StepDownloadButton
+                  workflowId={workflow._id}
+                  stepNumber={4}
+                  programName={workflow.projectName || workflow.step1?.programTitle || ''}
+                />
               )}
             </div>
           </div>

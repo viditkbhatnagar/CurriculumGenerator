@@ -16,6 +16,7 @@ import {
   KSCItem,
 } from '@/types/workflow';
 import EditWithAIButton, { EditTarget } from './EditWithAIButton';
+import StepDownloadButton from './StepDownloadButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1113,6 +1114,13 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                   </svg>
                   Approved
                 </span>
+              )}
+              {!!workflow.step3 && (
+                <StepDownloadButton
+                  workflowId={workflow._id}
+                  stepNumber={3}
+                  programName={workflow.projectName || workflow.step1?.programTitle || ''}
+                />
               )}
             </div>
           </div>

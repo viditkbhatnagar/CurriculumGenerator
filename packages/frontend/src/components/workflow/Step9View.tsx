@@ -7,6 +7,7 @@ import { CurriculumWorkflow, GlossaryTerm, ModuleTermList, TermPriority } from '
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import { useStepStatus } from '@/hooks/useStepStatus';
 import { EditTarget } from './EditWithAIButton';
+import StepDownloadButton from './StepDownloadButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1011,6 +1012,13 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
               <p className="text-cyan-400 text-sm animate-pulse">
                 ✓ Approved - Navigate to Step 10 using the sidebar
               </p>
+            )}
+            {!!workflow.step9 && (
+              <StepDownloadButton
+                workflowId={workflow._id}
+                stepNumber={9}
+                programName={workflow.projectName || workflow.step1?.programTitle || ''}
+              />
             )}
           </div>
 

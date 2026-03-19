@@ -48,6 +48,7 @@ if (redisUrl && redisUrl.length > 0) {
     step11Queue = new Bull('step11-ppt-generation', redisUrl, {
       defaultJobOptions: {
         attempts: 3, // Retry up to 3 times on failure
+        timeout: 1200000, // 20 min per module — GPT-5.2 thinking takes longer
         backoff: {
           type: 'exponential',
           delay: 60000, // Start with 1 minute delay
@@ -164,9 +165,7 @@ if (step11Queue) {
 
       // If not all complete, find and queue the next ungenerated module
       if (!allComplete) {
-        const nextUngenIndex = lessonPlans.findIndex(
-          (m: any) => !newCompletedIds.has(m.moduleId)
-        );
+        const nextUngenIndex = lessonPlans.findIndex((m: any) => !newCompletedIds.has(m.moduleId));
         if (nextUngenIndex !== -1) {
           await addStep11Job(workflowId, nextUngenIndex, job.data.userId);
           loggingService.info('Queued next module for PPT', {
@@ -326,9 +325,7 @@ export async function queueAllRemainingStep11Modules(
   const completedModuleIds = new Set(
     (workflow.step11?.modulePPTDecks || []).map((m: any) => m.moduleId)
   );
-  const nextModuleIndex = lessonPlans.findIndex(
-    (m: any) => !completedModuleIds.has(m.moduleId)
-  );
+  const nextModuleIndex = lessonPlans.findIndex((m: any) => !completedModuleIds.has(m.moduleId));
 
   const jobs: Job<Step11JobData>[] = [];
 

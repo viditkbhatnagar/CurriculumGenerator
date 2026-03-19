@@ -13,6 +13,7 @@ import {
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import { useStepStatus } from '@/hooks/useStepStatus';
 import { EditTarget } from './EditWithAIButton';
+import StepDownloadButton from './StepDownloadButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1231,6 +1232,13 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
                   </svg>
                   Approved
                 </span>
+              )}
+              {!!workflow.step8 && (
+                <StepDownloadButton
+                  workflowId={workflow._id}
+                  stepNumber={8}
+                  programName={workflow.projectName || workflow.step1?.programTitle || ''}
+                />
               )}
             </div>
           </div>

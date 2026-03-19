@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useWorkflow, useExportWorkflow } from '@/hooks/useWorkflow';
 import { STEP_NAMES, WorkflowStep } from '@/types/workflow';
+import StepDownloadButton from '@/components/workflow/StepDownloadButton';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -198,9 +199,12 @@ export default function ExportPage() {
         {/* Document Contents Preview */}
         <div className="bg-white rounded-xl border border-teal-200/50 p-6 mb-8 shadow-sm">
           <h3 className="text-lg font-semibold text-teal-800 mb-4">Document Contents</h3>
+          <p className="text-teal-600 text-sm mb-4">
+            Download individual steps as standalone Word documents
+          </p>
 
           <div className="grid grid-cols-3 gap-3">
-            {([1, 2, 3, 4, 5, 6, 7, 8, 9] as WorkflowStep[]).map((step) => {
+            {([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] as WorkflowStep[]).map((step) => {
               const stepData = workflow[`step${step}` as keyof typeof workflow];
               const hasStepData = !!stepData;
 
@@ -243,10 +247,18 @@ export default function ExportPage() {
                     </svg>
                   )}
                   <span
-                    className={`text-sm truncate ${hasStepData ? 'text-teal-800' : 'text-teal-500'}`}
+                    className={`text-sm truncate flex-1 ${hasStepData ? 'text-teal-800' : 'text-teal-500'}`}
                   >
                     {STEP_NAMES[step]}
                   </span>
+                  {hasStepData && (
+                    <StepDownloadButton
+                      workflowId={id}
+                      stepNumber={step}
+                      programName={workflow.projectName || ''}
+                      variant="icon"
+                    />
+                  )}
                 </div>
               );
             })}

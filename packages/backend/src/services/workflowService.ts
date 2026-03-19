@@ -4418,7 +4418,7 @@ Return ONLY valid JSON:
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 32000, // Good size for detailed single-module generation
-        timeout: 300000, // 5 minutes - plenty of time for one module
+        timeout: 600000, // 10 minutes — GPT-5.2 high thinking needs more time
       });
 
       const parsed = this.parseJSON(response, `step5-${moduleInfo.moduleId}`);
@@ -4784,7 +4784,7 @@ CRITICAL REQUIREMENTS:
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 32000, // Good size for detailed single-module reading list
-        timeout: 300000, // 5 minutes - plenty of time for detailed response
+        timeout: 600000, // 10 minutes — GPT-5.2 high thinking needs more time
       });
 
       const parsed = this.parseJSON(response, `step6-${moduleInfo.moduleId}`);
@@ -5182,7 +5182,7 @@ CRITICAL REQUIREMENTS:
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 32000, // Good size for single module quiz
-        timeout: 300000, // 5 minutes per module
+        timeout: 600000, // 10 minutes per module — GPT-5.2 high thinking needs more time
       });
 
       const parsed = this.parseJSON(response, `step7-quiz-${mod.id}`);
@@ -6200,7 +6200,7 @@ Begin output now.`;
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 64000, // MAXIMUM for detailed case studies
-        timeout: 600000, // 10 minutes per case study - MAXIMUM
+        timeout: 1200000, // 20 minutes per case study — GPT-5.2 high thinking on complex scenarios
       });
 
       const parsed = this.parseJSON(response, `step8-module-${mod.id}-case-${caseNumber}`);
@@ -6635,7 +6635,7 @@ Return ONLY valid JSON:
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 32000, // MAXIMUM for comprehensive glossary
-        timeout: 300000, // 5 minutes per module - MAXIMUM
+        timeout: 600000, // 10 minutes per module — GPT-5.2 high thinking needs more time
       });
 
       const parsed = this.parseJSON(response, `step9-module-${moduleId}`);

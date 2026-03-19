@@ -6,6 +6,7 @@ import { useStep10Status } from '@/hooks/useStep10Status';
 import { api } from '@/lib/api';
 import { CurriculumWorkflow, LessonPlan } from '@/types/workflow';
 import { EditTarget } from './EditWithAIButton';
+import StepDownloadButton from './StepDownloadButton';
 import { toast } from '@/stores/toastStore';
 
 interface Props {
@@ -1831,6 +1832,14 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                 </svg>
                 Approved
               </span>
+            )}
+
+            {!!workflow.step10 && (
+              <StepDownloadButton
+                workflowId={workflow._id}
+                stepNumber={10}
+                programName={workflow.projectName || workflow.step1?.programTitle || ''}
+              />
             )}
           </div>
         </div>

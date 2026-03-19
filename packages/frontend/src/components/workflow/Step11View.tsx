@@ -5,6 +5,7 @@ import { useSubmitStep11, useApproveStep11, useStep11Status } from '@/hooks/useW
 import { CurriculumWorkflow } from '@/types/workflow';
 import { useGeneration } from '@/contexts/GenerationContext';
 import { api } from '@/lib/api';
+import StepDownloadButton from './StepDownloadButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1113,6 +1114,14 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                 </svg>
                 Approved
               </span>
+            )}
+
+            {!!workflow.step11 && (
+              <StepDownloadButton
+                workflowId={workflow._id}
+                stepNumber={11}
+                programName={workflow.projectName || workflow.step1?.programTitle || ''}
+              />
             )}
           </div>
         </div>

@@ -14,6 +14,7 @@ import {
   AssignmentDeliveryVariant,
 } from '@/types/workflow';
 import { useGeneration } from '@/contexts/GenerationContext';
+import StepDownloadButton from './StepDownloadButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1005,6 +1006,14 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                 </svg>
                 Approved
               </span>
+            )}
+
+            {!!workflow.step12 && (
+              <StepDownloadButton
+                workflowId={workflow._id}
+                stepNumber={12}
+                programName={workflow.projectName || workflow.step1?.programTitle || ''}
+              />
             )}
           </div>
         </div>

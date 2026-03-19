@@ -18,6 +18,7 @@ interface Config {
     apiKey: string;
     embeddingModel: string;
     chatModel: string;
+    reasoningEffort?: 'low' | 'medium' | 'high';
   };
   auth0: {
     domain: string;
@@ -68,6 +69,8 @@ const config: Config = {
     apiKey: process.env.OPENAI_API_KEY || '',
     embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large',
     chatModel: process.env.OPENAI_CHAT_MODEL || 'gpt-4o',
+    reasoningEffort:
+      (process.env.OPENAI_REASONING_EFFORT as 'low' | 'medium' | 'high') || undefined,
   },
   auth0: {
     domain: process.env.AUTH0_DOMAIN || '',

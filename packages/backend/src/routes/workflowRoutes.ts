@@ -3831,6 +3831,96 @@ router.get('/:id/export/word', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/v3/workflow/:id/export/word/step/:stepNumber
+ * Export a single step as a standalone Word document
+ * Query params: ?module=<0-based-index> (optional, only for steps 10-12)
+ */
+router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Response) => {
+  try {
+    const stepNumber = parseInt(req.params.stepNumber, 10);
+    if (isNaN(stepNumber) || stepNumber < 1 || stepNumber > 13) {
+      return res.status(400).json({ success: false, error: 'Invalid step number (1-13)' });
+    }
+
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    if (!workflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+
+    const stepKey = `step${stepNumber}` as keyof typeof workflow;
+    if (!workflow[stepKey]) {
+      return res.status(400).json({ success: false, error: `Step ${stepNumber} has no data yet` });
+    }
+
+    const moduleIndex =
+      req.query.module !== undefined ? parseInt(req.query.module as string, 10) : undefined;
+
+    if (moduleIndex !== undefined && ![10, 11, 12].includes(stepNumber)) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'Module param only valid for steps 10-12' });
+    }
+
+    // Build minimal workflow data — always include step1 (program title) + step2 (kscMap)
+    const workflowData: any = {
+      projectName: workflow.projectName,
+      step1: workflow.step1,
+      step2: workflow.step2,
+    };
+    workflowData[`step${stepNumber}`] = workflow[stepKey];
+
+    const buffer = await wordExportService.generateStepDocument(
+      workflowData,
+      stepNumber,
+      moduleIndex !== undefined ? { moduleIndex } : undefined
+    );
+
+    const STEP_SLUGS: Record<number, string> = {
+      1: 'Program-Foundation',
+      2: 'Competency-Framework',
+      3: 'Learning-Outcomes',
+      4: 'Course-Structure',
+      5: 'Academic-Sources',
+      6: 'Reading-Lists',
+      7: 'Assessment-Package',
+      8: 'Case-Studies',
+      9: 'Glossary',
+      10: 'Lesson-Plans',
+      11: 'PowerPoint-Decks',
+      12: 'Assignment-Packs',
+      13: 'Summative-Exam',
+    };
+
+    const stepSlug = STEP_SLUGS[stepNumber] || `Step-${stepNumber}`;
+    const moduleSlug = moduleIndex !== undefined ? `-Module-${moduleIndex + 1}` : '';
+    const programSlug = workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum';
+    const dateSlug = new Date().toISOString().split('T')[0];
+    const filename = `${programSlug}-${stepSlug}${moduleSlug}-${dateSlug}.docx`;
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+
+    loggingService.info('Step Word document exported', {
+      workflowId: workflow._id,
+      stepNumber,
+      moduleIndex,
+      filename,
+    });
+  } catch (error) {
+    loggingService.error('Error exporting step Word document', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to export step document',
+    });
+  }
+});
+
+/**
  * GET /api/v3/workflow/:id/export/pdf
  * Export curriculum as PDF document
  */

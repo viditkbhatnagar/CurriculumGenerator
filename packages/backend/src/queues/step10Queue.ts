@@ -50,6 +50,7 @@ if (config.redis.host && config.redis.port) {
       },
       defaultJobOptions: {
         attempts: 3, // Retry up to 3 times on failure
+        timeout: 1200000, // 20 min per module — GPT-5.2 thinking takes longer
         backoff: {
           type: 'exponential',
           delay: 60000, // Start with 1 minute delay
@@ -104,9 +105,7 @@ if (step10Queue) {
       const existingModules = completedModuleIds.size;
 
       // Find the actual next ungenerated module
-      const nextModuleIndex = modules.findIndex(
-        (m: any) => !completedModuleIds.has(m.id)
-      );
+      const nextModuleIndex = modules.findIndex((m: any) => !completedModuleIds.has(m.id));
 
       // Check if all modules are already generated
       if (nextModuleIndex === -1) {
@@ -160,9 +159,7 @@ if (step10Queue) {
 
       // If not all complete, find and queue the next ungenerated module
       if (!allComplete) {
-        const nextUngenIndex = modules.findIndex(
-          (m: any) => !newCompletedIds.has(m.id)
-        );
+        const nextUngenIndex = modules.findIndex((m: any) => !newCompletedIds.has(m.id));
         if (nextUngenIndex !== -1) {
           await addStep10Job(workflowId, nextUngenIndex, job.data.userId);
           loggingService.info('Queued next module for lesson plans', {
@@ -292,9 +289,7 @@ export async function queueAllRemainingModules(
   const completedModuleIds = new Set(
     (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
   );
-  const nextModuleIndex = modules.findIndex(
-    (m: any) => !completedModuleIds.has(m.id)
-  );
+  const nextModuleIndex = modules.findIndex((m: any) => !completedModuleIds.has(m.id));
 
   const jobs: Job<Step10JobData>[] = [];
 

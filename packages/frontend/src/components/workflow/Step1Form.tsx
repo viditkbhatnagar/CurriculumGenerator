@@ -19,6 +19,7 @@ import {
   calculateCreditEquivalencies,
   calculateContactHours,
 } from '@/types/workflow';
+import StepDownloadButton from './StepDownloadButton';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1031,6 +1032,13 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                 </svg>
                 Approved
               </span>
+            )}
+            {!!workflow.step1 && (
+              <StepDownloadButton
+                workflowId={workflow._id}
+                stepNumber={1}
+                programName={workflow.projectName || workflow.step1?.programTitle || ''}
+              />
             )}
           </div>
         </div>

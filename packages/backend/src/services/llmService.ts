@@ -38,9 +38,9 @@ class CircuitBreaker {
   private failureCount = 0;
   private successCount = 0;
   private lastFailureTime: number = 0;
-  private readonly failureThreshold = 5;
+  private readonly failureThreshold = 10; // GPT-5.2 thinking is slower, more prone to transient failures
   private readonly successThreshold = 2;
-  private readonly timeout = 60000; // 60 seconds
+  private readonly timeout = 300000; // 5 minutes — give more recovery time for slow thinking models
 
   async execute<T>(fn: () => Promise<T>): Promise<T> {
     if (this.state === CircuitState.OPEN) {
@@ -147,4 +147,3 @@ export class LLMService {
 
 // Singleton instance
 export const llmService = new LLMService();
-
