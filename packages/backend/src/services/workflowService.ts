@@ -3135,6 +3135,8 @@ CRITICAL VALIDATION:
     const { PPTGenerationService } = await import('./pptGenerationService');
 
     // Create progress callback to save after each lesson
+    // CRITICAL: Uses atomic MongoDB operations to avoid overwriting other modules' data.
+    // The closure's `workflow` object is stale during the 2-5 min generation window.
     const lessonProgressCallback = async (progress: any) => {
       try {
         loggingService.info('Saving lesson progress', {
@@ -3144,83 +3146,79 @@ CRITICAL VALIDATION:
           totalLessons: progress.totalLessons,
         });
 
-        // Initialize step10 if it doesn't exist
-        if (!workflow.step10) {
-          workflow.step10 = {
-            moduleLessonPlans: [],
-            validation: {
-              allModulesHaveLessonPlans: false,
-              allLessonDurationsValid: false,
-              totalHoursMatch: false,
-              allMLOsCovered: false,
-              caseStudiesIntegrated: false,
-              assessmentsIntegrated: false,
-            },
-            summary: {
-              totalLessons: 0,
-              totalContactHours: 0,
-              averageLessonDuration: 0,
-              caseStudiesIncluded: 0,
-              formativeChecksIncluded: 0,
-            },
-            generatedAt: new Date(),
-          };
-        }
-
-        // Find or create module plan
-        let modulePlan = workflow.step10.moduleLessonPlans.find(
-          (m) => m.moduleId === progress.moduleId
-        );
-
-        if (!modulePlan) {
-          // Create new module plan
-          modulePlan = {
-            moduleId: progress.moduleId,
-            moduleCode: progress.moduleCode,
-            moduleTitle: progress.moduleTitle,
-            totalContactHours: 0,
-            totalLessons: progress.totalLessons,
-            lessons: [],
-            pptDecks: [],
-          };
-          workflow.step10.moduleLessonPlans.push(modulePlan);
-        }
-
-        // Update lessons (replace with latest)
-        modulePlan.lessons = progress.lessons;
-        modulePlan.totalLessons = progress.lessons.length;
-        modulePlan.totalContactHours = progress.lessons.reduce(
-          (sum: number, l: any) => sum + l.duration / 60,
-          0
-        );
-
-        // Update summary
-        const allLessons = workflow.step10.moduleLessonPlans.flatMap((m) => m.lessons);
-        workflow.step10.summary = {
-          totalLessons: allLessons.length,
-          totalContactHours: workflow.step10.moduleLessonPlans.reduce(
-            (sum, m) => sum + m.totalContactHours,
+        const modulePlanData = {
+          moduleId: progress.moduleId,
+          moduleCode: progress.moduleCode,
+          moduleTitle: progress.moduleTitle,
+          totalContactHours: progress.lessons.reduce(
+            (sum: number, l: any) => sum + l.duration / 60,
             0
           ),
-          averageLessonDuration:
-            allLessons.length > 0
-              ? allLessons.reduce((sum, l) => sum + l.duration, 0) / allLessons.length
-              : 0,
-          caseStudiesIncluded: allLessons.filter((l) => l.caseStudyActivity).length,
-          formativeChecksIncluded: allLessons.reduce(
-            (sum, l) => sum + (l.formativeChecks?.length || 0),
-            0
-          ),
+          totalLessons: progress.lessons.length,
+          lessons: progress.lessons,
+          pptDecks: [] as any[],
         };
 
-        // Save to database
-        workflow.markModified('step10');
-        await workflow.save();
+        // Atomic upsert: update this module's data without touching other modules
+        // First, try to update existing module entry
+        const updateResult = await CurriculumWorkflow.updateOne(
+          {
+            _id: workflowId,
+            'step10.moduleLessonPlans.moduleId': progress.moduleId,
+          },
+          {
+            $set: {
+              'step10.moduleLessonPlans.$': modulePlanData,
+            },
+          }
+        );
 
-        loggingService.info('Lesson progress saved', {
+        // If no existing entry found, push a new one (and init step10 if needed)
+        if (updateResult.matchedCount === 0) {
+          await CurriculumWorkflow.updateOne(
+            { _id: workflowId, step10: { $exists: false } },
+            {
+              $set: {
+                step10: {
+                  moduleLessonPlans: [],
+                  validation: {
+                    allModulesHaveLessonPlans: false,
+                    allLessonDurationsValid: false,
+                    totalHoursMatch: false,
+                    allMLOsCovered: false,
+                    caseStudiesIntegrated: false,
+                    assessmentsIntegrated: false,
+                  },
+                  summary: {
+                    totalLessons: 0,
+                    totalContactHours: 0,
+                    averageLessonDuration: 0,
+                    caseStudiesIncluded: 0,
+                    formativeChecksIncluded: 0,
+                  },
+                  generatedAt: new Date(),
+                },
+              },
+            }
+          );
+
+          await CurriculumWorkflow.updateOne(
+            {
+              _id: workflowId,
+              'step10.moduleLessonPlans.moduleId': { $ne: progress.moduleId },
+            },
+            {
+              $push: {
+                'step10.moduleLessonPlans': modulePlanData,
+              } as any,
+            }
+          );
+        }
+
+        loggingService.info('Lesson progress saved atomically', {
           workflowId,
           moduleId: progress.moduleId,
-          lessonsInDB: modulePlan.lessons.length,
+          lessonsInDB: progress.lessons.length,
         });
       } catch (err) {
         loggingService.error('Failed to save lesson progress', {
@@ -3280,7 +3278,8 @@ CRITICAL VALIDATION:
       durationMin: Math.round(duration / 60000),
     });
 
-    // Initialize step10 if it doesn't exist
+    // Note: step10 initialization is handled atomically in the progress callback above.
+    // This legacy block is kept as a fallback for the stale workflow object only.
     if (!workflow.step10) {
       workflow.step10 = {
         moduleLessonPlans: [],
