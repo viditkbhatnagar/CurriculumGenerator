@@ -182,7 +182,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
       const response = await api.post(
         `/api/v3/ppt/generate/all/${workflow._id}`,
         {},
-        { responseType: 'blob', timeout: 600000 } // 10 min timeout for all modules
+        { responseType: 'blob', timeout: 1800000 } // 30 min timeout for all modules
       );
 
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -221,7 +221,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
       const response = await api.post(
         `/api/v3/ppt/download/module/${workflow._id}/${moduleIndex}`,
         {},
-        { responseType: 'blob', timeout: 300000 } // 5 min timeout for PPT generation
+        { responseType: 'blob', timeout: 900000 } // 15 min timeout for PPT file generation
       );
 
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -269,13 +269,15 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
   });
 
   // Count how many step10 modules have corresponding step11 PPTs (by ID or code fallback)
-  let completedModules = 0;
+  let completedFromWorkflow = 0;
   for (let i = 0; i < totalModules; i++) {
     const lp = workflow.step10?.moduleLessonPlans?.[i];
     if (lp && (completedModuleIds.has(lp.moduleId) || completedByCode.has(lp.moduleCode))) {
-      completedModules++;
+      completedFromWorkflow++;
     }
   }
+  // Use the higher of workflow state vs polling status to avoid stale-state locking
+  const completedModules = Math.max(completedFromWorkflow, statusData?.modulesGenerated ?? 0);
 
   const _isIncomplete = hasStep11Data && completedModules < totalModules;
   const isAllModulesComplete = hasStep11Data && completedModules >= totalModules;
@@ -452,12 +454,13 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                 const modulePPT =
                   workflow.step11?.modulePPTDecks?.find((m) => m.moduleId === module.moduleId) ||
                   completedByCode.get(module.moduleCode);
-                const isComplete = !!modulePPT;
+                // Module is complete if we have its data OR polling says it's done
+                const isComplete = !!modulePPT || index < completedModules;
                 const isGenerating =
                   generatingModuleId === module.moduleId ||
-                  (generatingModuleId === 'next' && !isComplete && index === completedModules);
+                  (generatingModuleId === 'next' && !isComplete && index <= completedModules);
                 const canGenerate =
-                  !isComplete && !isCurrentlyGenerating && index === completedModules;
+                  !isComplete && !isCurrentlyGenerating && index <= completedModules;
 
                 return (
                   <div

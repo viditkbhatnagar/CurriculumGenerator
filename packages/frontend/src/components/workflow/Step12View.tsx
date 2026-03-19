@@ -38,7 +38,7 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
   const submitStep12 = useSubmitStep12();
   const submitNextModule = useSubmitStep12NextModule();
   const approveStep12 = useApproveStep12();
-  const { data: _statusData } = useStep12Status(workflow._id);
+  const { data: statusData } = useStep12Status(workflow._id);
   const [error, setError] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [activeVariant, setActiveVariant] = useState<AssignmentDeliveryVariant>('in_person');
@@ -174,7 +174,11 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
   const hasStep12Data = workflow.step12 && workflow.step12.moduleAssignmentPacks?.length > 0;
   const isApproved = !!workflow.step12?.approvedAt;
   const totalModules = workflow.step4?.modules?.length || 0;
-  const completedModules = getCompletedCount();
+  // Use the higher of workflow state vs polling status to avoid stale-state locking
+  const completedModules = Math.max(
+    getCompletedCount(),
+    (statusData as any)?.modulesGenerated ?? 0
+  );
   const isAllModulesComplete = hasStep12Data && completedModules >= totalModules;
 
   // Check if Step 11 is approved
@@ -338,12 +342,13 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                 const modulePacks =
                   workflow.step12?.moduleAssignmentPacks?.find((m) => m.moduleId === module.id) ||
                   completedByCode12.get(module.code);
-                const isComplete = !!modulePacks;
+                // Module is complete if we have its data OR polling says it's done
+                const isComplete = !!modulePacks || index < completedModules;
                 const isGeneratingThis =
                   generatingModuleId === module.id ||
-                  (generatingModuleId && !isComplete && index === completedModules);
+                  (generatingModuleId && !isComplete && index <= completedModules);
                 const canGenerate =
-                  !isComplete && !isCurrentlyGenerating && index === completedModules;
+                  !isComplete && !isCurrentlyGenerating && index <= completedModules;
 
                 return (
                   <div
