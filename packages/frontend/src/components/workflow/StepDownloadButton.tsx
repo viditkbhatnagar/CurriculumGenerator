@@ -35,7 +35,7 @@ export default function StepDownloadButton({
       const moduleSlug = moduleCode ? `-${moduleCode}` : '';
       const filename = `${programSlug}-Step${stepNumber}${moduleSlug}.docx`;
 
-      await downloadFile(url, filename);
+      await downloadFile(url, filename, { timeout: 600000 }); // 10 min — Word generation calls OpenAI for formatting
     } catch (err) {
       console.error('Step download failed:', err);
       alert(`Failed to download Step ${stepNumber} document. Please try again.`);
