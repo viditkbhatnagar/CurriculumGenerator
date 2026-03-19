@@ -76,11 +76,11 @@ export default function StepDownloadButton({
     <button
       onClick={handleDownload}
       disabled={disabled || downloading}
-      className={`px-3 py-1.5 bg-[#80A3A2]/10 hover:bg-[#80A3A2]/20 text-[#80A3A2] border border-[#80A3A2]/30 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 ${className || ''}`}
+      className={`px-3 py-1.5 bg-[#80A3A2] hover:bg-[#6b8e8d] text-white border border-[#80A3A2] rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 ${className || ''}`}
     >
       {downloading ? (
         <>
-          <div className="w-4 h-4 border-2 border-[#80A3A2] border-t-transparent rounded-full animate-spin" />
+          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
           Downloading...
         </>
       ) : (

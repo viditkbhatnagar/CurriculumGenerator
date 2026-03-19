@@ -1006,9 +1006,16 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
             <button
               type="submit"
               disabled={submitStep1.isPending}
-              className="px-6 py-2.5 bg-teal-100 hover:bg-teal-300 text-teal-800 rounded-lg transition-colors disabled:opacity-50"
+              className="px-6 py-2.5 bg-teal-100 hover:bg-teal-300 text-teal-800 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
             >
-              {submitStep1.isPending ? 'Saving...' : 'Save Draft'}
+              {submitStep1.isPending ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-teal-800 border-t-transparent rounded-full animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Draft'
+              )}
             </button>
             {isComplete && !isApproved && (
               <button
