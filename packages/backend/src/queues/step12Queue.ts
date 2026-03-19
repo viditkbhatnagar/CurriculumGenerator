@@ -230,6 +230,24 @@ export async function addStep12Job(
     return null;
   }
 
+  // Remove any stale job with the same ID (completed/failed from previous attempts)
+  const jobId = `step12-${workflowId}-module-${moduleIndex}`;
+  try {
+    const existingJob = await step12Queue.getJob(jobId);
+    if (existingJob) {
+      const state = await existingJob.getState();
+      if (['completed', 'failed'].includes(state)) {
+        await existingJob.remove();
+        loggingService.info('Removed stale Step 12 job before re-queue', {
+          jobId,
+          previousState: state,
+        });
+      }
+    }
+  } catch (_e) {
+    // Ignore
+  }
+
   const job = await step12Queue.add(
     {
       workflowId,
@@ -237,7 +255,7 @@ export async function addStep12Job(
       userId,
     },
     {
-      jobId: `step12-${workflowId}-module-${moduleIndex}`,
+      jobId,
       priority: 1,
     }
   );

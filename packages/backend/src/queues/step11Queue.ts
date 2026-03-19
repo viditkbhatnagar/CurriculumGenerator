@@ -282,6 +282,25 @@ export async function addStep11Job(
     return null;
   }
 
+  // Remove any stale job with the same ID (completed/failed from previous attempts)
+  // Bull rejects adding a job with an existing ID even if it's done
+  const jobId = `step11-${workflowId}-module-${moduleIndex}`;
+  try {
+    const existingJob = await step11Queue.getJob(jobId);
+    if (existingJob) {
+      const state = await existingJob.getState();
+      if (['completed', 'failed'].includes(state)) {
+        await existingJob.remove();
+        loggingService.info('Removed stale Step 11 job before re-queue', {
+          jobId,
+          previousState: state,
+        });
+      }
+    }
+  } catch (_e) {
+    // Ignore errors from job removal
+  }
+
   const job = await step11Queue.add(
     {
       workflowId,
@@ -289,8 +308,8 @@ export async function addStep11Job(
       userId,
     },
     {
-      jobId: `step11-${workflowId}-module-${moduleIndex}`, // Unique job ID prevents duplicates
-      priority: 1, // Higher priority for earlier modules
+      jobId,
+      priority: 1,
     }
   );
 

@@ -246,6 +246,24 @@ export async function addStep10Job(
     return null;
   }
 
+  // Remove any stale job with the same ID (completed/failed from previous attempts)
+  const jobId = `step10-${workflowId}-module-${moduleIndex}`;
+  try {
+    const existingJob = await step10Queue.getJob(jobId);
+    if (existingJob) {
+      const state = await existingJob.getState();
+      if (['completed', 'failed'].includes(state)) {
+        await existingJob.remove();
+        loggingService.info('Removed stale Step 10 job before re-queue', {
+          jobId,
+          previousState: state,
+        });
+      }
+    }
+  } catch (_e) {
+    // Ignore
+  }
+
   const job = await step10Queue.add(
     {
       workflowId,
@@ -253,8 +271,8 @@ export async function addStep10Job(
       userId,
     },
     {
-      jobId: `step10-${workflowId}-module-${moduleIndex}`, // Unique job ID prevents duplicates
-      priority: 1, // Higher priority for earlier modules
+      jobId,
+      priority: 1,
     }
   );
 
