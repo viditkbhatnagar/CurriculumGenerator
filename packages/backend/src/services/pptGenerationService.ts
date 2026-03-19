@@ -1016,7 +1016,8 @@ Return ONLY valid JSON.`;
     const response = await openaiService.generateContent(userPrompt, systemPrompt, {
       responseFormat: 'json_object',
       maxTokens: 32000,
-      timeout: 600000, // 10 minutes for GPT-5.2 high thinking
+      timeout: 600000, // 10 minutes — medium reasoning is much faster
+      reasoningEffort: 'medium', // Medium reasoning for PPTs — enough for good structure, much faster
     });
 
     // Parse with safe JSON parser

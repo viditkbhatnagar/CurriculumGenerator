@@ -48,7 +48,7 @@ if (redisUrl && redisUrl.length > 0) {
     step11Queue = new Bull('step11-ppt-generation', redisUrl, {
       defaultJobOptions: {
         attempts: 3, // Retry up to 3 times on failure
-        timeout: 3600000, // 60 min per module — GPT-5.2 generates each lesson's slides sequentially
+        timeout: 18000000, // 5 hours per module — GPT-5.2 high thinking takes 10-20 min per lesson × up to 16 lessons
         backoff: {
           type: 'exponential',
           delay: 60000, // Start with 1 minute delay
