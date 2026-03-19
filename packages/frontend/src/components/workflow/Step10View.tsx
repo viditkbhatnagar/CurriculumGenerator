@@ -541,9 +541,11 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
         onRefresh();
       }
     },
-    onModuleComplete: () => {
+    onModuleComplete: async () => {
       // Refresh workflow data after each individual module completes
-      onRefresh();
+      // Clear generating state so UI unlocks the next module
+      setGeneratingModuleId(null);
+      await onRefresh();
     },
     onFailed: (errorMsg) => {
       toast.error(
@@ -738,9 +740,11 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
 
   const totalModules = workflow.step4?.modules?.length || 0;
   // Count unique modules that match a step4 module (by id or code)
-  const completedModules = (workflow.step4?.modules || []).filter(
+  const completedFromWorkflow = (workflow.step4?.modules || []).filter(
     (m) => completedModuleSet.has(m.id) || completedByCode.has(m.code)
   ).length;
+  // Use the higher of workflow state vs polling status to avoid stale-state locking
+  const completedModules = Math.max(completedFromWorkflow, step10Status?.modulesGenerated ?? 0);
   const _isIncomplete = hasStep10Data && completedModules < totalModules;
   const isAllModulesComplete = hasStep10Data && completedModules >= totalModules;
 
@@ -926,7 +930,8 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                 const modulePlan =
                   workflow.step10?.moduleLessonPlans?.find((m) => m.moduleId === module.id) ||
                   completedByCode.get(module.code);
-                const isComplete = !!modulePlan;
+                // Module is complete if we have its data OR polling says it's done
+                const isComplete = !!modulePlan || index < completedModules;
                 const isThisModuleGenerating =
                   generatingModuleId === module.id ||
                   step10Status?.jobs?.details?.some(

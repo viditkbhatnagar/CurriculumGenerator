@@ -1249,6 +1249,9 @@ export interface Step9Glossary {
 
   // Metadata
   generatedAt: string;
+  validatedAt?: string;
+  approvedAt?: string;
+  approvedBy?: string;
   programType?: 'certificate' | 'diploma'; // Affects typical size
   typicalSize?: string; // "30-50 terms" for certificate, "50-80" for diploma
 }
