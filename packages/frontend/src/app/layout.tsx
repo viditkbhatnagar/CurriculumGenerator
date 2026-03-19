@@ -4,6 +4,7 @@ import { QueryProvider } from '@/providers/QueryProvider';
 import { GenerationProvider } from '@/contexts/GenerationContext';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { ToastContainer } from '@/components/ui/ToastContainer';
+import { FloatingThemeToggle } from '@/components/ui/FloatingThemeToggle';
 
 export const metadata: Metadata = {
   title: 'Curriculum Generator | AGCQ',
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <GenerationProvider>
               {children}
               <ToastContainer />
+              <FloatingThemeToggle />
             </GenerationProvider>
           </ThemeProvider>
         </QueryProvider>

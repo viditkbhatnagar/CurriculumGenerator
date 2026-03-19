@@ -30,12 +30,12 @@
     "npm": ">=9.0.0"
   },
   "dependencies": {
-    "esbuild": "^0.27.2",
+    "esbuild": "~0.25.0",
     "jszip": "^3.10.1",
     "pptxgenjs": "^4.0.1"
   },
   "optionalDependencies": {
-    "@esbuild/darwin-arm64": "^0.25.11",
-    "@esbuild/win32-x64": "^0.27.2"
+    "@esbuild/darwin-arm64": "~0.25.0",
+    "@esbuild/win32-x64": "~0.25.0"
   }
 }
