@@ -94,17 +94,17 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
       return;
 
     // Wait until statusData is loaded before evaluating backend state
-    if (_statusData == null) return;
+    if (statusData == null) return;
 
     const hasActiveBackendJobs =
-      (_statusData as any)?.queueStatus?.state === 'active' ||
-      (_statusData as any)?.queueStatus?.state === 'waiting';
+      (statusData as any)?.queueStatus?.state === 'active' ||
+      (statusData as any)?.queueStatus?.state === 'waiting';
 
     // If no active backend jobs and we're not actively submitting, clear stale context
     if (!hasActiveBackendJobs) {
       completeGeneration(workflow._id, 12);
     }
-  }, [_statusData]); // eslint-disable-line
+  }, [statusData]); // eslint-disable-line
 
   // Auto-poll during generation
   useEffect(() => {
