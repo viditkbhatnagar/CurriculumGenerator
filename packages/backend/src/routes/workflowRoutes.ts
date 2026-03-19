@@ -2922,12 +2922,34 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
       ['waiting', 'active', 'delayed'].includes(state)
     );
 
-    if (activeJobs.length > 0) {
+    // Clean up zombie jobs that have been stuck for too long (e.g., from a deploy/crash)
+    const STALE_JOB_THRESHOLD = 30 * 60 * 1000; // 30 minutes
+    const now = Date.now();
+    const genuinelyActiveJobs = [];
+    for (const { job: activeJob, state } of activeJobs) {
+      const jobAge = now - (activeJob.timestamp || 0);
+      if (jobAge > STALE_JOB_THRESHOLD) {
+        loggingService.warn('Removing stale Step 11 job', {
+          jobId: activeJob.id,
+          state,
+          ageMinutes: Math.round(jobAge / 60000),
+        });
+        try {
+          await activeJob.remove();
+        } catch (_e) {
+          // Ignore removal errors
+        }
+      } else {
+        genuinelyActiveJobs.push({ job: activeJob, state });
+      }
+    }
+
+    if (genuinelyActiveJobs.length > 0) {
       return res.json({
         success: true,
         data: {
           message: 'PPT generation already in progress',
-          jobsQueued: activeJobs.length,
+          jobsQueued: genuinelyActiveJobs.length,
           modulesGenerated: completedModuleIds.size,
           totalModules: lessonPlans.length,
         },
