@@ -203,48 +203,55 @@ router.post('/generate/all/:workflowId', async (req: Request, res: Response) => 
     // Create ZIP file
     const zip = new JSZip();
 
-    // Generate PPTs for each module's lessons
+    // Use pre-generated Step 11 PPT data when available (fast path)
+    const step11Modules = workflow.step11?.modulePPTDecks || [];
+
     for (const modulePlan of moduleLessonPlans) {
-      loggingService.info('Generating PPTs for module', {
-        moduleCode: modulePlan.moduleCode,
-        lessonCount: modulePlan.lessons.length,
-      });
+      // Try to find pre-generated PPT data from Step 11
+      const step11Module = step11Modules.find(
+        (m: any) => m.moduleId === modulePlan.moduleId || m.moduleCode === modulePlan.moduleCode
+      );
 
-      // Build context for PPT generation
-      const context = {
-        programTitle: workflow.step1?.programTitle || 'Program',
-        academicLevel: workflow.step1?.academicLevel || '',
-        deliveryMode: workflow.step1?.deliveryMode || 'in-person',
-        moduleCode: modulePlan.moduleCode,
-        moduleTitle: modulePlan.moduleTitle,
-        sources: workflow.step5?.sources || [],
-        glossaryEntries: workflow.step9?.entries || [],
-      };
+      if (step11Module?.pptDecks?.length) {
+        // Fast path: render pre-generated slide data to .pptx
+        for (const deck of step11Module.pptDecks) {
+          try {
+            const pptxBuffer = await pptGenerationService.exportPPTX(deck);
+            const filename = `${modulePlan.moduleCode}_Lesson${deck.lessonNumber}_${(deck.lessonTitle || 'Lesson').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.pptx`;
+            zip.file(filename, pptxBuffer);
+          } catch (error: any) {
+            loggingService.error('Failed to render PPT deck', {
+              error: error.message,
+              moduleCode: modulePlan.moduleCode,
+              lessonNumber: deck.lessonNumber,
+            });
+          }
+        }
+      } else {
+        // Slow fallback: generate from lesson plans using templates (no LLM)
+        const context = {
+          programTitle: workflow.step1?.programTitle || 'Program',
+          academicLevel: workflow.step1?.academicLevel || '',
+          deliveryMode: workflow.step1?.deliveryMode || 'in-person',
+          moduleCode: modulePlan.moduleCode,
+          moduleTitle: modulePlan.moduleTitle,
+          sources: workflow.step5?.sources || [],
+          glossaryEntries: workflow.step9?.entries || [],
+        };
 
-      // Generate PPT for each lesson
-      for (const lesson of modulePlan.lessons) {
-        try {
-          const deck = await pptGenerationService.generateLessonPPT(lesson, context);
-
-          // Export to PPTX buffer
-          const pptxBuffer = await pptGenerationService.exportPPTX(deck);
-
-          // Add to ZIP with descriptive filename
-          const filename = `${modulePlan.moduleCode}_Lesson${lesson.lessonNumber}_${lesson.lessonTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.pptx`;
-          zip.file(filename, pptxBuffer);
-
-          loggingService.info('PPT generated for lesson', {
-            moduleCode: modulePlan.moduleCode,
-            lessonNumber: lesson.lessonNumber,
-            slideCount: deck.slideCount,
-          });
-        } catch (error: any) {
-          loggingService.error('Failed to generate PPT for lesson', {
-            error: error.message,
-            moduleCode: modulePlan.moduleCode,
-            lessonNumber: lesson.lessonNumber,
-          });
-          // Continue with other lessons
+        for (const lesson of modulePlan.lessons) {
+          try {
+            const deck = pptGenerationService.generateLessonPPTFallback(lesson, context);
+            const pptxBuffer = await pptGenerationService.exportPPTX(deck);
+            const filename = `${modulePlan.moduleCode}_Lesson${lesson.lessonNumber}_${lesson.lessonTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.pptx`;
+            zip.file(filename, pptxBuffer);
+          } catch (error: any) {
+            loggingService.error('Failed to generate PPT for lesson', {
+              error: error.message,
+              moduleCode: modulePlan.moduleCode,
+              lessonNumber: lesson.lessonNumber,
+            });
+          }
         }
       }
     }
@@ -325,46 +332,69 @@ router.post('/download/module/:workflowId/:moduleIndex', async (req: Request, re
 
     const modulePlan = moduleLessonPlans[moduleIdx];
 
-    loggingService.info('Generating PPTs for module download', {
+    loggingService.info('Downloading PPTs for module', {
       workflowId,
       moduleIndex: moduleIdx,
       moduleCode: modulePlan.moduleCode,
       lessonCount: modulePlan.lessons.length,
     });
 
-    // Build context for PPT generation
-    const context = {
-      programTitle: workflow.step1?.programTitle || 'Program',
-      academicLevel: workflow.step1?.academicLevel || '',
-      deliveryMode: workflow.step1?.deliveryMode || 'in-person',
-      moduleCode: modulePlan.moduleCode,
-      moduleTitle: modulePlan.moduleTitle,
-      sources: workflow.step5?.sources || [],
-      glossaryEntries: workflow.step9?.entries || [],
-    };
+    // Try to use pre-generated PPT data from Step 11 first (fast path)
+    const step11Module = workflow.step11?.modulePPTDecks?.find(
+      (m: any) => m.moduleId === modulePlan.moduleId || m.moduleCode === modulePlan.moduleCode
+    );
 
-    // Create ZIP file for all lessons in this module
     const zip = new JSZip();
 
-    for (const lesson of modulePlan.lessons) {
-      try {
-        const deck = await pptGenerationService.generateLessonPPT(lesson, context);
-        const pptxBuffer = await pptGenerationService.exportPPTX(deck);
+    if (step11Module?.pptDecks?.length) {
+      // Fast path: render pre-generated PPT slide data to .pptx files
+      loggingService.info('Using pre-generated Step 11 PPT data (fast path)', {
+        moduleCode: modulePlan.moduleCode,
+        pptDecks: step11Module.pptDecks.length,
+      });
 
-        const filename = `Lesson${lesson.lessonNumber}_${lesson.lessonTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.pptx`;
-        zip.file(filename, pptxBuffer);
+      for (const deck of step11Module.pptDecks) {
+        try {
+          const pptxBuffer = await pptGenerationService.exportPPTX(deck);
+          const filename = `Lesson${deck.lessonNumber}_${(deck.lessonTitle || 'Lesson').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.pptx`;
+          zip.file(filename, pptxBuffer);
+        } catch (error: any) {
+          loggingService.error('Failed to render PPT deck to pptx', {
+            error: error.message,
+            moduleCode: modulePlan.moduleCode,
+            lessonNumber: deck.lessonNumber,
+          });
+        }
+      }
+    } else {
+      // Slow fallback: generate PPTs from lesson plans using templates (no LLM)
+      loggingService.info('No Step 11 data, using template fallback for download', {
+        moduleCode: modulePlan.moduleCode,
+      });
 
-        loggingService.info('PPT generated for lesson', {
-          moduleCode: modulePlan.moduleCode,
-          lessonNumber: lesson.lessonNumber,
-          slideCount: deck.slideCount,
-        });
-      } catch (error: any) {
-        loggingService.error('Failed to generate PPT for lesson', {
-          error: error.message,
-          moduleCode: modulePlan.moduleCode,
-          lessonNumber: lesson.lessonNumber,
-        });
+      const context = {
+        programTitle: workflow.step1?.programTitle || 'Program',
+        academicLevel: workflow.step1?.academicLevel || '',
+        deliveryMode: workflow.step1?.deliveryMode || 'in-person',
+        moduleCode: modulePlan.moduleCode,
+        moduleTitle: modulePlan.moduleTitle,
+        sources: workflow.step5?.sources || [],
+        glossaryEntries: workflow.step9?.entries || [],
+      };
+
+      for (const lesson of modulePlan.lessons) {
+        try {
+          const deck = pptGenerationService.generateLessonPPTFallback(lesson, context);
+          const pptxBuffer = await pptGenerationService.exportPPTX(deck);
+          const filename = `Lesson${lesson.lessonNumber}_${lesson.lessonTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.pptx`;
+          zip.file(filename, pptxBuffer);
+        } catch (error: any) {
+          loggingService.error('Failed to generate PPT for lesson', {
+            error: error.message,
+            moduleCode: modulePlan.moduleCode,
+            lessonNumber: lesson.lessonNumber,
+          });
+        }
       }
     }
 
