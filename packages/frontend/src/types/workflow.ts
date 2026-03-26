@@ -1498,6 +1498,16 @@ export interface Step11PPTGeneration {
     timestamp: string;
   };
 
+  generationProgress?: {
+    moduleIndex: number;
+    moduleCode: string;
+    moduleTitle: string;
+    completedLessons: number;
+    totalLessons: number;
+    currentLesson: string | null;
+    startedAt: Date;
+  };
+
   generatedAt: Date;
   validatedAt?: Date;
   approvedAt?: Date;

@@ -3519,19 +3519,46 @@ CRITICAL VALIDATION:
     // Generate PPT for each lesson in the module
     const startTime = Date.now();
     const pptDecks: any[] = [];
+    const totalLessonsInModule = moduleToProcess.lessons.length;
 
-    for (let i = 0; i < moduleToProcess.lessons.length; i++) {
+    // Write initial generation progress so the frontend can show lesson-by-lesson status
+    const progressWorkflow = await CurriculumWorkflow.findById(workflowId);
+    if (progressWorkflow) {
+      if (!progressWorkflow.step11) {
+        progressWorkflow.step11 = {
+          modulePPTDecks: [],
+          validation: {
+            allLessonsHavePPTs: false,
+            allSlideCountsValid: false,
+            allMLOsCovered: false,
+            allCitationsValid: false,
+          },
+          summary: { totalPPTDecks: 0, totalSlides: 0, averageSlidesPerLesson: 0 },
+          generatedAt: new Date(),
+        };
+      }
+      progressWorkflow.step11.generationProgress = {
+        moduleIndex: expectedModuleIndex,
+        moduleCode: moduleToProcess.moduleCode,
+        moduleTitle: moduleToProcess.moduleTitle,
+        completedLessons: 0,
+        totalLessons: totalLessonsInModule,
+        currentLesson: moduleToProcess.lessons[0]?.lessonTitle || 'Lesson 1',
+        startedAt: new Date(),
+      };
+      progressWorkflow.markModified('step11');
+      await progressWorkflow.save();
+    }
+
+    for (let i = 0; i < totalLessonsInModule; i++) {
       const lesson = moduleToProcess.lessons[i];
 
       try {
-        loggingService.info(
-          `Generating PPT for lesson ${i + 1}/${moduleToProcess.lessons.length}`,
-          {
-            workflowId,
-            moduleCode: moduleToProcess.moduleCode,
-            lessonId: lesson.lessonId,
-          }
-        );
+        loggingService.info(`Generating PPT for lesson ${i + 1}/${totalLessonsInModule}`, {
+          workflowId,
+          moduleCode: moduleToProcess.moduleCode,
+          lessonId: lesson.lessonId,
+        });
 
         const lessonStartTime = Date.now();
         const pptDeck = await pptService.generateLessonPPT(lesson, pptContext);
@@ -3539,7 +3566,7 @@ CRITICAL VALIDATION:
 
         pptDecks.push(pptDeck);
 
-        loggingService.info(`PPT generated for lesson ${i + 1}/${moduleToProcess.lessons.length}`, {
+        loggingService.info(`PPT generated for lesson ${i + 1}/${totalLessonsInModule}`, {
           workflowId,
           moduleCode: moduleToProcess.moduleCode,
           lessonId: lesson.lessonId,
@@ -3547,6 +3574,30 @@ CRITICAL VALIDATION:
           durationMs: lessonDuration,
           durationSec: Math.round(lessonDuration / 1000),
         });
+
+        // Update generation progress in MongoDB so frontend can show lesson-by-lesson status
+        try {
+          const progressUpdate = await CurriculumWorkflow.findById(workflowId);
+          if (progressUpdate?.step11) {
+            const nextLesson = moduleToProcess.lessons[i + 1];
+            progressUpdate.step11.generationProgress = {
+              moduleIndex: expectedModuleIndex,
+              moduleCode: moduleToProcess.moduleCode,
+              moduleTitle: moduleToProcess.moduleTitle,
+              completedLessons: i + 1,
+              totalLessons: totalLessonsInModule,
+              currentLesson: nextLesson?.lessonTitle || null,
+              startedAt: progressUpdate.step11.generationProgress?.startedAt || new Date(),
+            };
+            progressUpdate.markModified('step11');
+            await progressUpdate.save();
+          }
+        } catch (progressErr) {
+          // Non-critical — don't fail generation if progress tracking fails
+          loggingService.warn('Failed to update generation progress', {
+            error: progressErr instanceof Error ? progressErr.message : String(progressErr),
+          });
+        }
       } catch (err) {
         loggingService.error(`Failed to generate PPT for lesson ${i + 1}`, {
           workflowId,
@@ -3619,6 +3670,9 @@ CRITICAL VALIDATION:
 
     // Add the new module PPT deck
     freshWorkflow.step11.modulePPTDecks.push(modulePPTDeck);
+
+    // Clear generation progress — module is done
+    freshWorkflow.step11.generationProgress = undefined;
 
     // Update summary
     const allPPTDecks = freshWorkflow.step11.modulePPTDecks.flatMap((m) => m.pptDecks);

@@ -654,18 +654,52 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                         </div>
 
                         {/* Progress indicator for generating module */}
-                        {isGenerating && (
-                          <div className="mt-3 bg-white/50 rounded-lg p-3">
-                            <div className="flex items-center gap-2 text-sm text-orange-400 mb-2">
-                              <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
-                              <span>Generating PPT decks for {module.totalLessons} lessons...</span>
-                            </div>
-                            <p className="text-xs text-teal-500">
-                              This may take 15-30 minutes. You can leave this page and come back
-                              later.
-                            </p>
-                          </div>
-                        )}
+                        {isGenerating &&
+                          (() => {
+                            const progress = workflow.step11?.generationProgress;
+                            const isThisModule =
+                              progress && progress.moduleCode === module.moduleCode;
+                            const completed = isThisModule ? progress.completedLessons : 0;
+                            const total = isThisModule
+                              ? progress.totalLessons
+                              : module.totalLessons;
+                            const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                            return (
+                              <div className="mt-3 bg-white/50 rounded-lg p-4">
+                                <div className="flex items-center justify-between text-sm mb-2">
+                                  <div className="flex items-center gap-2 text-orange-500 font-medium">
+                                    <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                                    {isThisModule && completed > 0
+                                      ? `Lesson ${completed}/${total} complete`
+                                      : `Generating PPT decks for ${total} lessons...`}
+                                  </div>
+                                  {isThisModule && (
+                                    <span className="text-teal-600 font-medium">{pct}%</span>
+                                  )}
+                                </div>
+                                {/* Progress bar */}
+                                <div className="w-full bg-teal-100 rounded-full h-2.5 mb-2">
+                                  <div
+                                    className="bg-gradient-to-r from-orange-400 to-red-500 h-2.5 rounded-full transition-all duration-700"
+                                    style={{ width: `${isThisModule ? Math.max(pct, 3) : 3}%` }}
+                                  />
+                                </div>
+                                {isThisModule && progress.currentLesson ? (
+                                  <p className="text-xs text-teal-500">
+                                    Now generating:{' '}
+                                    <span className="text-teal-700 font-medium">
+                                      {progress.currentLesson}
+                                    </span>
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-teal-500">
+                                    Each lesson takes 10-20 minutes. You can leave this page and
+                                    come back later.
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
                       </div>
                     </div>
                   </div>
@@ -676,7 +710,10 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
             {/* Manual Refresh Button */}
             <div className="mt-6 pt-6 border-t border-teal-200">
               <button
-                onClick={onRefresh}
+                onClick={() => {
+                  onRefresh();
+                  refetchStatus();
+                }}
                 className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-teal-800 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
