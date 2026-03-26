@@ -164,15 +164,27 @@ if (step11Queue) {
       await job.progress(100);
 
       // If not all complete, find and queue the next ungenerated module
+      // Wrapped in try/catch so a chaining failure doesn't fail the current (already-saved) job
       if (!allComplete) {
-        const nextUngenIndex = lessonPlans.findIndex((m: any) => !newCompletedIds.has(m.moduleId));
-        if (nextUngenIndex !== -1) {
-          await addStep11Job(workflowId, nextUngenIndex, job.data.userId);
-          loggingService.info('Queued next module for PPT', {
+        try {
+          const nextUngenIndex = lessonPlans.findIndex(
+            (m: any) => !newCompletedIds.has(m.moduleId)
+          );
+          if (nextUngenIndex !== -1) {
+            await addStep11Job(workflowId, nextUngenIndex, job.data.userId);
+            loggingService.info('Queued next module for PPT', {
+              workflowId,
+              nextModuleIndex: nextUngenIndex,
+              nextModuleId: lessonPlans[nextUngenIndex]?.moduleId,
+            });
+          }
+        } catch (chainError) {
+          loggingService.error('Failed to chain next Step 11 module job', {
             workflowId,
-            nextModuleIndex: nextUngenIndex,
-            nextModuleId: lessonPlans[nextUngenIndex]?.moduleId,
+            error: chainError instanceof Error ? chainError.message : String(chainError),
           });
+          // Don't rethrow — the current module was saved successfully.
+          // The frontend auto-continuation will pick up and re-trigger if needed.
         }
       }
 

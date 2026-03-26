@@ -16,150 +16,167 @@ interface Props {
 export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
   const submitStep11 = useSubmitStep11();
   const approveStep11 = useApproveStep11();
-  const { data: statusData, refetch: refetchStatus } = useStep11Status(workflow._id);
   const [error, setError] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
-  const [generatingModuleId, setGeneratingModuleId] = useState<string | null>(null);
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [downloadingModule, setDownloadingModule] = useState<string | null>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
 
-  const isCurrentlyGenerating =
-    isGenerating(workflow._id, 11) || submitStep11.isPending || !!generatingModuleId;
+  // Compute whether we need active status polling (before the hook call)
+  const _lessonPlans = workflow.step10?.moduleLessonPlans || [];
+  const _totalMods = _lessonPlans.length;
+  const _completedMods = new Set(workflow.step11?.modulePPTDecks?.map((m) => m.moduleId) || [])
+    .size;
+  const shouldPollStatus = isAutoGenerating || (_completedMods > 0 && _completedMods < _totalMods);
+  const { data: statusData, refetch: refetchStatus } = useStep11Status(
+    workflow._id,
+    shouldPollStatus
+  );
 
-  // Track the previous module count to detect when generation completes
-  // Use unique count based on step10 module matching
-  const getUniqueCompletedCount = () => {
-    const moduleIds = new Set(workflow.step11?.modulePPTDecks?.map((m) => m.moduleId) || []);
-    const moduleCodes = new Set(
-      workflow.step11?.modulePPTDecks?.map((m) => m.moduleCode).filter(Boolean) || []
+  const isCurrentlyGenerating = isAutoGenerating || submitStep11.isPending;
+
+  // Grace period: don't react to stale errors right after starting generation
+  // (backend clears lastError on POST /step11, but query hasn't refetched yet)
+  const generationStartedAtRef = useRef(0);
+
+  // Derive which module is currently generating (first incomplete module)
+  const currentlyGeneratingModuleId = isCurrentlyGenerating
+    ? (_lessonPlans.find(
+        (m) =>
+          !new Set(workflow.step11?.modulePPTDecks?.map((d) => d.moduleId) || []).has(m.moduleId)
+      )?.moduleId ?? null)
+    : null;
+
+  // 1. Auto-detect active backend jobs on mount (recover from page refresh)
+  const mountCheckedRef = useRef(false);
+  useEffect(() => {
+    if (mountCheckedRef.current || !statusData || isAutoGenerating) return;
+    mountCheckedRef.current = true;
+    const backendBusy = (statusData.jobs?.active ?? 0) > 0;
+    if (backendBusy && _completedMods < _totalMods) {
+      setIsAutoGenerating(true);
+      startGeneration(workflow._id, 11, (_totalMods - _completedMods) * 200);
+    }
+  }, [statusData]); // eslint-disable-line
+
+  // 2. Monitor completion, errors, and auto-continue while generating
+  // This is the core fix: we stay in generating mode until ALL modules are done,
+  // and auto-trigger the next module if the backend queue isn't chaining (sync fallback)
+  const prevCompletedRef = useRef(_completedMods);
+  useEffect(() => {
+    // Compute completed count (same logic as below, but inline for the effect)
+    const completedModuleIds = new Set(
+      workflow.step11?.modulePPTDecks?.map((m) => m.moduleId) || []
     );
-    let count = 0;
+    const completedByCodeMap = new Map<string, boolean>();
+    (workflow.step11?.modulePPTDecks || []).forEach((m) => {
+      if (m.moduleCode) completedByCodeMap.set(m.moduleCode, true);
+    });
     const lessonPlans = workflow.step10?.moduleLessonPlans || [];
-    for (let i = 0; i < lessonPlans.length; i++) {
+    const totalModules = lessonPlans.length;
+    let completedFromWf = 0;
+    for (let i = 0; i < totalModules; i++) {
       const lp = lessonPlans[i];
-      if (lp && (moduleIds.has(lp.moduleId) || moduleCodes.has(lp.moduleCode))) {
-        count++;
+      if (lp && (completedModuleIds.has(lp.moduleId) || completedByCodeMap.has(lp.moduleCode))) {
+        completedFromWf++;
       }
     }
-    return count;
-  };
+    const completedModules = Math.max(completedFromWf, statusData?.modulesGenerated ?? 0);
+    const allComplete = completedModules >= totalModules && totalModules > 0;
 
-  const prevModuleCountRef = useRef<number>(getUniqueCompletedCount());
-
-  useEffect(() => {
-    if (!generatingModuleId) return;
-
-    // Check if the module we're waiting for is already complete
-    const moduleAlreadyComplete = workflow.step11?.modulePPTDecks?.some(
-      (m) => m.moduleId === generatingModuleId
-    );
-    if (moduleAlreadyComplete) {
-      setGeneratingModuleId(null);
-      completeGeneration(workflow._id, 11);
+    if (!isAutoGenerating) {
+      prevCompletedRef.current = completedModules;
       return;
     }
 
-    // Check if there's an error from the backend
-    if (workflow.step11?.lastError) {
-      setError(
-        `PPT generation failed for module ${workflow.step11.lastError.moduleIndex + 1}: ${workflow.step11.lastError.message}`
-      );
-      setGeneratingModuleId(null);
-      failGeneration(workflow._id, 11, workflow.step11.lastError.message);
+    // All done — exit generating mode
+    if (allComplete) {
+      setIsAutoGenerating(false);
+      completeGeneration(workflow._id, 11);
+      prevCompletedRef.current = completedModules;
       return;
     }
 
-    // Fallback: count-based check
-    const currentModuleCount = getUniqueCompletedCount();
-    if (currentModuleCount > prevModuleCountRef.current) {
-      setGeneratingModuleId(null);
-      completeGeneration(workflow._id, 11);
+    // Error check — only stop if backend isn't retrying and we're past the grace period
+    // (after clicking Generate/Retry, the old lastError is stale until the query refetches)
+    const isWithinGracePeriod = Date.now() - generationStartedAtRef.current < 15000;
+    if (workflow.step11?.lastError && !isWithinGracePeriod) {
+      const backendBusy = (statusData?.jobs?.active ?? 0) > 0;
+      if (!backendBusy) {
+        setIsAutoGenerating(false);
+        setError(
+          `PPT generation failed for module ${workflow.step11.lastError.moduleIndex + 1}: ${workflow.step11.lastError.message}`
+        );
+        failGeneration(workflow._id, 11, workflow.step11.lastError.message);
+        prevCompletedRef.current = completedModules;
+        return;
+      }
     }
-    prevModuleCountRef.current = currentModuleCount;
-  }, [
-    workflow.step11?.modulePPTDecks,
-    workflow.step11?.lastError,
-    workflow.step10?.moduleLessonPlans,
-    generatingModuleId,
-    completeGeneration,
-    failGeneration,
-    workflow._id,
-  ]);
 
-  // Clear stale GenerationContext state on mount/status update
+    // Progress detected — auto-continue if backend has no active jobs
+    // This handles the sync fallback case where the backend doesn't auto-chain
+    if (completedModules > prevCompletedRef.current) {
+      prevCompletedRef.current = completedModules;
+      const backendBusy = (statusData?.jobs?.active ?? 0) > 0;
+      if (!backendBusy && completedModules < totalModules) {
+        submitStep11.mutateAsync(workflow._id).catch((err) => {
+          console.error('Auto-continuation failed:', err);
+        });
+      }
+    }
+  }, [workflow.step11, statusData, isAutoGenerating]); // eslint-disable-line
+
+  // 3. Poll workflow data while generating
   useEffect(() => {
-    if (!isGenerating(workflow._id, 11) || generatingModuleId || submitStep11.isPending) return;
+    if (!isAutoGenerating) return;
+    const interval = setInterval(() => {
+      onRefresh();
+      refetchStatus();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isAutoGenerating, onRefresh, refetchStatus]);
 
-    // Wait until statusData is loaded before evaluating backend job state
-    if (statusData == null) return;
-
-    const hasActiveBackendJobs = statusData?.jobs?.active > 0;
-    const hasError = !!workflow.step11?.lastError;
-
-    // If no active backend jobs and we're not actively submitting, clear stale context
-    if (!hasActiveBackendJobs) {
-      if (hasError) {
-        failGeneration(workflow._id, 11, workflow.step11!.lastError!.message);
+  // 4. Clear stale GenerationContext state from previous sessions (localStorage)
+  useEffect(() => {
+    if (!isGenerating(workflow._id, 11) || isAutoGenerating || submitStep11.isPending) return;
+    if (!statusData) return;
+    const backendBusy = (statusData.jobs?.active ?? 0) > 0;
+    if (!backendBusy) {
+      if (workflow.step11?.lastError) {
+        failGeneration(workflow._id, 11, workflow.step11.lastError.message);
       } else {
         completeGeneration(workflow._id, 11);
       }
     }
   }, [statusData, workflow.step11?.lastError]); // eslint-disable-line
 
-  // Auto-poll when generation is in progress (reduced frequency to prevent server overload)
-  useEffect(() => {
-    if (!generatingModuleId) return;
-
-    const pollInterval = setInterval(() => {
-      onRefresh(); // This should trigger a workflow refetch
-      refetchStatus(); // Also refetch job status
-    }, 15000); // Poll every 15 seconds to avoid overwhelming the server
-
-    return () => clearInterval(pollInterval);
-  }, [generatingModuleId, onRefresh, refetchStatus]);
-
   const handleRetry = async () => {
     setError(null);
-    // Clear the lastError from backend by triggering a fresh generation
     await handleGenerate();
   };
 
   const handleGenerate = async () => {
-    // Prevent multiple simultaneous generation requests
-    if (generatingModuleId || submitStep11.isPending) {
+    if (isAutoGenerating || submitStep11.isPending) {
       console.log('Generation already in progress, ignoring click');
       return;
     }
 
     setError(null);
-
-    const lessonPlans = workflow.step10?.moduleLessonPlans || [];
-    const completedModuleIdSet = new Set(
-      workflow.step11?.modulePPTDecks?.map((m) => m.moduleId) || []
-    );
-
-    // Find the first module that hasn't been generated yet
-    const nextModule = lessonPlans.find((m) => !completedModuleIdSet.has(m.moduleId));
-
-    if (!nextModule) {
-      setError('All PPTs already generated');
-      return;
-    }
-
-    setGeneratingModuleId(nextModule.moduleId);
-    startGeneration(workflow._id, 11, 200); // ~3 minutes estimated per module
+    setIsAutoGenerating(true);
+    generationStartedAtRef.current = Date.now();
+    // Estimate based on remaining modules
+    const remaining = _totalMods - _completedMods;
+    startGeneration(workflow._id, 11, remaining * 200);
 
     try {
       await submitStep11.mutateAsync(workflow._id);
-      // Don't clear generatingModuleId here - it will be cleared when the data updates
-      // The generation continues in the background
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate PPTs';
       console.error('Failed to generate PPTs:', err);
+      setIsAutoGenerating(false);
       failGeneration(workflow._id, 11, errorMessage);
       setError(errorMessage);
-      setGeneratingModuleId(null);
     }
   };
 
@@ -482,9 +499,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                   completedByCode.get(module.moduleCode);
                 // Module is complete if we have its data OR polling says it's done
                 const isComplete = !!modulePPT || index < completedModules;
-                const isGenerating =
-                  generatingModuleId === module.moduleId ||
-                  (generatingModuleId === 'next' && !isComplete && index <= completedModules);
+                const isGenerating = currentlyGeneratingModuleId === module.moduleId;
                 const canGenerate =
                   !isComplete && !isCurrentlyGenerating && index <= completedModules;
 

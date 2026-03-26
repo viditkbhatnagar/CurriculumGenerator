@@ -566,6 +566,7 @@ export function useSubmitStep11() {
     },
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+      queryClient.invalidateQueries({ queryKey: ['workflow', id, 'step11-status'] });
     },
   });
 }
@@ -586,7 +587,7 @@ export function useApproveStep11() {
   });
 }
 
-export function useStep11Status(id: string) {
+export function useStep11Status(id: string, shouldPoll: boolean = true) {
   return useQuery({
     queryKey: ['workflow', id, 'step11-status'],
     queryFn: async () => {
@@ -594,7 +595,7 @@ export function useStep11Status(id: string) {
       return response.data;
     },
     enabled: !!id,
-    refetchInterval: 10000, // Poll every 10 seconds
+    refetchInterval: shouldPoll ? 8000 : false, // Poll every 8s when actively generating
   });
 }
 
