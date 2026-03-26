@@ -615,6 +615,7 @@ export function useSubmitStep12() {
     },
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+      queryClient.invalidateQueries({ queryKey: ['workflow', id, 'step12-status'] });
     },
   });
 }
@@ -634,6 +635,7 @@ export function useSubmitStep12NextModule() {
     },
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+      queryClient.invalidateQueries({ queryKey: ['workflow', id, 'step12-status'] });
     },
   });
 }
@@ -654,7 +656,7 @@ export function useApproveStep12() {
   });
 }
 
-export function useStep12Status(id: string) {
+export function useStep12Status(id: string, shouldPoll: boolean = true) {
   return useQuery({
     queryKey: ['workflow', id, 'step12-status'],
     queryFn: async () => {
@@ -662,7 +664,7 @@ export function useStep12Status(id: string) {
       return response.data;
     },
     enabled: !!id,
-    refetchInterval: 10000,
+    refetchInterval: shouldPoll ? 8000 : false,
   });
 }
 

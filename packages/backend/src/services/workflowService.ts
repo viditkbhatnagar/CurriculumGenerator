@@ -3146,6 +3146,31 @@ CRITICAL VALIDATION:
           totalLessons: progress.totalLessons,
         });
 
+        // Write generationProgress for frontend progress bar
+        try {
+          await CurriculumWorkflow.updateOne(
+            { _id: workflowId },
+            {
+              $set: {
+                'step10.generationProgress': {
+                  moduleIndex: expectedModuleIndex,
+                  moduleCode: progress.moduleCode,
+                  moduleTitle: progress.moduleTitle,
+                  completedLessons: progress.lessonsGenerated,
+                  totalLessons: progress.totalLessons,
+                  currentLesson:
+                    progress.lessonsGenerated < progress.totalLessons
+                      ? `Lesson ${progress.lessonsGenerated + 1}`
+                      : null,
+                  startedAt: new Date(),
+                },
+              },
+            }
+          );
+        } catch (_e) {
+          // Non-critical
+        }
+
         const modulePlanData = {
           moduleId: progress.moduleId,
           moduleCode: progress.moduleCode,
@@ -3341,6 +3366,9 @@ CRITICAL VALIDATION:
     } else {
       freshWorkflow.step10.moduleLessonPlans.push(modulePlan);
     }
+
+    // Clear generation progress — module is done
+    freshWorkflow.step10.generationProgress = undefined;
 
     // Update summary from fresh data
     const allLessons = freshWorkflow.step10.moduleLessonPlans.flatMap((m) => m.lessons);
@@ -3959,8 +3987,66 @@ CRITICAL VALIDATION:
       independentHours: moduleToProcess.independentHours ?? moduleToProcess.selfStudyHours,
     };
 
+    // Write initial generation progress so the frontend can show variant-by-variant status
+    const variantNames = ['In-Person', 'Self-Study', 'Hybrid'];
+    try {
+      const progressWf = await CurriculumWorkflow.findById(workflowId);
+      if (progressWf) {
+        if (!progressWf.step12) {
+          progressWf.step12 = {
+            moduleAssignmentPacks: [],
+            validation: {
+              allModulesHaveAssignments: false,
+              allVariantsGenerated: false,
+              allMLOsCovered: false,
+              allRubricsComplete: false,
+            },
+            summary: { totalModules: 0, totalAssignmentPacks: 0, averageCriteriaPerRubric: 0 },
+            generatedAt: new Date(),
+          };
+        }
+        progressWf.step12.generationProgress = {
+          moduleIndex: expectedModuleIndex,
+          moduleCode: moduleToProcess.moduleCode || moduleToProcess.code,
+          moduleTitle: moduleToProcess.title,
+          completedVariants: 0,
+          totalVariants: 3,
+          currentVariant: variantNames[0],
+          startedAt: new Date(),
+        };
+        progressWf.markModified('step12');
+        await progressWf.save();
+      }
+    } catch (_e) {
+      // Non-critical
+    }
+
     const startTime = Date.now();
-    const packs = await assignmentPackService.generateModuleAssignmentPacks(moduleContext, context);
+    const packs = await assignmentPackService.generateModuleAssignmentPacks(
+      moduleContext,
+      context,
+      async (completedVariants: number, currentVariant: string | null) => {
+        // Progress callback — update MongoDB after each variant
+        try {
+          const pw = await CurriculumWorkflow.findById(workflowId);
+          if (pw?.step12) {
+            pw.step12.generationProgress = {
+              moduleIndex: expectedModuleIndex,
+              moduleCode: moduleToProcess.moduleCode || moduleToProcess.code,
+              moduleTitle: moduleToProcess.title,
+              completedVariants,
+              totalVariants: 3,
+              currentVariant,
+              startedAt: pw.step12.generationProgress?.startedAt || new Date(),
+            };
+            pw.markModified('step12');
+            await pw.save();
+          }
+        } catch (_e) {
+          // Non-critical
+        }
+      }
+    );
     const duration = Date.now() - startTime;
 
     loggingService.info('Module assignment packs generated', {
@@ -4006,6 +4092,9 @@ CRITICAL VALIDATION:
     }
 
     freshWorkflow.step12.moduleAssignmentPacks.push(packs);
+
+    // Clear generation progress — module is done
+    freshWorkflow.step12.generationProgress = undefined;
 
     // Update summary — use unique moduleId count
     const newModulesCount = new Set(

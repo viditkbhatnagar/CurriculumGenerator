@@ -617,7 +617,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
 
         toast.info(
           'Generation Started',
-          `Module ${moduleIndex + 1} generation has started. This may take 2-5 minutes.`
+          `Module ${moduleIndex + 1} generation has started. This may take 10-20 minutes.`
         );
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to start generation';
@@ -930,7 +930,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
           <div className="bg-teal-50/50 rounded-lg p-6 border border-teal-200">
             <h3 className="text-xl font-bold text-teal-800 mb-4">Module Generation Progress</h3>
             <p className="text-sm text-teal-600 mb-4">
-              Generate lesson plans for each module. Each module takes 2-5 minutes.
+              Generate lesson plans for each module. Each module takes 10-20 minutes.
             </p>
 
             {/* Generate All Button */}
@@ -1088,17 +1088,55 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                         </div>
 
                         {/* Progress indicator for generating module */}
-                        {isThisModuleGenerating && (
-                          <div className="mt-3 bg-white/50 rounded-lg p-3">
-                            <div className="flex items-center gap-2 text-sm text-teal-600 mb-2">
-                              <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-                              <span>Generating lesson plans...</span>
-                            </div>
-                            <p className="text-xs text-teal-500">
-                              This will take 2-5 minutes. Status updates every 10 seconds.
-                            </p>
-                          </div>
-                        )}
+                        {isThisModuleGenerating &&
+                          (() => {
+                            const progress = (workflow.step10 as any)?.generationProgress;
+                            const isThisModule =
+                              progress &&
+                              (progress.moduleCode === module.code ||
+                                progress.moduleIndex === index);
+                            const completed = isThisModule ? progress.completedLessons || 0 : 0;
+                            const total = isThisModule
+                              ? progress.totalLessons || module.totalHours || 0
+                              : 0;
+                            const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                            return (
+                              <div className="mt-3 bg-white/50 rounded-lg p-4">
+                                <div className="flex items-center justify-between text-sm mb-2">
+                                  <div className="flex items-center gap-2 text-teal-600 font-medium">
+                                    <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                                    {isThisModule && completed > 0
+                                      ? `Lesson ${completed}/${total} complete`
+                                      : 'Generating lesson plans...'}
+                                  </div>
+                                  {isThisModule && total > 0 && (
+                                    <span className="text-teal-600 font-medium">{pct}%</span>
+                                  )}
+                                </div>
+                                <div className="w-full bg-teal-100 rounded-full h-2.5 mb-2">
+                                  <div
+                                    className="bg-gradient-to-r from-cyan-400 to-teal-500 h-2.5 rounded-full transition-all duration-700"
+                                    style={{
+                                      width: `${isThisModule && total > 0 ? Math.max(pct, 3) : 3}%`,
+                                    }}
+                                  />
+                                </div>
+                                {isThisModule && progress.currentLesson ? (
+                                  <p className="text-xs text-teal-500">
+                                    Now generating:{' '}
+                                    <span className="text-teal-700 font-medium">
+                                      {progress.currentLesson}
+                                    </span>
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-teal-500">
+                                    Each module takes 10-20 minutes. You can leave this page and
+                                    come back later.
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
                       </div>
                     </div>
                   </div>

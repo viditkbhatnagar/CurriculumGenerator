@@ -59,7 +59,8 @@ export class AssignmentPackService {
    */
   async generateModuleAssignmentPacks(
     module: ModuleContext,
-    context: WorkflowContext
+    context: WorkflowContext,
+    onProgress?: (completedVariants: number, currentVariant: string | null) => Promise<void>
   ): Promise<ModuleAssignmentPacks> {
     loggingService.info('Generating assignment packs for module', {
       moduleId: module.moduleId,
@@ -115,6 +116,25 @@ export class AssignmentPackService {
         });
         // Create a minimal placeholder so we don't block other variants
         result[variant] = this.createPlaceholderPack(module, variant);
+      }
+
+      // Report progress after each variant
+      if (onProgress) {
+        const variantIndex = variants.indexOf(variant);
+        const nextVariant = variants[variantIndex + 1];
+        const variantLabels: Record<string, string> = {
+          in_person: 'In-Person',
+          self_study: 'Self-Study',
+          hybrid: 'Hybrid',
+        };
+        try {
+          await onProgress(
+            variantIndex + 1,
+            nextVariant ? variantLabels[nextVariant] || nextVariant : null
+          );
+        } catch (_e) {
+          // Non-critical
+        }
       }
 
       // Brief delay between variants to avoid rate limits

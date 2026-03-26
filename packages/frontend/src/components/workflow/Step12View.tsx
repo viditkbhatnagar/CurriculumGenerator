@@ -38,110 +38,164 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
   const submitStep12 = useSubmitStep12();
   const submitNextModule = useSubmitStep12NextModule();
   const approveStep12 = useApproveStep12();
-  const { data: statusData } = useStep12Status(workflow._id);
   const [error, setError] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [activeVariant, setActiveVariant] = useState<AssignmentDeliveryVariant>('in_person');
-  const [generatingModuleId, setGeneratingModuleId] = useState<string | null>(null);
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
 
-  const isCurrentlyGenerating =
-    isGenerating(workflow._id, 12) ||
-    submitStep12.isPending ||
-    submitNextModule.isPending ||
-    !!generatingModuleId;
-
-  // Track module count to detect completion — use Set-based dedup + moduleCode fallback
-  const completedModuleIdSet = new Set(
+  // Compute completed count for polling decision (before hook call)
+  const _completedModuleIdSet = new Set(
     (workflow.step12?.moduleAssignmentPacks || []).map((m) => m.moduleId)
   );
-  const completedByCode12 = new Map<string, ModuleAssignmentPacks>();
+  const _completedByCode12 = new Map<string, ModuleAssignmentPacks>();
   (workflow.step12?.moduleAssignmentPacks || []).forEach((m) => {
-    if (m.moduleCode) completedByCode12.set(m.moduleCode, m);
+    if (m.moduleCode) _completedByCode12.set(m.moduleCode, m);
   });
+  const _modules = workflow.step4?.modules || [];
+  const _totalMods = _modules.length;
+  const _completedMods = _modules.filter(
+    (m) => _completedModuleIdSet.has(m.id) || _completedByCode12.has(m.code)
+  ).length;
 
-  const getCompletedCount = () => {
-    return (workflow.step4?.modules || []).filter(
-      (m) => completedModuleIdSet.has(m.id) || completedByCode12.has(m.code)
-    ).length;
-  };
-
-  const prevModuleCountRef = useRef<number>(getCompletedCount());
-
-  useEffect(() => {
-    const currentCount = getCompletedCount();
-    if (generatingModuleId && currentCount > prevModuleCountRef.current) {
-      setGeneratingModuleId(null);
-      completeGeneration(workflow._id, 12);
-    }
-    prevModuleCountRef.current = currentCount;
-  }, [
-    workflow.step12?.moduleAssignmentPacks,
-    generatingModuleId,
-    completeGeneration,
+  const shouldPollStatus = isAutoGenerating || (_completedMods > 0 && _completedMods < _totalMods);
+  const { data: statusData, refetch: refetchStatus } = useStep12Status(
     workflow._id,
-  ]);
+    shouldPollStatus
+  );
 
-  // Clear stale GenerationContext state on mount/status update
+  const isCurrentlyGenerating =
+    isAutoGenerating || submitStep12.isPending || submitNextModule.isPending;
+
+  // Grace period for stale error handling after clicking Generate/Retry
+  const generationStartedAtRef = useRef(0);
+
+  // Derive currently generating module (first incomplete module)
+  const currentlyGeneratingModuleId = isCurrentlyGenerating
+    ? (_modules.find((m) => !_completedModuleIdSet.has(m.id) && !_completedByCode12.has(m.code))
+        ?.id ?? null)
+    : null;
+
+  // Re-expose these for JSX usage below
+  const completedModuleIdSet = _completedModuleIdSet;
+  const completedByCode12 = _completedByCode12;
+
+  // 1. Auto-detect active backend jobs on mount (recover from page refresh)
+  const mountCheckedRef = useRef(false);
+  useEffect(() => {
+    if (mountCheckedRef.current || !statusData || isAutoGenerating) return;
+    mountCheckedRef.current = true;
+    const backendBusy =
+      (statusData as any)?.queueStatus?.state === 'active' ||
+      (statusData as any)?.queueStatus?.state === 'waiting';
+    if (backendBusy && _completedMods < _totalMods) {
+      setIsAutoGenerating(true);
+      startGeneration(workflow._id, 12, (_totalMods - _completedMods) * 600);
+    }
+  }, [statusData]); // eslint-disable-line
+
+  // 2. Monitor completion, errors, and auto-continue while generating
+  const prevCompletedRef = useRef(_completedMods);
+  useEffect(() => {
+    const modules = workflow.step4?.modules || [];
+    const totalModules = modules.length;
+    const completedIds = new Set(
+      (workflow.step12?.moduleAssignmentPacks || []).map((m) => m.moduleId)
+    );
+    const completedCodes = new Map<string, boolean>();
+    (workflow.step12?.moduleAssignmentPacks || []).forEach((m) => {
+      if (m.moduleCode) completedCodes.set(m.moduleCode, true);
+    });
+    const completedFromWf = modules.filter(
+      (m) => completedIds.has(m.id) || completedCodes.has(m.code)
+    ).length;
+    const completedModules = Math.max(completedFromWf, (statusData as any)?.modulesGenerated ?? 0);
+    const allComplete = completedModules >= totalModules && totalModules > 0;
+
+    if (!isAutoGenerating) {
+      prevCompletedRef.current = completedModules;
+      return;
+    }
+
+    // All done
+    if (allComplete) {
+      setIsAutoGenerating(false);
+      completeGeneration(workflow._id, 12);
+      prevCompletedRef.current = completedModules;
+      return;
+    }
+
+    // Error check — only stop if backend isn't retrying and past grace period
+    const isWithinGracePeriod = Date.now() - generationStartedAtRef.current < 15000;
+    if ((workflow.step12 as any)?.lastError && !isWithinGracePeriod) {
+      const backendBusy =
+        (statusData as any)?.queueStatus?.state === 'active' ||
+        (statusData as any)?.queueStatus?.state === 'waiting';
+      if (!backendBusy) {
+        setIsAutoGenerating(false);
+        setError(
+          `Assignment pack generation failed: ${(workflow.step12 as any).lastError.message}`
+        );
+        failGeneration(workflow._id, 12, (workflow.step12 as any).lastError.message);
+        prevCompletedRef.current = completedModules;
+        return;
+      }
+    }
+
+    // Progress detected — auto-continue if backend has no active jobs
+    if (completedModules > prevCompletedRef.current) {
+      prevCompletedRef.current = completedModules;
+      const backendBusy =
+        (statusData as any)?.queueStatus?.state === 'active' ||
+        (statusData as any)?.queueStatus?.state === 'waiting';
+      if (!backendBusy && completedModules < totalModules) {
+        // Auto-trigger next module
+        submitNextModule.mutateAsync(workflow._id).catch((err) => {
+          console.error('Auto-continuation failed:', err);
+        });
+      }
+    }
+  }, [workflow.step12, statusData, isAutoGenerating]); // eslint-disable-line
+
+  // 3. Poll workflow data while generating
+  useEffect(() => {
+    if (!isAutoGenerating) return;
+    const interval = setInterval(() => {
+      onRefresh();
+      refetchStatus();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isAutoGenerating, onRefresh, refetchStatus]);
+
+  // 4. Clear stale GenerationContext state from previous sessions
   useEffect(() => {
     if (
       !isGenerating(workflow._id, 12) ||
-      generatingModuleId ||
+      isAutoGenerating ||
       submitStep12.isPending ||
       submitNextModule.isPending
     )
       return;
-
-    // Wait until statusData is loaded before evaluating backend state
-    if (statusData == null) return;
-
-    const hasActiveBackendJobs =
+    if (!statusData) return;
+    const backendBusy =
       (statusData as any)?.queueStatus?.state === 'active' ||
       (statusData as any)?.queueStatus?.state === 'waiting';
-
-    // If no active backend jobs and we're not actively submitting, clear stale context
-    if (!hasActiveBackendJobs) {
+    if (!backendBusy) {
       completeGeneration(workflow._id, 12);
     }
   }, [statusData]); // eslint-disable-line
 
-  // Auto-poll during generation
-  useEffect(() => {
-    if (!generatingModuleId) return;
-    const pollInterval = setInterval(() => {
-      onRefresh();
-    }, 15000);
-    return () => clearInterval(pollInterval);
-  }, [generatingModuleId, onRefresh]);
-
   const handleGenerate = async () => {
-    if (generatingModuleId || submitNextModule.isPending) return;
+    if (isAutoGenerating || submitNextModule.isPending || submitStep12.isPending) return;
     setError(null);
-
-    const totalModules = workflow.step4?.modules?.length || 0;
-    const existingModules = getCompletedCount();
-
-    if (existingModules >= totalModules) {
-      setError('All assignment packs already generated');
-      return;
-    }
-
-    // Find the first module that hasn't been generated yet (by ID or code)
-    const nextModule = workflow.step4?.modules?.find(
-      (m) => !completedModuleIdSet.has(m.id) && !completedByCode12.has(m.code)
-    );
-    if (!nextModule) {
-      setError('No more modules to generate');
-      return;
-    }
-
-    setGeneratingModuleId(nextModule.id);
-    startGeneration(workflow._id, 12, 300);
+    setIsAutoGenerating(true);
+    generationStartedAtRef.current = Date.now();
+    const remaining = _totalMods - _completedMods;
+    startGeneration(workflow._id, 12, remaining * 600);
 
     try {
-      // Use the queue-based submit endpoint for first module, next-module for subsequent
-      if (existingModules === 0) {
+      if (_completedMods === 0) {
         await submitStep12.mutateAsync(workflow._id);
       } else {
         await submitNextModule.mutateAsync(workflow._id);
@@ -150,9 +204,9 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to generate assignment packs';
       console.error('Failed to generate assignment packs:', err);
+      setIsAutoGenerating(false);
       failGeneration(workflow._id, 12, errorMessage);
       setError(errorMessage);
-      setGeneratingModuleId(null);
     }
   };
 
@@ -175,10 +229,7 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
   const isApproved = !!workflow.step12?.approvedAt;
   const totalModules = workflow.step4?.modules?.length || 0;
   // Use the higher of workflow state vs polling status to avoid stale-state locking
-  const completedModules = Math.max(
-    getCompletedCount(),
-    (statusData as any)?.modulesGenerated ?? 0
-  );
+  const completedModules = Math.max(_completedMods, (statusData as any)?.modulesGenerated ?? 0);
   const isAllModulesComplete = hasStep12Data && completedModules >= totalModules;
 
   // Check if Step 11 is approved
@@ -334,7 +385,7 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
             </h3>
             <p className="text-sm text-teal-600 mb-4">
               Each module generates 3 assignment pack variants (In-Person, Self-Study, Hybrid).
-              Takes 3-5 minutes per module.
+              Takes 10-20 minutes per module.
             </p>
 
             {/* Generate All Button */}
@@ -370,9 +421,7 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                   completedByCode12.get(module.code);
                 // Module is complete if we have its data OR polling says it's done
                 const isComplete = !!modulePacks || index < completedModules;
-                const isGeneratingThis =
-                  generatingModuleId === module.id ||
-                  (generatingModuleId && !isComplete && index <= completedModules);
+                const isGeneratingThis = currentlyGeneratingModuleId === module.id;
                 const canGenerate =
                   !isComplete && !isCurrentlyGenerating && index <= completedModules;
 
@@ -480,17 +529,49 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                           </div>
                         </div>
 
-                        {isGeneratingThis && (
-                          <div className="mt-3 bg-white/50 rounded-lg p-3">
-                            <div className="flex items-center gap-2 text-sm text-blue-400 mb-2">
-                              <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                              <span>Generating 3 assignment pack variants...</span>
-                            </div>
-                            <p className="text-xs text-teal-500">
-                              This will take 3-5 minutes. You can wait here or come back later.
-                            </p>
-                          </div>
-                        )}
+                        {isGeneratingThis &&
+                          (() => {
+                            const progress = (workflow.step12 as any)?.generationProgress;
+                            const isThisModule = progress && progress.moduleCode === module.code;
+                            const completed = isThisModule ? progress.completedVariants || 0 : 0;
+                            const total = isThisModule ? progress.totalVariants || 3 : 3;
+                            const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                            return (
+                              <div className="mt-3 bg-white/50 rounded-lg p-4">
+                                <div className="flex items-center justify-between text-sm mb-2">
+                                  <div className="flex items-center gap-2 text-blue-500 font-medium">
+                                    <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                                    {isThisModule && completed > 0
+                                      ? `Variant ${completed}/${total} complete`
+                                      : 'Generating 3 assignment pack variants...'}
+                                  </div>
+                                  {isThisModule && (
+                                    <span className="text-teal-600 font-medium">{pct}%</span>
+                                  )}
+                                </div>
+                                <div className="w-full bg-teal-100 rounded-full h-2.5 mb-2">
+                                  <div
+                                    className="bg-gradient-to-r from-blue-400 to-indigo-500 h-2.5 rounded-full transition-all duration-700"
+                                    style={{ width: `${isThisModule ? Math.max(pct, 3) : 3}%` }}
+                                  />
+                                </div>
+                                {isThisModule && progress.currentVariant ? (
+                                  <p className="text-xs text-teal-500">
+                                    Now generating:{' '}
+                                    <span className="text-teal-700 font-medium">
+                                      {progress.currentVariant}
+                                    </span>{' '}
+                                    variant
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-teal-500">
+                                    Each module takes 10-20 minutes. You can leave this page and
+                                    come back later.
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
                       </div>
                     </div>
                   </div>
@@ -501,7 +582,10 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
             {/* Refresh Button */}
             <div className="mt-6 pt-6 border-t border-teal-200">
               <button
-                onClick={onRefresh}
+                onClick={() => {
+                  onRefresh();
+                  refetchStatus();
+                }}
                 className="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

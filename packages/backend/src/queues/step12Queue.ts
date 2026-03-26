@@ -157,14 +157,22 @@ if (step12Queue) {
       await job.progress(100);
 
       // If not all complete, find and queue the next ungenerated module
+      // Wrapped in try/catch so a chaining failure doesn't fail the current (already-saved) job
       if (!allComplete) {
-        const nextUngenIndex = modules.findIndex((m: any) => !newCompletedIds.has(m.id));
-        if (nextUngenIndex !== -1) {
-          await addStep12Job(workflowId, nextUngenIndex, job.data.userId);
-          loggingService.info('Queued next module for assignment packs', {
+        try {
+          const nextUngenIndex = modules.findIndex((m: any) => !newCompletedIds.has(m.id));
+          if (nextUngenIndex !== -1) {
+            await addStep12Job(workflowId, nextUngenIndex, job.data.userId);
+            loggingService.info('Queued next module for assignment packs', {
+              workflowId,
+              nextModuleIndex: nextUngenIndex,
+              nextModuleId: modules[nextUngenIndex]?.id,
+            });
+          }
+        } catch (chainError) {
+          loggingService.error('Failed to chain next Step 12 module job', {
             workflowId,
-            nextModuleIndex: nextUngenIndex,
-            nextModuleId: modules[nextUngenIndex]?.id,
+            error: chainError instanceof Error ? chainError.message : String(chainError),
           });
         }
       }
