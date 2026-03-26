@@ -56,7 +56,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
     const backendBusy = (statusData.jobs?.active ?? 0) > 0;
     if (backendBusy && _completedMods < _totalMods) {
       setIsAutoGenerating(true);
-      startGeneration(workflow._id, 11, (_totalMods - _completedMods) * 200);
+      startGeneration(workflow._id, 11, (_totalMods - _completedMods) * 900);
     }
   }, [statusData]); // eslint-disable-line
 
@@ -167,7 +167,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
     generationStartedAtRef.current = Date.now();
     // Estimate based on remaining modules
     const remaining = _totalMods - _completedMods;
-    startGeneration(workflow._id, 11, remaining * 200);
+    startGeneration(workflow._id, 11, remaining * 900);
 
     try {
       await submitStep11.mutateAsync(workflow._id);
@@ -462,8 +462,8 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
           <div className="bg-teal-50/50 rounded-lg p-6 border border-teal-200">
             <h3 className="text-xl font-bold text-teal-800 mb-4">PPT Generation Progress</h3>
             <p className="text-sm text-teal-600 mb-4">
-              Generate PowerPoint slide decks for each module. Each module takes 2-5 minutes to
-              generate.
+              Generate PowerPoint slide decks for each module. Each module takes 15-30 minutes to
+              generate depending on the number of lessons.
             </p>
 
             {/* Generate All Button */}
@@ -661,7 +661,8 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                               <span>Generating PPT decks for {module.totalLessons} lessons...</span>
                             </div>
                             <p className="text-xs text-teal-500">
-                              This will take 2-3 minutes. You can wait here or come back later.
+                              This may take 15-30 minutes. You can leave this page and come back
+                              later.
                             </p>
                           </div>
                         )}

@@ -2976,7 +2976,7 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
         jobsQueued: jobs.length,
         modulesGenerated,
         totalModules,
-        estimatedTimeMinutes: (totalModules - modulesGenerated) * 10,
+        estimatedTimeMinutes: (totalModules - modulesGenerated) * 20,
       },
       message: `Step 11 PPT generation started. ${totalModules - modulesGenerated} module(s) will be generated in the background.`,
     });
