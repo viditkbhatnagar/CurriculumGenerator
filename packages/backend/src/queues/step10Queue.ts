@@ -58,6 +58,11 @@ if (config.redis.host && config.redis.port) {
         removeOnComplete: 100, // Keep last 100 completed jobs
         removeOnFail: 200, // Keep last 200 failed jobs
       },
+      settings: {
+        lockDuration: 600000, // 10 min — long-running LLM calls need extended locks
+        stalledInterval: 600000,
+        lockRenewTime: 300000,
+      },
     });
 
     loggingService.info('Step 10 queue initialized with Redis');

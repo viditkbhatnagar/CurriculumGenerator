@@ -51,6 +51,11 @@ if (redisUrl && redisUrl.length > 0) {
         removeOnComplete: 100,
         removeOnFail: 200,
       },
+      settings: {
+        lockDuration: 600000, // 10 min — long-running LLM calls need extended locks
+        stalledInterval: 600000,
+        lockRenewTime: 300000,
+      },
     });
 
     loggingService.info('Step 12 queue initialized with Redis URL');

@@ -56,6 +56,11 @@ if (redisUrl && redisUrl.length > 0) {
         removeOnComplete: 100, // Keep last 100 completed jobs
         removeOnFail: 200, // Keep last 200 failed jobs
       },
+      settings: {
+        lockDuration: 600000, // 10 minutes — prevents Bull from marking long-running PPT jobs as stalled
+        stalledInterval: 600000, // Check for stalled jobs every 10 minutes (default 30s is too aggressive)
+        lockRenewTime: 300000, // Renew lock every 5 minutes (half of lockDuration)
+      },
     });
 
     loggingService.info('Step 11 queue initialized with Redis URL');
