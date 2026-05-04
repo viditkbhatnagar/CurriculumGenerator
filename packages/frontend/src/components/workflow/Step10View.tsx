@@ -710,6 +710,47 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
     setEditingLesson(null);
   };
 
+  // Regenerate one module's lesson plans (e.g. after editing the module title in Step 4)
+  const [regeneratingModuleId, setRegeneratingModuleId] = useState<string | null>(null);
+  const handleRegenerateModule = async (moduleId: string, moduleTitle: string) => {
+    if (
+      !confirm(
+        `Regenerate lesson plans for "${moduleTitle}"?\n\nThis will discard the existing lesson plans for this module and generate new ones using the latest module title and content. It takes 2–5 minutes.`
+      )
+    ) {
+      return;
+    }
+
+    setError(null);
+    setRegeneratingModuleId(moduleId);
+    try {
+      const response = await api.post(
+        `/api/v3/workflow/${workflow._id}/step10/module/${moduleId}/regenerate`
+      );
+
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || 'Failed to start regeneration');
+      }
+
+      toast.info(
+        'Regeneration Started',
+        'The module lesson plans are being regenerated. This will take 2–5 minutes.'
+      );
+
+      // Reflect the in-progress state immediately and start polling
+      setGeneratingModuleId(moduleId);
+      hasShownCompletionRef.current = false;
+      startPolling();
+      await onRefresh();
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err?.message || 'Failed to regenerate module';
+      setError(message);
+      toast.error('Regeneration Failed', message);
+    } finally {
+      setRegeneratingModuleId(null);
+    }
+  };
+
   // Handle approving Step 10
   const handleApprove = async () => {
     setError(null);
@@ -1378,9 +1419,35 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
           {currentModule && (
             <div className="space-y-4">
               <div className="bg-teal-50/50 rounded-lg p-5 border border-teal-200">
-                <h3 className="text-xl font-bold text-teal-800 mb-2">
-                  {currentModule.moduleCode}: {currentModule.moduleTitle}
-                </h3>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h3 className="text-xl font-bold text-teal-800">
+                    {currentModule.moduleCode}: {currentModule.moduleTitle}
+                  </h3>
+                  <button
+                    onClick={() =>
+                      handleRegenerateModule(currentModule.moduleId, currentModule.moduleTitle)
+                    }
+                    disabled={
+                      regeneratingModuleId === currentModule.moduleId ||
+                      generatingModuleId === currentModule.moduleId ||
+                      isCurrentlyGenerating
+                    }
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed text-amber-800 rounded-lg transition-colors text-sm font-medium border border-amber-300"
+                    title="Regenerate this module's lesson plans (use after editing the module title or description)"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    {regeneratingModuleId === currentModule.moduleId
+                      ? 'Starting...'
+                      : 'Regenerate Module'}
+                  </button>
+                </div>
                 <div className="flex items-center gap-4 text-sm text-teal-600">
                   <span>{currentModule.totalLessons} Lessons</span>
                   <span>•</span>

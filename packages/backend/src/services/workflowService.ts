@@ -3860,7 +3860,9 @@ CRITICAL VALIDATION:
     for (const mod of modules) {
       const moduleContext = {
         moduleId: mod.id,
-        moduleCode: mod.moduleCode,
+        // step4.modules[] uses `code`; some legacy/intermediate shapes use `moduleCode`.
+        // Fall back across both so assignmentId never resolves to "undefined-<variant>".
+        moduleCode: mod.moduleCode || mod.code,
         moduleTitle: mod.title,
         mlos: (mod.mlos || []).map((mlo: any) => ({
           id: mlo.id,
@@ -3974,7 +3976,9 @@ CRITICAL VALIDATION:
 
     const moduleContext = {
       moduleId: moduleToProcess.id,
-      moduleCode: moduleToProcess.moduleCode,
+      // step4.modules[] uses `code`; some legacy/intermediate shapes use `moduleCode`.
+      // Fall back across both so assignmentId never resolves to "undefined-<variant>".
+      moduleCode: moduleToProcess.moduleCode || moduleToProcess.code,
       moduleTitle: moduleToProcess.title,
       mlos: (moduleToProcess.mlos || []).map((mlo: any) => ({
         id: mlo.id,
@@ -7151,6 +7155,61 @@ Return ONLY valid JSON:
       };
     }
 
+    // Step 10 - Lesson Plans (FULL DATA so AI can find/edit any lesson by number, title, or module)
+    if ((workflow as any).step10) {
+      const s10 = (workflow as any).step10;
+      // Build a flat global index of every lesson with a sequential globalLessonNumber
+      // so users can say things like "lesson plan 11" and the AI can locate it.
+      const flatLessons: any[] = [];
+      let globalLessonNumber = 0;
+      (s10.moduleLessonPlans || []).forEach((mp: any) => {
+        (mp.lessons || []).forEach((l: any) => {
+          globalLessonNumber += 1;
+          flatLessons.push({
+            globalLessonNumber,
+            lessonId: l.lessonId,
+            lessonNumber: l.lessonNumber,
+            lessonTitle: l.lessonTitle,
+            duration: l.duration,
+            bloomLevel: l.bloomLevel,
+            objectives: l.objectives,
+            linkedMLOs: l.linkedMLOs,
+            moduleId: mp.moduleId,
+            moduleCode: mp.moduleCode,
+            moduleTitle: mp.moduleTitle,
+            instructorNotes: l.instructorNotes,
+            independentStudy: l.independentStudy
+              ? {
+                  estimatedEffort: l.independentStudy.estimatedEffort,
+                  coreReadings: (l.independentStudy.coreReadings || []).slice(0, 3),
+                }
+              : undefined,
+            formativeChecks: l.formativeChecks?.slice(0, 3),
+          });
+        });
+      });
+
+      fullWorkflowData.step10 = {
+        totalModules: s10.moduleLessonPlans?.length || 0,
+        totalLessons: flatLessons.length,
+        // Module-level summary (one row per module)
+        moduleLessonPlans: (s10.moduleLessonPlans || []).map((mp: any) => ({
+          moduleId: mp.moduleId,
+          moduleCode: mp.moduleCode,
+          moduleTitle: mp.moduleTitle,
+          totalContactHours: mp.totalContactHours,
+          totalLessons: mp.totalLessons,
+          lessonTitles: (mp.lessons || []).map((l: any) => ({
+            lessonId: l.lessonId,
+            lessonNumber: l.lessonNumber,
+            lessonTitle: l.lessonTitle,
+          })),
+        })),
+        // Flat lessons array — so user can reference "lesson plan 11" globally
+        lessons: flatLessons,
+      };
+    }
+
     // =====================================================
     // BUILD FLEXIBLE SYSTEM PROMPT - AI HAS FULL CONTEXT
     // =====================================================
@@ -7192,6 +7251,7 @@ SUPPORTED ACTIONS:
 - "add": Add new item to an array
 - "delete": Remove an item (use "match" to identify it)
 - "set": Set a scalar value directly (for non-array fields)
+- "regenerate": (Step 10 only) Trigger background regeneration of one module's lesson plans (use "match": { "moduleId": "..." })
 
 === EXACT FIELD NAMES FOR EACH STEP ===
 
@@ -7314,6 +7374,30 @@ STEP 9 - Glossary:
 - "acronymExpansion" = full form if acronym
 Array: terms
 Example: { "step": 9, "path": "terms", "action": "update", "match": { "term": "ROI" }, "changes": { "definition": "New definition here" } }
+
+STEP 10 - Lesson Plans:
+DATA SHAPE: step10.moduleLessonPlans is an array of modules. Each module has a lessons[] array.
+Lesson fields (inside lessons array):
+- "lessonId" = stable unique identifier (preferred for matching)
+- "lessonNumber" = 1-based number WITHIN its module
+- "globalLessonNumber" = 1-based number ACROSS the whole programme (use this when the user says "lesson plan 11" without specifying a module)
+- "lessonTitle" = the lesson title (this is the most common thing to edit)
+- "duration" = lesson length in minutes
+- "objectives" = string[] of learning objectives
+- "linkedMLOs" = string[] of MLO codes
+- "instructorNotes" = { pedagogicalGuidance, pacingSuggestions, adaptationOptions, commonMisconceptions, discussionPrompts }
+- "independentStudy" = { estimatedEffort, coreReadings, supplementaryReadings }
+- "formativeChecks" = array of check items
+Array path: "moduleLessonPlans.lessons"
+
+To update a lesson, prefer matching by lessonId. If only the global number is known, match by globalLessonNumber.
+Example (rewrite a lesson for Indian context — change title and objectives):
+{ "step": 10, "path": "moduleLessonPlans.lessons", "action": "update", "match": { "globalLessonNumber": 11 }, "changes": { "lessonTitle": "Indian retail health, safety and equality requirements", "objectives": ["Apply Indian retail safety regulations...", "..."] } }
+Example (update by lessonId — most reliable):
+{ "step": 10, "path": "moduleLessonPlans.lessons", "action": "update", "match": { "lessonId": "lesson-mod3-1" }, "changes": { "lessonTitle": "New Title", "instructorNotes": { "pedagogicalGuidance": "Adapt examples to the Indian retail context..." } } }
+Example (regenerate all lesson plans for one module — use the regenerate action):
+{ "step": 10, "path": "moduleLessonPlans", "action": "regenerate", "match": { "moduleId": "mod3" } }
+The "regenerate" action triggers fresh AI generation that incorporates the latest module title/description. Use this when the user wants context-wide updates (e.g. "remove UK from all modules" or "regenerate for Indian context") rather than editing individual lesson fields.
 
 CRITICAL RULES:
 1. ALWAYS use "statement" for KSC items (step 2), PLOs (step 3), and MLOs (step 4) - NOT "title" or "item" or "outcome"

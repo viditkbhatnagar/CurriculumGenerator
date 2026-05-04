@@ -127,6 +127,16 @@ function propagateModuleTitleChange(
     });
   }
 
+  // Step 10: lesson plans (already-generated module entries hold a stale moduleTitle)
+  if (workflow.step10?.moduleLessonPlans) {
+    workflow.step10.moduleLessonPlans.forEach((mp: any) => {
+      if (mp.moduleId === moduleId || mp.moduleTitle === oldTitle) {
+        mp.moduleTitle = newTitle;
+        stepsToUpdate.push('step10');
+      }
+    });
+  }
+
   // Mark all affected steps as modified
   const uniqueSteps = [...new Set(stepsToUpdate)];
   uniqueSteps.forEach((step) => workflow.markModified(step));
@@ -139,6 +149,66 @@ function propagateModuleTitleChange(
       affectedSteps: uniqueSteps,
     });
   }
+}
+
+/**
+ * Remove existing lesson plan entries for the given moduleIds and queue a Step 10 job
+ * so the worker (or sync fallback) regenerates them with the latest module data.
+ *
+ * Returns the number of modules that were actually queued.
+ */
+async function regenerateStep10Modules(
+  workflowId: string,
+  moduleIds: string[],
+  userId?: string
+): Promise<number> {
+  const uniqueIds = [...new Set(moduleIds)].filter(Boolean);
+  if (uniqueIds.length === 0) return 0;
+
+  const wf = await CurriculumWorkflow.findById(workflowId);
+  if (!wf || !wf.step10?.moduleLessonPlans) return 0;
+
+  const before = wf.step10.moduleLessonPlans.length;
+  wf.step10.moduleLessonPlans = wf.step10.moduleLessonPlans.filter(
+    (mp: any) => !uniqueIds.includes(mp.moduleId)
+  );
+  const removed = before - wf.step10.moduleLessonPlans.length;
+  if (removed === 0) return 0;
+
+  // Refresh summary so the UI reflects the in-progress state
+  const allLessons = wf.step10.moduleLessonPlans.flatMap((m: any) => m.lessons || []);
+  if (wf.step10.summary) {
+    wf.step10.summary.totalLessons = allLessons.length;
+    wf.step10.summary.totalContactHours = wf.step10.moduleLessonPlans.reduce(
+      (sum: number, m: any) => sum + (m.totalContactHours || 0),
+      0
+    );
+  }
+
+  wf.markModified('step10');
+  await wf.save();
+
+  loggingService.info('Cleared lesson plans for regeneration', {
+    workflowId,
+    moduleIds: uniqueIds,
+    removedCount: removed,
+  });
+
+  // Queue regeneration. The worker auto-chains across all remaining ungenerated modules.
+  const { queueAllRemainingModules, step10Queue } = await import('../queues/step10Queue');
+  if (step10Queue) {
+    await queueAllRemainingModules(workflowId, userId);
+  } else {
+    // Redis not available — kick off in-process regeneration without blocking the response
+    workflowService.processStep10NextModule(workflowId).catch((err) => {
+      loggingService.error('Sync Step 10 regeneration failed in background', {
+        workflowId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+
+  return removed;
 }
 
 // ============================================================================
@@ -940,6 +1010,9 @@ router.put(
         return res.status(404).json({ success: false, error: 'Module not found' });
       }
 
+      // Capture old title BEFORE we apply updates so we can propagate if it changed
+      const oldTitle = (module as any).title;
+
       // Apply updates (excluding mlos to prevent accidental overwrites)
       const { mlos, ...moduleUpdates } = updates;
       Object.assign(module, moduleUpdates);
@@ -951,16 +1024,37 @@ router.put(
       );
       workflow.step4.hoursIntegrity = totalModuleHours === workflow.step4.totalProgramHours;
 
+      // If title changed, propagate to all downstream steps that snapshotted it
+      const titleChanged = moduleUpdates.title !== undefined && moduleUpdates.title !== oldTitle;
+      if (titleChanged) {
+        propagateModuleTitleChange(workflow, moduleId, oldTitle, moduleUpdates.title);
+      }
+
+      // Detect whether downstream lesson plans (step 10) have been generated for this
+      // module — if so, the saved lesson plans now hold stale module context (e.g. the
+      // module title still mentions "UK"). We flag this so the UI can prompt the user
+      // to regenerate.
+      const hasStep10Plans = !!workflow.step10?.moduleLessonPlans?.find(
+        (mp: any) => mp.moduleId === moduleId
+      );
+
       // Mark as modified and save
       workflow.markModified('step4');
       await workflow.save();
 
-      loggingService.info('Module updated successfully', { moduleId, module });
+      loggingService.info('Module updated successfully', {
+        moduleId,
+        titleChanged,
+        hasStep10Plans,
+      });
 
       res.json({
         success: true,
         data: module,
         hoursIntegrity: workflow.step4.hoursIntegrity,
+        // Lets the frontend offer "regenerate lesson plans" when title/description changed
+        // and lesson plans already exist for this module
+        lessonPlansStale: titleChanged && hasStep10Plans,
         message: 'Module updated successfully',
       });
     } catch (error) {
@@ -4289,134 +4383,53 @@ router.put(
 );
 
 /**
- * POST /api/v3/workflow/:id/regenerate-lesson
- * Regenerate a specific lesson
+ * POST /api/v3/workflow/:id/step10/module/:moduleId/regenerate
+ * Wipe an existing module's lesson plans and queue a fresh generation that picks
+ * up the latest module title/description/MLOs. Use this after editing a module
+ * (e.g. removing "UK" from titles) so the lesson plans reflect the new context.
  */
 router.post(
-  '/:id/regenerate-lesson',
+  '/:id/step10/module/:moduleId/regenerate',
   validateJWT,
   loadUser,
   async (req: Request, res: Response) => {
     try {
-      const { moduleId, lessonId } = req.body;
+      const { id, moduleId } = req.params;
+      const userId = (req as any).user?.id || (req as any).user?.userId;
 
-      if (!moduleId || !lessonId) {
-        return res.status(400).json({
-          success: false,
-          error: 'moduleId and lessonId are required',
-        });
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
       }
 
-      const workflow = await CurriculumWorkflow.findById(req.params.id);
-      if (!workflow || !workflow.step10) {
+      const module = workflow.step10?.moduleLessonPlans?.find((m: any) => m.moduleId === moduleId);
+      if (!module) {
         return res.status(404).json({
           success: false,
-          error: 'Workflow or Step 10 data not found',
+          error: 'No existing lesson plan for this module — use the standard generate flow',
         });
       }
 
-      // Find the module and lesson
-      const moduleIndex = workflow.step10.moduleLessonPlans?.findIndex(
-        (m) => m.moduleId === moduleId
-      );
-      if (moduleIndex === undefined || moduleIndex === -1) {
-        return res.status(404).json({
+      const removed = await regenerateStep10Modules(id, [moduleId], userId);
+      if (removed === 0) {
+        return res.status(500).json({
           success: false,
-          error: 'Module not found',
+          error: 'Failed to clear existing lesson plan',
         });
       }
-
-      const module = workflow.step10.moduleLessonPlans[moduleIndex];
-      const lessonIndex = module.lessons.findIndex((l) => l.lessonId === lessonId);
-      if (lessonIndex === -1) {
-        return res.status(404).json({
-          success: false,
-          error: 'Lesson not found',
-        });
-      }
-
-      const oldLesson = module.lessons[lessonIndex];
-
-      loggingService.info('🔄 Regenerating lesson', {
-        workflowId: req.params.id,
-        moduleId,
-        lessonId,
-        lessonNumber: oldLesson.lessonNumber,
-        lessonTitle: oldLesson.lessonTitle,
-      });
-
-      // Get module data from step4
-      const step4Module = workflow.step4?.modules?.find((m: any) => m.id === moduleId);
-      if (!step4Module) {
-        return res.status(404).json({
-          success: false,
-          error: 'Module not found in Step 4',
-        });
-      }
-
-      // Regenerate the lesson using the lesson plan service
-      const newLesson = await lessonPlanService.generateSingleLesson(
-        step4Module,
-        oldLesson.lessonNumber,
-        {
-          programTitle: workflow.step1?.programTitle || '',
-          deliveryMode: workflow.step1?.delivery?.mode || 'hybrid_blended',
-          plos: workflow.step3?.outcomes || [],
-          sources: workflow.step5?.sourcesByModule?.[moduleId] || [],
-          readings:
-            workflow.step6?.moduleReadingLists?.find((r: any) => r.moduleId === moduleId)
-              ?.readings || [],
-          assessments: workflow.step7?.quizzes?.filter((q: any) => q.moduleId === moduleId) || [],
-          caseStudies:
-            workflow.step8?.caseStudies?.filter((cs: any) => cs.moduleId === moduleId) || [],
-          glossary: workflow.step9?.entries || [],
-        }
-      );
-
-      // Replace the old lesson with the new one
-      module.lessons[lessonIndex] = newLesson;
-
-      // Recalculate module totals
-      module.totalLessons = module.lessons.length;
-      module.totalContactHours = module.lessons.reduce((sum, l) => sum + l.duration / 60, 0);
-
-      // Recalculate summary
-      if (workflow.step10.summary) {
-        workflow.step10.summary.totalLessons = workflow.step10.moduleLessonPlans.reduce(
-          (sum, m) => sum + m.totalLessons,
-          0
-        );
-        workflow.step10.summary.totalContactHours = workflow.step10.moduleLessonPlans.reduce(
-          (sum, m) => sum + m.totalContactHours,
-          0
-        );
-      }
-
-      // Mark as modified and save
-      workflow.markModified('step10');
-      await workflow.save();
-
-      loggingService.info('✅ Lesson regenerated successfully', {
-        workflowId: req.params.id,
-        moduleId,
-        lessonId,
-        newLessonTitle: newLesson.lessonTitle,
-      });
 
       res.json({
         success: true,
-        data: {
-          lesson: newLesson,
-          module: module,
-          summary: workflow.step10.summary,
-        },
-        message: 'Lesson regenerated successfully',
+        data: { moduleId, modulesQueued: removed },
+        message: 'Module lesson plans cleared and regeneration queued. This will take 2–5 minutes.',
       });
     } catch (error) {
-      loggingService.error('Error regenerating lesson', { error });
+      loggingService.error('Error regenerating module lesson plans', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to regenerate lesson',
+        error: error instanceof Error ? error.message : 'Failed to regenerate module',
       });
     }
   }
@@ -4882,6 +4895,9 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
     // FLEXIBLE UPDATE SYSTEM - Handle any change to any step
     // =====================================================
 
+    // Module IDs flagged by AI for regeneration (Step 10) — processed after save
+    const modulesToRegenerate: string[] = [];
+
     // Process the new "updates" array format for flexible editing
     if (newContent.updates && Array.isArray(newContent.updates)) {
       for (const update of newContent.updates) {
@@ -4899,6 +4915,114 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
           path: update.path,
           action: update.action,
         });
+
+        // =====================================================
+        // STEP 10 SPECIAL HANDLING - Lesson plans use moduleId/lessonId
+        // and support flat lookup across modules via globalLessonNumber
+        // =====================================================
+        if (targetStep === 10) {
+          const moduleLessonPlans: any[] = targetStepData.moduleLessonPlans || [];
+
+          // Action: regenerate one module's lesson plans
+          if (update.action === 'regenerate' && update.match?.moduleId) {
+            modulesToRegenerate.push(update.match.moduleId);
+            loggingService.info('Step 10 module flagged for regeneration', {
+              moduleId: update.match.moduleId,
+            });
+            continue;
+          }
+
+          // Path: moduleLessonPlans.lessons — update/add/delete a specific lesson
+          if (update.path === 'moduleLessonPlans.lessons') {
+            const matchCriteria = { ...(update.match || {}) };
+            const moduleIdHint = matchCriteria.moduleId;
+            delete matchCriteria.moduleId;
+
+            // Locate the lesson across all modules (or just the hinted module)
+            const candidateModules = moduleIdHint
+              ? moduleLessonPlans.filter((m: any) => m.moduleId === moduleIdHint)
+              : moduleLessonPlans;
+
+            // Build a flat globalLessonNumber index so AI can match by global number
+            let runningGlobalNumber = 0;
+            const lessonIndex: Array<{ module: any; lesson: any; globalLessonNumber: number }> = [];
+            moduleLessonPlans.forEach((m: any) => {
+              (m.lessons || []).forEach((l: any) => {
+                runningGlobalNumber += 1;
+                lessonIndex.push({ module: m, lesson: l, globalLessonNumber: runningGlobalNumber });
+              });
+            });
+
+            const matchesLesson = (lesson: any, mod: any, globalNum: number) => {
+              return Object.keys(matchCriteria).every((key) => {
+                if (key === 'globalLessonNumber') {
+                  return globalNum === Number(matchCriteria[key]);
+                }
+                if (key === 'lessonNumber') {
+                  return lesson.lessonNumber === Number(matchCriteria[key]);
+                }
+                if (typeof lesson[key] === 'string' && typeof matchCriteria[key] === 'string') {
+                  return lesson[key].toLowerCase() === matchCriteria[key].toLowerCase();
+                }
+                return lesson[key] === matchCriteria[key];
+              });
+            };
+
+            if (update.action === 'update') {
+              const hit = lessonIndex.find(
+                ({ lesson, module, globalLessonNumber }) =>
+                  (!moduleIdHint || module.moduleId === moduleIdHint) &&
+                  matchesLesson(lesson, module, globalLessonNumber)
+              );
+              if (hit) {
+                Object.assign(hit.lesson, update.changes || {});
+                workflow.markModified('step10');
+                loggingService.info('Step 10 lesson updated via canvas', {
+                  moduleId: hit.module.moduleId,
+                  lessonId: hit.lesson.lessonId,
+                  changedFields: Object.keys(update.changes || {}),
+                });
+              } else {
+                loggingService.warn('Step 10 lesson not found for update', {
+                  match: update.match,
+                });
+              }
+            } else if (update.action === 'delete') {
+              for (const m of candidateModules) {
+                const idx = (m.lessons || []).findIndex((l: any, i: number) =>
+                  matchesLesson(
+                    l,
+                    m,
+                    lessonIndex.find((x) => x.lesson === l)?.globalLessonNumber ?? -1
+                  )
+                );
+                if (idx !== -1) {
+                  m.lessons.splice(idx, 1);
+                  m.totalLessons = m.lessons.length;
+                  m.totalContactHours = m.lessons.reduce(
+                    (sum: number, l: any) => sum + (l.duration || 0) / 60,
+                    0
+                  );
+                  workflow.markModified('step10');
+                  break;
+                }
+              }
+            }
+            continue;
+          }
+
+          // Path: moduleLessonPlans (top-level module entry edits, e.g. moduleTitle)
+          if (update.path === 'moduleLessonPlans' && update.action === 'update' && update.match) {
+            const mod = moduleLessonPlans.find((m: any) =>
+              Object.keys(update.match).every((k) => m[k] === update.match[k])
+            );
+            if (mod) {
+              Object.assign(mod, update.changes || {});
+              workflow.markModified('step10');
+            }
+            continue;
+          }
+        }
 
         // Handle "set" action for direct field updates
         if (update.action === 'set' && update.path && update.value !== undefined) {
@@ -5260,10 +5384,34 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
 
     loggingService.info('Canvas edit saved successfully', { workflowId: id, stepNumber });
 
+    // =====================================================
+    // STEP 10 REGENERATION — kick off after save
+    // =====================================================
+    let regenerationQueued = 0;
+    if (modulesToRegenerate.length > 0) {
+      try {
+        regenerationQueued = await regenerateStep10Modules(
+          id,
+          modulesToRegenerate,
+          (req as any).user?.id || (req as any).user?.userId
+        );
+      } catch (regenErr: any) {
+        loggingService.error('Failed to queue step 10 regeneration after canvas edit', {
+          error: regenErr?.message,
+          workflowId: id,
+          modulesToRegenerate,
+        });
+      }
+    }
+
     res.json({
       success: true,
-      message: 'Edit applied successfully',
+      message:
+        regenerationQueued > 0
+          ? `Edit applied. ${regenerationQueued} module(s) queued for lesson plan regeneration.`
+          : 'Edit applied successfully',
       updatedStep: (workflow as any)[`step${stepNumber}`],
+      modulesRegenerating: regenerationQueued,
     });
   } catch (error: any) {
     loggingService.error('Apply edit failed', { error });

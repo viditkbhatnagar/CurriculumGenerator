@@ -304,10 +304,7 @@ function StepDataViewer({
     return (
       <div className="space-y-2">
         {sources.slice(0, 10).map((source: any, idx: number) => (
-          <div
-            key={source.id || idx}
-            className="bg-white rounded-lg p-3 border border-teal-200"
-          >
+          <div key={source.id || idx} className="bg-white rounded-lg p-3 border border-teal-200">
             <p className="text-sm text-teal-800 font-medium">{source.title}</p>
             <p className="text-xs text-teal-600 mt-1">
               {source.authors?.join(', ')} ({source.year})
@@ -336,10 +333,7 @@ function StepDataViewer({
     return (
       <div className="space-y-2">
         {readings.slice(0, 10).map((reading: any, idx: number) => (
-          <div
-            key={reading.id || idx}
-            className="bg-white rounded-lg p-3 border border-teal-200"
-          >
+          <div key={reading.id || idx} className="bg-white rounded-lg p-3 border border-teal-200">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <span
@@ -378,10 +372,7 @@ function StepDataViewer({
           </div>
         </div>
         {quizzes.map((quiz: any, idx: number) => (
-          <div
-            key={quiz.id || idx}
-            className="bg-white rounded-lg p-3 border border-teal-200"
-          >
+          <div key={quiz.id || idx} className="bg-white rounded-lg p-3 border border-teal-200">
             <p className="text-sm text-teal-800 font-medium">
               {quiz.moduleTitle || `Module ${idx + 1} Quiz`}
             </p>
@@ -402,10 +393,7 @@ function StepDataViewer({
     return (
       <div className="space-y-2">
         {terms.slice(0, 15).map((term: any, idx: number) => (
-          <div
-            key={term.id || idx}
-            className="bg-white rounded-lg p-2 border border-teal-200"
-          >
+          <div key={term.id || idx} className="bg-white rounded-lg p-2 border border-teal-200">
             <p className="text-sm text-teal-700 font-medium">{term.term}</p>
             <p className="text-xs text-teal-600 mt-0.5 line-clamp-2">{term.definition}</p>
           </div>
@@ -413,6 +401,52 @@ function StepDataViewer({
         {terms.length > 15 && (
           <p className="text-xs text-teal-500 text-center">+ {terms.length - 15} more terms</p>
         )}
+      </div>
+    );
+  };
+
+  const renderStep10Lessons = () => {
+    const moduleLessonPlans = (workflow.step10 as any)?.moduleLessonPlans || [];
+    if (moduleLessonPlans.length === 0) {
+      return <p className="text-teal-500 text-sm">No lesson plans generated yet.</p>;
+    }
+
+    // Build flat global numbering so a chat reference like "lesson 11" matches the
+    // numbering the AI receives in its system prompt.
+    let globalLessonNumber = 0;
+    return (
+      <div className="space-y-3">
+        {moduleLessonPlans.map((mp: any, modIdx: number) => (
+          <div
+            key={mp.moduleId || modIdx}
+            className="bg-white rounded-lg p-3 border border-teal-200"
+          >
+            <p className="text-sm font-medium text-teal-800">
+              {mp.moduleCode}: {mp.moduleTitle}
+            </p>
+            <p className="text-xs text-teal-500 mb-2">
+              {mp.totalLessons} lessons • {mp.totalContactHours}h
+            </p>
+            <div className="space-y-1">
+              {(mp.lessons || []).map((lesson: any) => {
+                globalLessonNumber += 1;
+                return (
+                  <div
+                    key={lesson.lessonId}
+                    className="flex items-baseline gap-2 text-xs text-teal-700"
+                  >
+                    <span className="font-mono text-teal-500 w-6 text-right">
+                      #{globalLessonNumber}
+                    </span>
+                    <span className="line-clamp-1">
+                      L{lesson.lessonNumber}: {lesson.lessonTitle}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     );
   };
@@ -433,6 +467,8 @@ function StepDataViewer({
         return renderStep7Quizzes();
       case 9:
         return renderStep9Glossary();
+      case 10:
+        return renderStep10Lessons();
       default:
         return <p className="text-teal-500 text-sm">Select an item to edit from the main view.</p>;
     }
@@ -596,10 +632,7 @@ function MessageBubble({
                           📚 {changes.sources.length} New/Updated Sources:
                         </p>
                         {changes.sources.slice(0, 5).map((src: any, idx: number) => (
-                          <div
-                            key={idx}
-                            className="bg-white border border-teal-200 rounded-lg p-3"
-                          >
+                          <div key={idx} className="bg-white border border-teal-200 rounded-lg p-3">
                             <p className="text-sm font-medium text-teal-700">{src.title}</p>
                             <p className="text-xs text-teal-600 mt-1">
                               {src.authors?.join(', ')} ({src.year})
@@ -633,10 +666,7 @@ function MessageBubble({
                           📖 {changes.readings.length} New/Updated Readings:
                         </p>
                         {changes.readings.slice(0, 5).map((reading: any, idx: number) => (
-                          <div
-                            key={idx}
-                            className="bg-white border border-teal-200 rounded-lg p-3"
-                          >
+                          <div key={idx} className="bg-white border border-teal-200 rounded-lg p-3">
                             <p className="text-sm font-medium text-teal-700">{reading.title}</p>
                             {reading.chapter && (
                               <p className="text-xs text-teal-600">Chapter: {reading.chapter}</p>

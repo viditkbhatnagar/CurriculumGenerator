@@ -62,6 +62,18 @@ export class AssignmentPackService {
     context: WorkflowContext,
     onProgress?: (completedVariants: number, currentVariant: string | null) => Promise<void>
   ): Promise<ModuleAssignmentPacks> {
+    // Guard: a missing moduleCode used to silently produce assignmentId="undefined-<variant>"
+    // and propagate to downstream consumers (e.g. India Learns LMS import).
+    // Fail loud at the boundary so the bug surfaces instead of poisoning data.
+    if (!module.moduleCode || typeof module.moduleCode !== 'string') {
+      throw new Error(
+        `assignmentPackService: module.moduleCode is required (got ${JSON.stringify(
+          module.moduleCode
+        )} for moduleId=${module.moduleId}). ` +
+          `Caller must populate moduleCode before generating assignment packs.`
+      );
+    }
+
     loggingService.info('Generating assignment packs for module', {
       moduleId: module.moduleId,
       moduleCode: module.moduleCode,
