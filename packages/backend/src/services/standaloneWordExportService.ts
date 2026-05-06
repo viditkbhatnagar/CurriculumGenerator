@@ -26,12 +26,12 @@ import { loggingService } from './loggingService';
 // Font specifications
 const FONT_FAMILY = 'Arial';
 const FONT_SIZES = {
-  TITLE: 48,    // 24pt
-  H1: 32,       // 16pt
-  H2: 28,       // 14pt
-  H3: 24,       // 12pt
-  BODY: 22,     // 11pt
-  TABLE: 20,    // 10pt
+  TITLE: 48, // 24pt
+  H1: 32, // 16pt
+  H2: 28, // 14pt
+  H3: 24, // 12pt
+  BODY: 22, // 11pt
+  TABLE: 20, // 10pt
 };
 
 // Line spacing
@@ -68,15 +68,12 @@ class StandaloneWordExportService {
 
       // User description section (Requirement 6.4)
       if (data.description) {
-        children.push(
-          this.createH1('Context'),
-          this.createParagraph(data.description)
-        );
+        children.push(this.createH1('Context'), this.createParagraph(data.description));
       }
 
       // Content section - formatted appropriately (Requirement 6.5)
       children.push(this.createH1('Generated Content'));
-      
+
       // Check if content is a string (new markdown format) or object (legacy JSON)
       let contentParagraphs: Paragraph[];
       if (typeof data.content === 'string') {
@@ -86,7 +83,7 @@ class StandaloneWordExportService {
         // Legacy format: Use step-specific formatters
         contentParagraphs = await this.formatStepContent(data.stepNumber, data.content);
       }
-      
+
       children.push(...contentParagraphs);
 
       // Create document
@@ -124,11 +121,11 @@ class StandaloneWordExportService {
   private parseMarkdownContent(content: string): Paragraph[] {
     const paragraphs: Paragraph[] = [];
     const lines = content.split('\n');
-    
+
     let i = 0;
     while (i < lines.length) {
       const line = lines[i].trim();
-      
+
       // Skip empty lines
       if (!line) {
         i++;
@@ -148,19 +145,19 @@ class StandaloneWordExportService {
         i++;
         continue;
       }
-      
+
       if (line.startsWith('## ')) {
         paragraphs.push(this.createH1(line.substring(3)));
         i++;
         continue;
       }
-      
+
       if (line.startsWith('### ')) {
         paragraphs.push(this.createH2(line.substring(4)));
         i++;
         continue;
       }
-      
+
       if (line.startsWith('#### ')) {
         paragraphs.push(this.createH3(line.substring(5)));
         i++;
@@ -177,7 +174,12 @@ class StandaloneWordExportService {
       // Handle numbered lists
       const numberedMatch = line.match(/^(\d+)\.\s+(.+)$/);
       if (numberedMatch) {
-        paragraphs.push(this.createNumberedParagraph(numberedMatch[1], this.parseInlineFormatting(numberedMatch[2])));
+        paragraphs.push(
+          this.createNumberedParagraph(
+            numberedMatch[1],
+            this.parseInlineFormatting(numberedMatch[2])
+          )
+        );
         i++;
         continue;
       }
@@ -215,17 +217,19 @@ class StandaloneWordExportService {
   private parseInlineFormatting(text: string): TextRun[] {
     const runs: TextRun[] = [];
     let remaining = text;
-    
+
     while (remaining.length > 0) {
       // Check for bold (**text**)
       const boldMatch = remaining.match(/^\*\*(.+?)\*\*/);
       if (boldMatch) {
-        runs.push(new TextRun({
-          text: boldMatch[1],
-          bold: true,
-          size: FONT_SIZES.BODY,
-          font: FONT_FAMILY,
-        }));
+        runs.push(
+          new TextRun({
+            text: boldMatch[1],
+            bold: true,
+            size: FONT_SIZES.BODY,
+            font: FONT_FAMILY,
+          })
+        );
         remaining = remaining.substring(boldMatch[0].length);
         continue;
       }
@@ -233,12 +237,14 @@ class StandaloneWordExportService {
       // Check for italic (*text* or _text_)
       const italicMatch = remaining.match(/^\*(.+?)\*/) || remaining.match(/^_(.+?)_/);
       if (italicMatch) {
-        runs.push(new TextRun({
-          text: italicMatch[1],
-          italics: true,
-          size: FONT_SIZES.BODY,
-          font: FONT_FAMILY,
-        }));
+        runs.push(
+          new TextRun({
+            text: italicMatch[1],
+            italics: true,
+            size: FONT_SIZES.BODY,
+            font: FONT_FAMILY,
+          })
+        );
         remaining = remaining.substring(italicMatch[0].length);
         continue;
       }
@@ -246,46 +252,56 @@ class StandaloneWordExportService {
       // Check for inline code (`text`)
       const codeMatch = remaining.match(/^`(.+?)`/);
       if (codeMatch) {
-        runs.push(new TextRun({
-          text: codeMatch[1],
-          size: FONT_SIZES.BODY,
-          font: 'Courier New',
-          color: '333333',
-        }));
+        runs.push(
+          new TextRun({
+            text: codeMatch[1],
+            size: FONT_SIZES.BODY,
+            font: 'Courier New',
+            color: '333333',
+          })
+        );
         remaining = remaining.substring(codeMatch[0].length);
         continue;
       }
 
       // Find next special character
-      const nextSpecial = remaining.search(/[\*_`]/);
+      const nextSpecial = remaining.search(/[*_`]/);
       if (nextSpecial === -1) {
         // No more special characters
-        runs.push(new TextRun({
-          text: remaining,
-          size: FONT_SIZES.BODY,
-          font: FONT_FAMILY,
-        }));
+        runs.push(
+          new TextRun({
+            text: remaining,
+            size: FONT_SIZES.BODY,
+            font: FONT_FAMILY,
+          })
+        );
         break;
       } else if (nextSpecial === 0) {
         // Special character at start but not matched - treat as regular text
-        runs.push(new TextRun({
-          text: remaining.charAt(0),
-          size: FONT_SIZES.BODY,
-          font: FONT_FAMILY,
-        }));
+        runs.push(
+          new TextRun({
+            text: remaining.charAt(0),
+            size: FONT_SIZES.BODY,
+            font: FONT_FAMILY,
+          })
+        );
         remaining = remaining.substring(1);
       } else {
         // Regular text before special character
-        runs.push(new TextRun({
-          text: remaining.substring(0, nextSpecial),
-          size: FONT_SIZES.BODY,
-          font: FONT_FAMILY,
-        }));
+        runs.push(
+          new TextRun({
+            text: remaining.substring(0, nextSpecial),
+            size: FONT_SIZES.BODY,
+            font: FONT_FAMILY,
+          })
+        );
         remaining = remaining.substring(nextSpecial);
       }
     }
 
-    return runs.length > 0 ? runs : [new TextRun({ text: text, size: FONT_SIZES.BODY, font: FONT_FAMILY })];
+    return runs.length > 0
+      ? runs
+      : [new TextRun({ text: text, size: FONT_SIZES.BODY, font: FONT_FAMILY })];
   }
 
   /**
@@ -306,17 +322,18 @@ class StandaloneWordExportService {
    */
   private parseTable(tableLines: string[]): Paragraph[] {
     const paragraphs: Paragraph[] = [];
-    
+
     if (tableLines.length < 2) return paragraphs;
 
     // Skip separator line (usually second line with dashes)
-    const dataLines = tableLines.filter(line => !line.match(/^\|[\s\-:|]+\|$/));
+    const dataLines = tableLines.filter((line) => !line.match(/^\|[\s\-:|]+\|$/));
 
     for (const line of dataLines) {
-      const cells = line.split('|')
-        .map(cell => cell.trim())
-        .filter(cell => cell.length > 0);
-      
+      const cells = line
+        .split('|')
+        .map((cell) => cell.trim())
+        .filter((cell) => cell.length > 0);
+
       if (cells.length > 0) {
         // First line is usually header
         if (dataLines.indexOf(line) === 0) {
@@ -431,12 +448,11 @@ class StandaloneWordExportService {
     const paragraphs: Paragraph[] = [];
 
     // Summary
-    const totalItems = (content.knowledgeItems?.length || 0) + 
-                       (content.skillItems?.length || 0) + 
-                       (content.competencyItems?.length || 0);
-    paragraphs.push(
-      this.createParagraph(`Total KSC Items: ${totalItems}`)
-    );
+    const totalItems =
+      (content.knowledgeItems?.length || 0) +
+      (content.skillItems?.length || 0) +
+      (content.competencyItems?.length || 0);
+    paragraphs.push(this.createParagraph(`Total KSC Items: ${totalItems}`));
 
     // Knowledge Items
     if (content.knowledgeItems?.length > 0) {
@@ -445,7 +461,9 @@ class StandaloneWordExportService {
         paragraphs.push(
           this.createBoldParagraph(`${item.id || `K${index + 1}`}: ${item.statement}`),
           this.createParagraph(item.description || ''),
-          this.createItalicParagraph(`Importance: ${item.importance || 'N/A'} | Source: ${item.source || 'N/A'}`)
+          this.createItalicParagraph(
+            `Importance: ${item.importance || 'N/A'} | Source: ${item.source || 'N/A'}`
+          )
         );
       });
     }
@@ -457,7 +475,9 @@ class StandaloneWordExportService {
         paragraphs.push(
           this.createBoldParagraph(`${item.id || `S${index + 1}`}: ${item.statement}`),
           this.createParagraph(item.description || ''),
-          this.createItalicParagraph(`Importance: ${item.importance || 'N/A'} | Source: ${item.source || 'N/A'}`)
+          this.createItalicParagraph(
+            `Importance: ${item.importance || 'N/A'} | Source: ${item.source || 'N/A'}`
+          )
         );
       });
     }
@@ -469,7 +489,9 @@ class StandaloneWordExportService {
         paragraphs.push(
           this.createBoldParagraph(`${item.id || `C${index + 1}`}: ${item.statement}`),
           this.createParagraph(item.description || ''),
-          this.createItalicParagraph(`Importance: ${item.importance || 'N/A'} | Source: ${item.source || 'N/A'}`)
+          this.createItalicParagraph(
+            `Importance: ${item.importance || 'N/A'} | Source: ${item.source || 'N/A'}`
+          )
         );
       });
     }
@@ -515,9 +537,7 @@ class StandaloneWordExportService {
   private formatCourseFrameworkContent(content: any): Paragraph[] {
     const paragraphs: Paragraph[] = [];
 
-    paragraphs.push(
-      this.createParagraph(`Total Hours: ${content.totalHours || 0}`)
-    );
+    paragraphs.push(this.createParagraph(`Total Hours: ${content.totalHours || 0}`));
 
     if (content.modules?.length > 0) {
       content.modules.forEach((module: any) => {
@@ -533,11 +553,13 @@ class StandaloneWordExportService {
           paragraphs.push(this.createH3('Module Learning Outcomes'));
           module.mlos.forEach((mlo: any) => {
             paragraphs.push(
-              this.createBulletParagraph([new TextRun({
-                text: `${mlo.id}: ${mlo.statement} (${mlo.bloomLevel})`,
-                size: FONT_SIZES.BODY,
-                font: FONT_FAMILY,
-              })])
+              this.createBulletParagraph([
+                new TextRun({
+                  text: `${mlo.id}: ${mlo.statement} (${mlo.bloomLevel})`,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ])
             );
           });
         }
@@ -545,11 +567,15 @@ class StandaloneWordExportService {
         if (module.topics?.length > 0) {
           paragraphs.push(this.createH3('Topics'));
           module.topics.forEach((topic: string) => {
-            paragraphs.push(this.createBulletParagraph([new TextRun({
-              text: topic,
-              size: FONT_SIZES.BODY,
-              font: FONT_FAMILY,
-            })]));
+            paragraphs.push(
+              this.createBulletParagraph([
+                new TextRun({
+                  text: topic,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ])
+            );
           });
         }
       });
@@ -565,15 +591,18 @@ class StandaloneWordExportService {
     const paragraphs: Paragraph[] = [];
 
     if (content.sources?.length > 0) {
-      paragraphs.push(
-        this.createParagraph(`Total Sources: ${content.sources.length}`)
-      );
+      paragraphs.push(this.createParagraph(`Total Sources: ${content.sources.length}`));
 
       content.sources.forEach((source: any, index: number) => {
         paragraphs.push(
           this.createBoldParagraph(`Source ${index + 1}`),
-          this.createParagraph(source.apaCitation || `${source.authors} (${source.year}). ${source.title}. ${source.publisher}.`),
-          this.createItalicParagraph(`Type: ${source.sourceType || 'N/A'} | Recent: ${source.isRecent ? 'Yes' : 'No'}`)
+          this.createParagraph(
+            source.apaCitation ||
+              `${source.authors} (${source.year}). ${source.title}. ${source.publisher}.`
+          ),
+          this.createItalicParagraph(
+            `Type: ${source.sourceType || 'N/A'} | Recent: ${source.isRecent ? 'Yes' : 'No'}`
+          )
         );
         if (source.doi) {
           paragraphs.push(this.createParagraph(`DOI: ${source.doi}`));
@@ -594,12 +623,16 @@ class StandaloneWordExportService {
       paragraphs.push(this.createH2('Core Readings'));
       content.coreReadings.forEach((reading: any) => {
         paragraphs.push(
-          this.createBulletParagraph([new TextRun({
-            text: reading.citation,
-            size: FONT_SIZES.BODY,
-            font: FONT_FAMILY,
-          })]),
-          this.createItalicParagraph(`Est. Time: ${reading.estimatedMinutes || 0} min | Complexity: ${reading.complexityLevel || 'N/A'}`)
+          this.createBulletParagraph([
+            new TextRun({
+              text: reading.citation,
+              size: FONT_SIZES.BODY,
+              font: FONT_FAMILY,
+            }),
+          ]),
+          this.createItalicParagraph(
+            `Est. Time: ${reading.estimatedMinutes || 0} min | Complexity: ${reading.complexityLevel || 'N/A'}`
+          )
         );
       });
     }
@@ -608,12 +641,16 @@ class StandaloneWordExportService {
       paragraphs.push(this.createH2('Supplementary Readings'));
       content.supplementaryReadings.forEach((reading: any) => {
         paragraphs.push(
-          this.createBulletParagraph([new TextRun({
-            text: reading.citation,
-            size: FONT_SIZES.BODY,
-            font: FONT_FAMILY,
-          })]),
-          this.createItalicParagraph(`Est. Time: ${reading.estimatedMinutes || 0} min | Complexity: ${reading.complexityLevel || 'N/A'}`)
+          this.createBulletParagraph([
+            new TextRun({
+              text: reading.citation,
+              size: FONT_SIZES.BODY,
+              font: FONT_FAMILY,
+            }),
+          ]),
+          this.createItalicParagraph(
+            `Est. Time: ${reading.estimatedMinutes || 0} min | Complexity: ${reading.complexityLevel || 'N/A'}`
+          )
         );
       });
     }
@@ -652,22 +689,20 @@ class StandaloneWordExportService {
       content.questionBank.forEach((question: any, index: number) => {
         paragraphs.push(
           this.createBoldParagraph(`Question ${index + 1}: ${question.stem}`),
-          this.createItalicParagraph(`Bloom Level: ${question.bloomLevel || 'N/A'} | Difficulty: ${question.difficulty || 'N/A'}`)
+          this.createItalicParagraph(
+            `Bloom Level: ${question.bloomLevel || 'N/A'} | Difficulty: ${question.difficulty || 'N/A'}`
+          )
         );
-        
+
         if (question.options?.length > 0) {
           question.options.forEach((option: any) => {
             const marker = option.isCorrect ? '✓' : '○';
-            paragraphs.push(
-              this.createParagraph(`  ${marker} ${option.label}. ${option.text}`)
-            );
+            paragraphs.push(this.createParagraph(`  ${marker} ${option.label}. ${option.text}`));
           });
         }
-        
+
         if (question.rationale) {
-          paragraphs.push(
-            this.createItalicParagraph(`Rationale: ${question.rationale}`)
-          );
+          paragraphs.push(this.createItalicParagraph(`Rationale: ${question.rationale}`));
         }
       });
     }
@@ -714,14 +749,10 @@ class StandaloneWordExportService {
           this.createParagraph(term.definition || '')
         );
         if (term.exampleSentence) {
-          paragraphs.push(
-            this.createItalicParagraph(`Example: ${term.exampleSentence}`)
-          );
+          paragraphs.push(this.createItalicParagraph(`Example: ${term.exampleSentence}`));
         }
         if (term.relatedTerms?.length > 0) {
-          paragraphs.push(
-            this.createItalicParagraph(`Related: ${term.relatedTerms.join(', ')}`)
-          );
+          paragraphs.push(this.createItalicParagraph(`Related: ${term.relatedTerms.join(', ')}`));
         }
       });
     }
@@ -745,41 +776,50 @@ class StandaloneWordExportService {
         if (lesson.objectives?.length > 0) {
           paragraphs.push(this.createH3('Learning Objectives'));
           lesson.objectives.forEach((obj: string) => {
-            paragraphs.push(this.createBulletParagraph([new TextRun({
-              text: obj,
-              size: FONT_SIZES.BODY,
-              font: FONT_FAMILY,
-            })]));
+            paragraphs.push(
+              this.createBulletParagraph([
+                new TextRun({
+                  text: obj,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ])
+            );
           });
         }
 
         if (lesson.activities?.length > 0) {
           paragraphs.push(this.createH3('Activities'));
           lesson.activities.forEach((activity: string) => {
-            paragraphs.push(this.createBulletParagraph([new TextRun({
-              text: activity,
-              size: FONT_SIZES.BODY,
-              font: FONT_FAMILY,
-            })]));
+            paragraphs.push(
+              this.createBulletParagraph([
+                new TextRun({
+                  text: activity,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ])
+            );
           });
         }
 
         if (lesson.materials?.length > 0) {
           paragraphs.push(this.createH3('Materials'));
           lesson.materials.forEach((material: string) => {
-            paragraphs.push(this.createBulletParagraph([new TextRun({
-              text: material,
-              size: FONT_SIZES.BODY,
-              font: FONT_FAMILY,
-            })]));
+            paragraphs.push(
+              this.createBulletParagraph([
+                new TextRun({
+                  text: material,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ])
+            );
           });
         }
 
         if (lesson.assessment) {
-          paragraphs.push(
-            this.createH3('Assessment'),
-            this.createParagraph(lesson.assessment)
-          );
+          paragraphs.push(this.createH3('Assessment'), this.createParagraph(lesson.assessment));
         }
       });
     }
@@ -792,19 +832,16 @@ class StandaloneWordExportService {
    */
   private formatGenericContent(content: any): Paragraph[] {
     const paragraphs: Paragraph[] = [];
-    
+
     if (typeof content === 'string') {
       // If it's a string, try to parse it as markdown
       return this.parseMarkdownContent(content);
     } else {
-      paragraphs.push(
-        this.createParagraph(JSON.stringify(content, null, 2))
-      );
+      paragraphs.push(this.createParagraph(JSON.stringify(content, null, 2)));
     }
 
     return paragraphs;
   }
-
 
   // ============================================================================
   // HELPER METHODS FOR CREATING DOCUMENT ELEMENTS
