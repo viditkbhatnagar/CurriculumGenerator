@@ -514,6 +514,18 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   // Track if we've already shown completion notification
   const hasShownCompletionRef = useRef(false);
 
+  // Module Details panel — referenced so "View Details" can scroll to it
+  const moduleDetailsRef = useRef<HTMLDivElement | null>(null);
+
+  const handleViewDetails = (moduleId: string) => {
+    setSelectedModule(moduleId);
+    setSelectedLesson(null);
+    // Defer to next tick so React can render the Module Details panel before we scroll.
+    requestAnimationFrame(() => {
+      moduleDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   // Use the Step 10 status hook for polling
   const {
     status: step10Status,
@@ -1102,8 +1114,8 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                           <div className="flex-shrink-0">
                             {isComplete ? (
                               <button
-                                onClick={() => setSelectedModule(module.id)}
-                                className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg transition-colors text-sm font-medium"
+                                onClick={() => handleViewDetails(module.id)}
+                                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors text-sm font-semibold shadow-sm"
                               >
                                 View Details
                               </button>
@@ -1392,10 +1404,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                 {workflow.step10?.moduleLessonPlans?.map((module) => (
                   <button
                     key={module.moduleId}
-                    onClick={() => {
-                      setSelectedModule(module.moduleId);
-                      setSelectedLesson(null);
-                    }}
+                    onClick={() => handleViewDetails(module.moduleId)}
                     className={`p-4 rounded-lg border text-left transition-all ${
                       selectedModule === module.moduleId
                         ? 'bg-teal-500/20 border-teal-500 text-teal-600'
@@ -1417,7 +1426,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Module Details */}
           {currentModule && (
-            <div className="space-y-4">
+            <div ref={moduleDetailsRef} className="space-y-4 scroll-mt-4">
               <div className="bg-teal-50/50 rounded-lg p-5 border border-teal-200">
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <h3 className="text-xl font-bold text-teal-800">
