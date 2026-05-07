@@ -204,7 +204,7 @@ export default function ExportPage() {
           </p>
 
           <div className="grid grid-cols-3 gap-3">
-            {([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] as WorkflowStep[]).map((step) => {
+            {([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] as WorkflowStep[]).map((step) => {
               const stepData = workflow[`step${step}` as keyof typeof workflow];
               const hasStepData = !!stepData;
 

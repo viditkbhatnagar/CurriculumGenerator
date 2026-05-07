@@ -494,7 +494,7 @@ export default function WorkflowDetailPage() {
             </div>
             <div className="relative">
               <nav className="p-2 max-h-[calc(100vh-200px)] overflow-y-auto scrollbar-thin scrollbar-track-teal-50 scrollbar-thumb-teal-200 hover:scrollbar-thumb-teal-300">
-                {([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] as WorkflowStep[]).map((step) => {
+                {([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] as WorkflowStep[]).map((step) => {
                   const stepProgress = workflow.stepProgress.find((p) => p.step === step);
                   const isAccessible = isStepAccessible(step);
                   const isCurrent = workflow.currentStep === step;
