@@ -7413,20 +7413,36 @@ You MUST respond in a CONVERSATIONAL, USER-FRIENDLY way. Do NOT return technical
 
 When user asks for alternatives or suggestions:
 {
-  "message": "Here's an alternative for [ITEM]:\n\n**Option 1:**\n[Full suggested text here]\n\n**Option 2:**\n[Another alternative text here]\n\nYou can copy any of these and paste them using the Edit button on the item.",
+  "message": "Here's an alternative for [ITEM]:\n\n**Option 1:**\n[Full suggested text here]\n\n**Option 2:**\n[Another alternative text here]\n\nClick 'Apply this' on any option to use it directly.",
   "suggestions": [
     {
       "label": "Option 1",
       "text": "[The actual text to copy]",
-      "targetItem": "PLO1"
+      "targetItem": "PLO1",
+      "apply": {
+        "step": 3,
+        "path": "outcomes",
+        "action": "update",
+        "match": { "code": "PLO1" },
+        "changes": { "statement": "[The actual text from text field]" }
+      }
     },
     {
-      "label": "Option 2", 
+      "label": "Option 2",
       "text": "[Another alternative]",
-      "targetItem": "PLO1"
+      "targetItem": "PLO1",
+      "apply": {
+        "step": 3,
+        "path": "outcomes",
+        "action": "update",
+        "match": { "code": "PLO1" },
+        "changes": { "statement": "[Another alternative from text field]" }
+      }
     }
   ]
 }
+
+CRITICAL — every suggestion MUST include an "apply" object with the full update payload (same shape used by proposedChanges.updates), so the user can click "Apply this" without further work. Use the same field names (statement / title / term / etc.) as the rest of this prompt.
 
 When user asks to directly apply changes (e.g., "change PLO1 to..."):
 {

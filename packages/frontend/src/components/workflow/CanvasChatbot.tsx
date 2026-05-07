@@ -482,13 +482,19 @@ function MessageBubble({
   message,
   onApply,
   onReject,
+  onApplySuggestion,
 }: {
   message: CanvasMessage;
   onApply?: () => void;
   onReject?: () => void;
+  /** Applies a single suggestion's `apply` payload — the same shape used by
+   *  proposedChanges. Pass-through to the parent's apply handler. */
+  onApplySuggestion?: (suggestion: any, idx: number) => Promise<void> | void;
 }) {
   const [showDiff, setShowDiff] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [applyingIndex, setApplyingIndex] = useState<number | null>(null);
+  const [appliedIndex, setAppliedIndex] = useState<number | null>(null);
   const isUser = message.role === 'user';
 
   const handleCopy = async (text: string, index: number) => {
@@ -539,65 +545,89 @@ function MessageBubble({
         {/* Suggestions with Copy Buttons */}
         {message.suggestions && message.suggestions.length > 0 && (
           <div className="mt-4 space-y-3">
-            {message.suggestions.map((suggestion, idx) => (
+            {message.suggestions.map((suggestion: any, idx) => (
               <div key={idx} className="bg-teal-50 rounded-lg p-3 border border-teal-200">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2 gap-2">
                   <span className="text-xs font-medium text-teal-700">
                     {suggestion.label}
                     {suggestion.targetItem && (
                       <span className="text-teal-500 ml-1">({suggestion.targetItem})</span>
                     )}
                   </span>
-                  <button
-                    onClick={() => handleCopy(suggestion.text, idx)}
-                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
-                      copiedIndex === idx
-                        ? 'bg-teal-200 text-teal-700'
-                        : 'bg-teal-100 text-teal-600 hover:bg-teal-200'
-                    }`}
-                  >
-                    {copiedIndex === idx ? (
-                      <>
-                        <svg
-                          className="w-3 h-3"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <svg
-                          className="w-3 h-3"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                          />
-                        </svg>
-                        Copy
-                      </>
+                  <div className="flex items-center gap-1.5">
+                    {suggestion.apply && onApplySuggestion && appliedIndex !== idx && (
+                      <button
+                        onClick={async () => {
+                          setApplyingIndex(idx);
+                          try {
+                            await onApplySuggestion(suggestion, idx);
+                            setAppliedIndex(idx);
+                          } finally {
+                            setApplyingIndex(null);
+                          }
+                        }}
+                        disabled={applyingIndex !== null}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-medium transition-all disabled:opacity-50"
+                      >
+                        {applyingIndex === idx ? 'Applying…' : '✓ Apply this'}
+                      </button>
                     )}
-                  </button>
+                    {appliedIndex === idx && (
+                      <span className="px-2 py-1 rounded text-xs bg-emerald-100 text-emerald-700 font-medium border border-emerald-300">
+                        Applied
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleCopy(suggestion.text, idx)}
+                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
+                        copiedIndex === idx
+                          ? 'bg-teal-200 text-teal-700'
+                          : 'bg-teal-100 text-teal-600 hover:bg-teal-200'
+                      }`}
+                    >
+                      {copiedIndex === idx ? (
+                        <>
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                            />
+                          </svg>
+                          Copy
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <p className="text-sm text-teal-700 leading-relaxed">{suggestion.text}</p>
               </div>
             ))}
             <p className="text-xs text-teal-500 mt-2">
-              💡 Copy any suggestion above and paste it using the Edit button on the item
+              💡 Click "Apply this" to use a suggestion directly, or Copy to paste it elsewhere.
             </p>
           </div>
         )}
@@ -1235,6 +1265,16 @@ export default function CanvasChatbot({
                   onReject={
                     msg.status === 'pending' ? () => handleRejectChanges(msg.id) : undefined
                   }
+                  onApplySuggestion={async (suggestion) => {
+                    // Wrap the suggestion's apply payload in the same shape
+                    // the proposedChanges path uses, then route through the
+                    // existing apply-edit endpoint.
+                    if (!suggestion?.apply || !msg.editTarget) return;
+                    await onApplyChanges(msg.editTarget, {
+                      updates: [suggestion.apply],
+                    });
+                    await onRefresh();
+                  }}
                 />
               ))
             )}

@@ -5072,6 +5072,30 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
     // Module IDs flagged by AI for regeneration (Step 10) — processed after save
     const modulesToRegenerate: string[] = [];
 
+    // Track applied vs rejected updates so the response surfaces "the AI's
+    // match criteria didn't find anything" instead of silently returning
+    // success when nothing was actually changed.
+    let appliedCount = 0;
+    const rejected: Array<{
+      step: number;
+      path?: string;
+      action?: string;
+      match?: any;
+      reason: string;
+    }> = [];
+    const noteApplied = () => {
+      appliedCount += 1;
+    };
+    const noteRejected = (u: any, reason: string) => {
+      rejected.push({
+        step: u.step,
+        path: u.path,
+        action: u.action,
+        match: u.match,
+        reason,
+      });
+    };
+
     // Process the new "updates" array format for flexible editing
     if (newContent.updates && Array.isArray(newContent.updates)) {
       for (const update of newContent.updates) {
@@ -5100,6 +5124,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
           // Action: regenerate one module's lesson plans
           if (update.action === 'regenerate' && update.match?.moduleId) {
             modulesToRegenerate.push(update.match.moduleId);
+            noteApplied();
             loggingService.info('Step 10 module flagged for regeneration', {
               moduleId: update.match.moduleId,
             });
@@ -5151,17 +5176,20 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
               if (hit) {
                 Object.assign(hit.lesson, update.changes || {});
                 workflow.markModified('step10');
+                noteApplied();
                 loggingService.info('Step 10 lesson updated via canvas', {
                   moduleId: hit.module.moduleId,
                   lessonId: hit.lesson.lessonId,
                   changedFields: Object.keys(update.changes || {}),
                 });
               } else {
+                noteRejected(update, 'no Step 10 lesson matched the supplied criteria');
                 loggingService.warn('Step 10 lesson not found for update', {
                   match: update.match,
                 });
               }
             } else if (update.action === 'delete') {
+              let deleted = false;
               for (const m of candidateModules) {
                 const idx = (m.lessons || []).findIndex((l: any, i: number) =>
                   matchesLesson(
@@ -5178,9 +5206,12 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
                     0
                   );
                   workflow.markModified('step10');
+                  deleted = true;
                   break;
                 }
               }
+              if (deleted) noteApplied();
+              else noteRejected(update, 'no Step 10 lesson matched for deletion');
             }
             continue;
           }
@@ -5193,6 +5224,9 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
             if (mod) {
               Object.assign(mod, update.changes || {});
               workflow.markModified('step10');
+              noteApplied();
+            } else {
+              noteRejected(update, 'no Step 10 module matched the supplied criteria');
             }
             continue;
           }
@@ -5202,6 +5236,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
         if (update.action === 'set' && update.path && update.value !== undefined) {
           (workflow as any)[targetStepKey][update.path] = update.value;
           workflow.markModified(targetStepKey);
+          noteApplied();
           loggingService.info('Field set', {
             step: targetStep,
             path: update.path,
@@ -5235,6 +5270,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
             if (itemIdx !== -1) {
               arr[itemIdx] = { ...arr[itemIdx], ...update.changes };
               workflow.markModified(targetStepKey);
+              noteApplied();
               loggingService.info('Item updated in array', {
                 step: targetStep,
                 path: update.path,
@@ -5242,6 +5278,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
                 changes: update.changes,
               });
             } else {
+              noteRejected(update, 'no item in array matched the supplied criteria');
               loggingService.warn('No matching item found for update', { match: update.match });
             }
           } else if (update.action === 'add' && update.item) {
@@ -5251,6 +5288,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
             }
             arr.push(update.item);
             workflow.markModified(targetStepKey);
+            noteApplied();
             loggingService.info('Item added to array', {
               step: targetStep,
               path: update.path,
@@ -5263,12 +5301,17 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
             if (itemIdx !== -1) {
               arr.splice(itemIdx, 1);
               workflow.markModified(targetStepKey);
+              noteApplied();
               loggingService.info('Item deleted from array', {
                 step: targetStep,
                 path: update.path,
                 itemIdx,
               });
+            } else {
+              noteRejected(update, 'no item in array matched the supplied criteria');
             }
+          } else {
+            noteRejected(update, `unsupported action "${update.action}" or missing payload`);
           }
         }
 
@@ -5326,6 +5369,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
                 if (childIdx !== -1) {
                   childArray[childIdx] = { ...childArray[childIdx], ...update.changes };
                   workflow.markModified(targetStepKey);
+                  noteApplied();
                   loggingService.info('Nested item updated', {
                     step: targetStep,
                     parent: parentArrayName,
@@ -5334,6 +5378,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
                     changes: update.changes,
                   });
                 } else {
+                  noteRejected(update, `no ${childArrayName} item matched the supplied criteria`);
                   loggingService.warn('No matching nested item found', { match: update.match });
                 }
               } else if (update.action === 'add' && update.item) {
@@ -5342,6 +5387,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
                 }
                 childArray.push(update.item);
                 workflow.markModified(targetStepKey);
+                noteApplied();
                 loggingService.info('Nested item added', {
                   step: targetStep,
                   parent: parentArrayName,
@@ -5358,14 +5404,21 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
                 if (childIdx !== -1) {
                   childArray.splice(childIdx, 1);
                   workflow.markModified(targetStepKey);
+                  noteApplied();
                   loggingService.info('Nested item deleted', {
                     step: targetStep,
                     parent: parentArrayName,
                     child: childArrayName,
                   });
+                } else {
+                  noteRejected(update, `no ${childArrayName} item matched for deletion`);
                 }
               }
             } else {
+              noteRejected(
+                update,
+                `parent ${parentArrayName} item or child ${childArrayName} array not found`
+              );
               loggingService.warn('Parent item or child array not found', {
                 parentMatch,
                 parentFound: !!parentItem,
@@ -5554,9 +5607,35 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
       });
     }
 
+    // If the AI returned an updates array but none of them actually matched
+    // anything in the workflow, surface that as a 400. Previously we silently
+    // returned success and the user saw an "Applied" status with no real
+    // change — the source of "I tell it to edit but it doesn't edit" reports.
+    const totalUpdates =
+      newContent.updates && Array.isArray(newContent.updates) ? newContent.updates.length : 0;
+    if (totalUpdates > 0 && appliedCount === 0) {
+      loggingService.warn('Apply-edit produced no changes', {
+        workflowId: id,
+        rejected,
+      });
+      return res.status(400).json({
+        success: false,
+        error:
+          "The AI's proposed edit didn't match any item in the workflow. Try rephrasing — include the exact code (e.g. PLO1, MOD202) or the verbatim text you want to change.",
+        rejected,
+        appliedCount: 0,
+        totalUpdates,
+      });
+    }
+
     await workflow.save();
 
-    loggingService.info('Canvas edit saved successfully', { workflowId: id, stepNumber });
+    loggingService.info('Canvas edit saved successfully', {
+      workflowId: id,
+      stepNumber,
+      appliedCount,
+      rejectedCount: rejected.length,
+    });
 
     // =====================================================
     // STEP 10 REGENERATION — kick off after save
@@ -5578,14 +5657,22 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
       }
     }
 
+    // Build a user-friendly status message that reflects the partial-success case.
+    let userMessage = 'Edit applied successfully';
+    if (rejected.length > 0 && appliedCount > 0) {
+      userMessage = `Applied ${appliedCount} of ${appliedCount + rejected.length} changes. ${rejected.length} couldn't be matched and were skipped — try rephrasing those.`;
+    } else if (regenerationQueued > 0) {
+      userMessage = `Edit applied. ${regenerationQueued} module(s) queued for lesson plan regeneration.`;
+    }
+
     res.json({
       success: true,
-      message:
-        regenerationQueued > 0
-          ? `Edit applied. ${regenerationQueued} module(s) queued for lesson plan regeneration.`
-          : 'Edit applied successfully',
+      message: userMessage,
       updatedStep: (workflow as any)[`step${stepNumber}`],
       modulesRegenerating: regenerationQueued,
+      appliedCount,
+      rejectedCount: rejected.length,
+      rejected: rejected.length > 0 ? rejected : undefined,
     });
   } catch (error: any) {
     loggingService.error('Apply edit failed', { error });
