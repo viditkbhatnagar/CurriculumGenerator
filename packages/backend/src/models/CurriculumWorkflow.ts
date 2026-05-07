@@ -58,7 +58,12 @@ export interface LessonActivity {
     | 'case_analysis'
     | 'group_work'
     | 'assessment'
-    | 'break';
+    | 'break'
+    | 'ai_activity';
+  // Whether this activity has students using a generative AI tool as part of the
+  // learning. Set on the AI-themed activity in each lesson and used by exports/UI
+  // to surface "Applied AI" content distinctly.
+  involvesAI?: boolean;
   title: string;
   description: string;
   duration: number; // minutes
@@ -533,6 +538,102 @@ export interface Step13SummativeExam {
 }
 
 // ============================================================================
+// STEP 14 INTERFACES — Course Syllabus
+// ============================================================================
+
+export interface SyllabusInstructor {
+  name: string;
+  email: string;
+  title?: string;
+  preferredCommunication?: string;
+  expectedResponseTime?: string;
+  officeHours?: string;
+  officeLocation?: string;
+}
+
+export interface SyllabusTaInfo {
+  name: string;
+  email: string;
+  role?: string;
+}
+
+export interface SyllabusExamItem {
+  name: string;
+  date: string;
+  weight: number;
+  description?: string;
+}
+
+export interface Step14SyllabusInputs {
+  instructor: SyllabusInstructor;
+  taInfo?: SyllabusTaInfo;
+
+  // Schedule basics — minimum needed for week-by-week auto-generation
+  courseNumber?: string;
+  semester: string; // e.g. "Fall 2026"
+  meetingPattern?: string; // e.g. "Tue/Thu 2:00–3:30 PM"
+  meetingLocation?: string;
+  startDate?: string; // ISO date
+  numWeeks?: number; // total course weeks
+  sessionsPerWeek?: number;
+
+  examSchedule?: SyllabusExamItem[];
+
+  // Optional overrides — if blank, defaults are used
+  policies?: {
+    attendance?: string;
+    lateWork?: string;
+    technologyUse?: string;
+    communicationNorms?: string;
+    academicIntegrity?: string;
+    accessibility?: string;
+  };
+}
+
+export interface SyllabusWeekRow {
+  week: number;
+  sessionNumber: number;
+  date?: string;
+  moduleCode?: string;
+  topics: string[];
+  readings: string[];
+  dueItems: string[];
+}
+
+export interface SyllabusAssignmentItem {
+  title: string;
+  description: string;
+  weight: number;
+  dueDate?: string;
+  source: 'step12' | 'step13' | 'user'; // for traceability
+}
+
+export interface Step14Syllabus {
+  inputs: Step14SyllabusInputs;
+
+  // Generated content
+  generatedSections?: {
+    courseDescription: string;
+    learningOutcomes: string[];
+    weeklySchedule: SyllabusWeekRow[];
+    assignments: SyllabusAssignmentItem[];
+    gradingScale: Array<{ grade: string; range: string }>;
+    policies: {
+      attendance: string;
+      lateWork: string;
+      technologyUse: string;
+      communicationNorms: string;
+      academicIntegrity: string;
+      accessibility: string;
+    };
+  };
+
+  generatedAt?: Date;
+  approvedAt?: Date;
+  approvedBy?: string;
+}
+
+// ============================================================================
 // INTERFACES
 // ============================================================================
 
@@ -542,7 +643,7 @@ export interface ICurriculumWorkflow extends Document {
   createdBy: mongoose.Types.ObjectId;
 
   // Current State
-  currentStep: number; // 1-13
+  currentStep: number; // 1-14
   status: string;
 
   // Step 1: Program Foundation
@@ -1074,6 +1175,9 @@ export interface ICurriculumWorkflow extends Document {
   // Step 13: Summative Exam Package
   step13?: Step13SummativeExam;
 
+  // Step 14: Course Syllabus (instructor info + schedule + auto-aggregated content)
+  step14?: Step14Syllabus;
+
   // Step Progress Tracking
   stepProgress: Array<{
     step: number;
@@ -1160,6 +1264,8 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
         'step12_complete',
         'step13_pending',
         'step13_complete',
+        'step14_pending',
+        'step14_complete',
         'review_pending',
         'published',
       ],
@@ -1246,6 +1352,12 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
       default: undefined,
     },
 
+    // Step 14: Course Syllabus (post-Step-13 finalization)
+    step14: {
+      type: Schema.Types.Mixed,
+      default: undefined,
+    },
+
     // Step Progress
     stepProgress: [
       {
@@ -1320,6 +1432,10 @@ CurriculumWorkflowSchema.pre('save', function (next) {
     if (!hasStep13) {
       this.stepProgress.push({ step: 13, status: 'pending' });
     }
+    const hasStep14 = this.stepProgress.some((p: any) => p.step === 14);
+    if (!hasStep14) {
+      this.stepProgress.push({ step: 14, status: 'pending' });
+    }
   }
 
   next();
@@ -1327,7 +1443,7 @@ CurriculumWorkflowSchema.pre('save', function (next) {
 
 // Advance to next step
 CurriculumWorkflowSchema.methods.advanceStep = async function (): Promise<void> {
-  if (this.currentStep >= 13) {
+  if (this.currentStep >= 14) {
     throw new Error('Already at final step');
   }
 
@@ -1380,7 +1496,7 @@ CurriculumWorkflowSchema.methods.calculateProgress = function (): number {
   const completedSteps = this.stepProgress.filter(
     (p: any) => p.status === 'completed' || p.status === 'approved'
   ).length;
-  return Math.round((completedSteps / 13) * 100);
+  return Math.round((completedSteps / 14) * 100);
 };
 
 // Virtual for duration

@@ -4,7 +4,7 @@
  */
 
 // Workflow step identifiers
-export type WorkflowStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+export type WorkflowStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
 
 // Step statuses
 export type StepStatus = 'pending' | 'in_progress' | 'completed' | 'approved' | 'revision_needed';
@@ -37,6 +37,8 @@ export type WorkflowStatus =
   | 'step12_complete'
   | 'step13_pending'
   | 'step13_complete'
+  | 'step14_pending'
+  | 'step14_complete'
   | 'review_pending'
   | 'published';
 
@@ -1272,7 +1274,9 @@ export interface LessonActivity {
     | 'case_analysis'
     | 'group_work'
     | 'assessment'
-    | 'break';
+    | 'break'
+    | 'ai_activity';
+  involvesAI?: boolean;
   title: string;
   description: string;
   duration: number; // minutes
@@ -1713,6 +1717,94 @@ export interface StepProgress {
 // =============================================================================
 // MAIN WORKFLOW INTERFACE
 // =============================================================================
+// =============================================================================
+// STEP 14: COURSE SYLLABUS
+// =============================================================================
+
+export interface SyllabusInstructor {
+  name: string;
+  email: string;
+  title?: string;
+  preferredCommunication?: string;
+  expectedResponseTime?: string;
+  officeHours?: string;
+  officeLocation?: string;
+}
+
+export interface SyllabusTaInfo {
+  name: string;
+  email: string;
+  role?: string;
+}
+
+export interface SyllabusExamItem {
+  name: string;
+  date: string;
+  weight: number;
+  description?: string;
+}
+
+export interface Step14SyllabusInputs {
+  instructor: SyllabusInstructor;
+  taInfo?: SyllabusTaInfo;
+  courseNumber?: string;
+  semester: string;
+  meetingPattern?: string;
+  meetingLocation?: string;
+  startDate?: string;
+  numWeeks?: number;
+  sessionsPerWeek?: number;
+  examSchedule?: SyllabusExamItem[];
+  policies?: {
+    attendance?: string;
+    lateWork?: string;
+    technologyUse?: string;
+    communicationNorms?: string;
+    academicIntegrity?: string;
+    accessibility?: string;
+  };
+}
+
+export interface SyllabusWeekRow {
+  week: number;
+  sessionNumber: number;
+  date?: string;
+  moduleCode?: string;
+  topics: string[];
+  readings: string[];
+  dueItems: string[];
+}
+
+export interface SyllabusAssignmentItem {
+  title: string;
+  description: string;
+  weight: number;
+  dueDate?: string;
+  source: 'step12' | 'step13' | 'user';
+}
+
+export interface Step14Syllabus {
+  inputs: Step14SyllabusInputs;
+  generatedSections?: {
+    courseDescription: string;
+    learningOutcomes: string[];
+    weeklySchedule: SyllabusWeekRow[];
+    assignments: SyllabusAssignmentItem[];
+    gradingScale: Array<{ grade: string; range: string }>;
+    policies: {
+      attendance: string;
+      lateWork: string;
+      technologyUse: string;
+      communicationNorms: string;
+      academicIntegrity: string;
+      accessibility: string;
+    };
+  };
+  generatedAt?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+}
+
 export interface CurriculumWorkflow {
   _id: string;
   projectName: string;
@@ -1735,6 +1827,7 @@ export interface CurriculumWorkflow {
   step11?: Step11PPTGeneration;
   step12?: Step12AssignmentPacks;
   step13?: Step13SummativeExam;
+  step14?: Step14Syllabus;
 
   // Metadata
   createdAt: string;
@@ -1847,6 +1940,7 @@ export const STEP_NAMES: Record<WorkflowStep, string> = {
   11: 'PPT Generation',
   12: 'Assignment Packs',
   13: 'Summative Exam',
+  14: 'Course Syllabus',
 };
 
 export const STEP_DESCRIPTIONS: Record<WorkflowStep, string> = {
@@ -1863,6 +1957,7 @@ export const STEP_DESCRIPTIONS: Record<WorkflowStep, string> = {
   11: 'Generate PowerPoint slide decks for all lessons',
   12: 'Generate assignment packs with briefs, rubrics & marking guides for all delivery modes',
   13: 'Generate formal summative exam with MCQs, scenarios & applied tasks',
+  14: 'Build the course syllabus from instructor info + schedule + curriculum content',
 };
 
 export const ESTIMATED_TIMES: Record<WorkflowStep, string> = {
@@ -1879,6 +1974,7 @@ export const ESTIMATED_TIMES: Record<WorkflowStep, string> = {
   11: '10-15 min',
   12: '15-20 min',
   13: '5-10 min',
+  14: '~30 sec',
 };
 
 export const BLOOM_LEVELS: BloomLevel[] = [

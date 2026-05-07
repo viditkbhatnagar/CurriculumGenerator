@@ -3,7 +3,13 @@ import { expressjwt, GetVerificationKey } from 'express-jwt';
 import jwksRsa from 'jwks-rsa';
 import config from '../config';
 import { UserRole, AuthUser } from '../types/auth';
-import { getUserByAuthProviderId, createUser, updateLastLogin } from '../services/userService';
+import {
+  getUserByAuthProviderId,
+  getUserByEmail,
+  createUser,
+  updateLastLogin,
+} from '../services/userService';
+import { User } from '../models/User';
 import { createAuditLog } from '../services/auditService';
 
 // Extend Express Request type to include auth
@@ -96,7 +102,40 @@ export const loadUser = async (req: Request, res: Response, next: NextFunction):
     // Try to get existing user
     let user = await getUserByAuthProviderId(authProviderId);
 
-    // If user doesn't exist, create them with default role
+    // If no user matches the Auth0 sub yet, look for an admin-invited record
+    // by email. If we find one with a "pending:<email>" placeholder, promote
+    // it to the real Auth0 sub now (faculty allowlist first-login flow).
+    if (!user && email) {
+      const invited = await getUserByEmail(email);
+      if (invited && invited.authProviderId.startsWith('pending:')) {
+        await User.findByIdAndUpdate(invited.id, {
+          authProviderId,
+          lastLogin: new Date(),
+        });
+        user = await getUserByAuthProviderId(authProviderId);
+      }
+    }
+
+    // Optional faculty allowlist enforcement. When FACULTY_ALLOWLIST_ENFORCED
+    // is set, any first-time login from an email that an admin has NOT
+    // invited is rejected. Default behaviour (env unset) preserves the
+    // legacy auto-provision-as-SME flow so existing deployments keep working.
+    const allowlistEnforced =
+      (process.env.FACULTY_ALLOWLIST_ENFORCED || '').toLowerCase() === 'true';
+    if (!user && allowlistEnforced) {
+      res.status(403).json({
+        error: {
+          code: 'NOT_INVITED',
+          message:
+            'This email is not on the authorized faculty list. Please contact an administrator.',
+          timestamp: new Date().toISOString(),
+          requestId: req.headers['x-request-id'] || 'unknown',
+        },
+      });
+      return;
+    }
+
+    // If user still doesn't exist, create them with the legacy default role
     if (!user && email) {
       user = await createUser({
         email,

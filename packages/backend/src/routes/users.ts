@@ -1,11 +1,18 @@
 import { Router, Request, Response } from 'express';
-import { validateJWT, loadUser, requireRole, auditAction, handleAuthError } from '../middleware/auth';
+import {
+  validateJWT,
+  loadUser,
+  requireRole,
+  auditAction,
+  handleAuthError,
+} from '../middleware/auth';
 import { UserRole } from '../types/auth';
 import {
   getUserById,
   listUsers,
   updateUserRole,
   deleteUser,
+  inviteFaculty,
 } from '../services/userService';
 import { getAuditLogsByUser } from '../services/auditService';
 
@@ -26,7 +33,13 @@ router.get(
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
 
-      const { users, total } = await listUsers(limit, offset);
+      // Optional ?role=faculty filter for the admin Faculty page
+      const roleParam = (req.query.role as string) || undefined;
+      const role =
+        roleParam && Object.values(UserRole).includes(roleParam as UserRole)
+          ? (roleParam as UserRole)
+          : undefined;
+      const { users, total } = await listUsers(limit, offset, { role });
 
       res.json({
         users: users.map((u) => ({
@@ -161,6 +174,57 @@ router.put(
 );
 
 /**
+ * Invite a faculty member to the allowlist (admin only).
+ * Body: { email, profile? }
+ * - Creates a User with role=faculty + authProviderId="pending:<email>".
+ * - When that email signs in via Auth0 for the first time, the auth
+ *   middleware promotes the placeholder to the real Auth0 sub.
+ * - Idempotent: if the email already exists, the existing record is
+ *   returned with status="exists".
+ */
+router.post(
+  '/invite-faculty',
+  requireRole(UserRole.ADMINISTRATOR),
+  auditAction('INVITE_FACULTY', 'users'),
+  async (req: Request, res: Response) => {
+    try {
+      const { email, profile } = req.body || {};
+      if (!email || typeof email !== 'string') {
+        res.status(400).json({
+          error: {
+            code: 'INVALID_EMAIL',
+            message: 'email is required',
+            timestamp: new Date().toISOString(),
+            requestId: req.headers['x-request-id'] || 'unknown',
+          },
+        });
+        return;
+      }
+
+      const result = await inviteFaculty(email, req.user?.id, profile);
+      res.status(result.status === 'invited' ? 201 : 200).json({
+        status: result.status,
+        user: {
+          id: result.user.id,
+          email: result.user.email,
+          role: result.user.role,
+        },
+      });
+    } catch (error) {
+      console.error('Error inviting faculty:', error);
+      res.status(500).json({
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to invite faculty',
+          timestamp: new Date().toISOString(),
+          requestId: req.headers['x-request-id'] || 'unknown',
+        },
+      });
+    }
+  }
+);
+
+/**
  * Delete user (admin only)
  */
 router.delete(
@@ -219,52 +283,49 @@ router.delete(
 /**
  * Get user audit logs (admin or own logs)
  */
-router.get(
-  '/:id/audit-logs',
-  async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
+router.get('/:id/audit-logs', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
 
-      // Users can only view their own logs unless they're admin
-      if (req.user?.role !== UserRole.ADMINISTRATOR && req.user?.id !== id) {
-        res.status(403).json({
-          error: {
-            code: 'FORBIDDEN',
-            message: 'Insufficient permissions',
-            timestamp: new Date().toISOString(),
-            requestId: req.headers['x-request-id'] || 'unknown',
-          },
-        });
-        return;
-      }
-
-      const limit = parseInt(req.query.limit as string) || 50;
-      const offset = parseInt(req.query.offset as string) || 0;
-
-      const { logs, total } = await getAuditLogsByUser(id, limit, offset);
-
-      res.json({
-        logs,
-        pagination: {
-          total,
-          limit,
-          offset,
-          hasMore: offset + limit < total,
-        },
-      });
-    } catch (error) {
-      console.error('Error fetching audit logs:', error);
-      res.status(500).json({
+    // Users can only view their own logs unless they're admin
+    if (req.user?.role !== UserRole.ADMINISTRATOR && req.user?.id !== id) {
+      res.status(403).json({
         error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to fetch audit logs',
+          code: 'FORBIDDEN',
+          message: 'Insufficient permissions',
           timestamp: new Date().toISOString(),
           requestId: req.headers['x-request-id'] || 'unknown',
         },
       });
+      return;
     }
+
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const { logs, total } = await getAuditLogsByUser(id, limit, offset);
+
+    res.json({
+      logs,
+      pagination: {
+        total,
+        limit,
+        offset,
+        hasMore: offset + limit < total,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching audit logs:', error);
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to fetch audit logs',
+        timestamp: new Date().toISOString(),
+        requestId: req.headers['x-request-id'] || 'unknown',
+      },
+    });
   }
-);
+});
 
 // Error handler for user routes
 router.use(handleAuthError);

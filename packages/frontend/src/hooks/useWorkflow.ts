@@ -783,10 +783,11 @@ export function useRemainingTime(currentStep: number): string {
     11: 15,
     12: 20,
     13: 10,
+    14: 1,
   };
 
   let remaining = 0;
-  for (let i = currentStep; i <= 13; i++) {
+  for (let i = currentStep; i <= 14; i++) {
     remaining += stepTimes[i] || 0;
   }
 

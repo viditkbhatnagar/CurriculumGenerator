@@ -14,7 +14,9 @@ function toAuthUser(user: IUser): AuthUser {
   return {
     id: user._id.toString(),
     email: user.email,
-    role: user.role,
+    // Mongoose's literal-union role widens to the IUser declared union; the
+    // enum's runtime values match exactly, so the cast is safe.
+    role: user.role as UserRole,
     authProviderId: user.authProviderId,
   };
 }
@@ -22,11 +24,9 @@ function toAuthUser(user: IUser): AuthUser {
 /**
  * Get user by Auth0 provider ID
  */
-export async function getUserByAuthProviderId(
-  authProviderId: string
-): Promise<AuthUser | null> {
+export async function getUserByAuthProviderId(authProviderId: string): Promise<AuthUser | null> {
   const user = await User.findOne({ authProviderId });
-  
+
   if (!user) {
     return null;
   }
@@ -39,7 +39,7 @@ export async function getUserByAuthProviderId(
  */
 export async function getUserById(userId: string): Promise<AuthUser | null> {
   const user = await User.findById(userId);
-  
+
   if (!user) {
     return null;
   }
@@ -52,7 +52,7 @@ export async function getUserById(userId: string): Promise<AuthUser | null> {
  */
 export async function getUserByEmail(email: string): Promise<AuthUser | null> {
   const user = await User.findOne({ email: email.toLowerCase() });
-  
+
   if (!user) {
     return null;
   }
@@ -78,15 +78,8 @@ export async function createUser(input: CreateUserInput): Promise<AuthUser> {
 /**
  * Update user role
  */
-export async function updateUserRole(
-  userId: string,
-  role: UserRole
-): Promise<AuthUser | null> {
-  const user = await User.findByIdAndUpdate(
-    userId,
-    { role },
-    { new: true }
-  );
+export async function updateUserRole(userId: string, role: UserRole): Promise<AuthUser | null> {
+  const user = await User.findByIdAndUpdate(userId, { role }, { new: true });
 
   if (!user) {
     return null;
@@ -115,18 +108,50 @@ export async function deleteUser(userId: string): Promise<boolean> {
  */
 export async function listUsers(
   limit: number = 50,
-  offset: number = 0
+  offset: number = 0,
+  filter: { role?: UserRole } = {}
 ): Promise<{ users: AuthUser[]; total: number }> {
+  const query: any = {};
+  if (filter.role) query.role = filter.role;
   const [users, total] = await Promise.all([
-    User.find()
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(offset),
-    User.countDocuments(),
+    User.find(query).sort({ createdAt: -1 }).limit(limit).skip(offset),
+    User.countDocuments(query),
   ]);
 
   return {
     users: users.map(toAuthUser),
     total,
   };
+}
+
+/**
+ * Invite a faculty member to the allowlist.
+ * Creates a User record with role=faculty, invited=true, and a placeholder
+ * authProviderId of `pending:<email>`. On their first Auth0 login, the auth
+ * middleware will replace `authProviderId` with the real Auth0 sub.
+ *
+ * Idempotent: if the email already exists, returns the existing user without
+ * re-creating it (status: "exists"); otherwise creates and returns
+ * (status: "invited").
+ */
+export async function inviteFaculty(
+  email: string,
+  invitedByUserId?: string,
+  profile?: { firstName?: string; lastName?: string; organization?: string }
+): Promise<{ user: AuthUser; status: 'invited' | 'exists' }> {
+  const existing = await User.findOne({ email: email.toLowerCase() });
+  if (existing) {
+    return { user: toAuthUser(existing), status: 'exists' };
+  }
+  const user = new User({
+    email: email.toLowerCase(),
+    role: UserRole.FACULTY,
+    authProviderId: `pending:${email.toLowerCase()}`,
+    invited: true,
+    invitedBy: invitedByUserId || undefined,
+    invitedAt: new Date(),
+    profile: profile || {},
+  });
+  await user.save();
+  return { user: toAuthUser(user), status: 'invited' };
 }

@@ -27,6 +27,7 @@ import Step10View from '@/components/workflow/Step10View';
 import Step11View from '@/components/workflow/Step11View';
 import Step12View from '@/components/workflow/Step12View';
 import Step13View from '@/components/workflow/Step13View';
+import Step14View from '@/components/workflow/Step14View';
 import FinalReviewView from '@/components/workflow/FinalReviewView';
 import CanvasChatbot from '@/components/workflow/CanvasChatbot';
 import { EditTarget } from '@/components/workflow/EditWithAIButton';
@@ -160,6 +161,16 @@ const STEP_ICONS: Record<WorkflowStep, React.ReactNode> = {
         strokeLinejoin="round"
         strokeWidth={2}
         d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+      />
+    </svg>
+  ),
+  14: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM9 7h6M9 11h6M9 15h4"
       />
     </svg>
   ),
@@ -314,7 +325,7 @@ export default function WorkflowDetailPage() {
   const handleStepComplete = () => {
     refetch();
     // If we just completed a step, move to next
-    if (currentStep < 13) {
+    if (currentStep < 14) {
       setActiveStep((currentStep + 1) as WorkflowStep);
     }
   };
@@ -373,6 +384,14 @@ export default function WorkflowDetailPage() {
         return <Step12View {...stepProps} />;
       case 13:
         return <Step13View {...stepProps} />;
+      case 14:
+        return (
+          <Step14View
+            workflow={workflow}
+            onComplete={handleStepComplete}
+            onRefresh={handleRefresh}
+          />
+        );
       default:
         return null;
     }

@@ -50,6 +50,7 @@ export const STEP_ESTIMATED_DURATIONS: Record<number, number> = {
   9: 45, // Glossary - moderate
   12: 240, // Assignment Packs - 3 variants per module
   13: 120, // Summative Exam - single generation
+  14: 30, // Syllabus - lightweight aggregation + LLM polish
 };
 
 const GenerationContext = createContext<GenerationContextType | null>(null);

@@ -27,6 +27,8 @@ import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { wordExportService } from '../services/wordExportService';
 import { analyticsStorageService } from '../services/analyticsStorageService';
 import { lessonPlanService } from '../services/lessonPlanService';
+import { syllabusService } from '../services/syllabusService';
+import { syllabusExportService } from '../services/syllabusExportService';
 import { addStepJob, getStepJobStatus, stepQueue, removeStepJob } from '../queues/stepQueue';
 
 const router = Router();
@@ -3765,6 +3767,178 @@ router.post('/:id/step13/approve', validateJWT, loadUser, async (req: Request, r
     });
   }
 });
+
+// ============================================================================
+// STEP 14: Course Syllabus
+// ============================================================================
+
+/**
+ * GET /api/v3/workflow/:id/step14
+ * Fetch the syllabus inputs + generated sections (if any).
+ */
+router.get('/:id/step14', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    if (!workflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    res.json({ success: true, data: workflow.step14 || null });
+  } catch (error) {
+    loggingService.error('Error fetching Step 14', { error, workflowId: req.params.id });
+    res.status(500).json({ success: false, error: 'Failed to fetch Step 14' });
+  }
+});
+
+/**
+ * PUT /api/v3/workflow/:id/step14
+ * Save instructor info + schedule + policies (no generation yet).
+ * Body: Step14SyllabusInputs
+ */
+router.put('/:id/step14', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const inputs = req.body;
+    if (!inputs?.instructor?.name || !inputs?.instructor?.email || !inputs?.semester) {
+      return res.status(400).json({
+        success: false,
+        error: 'instructor.name, instructor.email and semester are required',
+      });
+    }
+    const workflow = await syllabusService.saveInputs(req.params.id, inputs);
+    res.json({
+      success: true,
+      data: workflow.step14,
+      message: 'Syllabus inputs saved. POST /step14/generate to produce the syllabus.',
+    });
+  } catch (error) {
+    loggingService.error('Error saving Step 14 inputs', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to save Step 14 inputs',
+    });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/step14/generate
+ * Generate the syllabus: aggregate steps 1–13 + light LLM polish + persist.
+ * Saves to step14.generatedSections. Synchronous (~10–30s) — small enough
+ * to skip the queue.
+ */
+router.post(
+  '/:id/step14/generate',
+  validateJWT,
+  loadUser,
+  extendTimeout(120000),
+  async (req: Request, res: Response) => {
+    try {
+      const workflow = await syllabusService.generateSyllabus(req.params.id);
+      res.json({
+        success: true,
+        data: workflow.step14,
+        message: 'Syllabus generated successfully.',
+      });
+    } catch (error) {
+      loggingService.error('Error generating syllabus', { error, workflowId: req.params.id });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate syllabus',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/v3/workflow/:id/step14/approve
+ * Mark Step 14 as approved (terminal step — completes the workflow).
+ */
+router.post('/:id/step14/approve', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id || (req as any).user?.userId;
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    if (!workflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    if (!workflow.step14?.generatedSections) {
+      return res.status(400).json({
+        success: false,
+        error: 'Generate the syllabus before approving',
+      });
+    }
+
+    workflow.step14.approvedAt = new Date();
+    workflow.step14.approvedBy = userId;
+    workflow.currentStep = 14;
+    workflow.status = 'step14_complete';
+
+    const progress = workflow.stepProgress.find((p) => p.step === 14);
+    if (progress) {
+      progress.status = 'approved';
+      progress.approvedAt = new Date();
+      progress.approvedBy = userId;
+      progress.completedAt = new Date();
+    }
+
+    workflow.markModified('step14');
+    workflow.markModified('stepProgress');
+    await workflow.save();
+
+    res.json({
+      success: true,
+      data: { status: workflow.status, currentStep: workflow.currentStep },
+      message: 'Syllabus approved.',
+    });
+  } catch (error) {
+    loggingService.error('Error approving Step 14', { error, workflowId: req.params.id });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to approve Step 14',
+    });
+  }
+});
+
+/**
+ * GET /api/v3/workflow/:id/step14/export.docx
+ * Stream the generated syllabus as a Word document.
+ */
+router.get(
+  '/:id/step14/export.docx',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const workflow = await CurriculumWorkflow.findById(req.params.id);
+      if (!workflow) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+      if (!workflow.step14?.generatedSections) {
+        return res.status(400).json({
+          success: false,
+          error: 'Generate the syllabus before exporting',
+        });
+      }
+      const buffer = await syllabusExportService.generateSyllabusDocument(workflow);
+      const safeTitle = (
+        (workflow as any).step1?.programTitle ||
+        workflow.projectName ||
+        'syllabus'
+      )
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .substring(0, 60);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}_syllabus.docx"`);
+      res.send(buffer);
+    } catch (error) {
+      loggingService.error('Error exporting syllabus', { error, workflowId: req.params.id });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to export syllabus',
+      });
+    }
+  }
+);
 
 /**
  * POST /api/v3/workflow/:id/complete

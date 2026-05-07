@@ -804,6 +804,22 @@ Generate detailed lesson content including:
 6. Common misconceptions students might have
 7. Discussion prompts to engage learners
 
+APPLIED AI INTEGRATION (REQUIRED):
+At least ONE activity in the sequence MUST be an "applied AI" activity where students
+actively use a generative AI tool (ChatGPT, Copilot, Claude, domain-specific assistants,
+etc.) as a learning instrument. Mark these activities with "involvesAI": true and use
+the type "ai_activity". The activity should:
+  - Be authentic to the module's domain — not bolted on (e.g. for retail compliance,
+    use AI to draft policy variants and have students critique; for marketing, use AI
+    to generate audience personas and stress-test them).
+  - Spell out exactly what the student is asked to do with the tool, what they submit
+    or discuss afterwards, and how they would evaluate the AI's output critically.
+  - Include the rough prompt or task framing in instructorActions so a non-technical
+    instructor can run it.
+Do NOT replace lecture-style activities with AI tasks indiscriminately — exactly 1 (or
+at most 2) of the activities should be ai_activity, and the rest should remain
+varied (lecture, discussion, practice, etc.).
+
 Return your response as a JSON object with the following structure:
 {
   "objectives": ["objective 1", "objective 2", ...],
@@ -812,7 +828,8 @@ Return your response as a JSON object with the following structure:
       "title": "Activity title",
       "description": "Activity description",
       "duration": 30,
-      "type": "mini_lecture|discussion|demonstration|practice|role_play|case_analysis|group_work|assessment|break",
+      "type": "mini_lecture|discussion|demonstration|practice|role_play|case_analysis|group_work|assessment|break|ai_activity",
+      "involvesAI": false,
       "teachingMethod": "method description",
       "resources": ["resource 1", "resource 2"],
       "instructorActions": ["action 1", "action 2"],
@@ -865,11 +882,13 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
         activitiesCount: parsed.activities?.length || 0,
       });
 
-      // Transform activities to match LessonActivity interface
+      // Transform activities to match LessonActivity interface.
+      // Coerce involvesAI: explicit boolean OR ai_activity type implies true.
       const activities: LessonActivity[] = parsed.activities.map((act: any, index: number) => ({
         activityId: `${module.moduleCode}-L${block.lessonNumber}-A${index + 1}`,
         sequenceOrder: index + 1,
         type: act.type || 'mini_lecture',
+        involvesAI: act.involvesAI === true || act.type === 'ai_activity',
         title: act.title,
         description: act.description,
         duration: act.duration,
@@ -1181,6 +1200,8 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
       group_work: 'collaborative learning',
       assessment: 'formative assessment',
       break: 'n/a',
+      ai_activity:
+        'AI-augmented inquiry: students use a generative AI tool to draft, critique, or extend ideas, then evaluate the output against course concepts',
     };
 
     // Delivery mode adaptations
