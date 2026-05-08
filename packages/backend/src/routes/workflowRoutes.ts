@@ -256,14 +256,17 @@ router.post('/', validateJWT, loadUser, async (req: Request, res: Response) => {
 router.get('/', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || (req as any).user?.userId;
+    const role = (req as any).user?.role;
     const { status, step } = req.query;
 
-    const query: any = { createdBy: userId };
+    // Faculty (and any non-admin role) only see their own programs.
+    // Administrators see everything — useful for support and overview.
+    const query: any = role === 'administrator' ? {} : { createdBy: userId };
     if (status) query.status = status;
     if (step) query.currentStep = parseInt(step as string);
 
     const workflows = await CurriculumWorkflow.find(query)
-      .select('projectName currentStep status createdAt updatedAt stepProgress')
+      .select('projectName currentStep status createdAt updatedAt stepProgress createdBy')
       .sort({ updatedAt: -1 });
 
     res.json({
@@ -282,16 +285,28 @@ router.get('/', validateJWT, loadUser, async (req: Request, res: Response) => {
 
 /**
  * GET /api/v3/workflow/:id
- * Get workflow by ID
+ * Get workflow by ID. Faculty can only fetch programs they own; admins
+ * can fetch any. The mock-admin fallback (when Auth0 is unconfigured)
+ * is treated as administrator, preserving existing dev behaviour.
  */
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.id || (req as any).user?.userId;
+    const role = (req as any).user?.role;
     const workflow = await workflowService.getWorkflow(req.params.id);
 
     if (!workflow) {
       return res.status(404).json({
         success: false,
         error: 'Workflow not found',
+      });
+    }
+
+    // Ownership check — admins bypass; everyone else can only see their own.
+    if (role !== 'administrator' && String((workflow as any).createdBy) !== String(userId)) {
+      return res.status(403).json({
+        success: false,
+        error: 'You do not have access to this workflow',
       });
     }
 

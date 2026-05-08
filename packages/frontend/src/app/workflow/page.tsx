@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import UserMenu from '@/components/auth/UserMenu';
 
 function formatStatus(status: WorkflowStatus): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
@@ -159,6 +160,7 @@ export default function WorkflowListPage() {
               <Plus className="w-4 h-4" />
               New Curriculum
             </button>
+            <UserMenu />
           </div>
         </div>
       </header>

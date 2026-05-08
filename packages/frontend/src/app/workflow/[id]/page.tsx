@@ -31,6 +31,7 @@ import Step14View from '@/components/workflow/Step14View';
 import FinalReviewView from '@/components/workflow/FinalReviewView';
 import CanvasChatbot from '@/components/workflow/CanvasChatbot';
 import { EditTarget } from '@/components/workflow/EditWithAIButton';
+import UserMenu from '@/components/auth/UserMenu';
 
 // Step icons
 const STEP_ICONS: Record<WorkflowStep, React.ReactNode> = {
@@ -470,6 +471,7 @@ export default function WorkflowDetailPage() {
               >
                 Export
               </button>
+              <UserMenu />
             </div>
           </div>
 

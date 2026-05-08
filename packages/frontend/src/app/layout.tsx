@@ -5,6 +5,9 @@ import { GenerationProvider } from '@/contexts/GenerationContext';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { ToastContainer } from '@/components/ui/ToastContainer';
 import { FloatingThemeToggle } from '@/components/ui/FloatingThemeToggle';
+import Auth0ProviderWrapper from '@/components/auth/Auth0ProviderWrapper';
+import AuthBridge from '@/components/auth/AuthBridge';
+import AuthGate from '@/components/auth/AuthGate';
 
 export const metadata: Metadata = {
   title: 'Curriculum Generator | AGCQ',
@@ -25,11 +28,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-sans antialiased">
         <QueryProvider>
           <ThemeProvider>
-            <GenerationProvider>
-              {children}
-              <ToastContainer />
-              <FloatingThemeToggle />
-            </GenerationProvider>
+            <Auth0ProviderWrapper>
+              <AuthBridge />
+              <GenerationProvider>
+                <AuthGate>{children}</AuthGate>
+                <ToastContainer />
+                <FloatingThemeToggle />
+              </GenerationProvider>
+            </Auth0ProviderWrapper>
           </ThemeProvider>
         </QueryProvider>
       </body>
