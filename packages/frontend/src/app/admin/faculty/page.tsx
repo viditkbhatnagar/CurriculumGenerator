@@ -11,6 +11,8 @@ interface FacultyUser {
   id: string;
   email: string;
   role: string;
+  hasPendingPassword?: boolean;
+  lastLogin?: string | null;
 }
 
 interface NewCredential {
@@ -115,6 +117,41 @@ export default function FacultyAdminPage() {
       await refresh();
     } catch (err: any) {
       toast.error('Revoke failed', err?.response?.data?.error?.message || err.message);
+    }
+  };
+
+  /**
+   * Re-show a faculty member's temporary password for the admin who issued
+   * the invite. Hits /api/users/:id/pending-password — that endpoint
+   * returns 404 once the faculty member has signed in for the first time
+   * (the plaintext is cleared on successful login).
+   */
+  const handleRevealPassword = async (u: FacultyUser) => {
+    try {
+      const resp = await api.get(`/api/users/${u.id}/pending-password`);
+      const password = resp.data?.password;
+      if (!password) {
+        toast.info(
+          'No pending password',
+          `${u.email} has already signed in or never had one issued.`
+        );
+        return;
+      }
+      setNewCredential({ email: u.email, password });
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 404) {
+        toast.info(
+          'Password already used',
+          `${u.email} signed in already, so the temporary password is no longer available. Revoke + re-invite to issue a new one.`
+        );
+        await refresh();
+      } else {
+        toast.error(
+          'Reveal failed',
+          err?.response?.data?.error?.message || err?.message || 'Could not fetch the password'
+        );
+      }
     }
   };
 
@@ -290,19 +327,41 @@ export default function FacultyAdminPage() {
                         idx !== faculty.length - 1 ? 'border-b border-stone-100' : ''
                       }`}
                     >
-                      <td className="px-5 py-3.5 text-stone-800">{u.email}</td>
+                      <td className="px-5 py-3.5 text-stone-800">
+                        <div className="flex items-center gap-2">
+                          <span>{u.email}</span>
+                          {u.hasPendingPassword && (
+                            <span
+                              className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-medium tracking-tight uppercase"
+                              title="This faculty member hasn't signed in yet"
+                            >
+                              Pending
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-5 py-3.5">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[11px] font-medium tracking-tight">
                           {u.role}
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-right">
-                        <button
-                          onClick={() => handleRevoke(u.id, u.email)}
-                          className="text-[12px] font-medium text-stone-400 hover:text-rose-700 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-                        >
-                          Revoke
-                        </button>
+                        <div className="inline-flex items-center gap-3">
+                          {u.hasPendingPassword && (
+                            <button
+                              onClick={() => handleRevealPassword(u)}
+                              className="text-[12px] font-medium text-teal-700 hover:text-teal-900 transition-colors"
+                            >
+                              Reveal password
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleRevoke(u.id, u.email)}
+                            className="text-[12px] font-medium text-stone-400 hover:text-rose-700 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                          >
+                            Revoke
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

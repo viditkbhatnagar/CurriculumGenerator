@@ -16,11 +16,13 @@ export interface IUser extends Document {
   invited?: boolean;
   invitedBy?: mongoose.Types.ObjectId;
   invitedAt?: Date;
-  // Set when an admin generates a password for this user. The plaintext is
-  // returned ONCE in the API response and never stored — only the hash is.
-  // We track when the password was last reset so the admin UI can warn if
-  // a stale invite hasn't been used.
+  // Set when an admin generates a password for this user.
   passwordSetAt?: Date;
+  // Plaintext password kept only until the user first signs in, so the admin
+  // who issued the invite can recover it if they lost the modal before
+  // sharing. Cleared automatically on successful login. Never selected by
+  // default — only the dedicated admin endpoint reads it.
+  pendingPlaintextPassword?: string;
   profile: {
     firstName?: string;
     lastName?: string;
@@ -63,6 +65,7 @@ const UserSchema = new Schema<IUser>(
     },
     passwordHash: { type: String, select: false },
     passwordSetAt: { type: Date },
+    pendingPlaintextPassword: { type: String, select: false },
     invited: { type: Boolean, default: false, index: true },
     invitedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     invitedAt: { type: Date },

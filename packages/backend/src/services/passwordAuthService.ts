@@ -49,8 +49,13 @@ export async function login(input: LoginInput): Promise<LoginResult> {
   const ok = await bcrypt.compare(input.password, user.passwordHash);
   if (!ok) throw new InvalidCredentialsError();
 
-  // Update last-login best-effort; failure here shouldn't block login
-  User.findByIdAndUpdate(user._id, { lastLogin: new Date() }).catch(() => {
+  // Update last-login + clear the admin-visible plaintext invite password
+  // (see User.pendingPlaintextPassword). Best-effort; failure shouldn't
+  // block login.
+  User.findByIdAndUpdate(user._id, {
+    lastLogin: new Date(),
+    $unset: { pendingPlaintextPassword: '' },
+  }).catch(() => {
     /* ignore */
   });
 

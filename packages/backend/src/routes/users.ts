@@ -13,6 +13,7 @@ import {
   updateUserRole,
   deleteUser,
   inviteFaculty,
+  getPendingPlaintextPassword,
 } from '../services/userService';
 import { getAuditLogsByUser } from '../services/auditService';
 
@@ -46,6 +47,8 @@ router.get(
           id: u.id,
           email: u.email,
           role: u.role,
+          hasPendingPassword: u.hasPendingPassword,
+          lastLogin: u.lastLogin || null,
         })),
         pagination: {
           total,
@@ -167,6 +170,43 @@ router.put(
           message: 'Failed to update user role',
           timestamp: new Date().toISOString(),
           requestId: req.headers['x-request-id'] || 'unknown',
+        },
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/users/:id/pending-password
+ * Returns the plaintext temporary password for an invited user, but only
+ * if they haven't signed in yet. Once a user logs in successfully the
+ * field is cleared and this endpoint returns 404. Admin-only.
+ */
+router.get(
+  '/:id/pending-password',
+  requireRole(UserRole.ADMINISTRATOR),
+  auditAction('REVEAL_PENDING_PASSWORD', 'users'),
+  async (req: Request, res: Response) => {
+    try {
+      const password = await getPendingPlaintextPassword(req.params.id);
+      if (!password) {
+        return res.status(404).json({
+          error: {
+            code: 'NO_PENDING_PASSWORD',
+            message:
+              'No pending password for this user. They have already signed in, or were never issued one.',
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }
+      res.json({ password });
+    } catch (error) {
+      console.error('Error reading pending password:', error);
+      res.status(500).json({
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to read pending password',
+          timestamp: new Date().toISOString(),
         },
       });
     }

@@ -104,24 +104,52 @@ export async function deleteUser(userId: string): Promise<boolean> {
 }
 
 /**
- * List all users (admin only)
+ * List all users (admin only).
+ *
+ * Returns AuthUser shape plus `hasPendingPassword` so the admin UI can show
+ * a "Reveal" affordance for invitees who haven't signed in yet. The
+ * plaintext itself is never sent here — admins fetch it from the dedicated
+ * `/api/users/:id/pending-password` endpoint.
  */
 export async function listUsers(
   limit: number = 50,
   offset: number = 0,
   filter: { role?: UserRole } = {}
-): Promise<{ users: AuthUser[]; total: number }> {
+): Promise<{
+  users: Array<AuthUser & { hasPendingPassword: boolean; lastLogin?: Date }>;
+  total: number;
+}> {
   const query: any = {};
   if (filter.role) query.role = filter.role;
   const [users, total] = await Promise.all([
-    User.find(query).sort({ createdAt: -1 }).limit(limit).skip(offset),
+    // Pull pendingPlaintextPassword to compute the flag; it never leaves
+    // this function. Hash is also pulled but discarded.
+    User.find(query)
+      .select('+pendingPlaintextPassword +passwordHash')
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(offset),
     User.countDocuments(query),
   ]);
 
   return {
-    users: users.map(toAuthUser),
+    users: users.map((u) => ({
+      ...toAuthUser(u),
+      hasPendingPassword: !!u.pendingPlaintextPassword,
+      lastLogin: u.lastLogin,
+    })),
     total,
   };
+}
+
+/**
+ * Read the plaintext invite password for a user. Returns null if the user
+ * has already signed in (we cleared it then). Admin-only — the route
+ * that calls this is gated by requireRole(ADMINISTRATOR).
+ */
+export async function getPendingPlaintextPassword(userId: string): Promise<string | null> {
+  const user = await User.findById(userId).select('+pendingPlaintextPassword');
+  return user?.pendingPlaintextPassword || null;
 }
 
 /**
@@ -153,6 +181,7 @@ export async function inviteFaculty(
       const plain = generateRandomPassword();
       existing.passwordHash = await hashPassword(plain);
       existing.passwordSetAt = new Date();
+      existing.pendingPlaintextPassword = plain;
       // Promote role to faculty if the existing record was a placeholder
       if (existing.role === 'sme' || existing.role === 'student') existing.role = UserRole.FACULTY;
       await existing.save();
@@ -168,6 +197,9 @@ export async function inviteFaculty(
     authProviderId: `local:${email.toLowerCase()}`,
     passwordHash: await hashPassword(plain),
     passwordSetAt: new Date(),
+    // Stored so the admin can re-reveal the password later if the modal was
+    // dismissed before sharing. Cleared automatically on first successful login.
+    pendingPlaintextPassword: plain,
     invited: true,
     invitedBy: invitedByUserId || undefined,
     invitedAt: new Date(),
