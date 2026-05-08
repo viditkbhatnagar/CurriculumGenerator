@@ -150,6 +150,19 @@ export default function Step14View({ workflow, onComplete, onRefresh }: Props) {
     window.open(`${base}/api/v3/workflow/${workflow._id}/step14/export.docx`, '_blank');
   };
 
+  const handleDownloadModule = (moduleId: string) => {
+    const base = process.env.NEXT_PUBLIC_API_URL || '';
+    window.open(
+      `${base}/api/v3/workflow/${workflow._id}/step14/module/${moduleId}/export.docx`,
+      '_blank'
+    );
+  };
+
+  const handleDownloadAll = () => {
+    const base = process.env.NEXT_PUBLIC_API_URL || '';
+    window.open(`${base}/api/v3/workflow/${workflow._id}/step14/export-all.zip`, '_blank');
+  };
+
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <header className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-teal-500/30 rounded-xl p-5">
@@ -438,12 +451,22 @@ export default function Step14View({ workflow, onComplete, onRefresh }: Props) {
         >
           {generating ? 'Generating…' : generated ? 'Regenerate Syllabus' : 'Generate Syllabus'}
         </button>
+        {generated && generated.moduleSyllabi && generated.moduleSyllabi.length > 0 && (
+          <button
+            onClick={handleDownloadAll}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-semibold"
+            title={`Zip with ${generated.moduleSyllabi.length} per-module syllabus documents`}
+          >
+            Download All ({generated.moduleSyllabi.length} modules .zip)
+          </button>
+        )}
         {generated && (
           <button
             onClick={handleDownload}
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-semibold"
+            className="px-4 py-2 bg-white hover:bg-amber-50 border border-amber-400 text-amber-700 rounded-lg text-sm font-medium"
+            title="Single program-wide syllabus document"
           >
-            Download .docx
+            Programme overview .docx
           </button>
         )}
         {canApprove && (
@@ -525,6 +548,113 @@ export default function Step14View({ workflow, onComplete, onRefresh }: Props) {
                 ))}
               </ul>
             </div>
+          </div>
+        </Section>
+      )}
+
+      {/* Per-module syllabi preview — Logan's primary ask */}
+      {generated && generated.moduleSyllabi && generated.moduleSyllabi.length > 0 && (
+        <Section title={`Per-Module Syllabi (${generated.moduleSyllabi.length})`}>
+          <p className="text-xs text-teal-600 mb-4">
+            Each module has its own focused syllabus with that module's MLOs, topic schedule, and
+            assignments. Use the buttons to download one module at a time, or the "Download All"
+            button above for a zip.
+          </p>
+          <div className="space-y-3">
+            {generated.moduleSyllabi.map((mod) => (
+              <details
+                key={mod.moduleId}
+                className="bg-white rounded-lg border border-teal-200 group"
+              >
+                <summary className="cursor-pointer flex items-center justify-between p-3 list-none">
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-teal-800">
+                      {mod.moduleCode}: {mod.moduleTitle}
+                    </div>
+                    <div className="text-xs text-teal-600 mt-0.5">
+                      {mod.moduleLearningOutcomes.length} outcomes · {mod.weeklySchedule.length}{' '}
+                      sessions · {mod.assignments.length} assignment
+                      {mod.assignments.length === 1 ? '' : 's'}
+                      {mod.contactHours ? ` · ${mod.contactHours} contact hrs` : ''}
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDownloadModule(mod.moduleId);
+                    }}
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded font-semibold flex-shrink-0 ml-3"
+                  >
+                    Download .docx
+                  </button>
+                </summary>
+                <div className="px-3 pb-3 text-sm text-teal-800 space-y-3 border-t border-teal-100 pt-3">
+                  {mod.moduleDescription && (
+                    <div>
+                      <p className="text-xs font-semibold text-teal-700 mb-1">Description</p>
+                      <p className="text-xs whitespace-pre-wrap">{mod.moduleDescription}</p>
+                    </div>
+                  )}
+                  {mod.moduleLearningOutcomes.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-teal-700 mb-1">
+                        Module Learning Outcomes
+                      </p>
+                      <ol className="list-decimal pl-5 text-xs space-y-0.5">
+                        {mod.moduleLearningOutcomes.map((o, i) => (
+                          <li key={i}>{o}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                  {mod.weeklySchedule.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-teal-700 mb-1">Schedule</p>
+                      <div className="overflow-auto">
+                        <table className="text-xs w-full border-collapse">
+                          <thead>
+                            <tr className="bg-teal-50 text-left">
+                              <th className="p-1.5 border border-teal-200">Wk</th>
+                              <th className="p-1.5 border border-teal-200">Sess</th>
+                              <th className="p-1.5 border border-teal-200">Date</th>
+                              <th className="p-1.5 border border-teal-200">Topics</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {mod.weeklySchedule.map((row, i) => (
+                              <tr key={i} className="even:bg-teal-50/30">
+                                <td className="p-1.5 border border-teal-200">{row.week}</td>
+                                <td className="p-1.5 border border-teal-200">
+                                  {row.sessionNumber}
+                                </td>
+                                <td className="p-1.5 border border-teal-200">{row.date || '—'}</td>
+                                <td className="p-1.5 border border-teal-200">
+                                  {row.topics.join('; ')}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  {mod.assignments.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-teal-700 mb-1">Assignments</p>
+                      <ul className="text-xs space-y-0.5">
+                        {mod.assignments.map((a, i) => (
+                          <li key={i}>
+                            <span className="font-medium">{a.title}</span>
+                            {a.weight ? ` — ${a.weight}%` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </details>
+            ))}
           </div>
         </Section>
       )}

@@ -3898,7 +3898,7 @@ router.post('/:id/step14/approve', validateJWT, loadUser, async (req: Request, r
 
 /**
  * GET /api/v3/workflow/:id/step14/export.docx
- * Stream the generated syllabus as a Word document.
+ * Stream the program-wide syllabus as a Word document.
  */
 router.get(
   '/:id/step14/export.docx',
@@ -3935,6 +3935,101 @@ router.get(
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to export syllabus',
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/v3/workflow/:id/step14/module/:moduleId/export.docx
+ * Per-module syllabus (Logan's primary ask) — one focused syllabus per module.
+ */
+router.get(
+  '/:id/step14/module/:moduleId/export.docx',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const workflow = await CurriculumWorkflow.findById(req.params.id);
+      if (!workflow) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+      if (!workflow.step14?.generatedSections?.moduleSyllabi?.length) {
+        return res.status(400).json({
+          success: false,
+          error: 'Generate the syllabus before exporting per-module documents',
+        });
+      }
+      const buffer = await syllabusExportService.generateModuleSyllabusDocument(
+        workflow,
+        req.params.moduleId
+      );
+      const mod = workflow.step14.generatedSections.moduleSyllabi.find(
+        (m) => m.moduleId === req.params.moduleId
+      );
+      const safeName = `${mod?.moduleCode || req.params.moduleId}_${(
+        mod?.moduleTitle || ''
+      ).replace(/[^a-zA-Z0-9]+/g, '_')}`
+        .substring(0, 80)
+        .replace(/_+$/, '');
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="${safeName}_syllabus.docx"`);
+      res.send(buffer);
+    } catch (error) {
+      loggingService.error('Error exporting module syllabus', {
+        error,
+        workflowId: req.params.id,
+        moduleId: req.params.moduleId,
+      });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to export module syllabus',
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/v3/workflow/:id/step14/export-all.zip
+ * One zip containing every per-module syllabus DOCX.
+ */
+router.get(
+  '/:id/step14/export-all.zip',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const workflow = await CurriculumWorkflow.findById(req.params.id);
+      if (!workflow) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+      if (!workflow.step14?.generatedSections?.moduleSyllabi?.length) {
+        return res.status(400).json({
+          success: false,
+          error: 'Generate the syllabus before exporting per-module documents',
+        });
+      }
+      const buffer = await syllabusExportService.generateAllModuleSyllabiZip(workflow);
+      const safeTitle = ((workflow as any).step1?.programTitle || workflow.projectName || 'syllabi')
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .substring(0, 60);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${safeTitle}_module_syllabi.zip"`
+      );
+      res.send(buffer);
+    } catch (error) {
+      loggingService.error('Error exporting all module syllabi zip', {
+        error,
+        workflowId: req.params.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to export module syllabi zip',
       });
     }
   }

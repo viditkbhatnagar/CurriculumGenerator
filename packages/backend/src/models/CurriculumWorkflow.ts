@@ -608,6 +608,28 @@ export interface SyllabusAssignmentItem {
   source: 'step12' | 'step13' | 'user'; // for traceability
 }
 
+/**
+ * One per-module syllabus section. Logan asked for syllabi to be generated
+ * per module rather than program-wide; we now produce both — `moduleSyllabi`
+ * is the primary output, the program-wide section is kept for the
+ * occasional "single document" use case.
+ */
+export interface ModuleSyllabus {
+  moduleId: string;
+  moduleCode: string;
+  moduleTitle: string;
+  moduleDescription: string;
+  contactHours?: number;
+  // Module Learning Outcomes (MLOs) for this module — pulled from step4.
+  moduleLearningOutcomes: string[];
+  // Topics from step4 distributed across this module's sessions, with
+  // readings + due items folded in.
+  weeklySchedule: SyllabusWeekRow[];
+  // Step 12 assignment packs scoped to this module (+ any user exam due
+  // dates that fall during the module's session window).
+  assignments: SyllabusAssignmentItem[];
+}
+
 export interface Step14Syllabus {
   inputs: Step14SyllabusInputs;
 
@@ -626,6 +648,9 @@ export interface Step14Syllabus {
       academicIntegrity: string;
       accessibility: string;
     };
+    // Per-module syllabi — Logan's primary ask. Each module gets its own
+    // focused syllabus (own MLOs, own topic schedule, own assignments).
+    moduleSyllabi?: ModuleSyllabus[];
   };
 
   generatedAt?: Date;

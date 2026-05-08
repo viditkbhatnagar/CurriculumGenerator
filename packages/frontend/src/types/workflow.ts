@@ -1783,6 +1783,17 @@ export interface SyllabusAssignmentItem {
   source: 'step12' | 'step13' | 'user';
 }
 
+export interface ModuleSyllabus {
+  moduleId: string;
+  moduleCode: string;
+  moduleTitle: string;
+  moduleDescription: string;
+  contactHours?: number;
+  moduleLearningOutcomes: string[];
+  weeklySchedule: SyllabusWeekRow[];
+  assignments: SyllabusAssignmentItem[];
+}
+
 export interface Step14Syllabus {
   inputs: Step14SyllabusInputs;
   generatedSections?: {
@@ -1799,6 +1810,7 @@ export interface Step14Syllabus {
       academicIntegrity: string;
       accessibility: string;
     };
+    moduleSyllabi?: ModuleSyllabus[];
   };
   generatedAt?: string;
   approvedAt?: string;

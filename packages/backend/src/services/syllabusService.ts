@@ -15,6 +15,7 @@ import type {
   Step14SyllabusInputs,
   SyllabusWeekRow,
   SyllabusAssignmentItem,
+  ModuleSyllabus,
 } from '../models/CurriculumWorkflow';
 import { openaiService } from './openaiService';
 import { loggingService } from './loggingService';
@@ -123,6 +124,11 @@ class SyllabusService {
       accessibility: inputs.policies?.accessibility?.trim() || DEFAULT_POLICIES.accessibility,
     };
 
+    // ----- Per-module syllabi (Logan's primary ask) -----
+    // Each module gets its own focused syllabus: its own MLOs, just its
+    // own topics in the schedule, and just the assignments scoped to it.
+    const moduleSyllabi = this.buildModuleSyllabi(inputs, step4, step6, step12);
+
     workflow.step14.generatedSections = {
       courseDescription,
       learningOutcomes,
@@ -130,6 +136,7 @@ class SyllabusService {
       assignments,
       gradingScale: DEFAULT_GRADING_SCALE,
       policies,
+      moduleSyllabi,
     };
     workflow.step14.generatedAt = new Date();
     workflow.markModified('step14');
@@ -288,6 +295,130 @@ ${raw}`;
     }
 
     return rows;
+  }
+
+  /**
+   * Per-module syllabi: one ModuleSyllabus entry per step4 module, each
+   * carrying just that module's MLOs, topics, readings, and assignments.
+   *
+   * Session count per module is proportional to its contactHours when the
+   * user supplied numWeeks/sessionsPerWeek; otherwise we default to one
+   * session per topic.
+   */
+  private buildModuleSyllabi(
+    inputs: Step14SyllabusInputs,
+    step4: any,
+    step6: any,
+    step12: any
+  ): ModuleSyllabus[] {
+    const modules: any[] = step4.modules || [];
+    if (modules.length === 0) return [];
+
+    const totalContact = modules.reduce((sum, m) => sum + (m.contactHours || m.totalHours || 0), 0);
+    const programSessions =
+      Math.max(1, inputs.numWeeks || 12) * Math.max(1, inputs.sessionsPerWeek || 2);
+
+    // Build a global readings index once (moduleId → citations)
+    const readingsByModule = new Map<string, string[]>();
+    (step6.moduleReadingLists || []).forEach((list: any) => {
+      const cites: string[] = [];
+      (list.coreReadings || []).forEach((r: any) => {
+        if (r.citation) cites.push(r.citation);
+      });
+      readingsByModule.set(list.moduleId, cites);
+    });
+
+    // Track running session number across modules so each module's first
+    // session aligns with where the previous module left off.
+    let runningSession = 0;
+    const startDate = inputs.startDate ? new Date(inputs.startDate) : null;
+    const sessionsPerWeek = Math.max(1, inputs.sessionsPerWeek || 2);
+
+    return modules.map((m) => {
+      const moduleCode = m.moduleCode || m.code || '';
+      const moduleHours = m.contactHours || m.totalHours || 0;
+      const moduleTopics = (m.topics || [])
+        .map((t: any) => t.title || t.name || '')
+        .filter(Boolean);
+
+      // How many sessions this module gets — proportional to its contact
+      // hours, with a sensible floor of one session per topic.
+      const proportional =
+        totalContact > 0
+          ? Math.max(1, Math.round((moduleHours / totalContact) * programSessions))
+          : moduleTopics.length;
+      const moduleSessions = Math.max(moduleTopics.length || 1, proportional);
+
+      // Pace topics across the module's sessions. If we have more sessions
+      // than topics, repeat the last topic's title so the schedule isn't
+      // empty rows; if more topics than sessions, batch them.
+      const topicsPerSession = Math.max(1, Math.ceil(moduleTopics.length / moduleSessions));
+
+      const cites = readingsByModule.get(m.id) || [];
+      const rows: SyllabusWeekRow[] = [];
+      for (let i = 0; i < moduleSessions; i++) {
+        if (moduleTopics.length === 0) break;
+        const slice = moduleTopics.slice(i * topicsPerSession, (i + 1) * topicsPerSession);
+        if (slice.length === 0 && i > 0) break;
+
+        const globalSession = runningSession + i + 1;
+        const week = Math.floor((globalSession - 1) / sessionsPerWeek) + 1;
+        const dateStr = startDate
+          ? new Date(startDate.getTime() + (globalSession - 1) * (7 / sessionsPerWeek) * 86400000)
+              .toISOString()
+              .slice(0, 10)
+          : undefined;
+
+        rows.push({
+          week,
+          sessionNumber: globalSession,
+          date: dateStr,
+          moduleCode,
+          topics: slice,
+          // Dedupe readings to first 6 to keep the table compact
+          readings: cites.slice(0, 6),
+          dueItems: [],
+        });
+      }
+      runningSession += moduleSessions;
+
+      // MLOs for this module
+      const mloList: string[] = (m.mlos || m.learningOutcomes || [])
+        .map((mlo: any) => mlo.statement || mlo.outcome || '')
+        .filter(Boolean);
+
+      // Assignments scoped to this module — only Step 12 packs for this
+      // moduleId. The course-wide summative is handled in the program
+      // overview, not duplicated here.
+      const moduleAssignments: SyllabusAssignmentItem[] = [];
+      const matchingPack =
+        (step12.modulePacks || []).find(
+          (p: any) => p.moduleId === m.id || p.moduleCode === moduleCode
+        ) || null;
+      if (matchingPack) {
+        const rep = matchingPack.variants?.[0] || matchingPack.assignments?.[0];
+        if (rep) {
+          moduleAssignments.push({
+            title: rep.overview?.title || `${moduleCode} assignment`,
+            description:
+              rep.overview?.assignmentType || rep.description || 'Module-level applied assignment.',
+            weight: rep.overview?.weighting || 0,
+            source: 'step12',
+          });
+        }
+      }
+
+      return {
+        moduleId: m.id,
+        moduleCode,
+        moduleTitle: m.title || moduleCode,
+        moduleDescription: m.description || '',
+        contactHours: moduleHours,
+        moduleLearningOutcomes: mloList,
+        weeklySchedule: rows,
+        assignments: moduleAssignments,
+      };
+    });
   }
 
   /**

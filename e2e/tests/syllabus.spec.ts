@@ -89,10 +89,18 @@ test.describe('Step 14: Course Syllabus', () => {
     await expect(previewSection.locator('ol > li').first()).toBeVisible();
     await expect(previewSection.locator('table tbody tr').first()).toBeVisible();
 
-    // Download button is rendered (we don't actually download in CI to keep the
-    // test fast and avoid juggling browser download events; the endpoint is
-    // covered by an API-only test below).
-    await expect(page.getByRole('button', { name: /Download \.docx/ })).toBeVisible();
+    // Per-module syllabi section (Logan's primary ask) renders with at
+    // least one module entry + a per-module download button.
+    await expect(page.getByText(/Per-Module Syllabi \(\d+\)/)).toBeVisible();
+    const moduleDownloads = page.locator('details summary >> button:has-text("Download .docx")');
+    expect(await moduleDownloads.count()).toBeGreaterThan(0);
+
+    // Download buttons in the action bar (we don't click — endpoints are
+    // covered by API-only tests below)
+    await expect(
+      page.getByRole('button', { name: /Download All \(\d+ modules \.zip\)/ })
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: /Programme overview \.docx/ })).toBeVisible();
   });
 
   test('export.docx endpoint returns a real Word document', async () => {
@@ -111,5 +119,40 @@ test.describe('Step 14: Course Syllabus', () => {
     expect(buf[1]).toBe(0x4b); // K
     expect(buf[2]).toBe(0x03);
     expect(buf[3]).toBe(0x04);
+  });
+
+  test('per-module export.docx returns a focused module syllabus', async () => {
+    test.skip(!canRun, 'No suitable workflow available');
+
+    // Pick the first module from the workflow as the test target
+    const wfRes = await apiFetch(`/api/v3/workflow/${env.syllabusWorkflowId}`);
+    const wf = (await wfRes.json()) as {
+      data?: { step4?: { modules?: Array<{ id: string }> } };
+    };
+    const moduleId = wf.data?.step4?.modules?.[0]?.id;
+    expect(moduleId, 'workflow should have at least one module').toBeTruthy();
+
+    const res = await apiFetch(
+      `/api/v3/workflow/${env.syllabusWorkflowId}/step14/module/${moduleId}/export.docx`
+    );
+    expect(res.status, 'module export.docx should return 200').toBe(200);
+    expect(res.headers.get('content-type') || '').toContain('wordprocessingml');
+    const buf = Buffer.from(await res.arrayBuffer());
+    expect(buf.length).toBeGreaterThan(3_000);
+    expect(buf[0]).toBe(0x50);
+    expect(buf[1]).toBe(0x4b);
+  });
+
+  test('export-all.zip returns a zip containing one DOCX per module', async () => {
+    test.skip(!canRun, 'No suitable workflow available');
+
+    const res = await apiFetch(`/api/v3/workflow/${env.syllabusWorkflowId}/step14/export-all.zip`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type') || '').toContain('zip');
+    const buf = Buffer.from(await res.arrayBuffer());
+    // ZIP magic also starts with PK\x03\x04
+    expect(buf.length).toBeGreaterThan(10_000);
+    expect(buf[0]).toBe(0x50);
+    expect(buf[1]).toBe(0x4b);
   });
 });
