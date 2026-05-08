@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { toast } from '@/stores/toastStore';
 import { useAuth } from '@/components/auth/AuthContext';
+import UserMenu from '@/components/auth/UserMenu';
 
 interface FacultyUser {
   id: string;
@@ -133,12 +134,15 @@ export default function FacultyAdminPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-teal-800 mb-1">Faculty Management</h1>
-        <p className="text-sm text-teal-600">
-          Invite faculty members. Each invite generates a temporary password that you share with
-          them; they sign in directly. Revoking removes their access.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-teal-800 mb-1">Faculty Management</h1>
+          <p className="text-sm text-teal-600">
+            Invite faculty members. Each invite generates a temporary password that you share with
+            them; they sign in directly. Revoking removes their access.
+          </p>
+        </div>
+        <UserMenu />
       </header>
 
       {error && (
