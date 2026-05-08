@@ -209,6 +209,10 @@ router.post(
           email: result.user.email,
           role: result.user.role,
         },
+        // Plaintext password is returned ONCE on initial invite (or when an
+        // existing user without a password gets one). Admin must hand this
+        // off to the faculty member — we never store the plaintext.
+        generatedPassword: result.generatedPassword,
       });
     } catch (error) {
       console.error('Error inviting faculty:', error);

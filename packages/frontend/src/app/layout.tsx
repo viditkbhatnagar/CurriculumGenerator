@@ -5,8 +5,7 @@ import { GenerationProvider } from '@/contexts/GenerationContext';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { ToastContainer } from '@/components/ui/ToastContainer';
 import { FloatingThemeToggle } from '@/components/ui/FloatingThemeToggle';
-import Auth0ProviderWrapper from '@/components/auth/Auth0ProviderWrapper';
-import AuthBridge from '@/components/auth/AuthBridge';
+import { AuthProvider } from '@/components/auth/AuthContext';
 import AuthGate from '@/components/auth/AuthGate';
 
 export const metadata: Metadata = {
@@ -28,14 +27,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-sans antialiased">
         <QueryProvider>
           <ThemeProvider>
-            <Auth0ProviderWrapper>
-              <AuthBridge />
+            <AuthProvider>
               <GenerationProvider>
                 <AuthGate>{children}</AuthGate>
                 <ToastContainer />
                 <FloatingThemeToggle />
               </GenerationProvider>
-            </Auth0ProviderWrapper>
+            </AuthProvider>
           </ThemeProvider>
         </QueryProvider>
       </body>

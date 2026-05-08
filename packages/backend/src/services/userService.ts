@@ -125,33 +125,54 @@ export async function listUsers(
 }
 
 /**
- * Invite a faculty member to the allowlist.
- * Creates a User record with role=faculty, invited=true, and a placeholder
- * authProviderId of `pending:<email>`. On their first Auth0 login, the auth
- * middleware will replace `authProviderId` with the real Auth0 sub.
+ * Invite a faculty member.
  *
- * Idempotent: if the email already exists, returns the existing user without
- * re-creating it (status: "exists"); otherwise creates and returns
- * (status: "invited").
+ * Creates a User with role=faculty + a freshly-generated password and returns
+ * the plaintext ONCE so the caller (admin UI) can show it and have the admin
+ * pass it to the faculty member. Only the bcrypt hash is stored.
+ *
+ * If the email already exists:
+ *   - and they have no password → generate one (rare — covers Auth0-imported users)
+ *   - otherwise return status "exists" without changing the password.
  */
 export async function inviteFaculty(
   email: string,
   invitedByUserId?: string,
   profile?: { firstName?: string; lastName?: string; organization?: string }
-): Promise<{ user: AuthUser; status: 'invited' | 'exists' }> {
-  const existing = await User.findOne({ email: email.toLowerCase() });
+): Promise<{
+  user: AuthUser;
+  status: 'invited' | 'exists' | 'password_generated';
+  generatedPassword?: string;
+}> {
+  // Lazy-import to avoid a circular dep with passwordAuthService
+  const { generateRandomPassword, hashPassword } = await import('./passwordAuthService');
+
+  const existing = await User.findOne({ email: email.toLowerCase() }).select('+passwordHash');
   if (existing) {
+    if (!existing.passwordHash) {
+      const plain = generateRandomPassword();
+      existing.passwordHash = await hashPassword(plain);
+      existing.passwordSetAt = new Date();
+      // Promote role to faculty if the existing record was a placeholder
+      if (existing.role === 'sme' || existing.role === 'student') existing.role = UserRole.FACULTY;
+      await existing.save();
+      return { user: toAuthUser(existing), status: 'password_generated', generatedPassword: plain };
+    }
     return { user: toAuthUser(existing), status: 'exists' };
   }
+
+  const plain = generateRandomPassword();
   const user = new User({
     email: email.toLowerCase(),
     role: UserRole.FACULTY,
-    authProviderId: `pending:${email.toLowerCase()}`,
+    authProviderId: `local:${email.toLowerCase()}`,
+    passwordHash: await hashPassword(plain),
+    passwordSetAt: new Date(),
     invited: true,
     invitedBy: invitedByUserId || undefined,
     invitedAt: new Date(),
     profile: profile || {},
   });
   await user.save();
-  return { user: toAuthUser(user), status: 'invited' };
+  return { user: toAuthUser(user), status: 'invited', generatedPassword: plain };
 }

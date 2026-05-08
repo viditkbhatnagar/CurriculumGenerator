@@ -10,6 +10,7 @@ import {
   updateLastLogin,
 } from '../services/userService';
 import { User } from '../models/User';
+import { userFromToken as userFromOurToken } from '../services/passwordAuthService';
 import { createAuditLog } from '../services/auditService';
 
 // Extend Express Request type to include auth
@@ -44,10 +45,36 @@ const authBypass = async (req: Request, res: Response, next: NextFunction): Prom
 };
 
 /**
- * JWT validation middleware using Auth0
+ * JWT validation middleware. Tries three things in order:
+ *   1. Our built-in HS256 JWT (issued by /api/auth/login). If present and
+ *      valid, attaches req.auth + skips Auth0.
+ *   2. Auth0 RS256 JWT, if AUTH0_DOMAIN+AUDIENCE are set.
+ *   3. Mock-admin bypass when neither is configured (preserves dev path).
  */
 export const validateJWT = (req: Request, res: Response, next: NextFunction): void => {
-  // Skip JWT validation if Auth0 is not configured (works in any environment)
+  // Try our built-in JWT first — covers the email+password login path
+  const authHeader = req.headers.authorization;
+  const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (bearer) {
+    userFromOurToken(bearer)
+      .then((user) => {
+        if (user) {
+          req.auth = { sub: user.authProviderId || `local:${user.email}`, email: user.email };
+          // Stash the resolved user so loadUser can skip the DB hop
+          (req as any)._resolvedUser = user;
+          return next();
+        }
+        // Token didn't decode/find user — fall through to Auth0 if configured
+        return continueWithAuth0OrBypass(req, res, next);
+      })
+      .catch(() => continueWithAuth0OrBypass(req, res, next));
+    return;
+  }
+
+  continueWithAuth0OrBypass(req, res, next);
+};
+
+function continueWithAuth0OrBypass(req: Request, res: Response, next: NextFunction): void {
   if (!isAuth0Configured) {
     authBypass(req, res, next);
     return;
@@ -65,13 +92,20 @@ export const validateJWT = (req: Request, res: Response, next: NextFunction): vo
     issuer: `https://${config.auth0.domain}/`,
     algorithms: ['RS256'],
   })(req, res, next);
-};
+}
 
 /**
  * Middleware to load user from database and attach to request
  */
 export const loadUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    // Fast path: our built-in JWT already resolved the user in validateJWT
+    const preResolved = (req as any)._resolvedUser as AuthUser | undefined;
+    if (preResolved) {
+      req.user = preResolved;
+      return next();
+    }
+
     if (!req.auth?.sub) {
       res.status(401).json({
         error: {

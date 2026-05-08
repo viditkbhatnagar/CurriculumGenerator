@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { toast } from '@/stores/toastStore';
+import { useAuth } from '@/components/auth/AuthContext';
 
 interface FacultyUser {
   id: string;
@@ -10,7 +11,14 @@ interface FacultyUser {
   role: string;
 }
 
+interface NewCredential {
+  email: string;
+  password: string;
+  copied?: boolean;
+}
+
 export default function FacultyAdminPage() {
+  const { user, isLoading: authLoading } = useAuth();
   const [faculty, setFaculty] = useState<FacultyUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +26,7 @@ export default function FacultyAdminPage() {
   const [inviteFirstName, setInviteFirstName] = useState('');
   const [inviteLastName, setInviteLastName] = useState('');
   const [inviting, setInviting] = useState(false);
+  const [newCredential, setNewCredential] = useState<NewCredential | null>(null);
 
   const refresh = async () => {
     setLoading(true);
@@ -33,8 +42,32 @@ export default function FacultyAdminPage() {
   };
 
   useEffect(() => {
-    refresh();
-  }, []);
+    if (!authLoading && user?.role === 'administrator') {
+      void refresh();
+    }
+  }, [authLoading, user?.role]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-teal-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (user?.role !== 'administrator') {
+    return (
+      <div className="max-w-2xl mx-auto p-6 mt-12">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-5 text-center">
+          <h1 className="text-lg font-semibold text-red-700 mb-1">Administrator only</h1>
+          <p className="text-sm text-red-600">
+            You need an administrator role to manage faculty. If this is wrong, ask Logan to update
+            your role.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,13 +82,20 @@ export default function FacultyAdminPage() {
           lastName: inviteLastName.trim() || undefined,
         },
       });
-      const status = resp.data?.status;
-      toast.success(
-        status === 'invited' ? 'Faculty invited' : 'Already on the list',
-        status === 'invited'
-          ? `${inviteEmail} can now sign in once Auth0 is enabled.`
-          : `${inviteEmail} is already invited.`
-      );
+      const status = resp.data?.status as string;
+      const generatedPassword = resp.data?.generatedPassword as string | undefined;
+
+      if (status === 'exists') {
+        toast.info('Already on the list', `${inviteEmail} already has an account.`);
+      } else if (generatedPassword) {
+        // Show the one-time password modal — admin must hand this to the
+        // faculty member; the plaintext is gone after they close the modal.
+        setNewCredential({ email: inviteEmail.trim(), password: generatedPassword });
+        toast.success('Faculty invited', `Share the temporary password with ${inviteEmail}.`);
+      } else {
+        toast.success('Invited', inviteEmail);
+      }
+
       setInviteEmail('');
       setInviteFirstName('');
       setInviteLastName('');
@@ -78,15 +118,26 @@ export default function FacultyAdminPage() {
     }
   };
 
+  const handleCopyPassword = async () => {
+    if (!newCredential) return;
+    try {
+      await navigator.clipboard.writeText(newCredential.password);
+      setNewCredential({ ...newCredential, copied: true });
+      setTimeout(() => {
+        setNewCredential((cur) => (cur ? { ...cur, copied: false } : cur));
+      }, 2000);
+    } catch {
+      // Fallback if clipboard API blocked — user can select manually
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
       <header>
         <h1 className="text-2xl font-bold text-teal-800 mb-1">Faculty Management</h1>
         <p className="text-sm text-teal-600">
-          Invite authorized faculty to access the curriculum workflow. To enforce that only invited
-          faculty can sign in, set{' '}
-          <code className="text-xs bg-teal-100 px-1 rounded">FACULTY_ALLOWLIST_ENFORCED=true</code>{' '}
-          on the backend (and configure Auth0).
+          Invite faculty members. Each invite generates a temporary password that you share with
+          them; they sign in directly. Revoking removes their access.
         </p>
       </header>
 
@@ -177,6 +228,59 @@ export default function FacultyAdminPage() {
           </table>
         )}
       </section>
+
+      {/* One-time password reveal modal */}
+      {newCredential && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h3 className="text-lg font-bold text-teal-800">Share these credentials</h3>
+            <p className="text-sm text-teal-600">
+              This password will <strong>never be shown again</strong>. Copy it now and share it
+              with the faculty member through your normal channel (email, Slack, in person).
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs text-teal-700 font-medium mb-1">Email</p>
+                <code className="block w-full px-3 py-2 bg-teal-50 border border-teal-300 rounded text-sm text-teal-800 select-all">
+                  {newCredential.email}
+                </code>
+              </div>
+              <div>
+                <p className="text-xs text-teal-700 font-medium mb-1">Temporary password</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 px-3 py-2 bg-teal-50 border border-teal-300 rounded text-sm text-teal-800 font-mono select-all">
+                    {newCredential.password}
+                  </code>
+                  <button
+                    onClick={handleCopyPassword}
+                    className={`px-3 py-2 rounded text-xs font-semibold ${
+                      newCredential.copied
+                        ? 'bg-emerald-200 text-emerald-700'
+                        : 'bg-teal-500 hover:bg-teal-600 text-white'
+                    }`}
+                  >
+                    {newCredential.copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-teal-500">
+              Faculty should change this password from their own account once they sign in.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setNewCredential(null)}
+                className="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg text-sm font-semibold"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

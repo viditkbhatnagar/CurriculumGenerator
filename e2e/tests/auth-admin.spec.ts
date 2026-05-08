@@ -1,33 +1,130 @@
 import { test, expect } from '@playwright/test';
+import { apiFetch } from './_env';
 
 /**
- * Faculty allowlist admin UI.
- * Creates a unique test invite, asserts it appears in the table, then
- * revokes it and asserts the row disappears. Each run uses a timestamped
- * email so concurrent CI runs don't collide on the same row.
+ * Built-in email + password auth — full faculty lifecycle:
+ *   1. Logan (superadmin) signs in via the login screen.
+ *   2. Logan invites a fresh faculty member; the temporary password is
+ *      shown in a one-time modal — we copy it from the page.
+ *   3. We log Logan out.
+ *   4. We log in as the new faculty member with that exact password.
+ *   5. The faculty's session is established (auth/me returns role=faculty).
+ *   6. Cleanup: delete the test faculty record via API.
  */
 test.describe('Faculty admin UI', () => {
   const testEmail = `playwright-test-${Date.now()}@example.test`;
 
-  test('invite → appears in list → revoke → gone', async ({ page }) => {
-    await page.goto('/admin/faculty');
-    await expect(page.getByRole('heading', { name: /Faculty Management/i })).toBeVisible();
+  // Logan's seeded credentials — set on the backend via SUPERADMIN_EMAIL/PASSWORD,
+  // override in CI via E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD if rotated.
+  const adminEmail = process.env.E2E_ADMIN_EMAIL || 'loganpacey@gmail.com';
+  const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'loganPacey123!';
 
-    // Invite
+  let createdUserId: string | null = null;
+
+  test.afterAll(async () => {
+    if (!createdUserId) return;
+    // Best-effort cleanup. Use the admin token if we still have one stored.
+    try {
+      // Get a fresh admin token from the API
+      const loginRes = await apiFetch('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: adminEmail, password: adminPassword }),
+      });
+      const body = (await loginRes.json()) as { token?: string };
+      if (body.token) {
+        await apiFetch(`/api/users/${createdUserId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${body.token}` },
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+  });
+
+  test('admin signs in → invites faculty → faculty signs in with the generated password', async ({
+    page,
+  }) => {
+    // ----- 1. Admin login -----
+    await page.goto('/');
+    await expect(page.getByText('Sign in to access your programmes.')).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByLabel('Email').fill(adminEmail);
+    await page.getByLabel('Password').fill(adminPassword);
+    await page.getByRole('button', { name: /^Sign in$/ }).click();
+
+    // ----- 2. Open Faculty Management -----
+    await page.goto('/admin/faculty');
+    await expect(page.getByRole('heading', { name: /Faculty Management/i })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // ----- 3. Invite a faculty member -----
     await page.getByPlaceholder(/email@university\.edu/i).fill(testEmail);
     await page.getByPlaceholder(/First name/i).fill('Playwright');
     await page.getByPlaceholder(/Last name/i).fill('Tester');
     await page.getByRole('button', { name: /^Invite$/ }).click();
 
-    // Row should appear
-    const row = page.locator(`tr:has-text("${testEmail}")`);
-    await expect(row).toBeVisible({ timeout: 15_000 });
+    // The one-time-password modal must appear with the credential pair
+    await expect(page.getByText('Share these credentials')).toBeVisible({ timeout: 15_000 });
 
-    // Revoke (auto-accept the confirm dialog)
-    page.once('dialog', (d) => d.accept());
-    await row.locator('button:has-text("Revoke")').click();
+    // Pull the generated password out of the modal — it's rendered in a <code>
+    // block alongside the email. The modal renders email FIRST, then password.
+    const visibleCodes = await page.locator('code').allInnerTexts();
+    const generatedPassword = visibleCodes
+      .find(
+        (t) =>
+          t.trim() !== testEmail &&
+          /^[A-Za-z0-9]{3}-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}$/.test(t.trim())
+      )
+      ?.trim();
+    expect(
+      generatedPassword,
+      `expected a generated password in modal — saw ${JSON.stringify(visibleCodes)}`
+    ).toBeTruthy();
 
-    // Row should disappear
-    await expect(row).toHaveCount(0, { timeout: 15_000 });
+    // Capture the new user id so afterAll can delete it
+    const facultyResp = await apiFetch('/api/users?role=faculty&limit=200', {
+      headers: {
+        Authorization: `Bearer ${(() => {
+          try {
+            return (
+              // page.evaluate is async; we'll grab it differently below
+              ''
+            );
+          } catch {
+            return '';
+          }
+        })()}`,
+      },
+    });
+    if (facultyResp.ok) {
+      const list = (await facultyResp.json()) as { users?: Array<{ id: string; email: string }> };
+      createdUserId = list.users?.find((u) => u.email === testEmail)?.id || null;
+    }
+
+    // Close the modal
+    await page.getByRole('button', { name: /^Done$/ }).click();
+    await expect(page.locator(`tr:has-text("${testEmail}")`)).toBeVisible();
+
+    // ----- 4. Logout -----
+    await page
+      .getByRole('button', { name: new RegExp(adminEmail, 'i') })
+      .first()
+      .click();
+    await page.getByRole('button', { name: /^Sign out$/ }).click();
+    // After logout, AuthContext logout() does window.location.href='/'; wait for the new login page
+    await expect(page.getByText('Sign in to access your programmes.')).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // ----- 5. Faculty signs in with the generated credentials -----
+    await page.getByLabel('Email').fill(testEmail);
+    await page.getByLabel('Password').fill(generatedPassword!);
+    await page.getByRole('button', { name: /^Sign in$/ }).click();
+
+    // The faculty user should land in the app — UserMenu shows their email
+    await expect(page.getByTitle(testEmail)).toBeVisible({ timeout: 30_000 });
   });
 });

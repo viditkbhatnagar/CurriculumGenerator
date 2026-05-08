@@ -2,8 +2,58 @@ import { Router, Request, Response } from 'express';
 import { validateJWT, loadUser, handleAuthError } from '../middleware/auth';
 import { createSession, deleteSession, refreshSession } from '../services/sessionService';
 import { createAuditLog } from '../services/auditService';
+import { login as passwordLogin, InvalidCredentialsError } from '../services/passwordAuthService';
+import { loggingService } from '../services/loggingService';
 
 const router = Router();
+
+/**
+ * POST /api/auth/login
+ * Email + password login. Returns a JWT the frontend stores in
+ * localStorage as `auth_token`; the existing api.ts interceptor sends it
+ * as a Bearer header on subsequent calls. Auth middleware verifies it.
+ */
+router.post('/login', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({
+        error: {
+          code: 'MISSING_CREDENTIALS',
+          message: 'email and password are required',
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+    const result = await passwordLogin({ email, password });
+    return res.json({
+      token: result.token,
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        role: result.user.role,
+      },
+    });
+  } catch (error) {
+    if (error instanceof InvalidCredentialsError) {
+      return res.status(401).json({
+        error: {
+          code: 'INVALID_CREDENTIALS',
+          message: 'Invalid email or password',
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+    loggingService.error('Login failed', { error });
+    return res.status(500).json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Login failed',
+        timestamp: new Date().toISOString(),
+      },
+    });
+  }
+});
 
 /**
  * Get current user profile

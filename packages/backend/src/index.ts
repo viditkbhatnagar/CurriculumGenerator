@@ -336,6 +336,21 @@ async function startServer() {
       });
     }
 
+    // Seed the superadmin (idempotent — only acts when the user is missing
+    // or has no password yet). SUPERADMIN_EMAIL / SUPERADMIN_PASSWORD env
+    // vars override the built-in defaults; rotating the env var resets the
+    // password ONLY for first-time seed, never for an existing account that
+    // already has a password set.
+    try {
+      const { seedSuperAdmin } = await import('./services/passwordAuthService');
+      await seedSuperAdmin();
+      loggingService.info('Superadmin seed checked');
+    } catch (error) {
+      loggingService.error('Superadmin seed failed (continuing startup)', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     // Verify OpenAI connection
     try {
       const { openaiService } = await import('./services/openaiService');
