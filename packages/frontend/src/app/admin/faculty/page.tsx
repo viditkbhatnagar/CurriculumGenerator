@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '@/lib/api';
 import { toast } from '@/stores/toastStore';
 import { useAuth } from '@/components/auth/AuthContext';
@@ -50,18 +51,18 @@ export default function FacultyAdminPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-teal-400 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-stone-50">
+        <div className="w-9 h-9 rounded-full border-2 border-stone-300 border-t-teal-600 animate-spin" />
       </div>
     );
   }
 
   if (user?.role !== 'administrator') {
     return (
-      <div className="max-w-2xl mx-auto p-6 mt-12">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-5 text-center">
-          <h1 className="text-lg font-semibold text-red-700 mb-1">Administrator only</h1>
-          <p className="text-sm text-red-600">
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center px-6">
+        <div className="max-w-md w-full bg-white rounded-2xl border border-stone-200 p-8 text-center space-y-2">
+          <h1 className="text-lg font-semibold text-stone-900">Administrator only</h1>
+          <p className="text-sm text-stone-600 leading-relaxed">
             You need an administrator role to manage faculty. If this is wrong, ask Logan to update
             your role.
           </p>
@@ -89,8 +90,6 @@ export default function FacultyAdminPage() {
       if (status === 'exists') {
         toast.info('Already on the list', `${inviteEmail} already has an account.`);
       } else if (generatedPassword) {
-        // Show the one-time password modal — admin must hand this to the
-        // faculty member; the plaintext is gone after they close the modal.
         setNewCredential({ email: inviteEmail.trim(), password: generatedPassword });
         toast.success('Faculty invited', `Share the temporary password with ${inviteEmail}.`);
       } else {
@@ -126,165 +125,280 @@ export default function FacultyAdminPage() {
       setNewCredential({ ...newCredential, copied: true });
       setTimeout(() => {
         setNewCredential((cur) => (cur ? { ...cur, copied: false } : cur));
-      }, 2000);
+      }, 1800);
     } catch {
-      // Fallback if clipboard API blocked — user can select manually
+      // ignore — user can select manually
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-teal-800 mb-1">Faculty Management</h1>
-          <p className="text-sm text-teal-600">
-            Invite faculty members. Each invite generates a temporary password that you share with
-            them; they sign in directly. Revoking removes their access.
-          </p>
+    <div className="min-h-screen bg-stone-50 text-stone-900">
+      <header className="px-6 sm:px-10 py-6 flex items-center justify-between border-b border-stone-200/70">
+        <div className="flex items-center gap-2">
+          <span
+            aria-hidden
+            className="inline-block w-2 h-2 rounded-full bg-teal-600 ring-4 ring-teal-100"
+          />
+          <span className="text-[11px] uppercase tracking-[0.16em] text-stone-500 font-medium">
+            AGCQ · Admin
+          </span>
         </div>
         <UserMenu />
       </header>
 
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-600 text-sm">
-          {error}
-        </div>
-      )}
-
-      <section className="bg-white border border-teal-200 rounded-xl p-5">
-        <h2 className="text-lg font-semibold text-teal-800 mb-3">Invite Faculty</h2>
-        <form onSubmit={handleInvite} className="grid grid-cols-1 md:grid-cols-12 gap-3">
-          <input
-            type="email"
-            required
-            placeholder="email@university.edu"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            className="md:col-span-5 px-3 py-2 bg-teal-50/50 border border-teal-300 rounded text-sm"
-          />
-          <input
-            type="text"
-            placeholder="First name (optional)"
-            value={inviteFirstName}
-            onChange={(e) => setInviteFirstName(e.target.value)}
-            className="md:col-span-3 px-3 py-2 bg-teal-50/50 border border-teal-300 rounded text-sm"
-          />
-          <input
-            type="text"
-            placeholder="Last name (optional)"
-            value={inviteLastName}
-            onChange={(e) => setInviteLastName(e.target.value)}
-            className="md:col-span-2 px-3 py-2 bg-teal-50/50 border border-teal-300 rounded text-sm"
-          />
-          <button
-            type="submit"
-            disabled={inviting || !inviteEmail.trim()}
-            className="md:col-span-2 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded text-sm font-semibold"
-          >
-            {inviting ? 'Inviting…' : 'Invite'}
-          </button>
-        </form>
-      </section>
-
-      <section className="bg-white border border-teal-200 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-teal-800">
-            Current Faculty ({faculty.length})
-          </h2>
-          <button
-            onClick={refresh}
-            className="px-3 py-1.5 bg-teal-100 hover:bg-teal-200 text-teal-700 rounded text-sm border border-teal-300"
-          >
-            Refresh
-          </button>
-        </div>
-        {loading ? (
-          <p className="text-sm text-teal-600">Loading…</p>
-        ) : faculty.length === 0 ? (
-          <p className="text-sm text-teal-600">
-            No faculty invited yet. Use the form above to invite the first one.
+      <main className="max-w-4xl mx-auto px-6 sm:px-10 py-12 space-y-10">
+        {/* Page heading — calm, asymmetric, no card around it */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.28, ease: [0.2, 0.65, 0.3, 1] }}
+          className="space-y-1.5"
+        >
+          <h1 className="text-[28px] sm:text-[32px] leading-[1.1] font-semibold tracking-tight text-stone-900">
+            Faculty Management
+          </h1>
+          <p className="text-[15px] text-stone-600 leading-relaxed max-w-[58ch]">
+            Add or remove faculty who can use the curriculum generator. Each new invite produces a
+            one-time password to share through your usual channel.
           </p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left bg-teal-50 border-b border-teal-200">
-                <th className="p-2">Email</th>
-                <th className="p-2">Role</th>
-                <th className="p-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {faculty.map((u) => (
-                <tr key={u.id} className="border-b border-teal-100">
-                  <td className="p-2 text-teal-800">{u.email}</td>
-                  <td className="p-2 text-teal-600">{u.role}</td>
-                  <td className="p-2 text-right">
-                    <button
-                      onClick={() => handleRevoke(u.id, u.email)}
-                      className="px-2 py-1 text-red-600 hover:text-red-800 text-xs"
-                    >
-                      Revoke
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        </motion.div>
+
+        {error && (
+          <div
+            role="alert"
+            className="text-sm text-rose-700 bg-rose-50 border border-rose-200/70 rounded-lg px-3.5 py-2.5"
+          >
+            {error}
+          </div>
         )}
-      </section>
 
-      {/* One-time password reveal modal */}
-      {newCredential && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-lg font-bold text-teal-800">Share these credentials</h3>
-            <p className="text-sm text-teal-600">
-              This password will <strong>never be shown again</strong>. Copy it now and share it
-              with the faculty member through your normal channel (email, Slack, in person).
-            </p>
+        {/* Invite — section title sits above its own row of inputs, no card */}
+        <section className="space-y-4">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold tracking-tight text-stone-900 uppercase tracking-[0.08em] text-[12px]">
+              Invite faculty
+            </h2>
+          </div>
 
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs text-teal-700 font-medium mb-1">Email</p>
-                <code className="block w-full px-3 py-2 bg-teal-50 border border-teal-300 rounded text-sm text-teal-800 select-all">
-                  {newCredential.email}
-                </code>
-              </div>
-              <div>
-                <p className="text-xs text-teal-700 font-medium mb-1">Temporary password</p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 px-3 py-2 bg-teal-50 border border-teal-300 rounded text-sm text-teal-800 font-mono select-all">
-                    {newCredential.password}
-                  </code>
-                  <button
-                    onClick={handleCopyPassword}
-                    className={`px-3 py-2 rounded text-xs font-semibold ${
-                      newCredential.copied
-                        ? 'bg-emerald-200 text-emerald-700'
-                        : 'bg-teal-500 hover:bg-teal-600 text-white'
-                    }`}
-                  >
-                    {newCredential.copied ? 'Copied' : 'Copy'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <p className="text-xs text-teal-500">
-              Faculty should change this password from their own account once they sign in.
-            </p>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setNewCredential(null)}
-                className="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg text-sm font-semibold"
+          <form
+            onSubmit={handleInvite}
+            className="bg-white rounded-2xl border border-stone-200/80 p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-12 gap-3"
+          >
+            <div className="sm:col-span-5 space-y-1.5">
+              <label
+                htmlFor="invite-email"
+                className="block text-[12px] font-medium text-stone-700"
               >
-                Done
+                Email
+              </label>
+              <input
+                id="invite-email"
+                type="email"
+                required
+                placeholder="email@university.edu"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                className="block w-full h-10 px-3 rounded-lg bg-white border border-stone-300 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-600/10 transition-[border-color,box-shadow] duration-150"
+              />
+            </div>
+            <div className="sm:col-span-3 space-y-1.5">
+              <label
+                htmlFor="invite-first"
+                className="block text-[12px] font-medium text-stone-700"
+              >
+                First name <span className="text-stone-400 font-normal">(optional)</span>
+              </label>
+              <input
+                id="invite-first"
+                type="text"
+                placeholder="First name"
+                value={inviteFirstName}
+                onChange={(e) => setInviteFirstName(e.target.value)}
+                className="block w-full h-10 px-3 rounded-lg bg-white border border-stone-300 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-600/10 transition-[border-color,box-shadow] duration-150"
+              />
+            </div>
+            <div className="sm:col-span-2 space-y-1.5">
+              <label htmlFor="invite-last" className="block text-[12px] font-medium text-stone-700">
+                Last name <span className="text-stone-400 font-normal">(opt.)</span>
+              </label>
+              <input
+                id="invite-last"
+                type="text"
+                placeholder="Last name"
+                value={inviteLastName}
+                onChange={(e) => setInviteLastName(e.target.value)}
+                className="block w-full h-10 px-3 rounded-lg bg-white border border-stone-300 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-600/10 transition-[border-color,box-shadow] duration-150"
+              />
+            </div>
+            <div className="sm:col-span-2 flex items-end">
+              <button
+                type="submit"
+                disabled={inviting || !inviteEmail.trim()}
+                className="w-full inline-flex items-center justify-center h-10 rounded-lg bg-teal-700 hover:bg-teal-800 active:bg-teal-900 disabled:bg-stone-300 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors duration-150"
+              >
+                {inviting ? 'Inviting…' : 'Invite'}
               </button>
             </div>
+          </form>
+        </section>
+
+        {/* Faculty list — table, calm, no zebra; refresh quietly tucked into header */}
+        <section className="space-y-4">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold tracking-tight text-stone-900 uppercase tracking-[0.08em] text-[12px]">
+              Faculty{' '}
+              <span className="text-stone-400 font-normal normal-case">({faculty.length})</span>
+            </h2>
+            <button
+              onClick={refresh}
+              className="text-[12px] font-medium text-teal-700 hover:text-teal-900 transition-colors"
+            >
+              Refresh
+            </button>
           </div>
-        </div>
-      )}
+
+          <div className="bg-white rounded-2xl border border-stone-200/80 overflow-hidden">
+            {loading ? (
+              <div className="px-6 py-10 text-sm text-stone-500 text-center">Loading…</div>
+            ) : faculty.length === 0 ? (
+              <div className="px-6 py-12 text-center space-y-1.5">
+                <p className="text-sm text-stone-700">No faculty yet.</p>
+                <p className="text-[13px] text-stone-500">
+                  Use the form above to send your first invite.
+                </p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left">
+                    <th className="px-5 py-3 text-[11px] uppercase tracking-[0.08em] font-medium text-stone-500 border-b border-stone-100">
+                      Email
+                    </th>
+                    <th className="px-5 py-3 text-[11px] uppercase tracking-[0.08em] font-medium text-stone-500 border-b border-stone-100 w-32">
+                      Role
+                    </th>
+                    <th className="px-5 py-3 text-[11px] uppercase tracking-[0.08em] font-medium text-stone-500 border-b border-stone-100 w-28 text-right">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {faculty.map((u, idx) => (
+                    <tr
+                      key={u.id}
+                      className={`group hover:bg-stone-50/80 transition-colors ${
+                        idx !== faculty.length - 1 ? 'border-b border-stone-100' : ''
+                      }`}
+                    >
+                      <td className="px-5 py-3.5 text-stone-800">{u.email}</td>
+                      <td className="px-5 py-3.5">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[11px] font-medium tracking-tight">
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <button
+                          onClick={() => handleRevoke(u.id, u.email)}
+                          className="text-[12px] font-medium text-stone-400 hover:text-rose-700 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                        >
+                          Revoke
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+      </main>
+
+      {/* One-time password reveal modal */}
+      <AnimatePresence>
+        {newCredential && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-stone-950/30 backdrop-blur-[1px] flex items-center justify-center p-4 z-50"
+            onClick={() => setNewCredential(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.97 }}
+              transition={{ duration: 0.22, ease: [0.2, 0.65, 0.3, 1] }}
+              className="bg-white rounded-2xl shadow-[0_8px_40px_-12px_rgba(15,23,42,0.18)] max-w-md w-full p-7 space-y-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="space-y-1.5">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-teal-700 font-medium">
+                  One-time
+                </p>
+                <h3 className="text-xl font-semibold tracking-tight text-stone-900">
+                  Share these credentials
+                </h3>
+                <p className="text-sm text-stone-600 leading-relaxed">
+                  This password is shown only once. Copy it now and pass it to the faculty member
+                  through your usual channel.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-1">
+                <CredentialRow label="Email" value={newCredential.email} mono={false} />
+                <div className="space-y-1.5">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-stone-500 font-medium">
+                    Temporary password
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-lg text-[13px] text-stone-900 font-mono tracking-tight select-all break-all">
+                      {newCredential.password}
+                    </code>
+                    <button
+                      onClick={handleCopyPassword}
+                      className={`shrink-0 inline-flex items-center justify-center h-[42px] px-3.5 rounded-lg text-xs font-medium transition-colors duration-150 ${
+                        newCredential.copied
+                          ? 'bg-teal-50 text-teal-800 border border-teal-200'
+                          : 'bg-stone-900 hover:bg-stone-800 text-white'
+                      }`}
+                    >
+                      {newCredential.copied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[12px] text-stone-500 leading-relaxed">
+                Faculty should change this password from their own account once signed in.
+              </p>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  onClick={() => setNewCredential(null)}
+                  className="inline-flex items-center justify-center h-10 px-5 rounded-lg bg-teal-700 hover:bg-teal-800 active:bg-teal-900 text-white text-sm font-medium transition-colors duration-150"
+                >
+                  Done
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function CredentialRow({ label, value, mono }: { label: string; value: string; mono: boolean }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] uppercase tracking-[0.08em] text-stone-500 font-medium">{label}</p>
+      <code
+        className={`block w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-lg text-[13px] text-stone-900 select-all break-all ${
+          mono ? 'font-mono' : ''
+        }`}
+      >
+        {value}
+      </code>
     </div>
   );
 }

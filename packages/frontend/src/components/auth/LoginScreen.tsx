@@ -1,12 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { useAuth } from './AuthContext';
 
 /**
- * Email + password login form. Posts to /api/auth/login (handled by
- * passwordAuthService on the backend), stores the JWT, and the AuthContext
- * picks up the new state.
+ * Faculty sign-in. Calm, professional, single-card layout — designed for
+ * academic users in daytime contexts, not consumer-app urgency.
+ *
+ * Posts to /api/auth/login via AuthContext. Test contracts kept:
+ *   - text "Sign in to access your programmes." is present
+ *   - inputs labelled "Email" and "Password"
+ *   - submit button labelled "Sign in"
  */
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -22,7 +27,6 @@ export default function LoginScreen() {
     setError(null);
     try {
       await login(email.trim(), password);
-      // AuthContext flips isAuthenticated → AuthGate re-renders to children
     } catch (err: any) {
       const status = err?.response?.status;
       if (status === 401) {
@@ -36,62 +40,127 @@ export default function LoginScreen() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-teal-50 via-white to-sage-50">
-      <form
-        onSubmit={handleSubmit}
-        className="max-w-md w-full bg-white rounded-2xl border border-teal-200 shadow-sm p-8 space-y-5"
-      >
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-bold text-teal-800">Curriculum Generator</h1>
-          <p className="text-sm text-teal-600">Sign in to access your programmes.</p>
-        </div>
+    <div className="min-h-screen w-full bg-stone-50 text-stone-900 flex flex-col">
+      {/* Quiet, asymmetric top mark — not centered, not loud */}
+      <header className="px-6 sm:px-10 py-6 flex items-center gap-2">
+        <span
+          aria-hidden
+          className="inline-block w-2 h-2 rounded-full bg-teal-600 ring-4 ring-teal-100"
+        />
+        <span className="text-[11px] uppercase tracking-[0.16em] text-stone-500 font-medium">
+          AGCQ · Curriculum Generator
+        </span>
+      </header>
 
-        <div className="space-y-3">
-          <label className="block">
-            <span className="text-xs font-medium text-teal-700">Email</span>
-            <input
+      <main className="flex-1 flex items-center justify-center px-6 pb-16">
+        <motion.form
+          onSubmit={handleSubmit}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.32, ease: [0.2, 0.65, 0.3, 1] }}
+          className="w-full max-w-[420px] bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.08)] p-8 sm:p-10 space-y-7"
+        >
+          <div className="space-y-2">
+            <h1 className="text-[26px] leading-[1.15] font-semibold tracking-tight text-stone-900">
+              Welcome back.
+            </h1>
+            <p className="text-sm text-stone-600 leading-relaxed">
+              Sign in to access your programmes.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <Field
+              label="Email"
               type="email"
               autoComplete="email"
-              required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full px-3 py-2 bg-teal-50/50 border border-teal-300 rounded-lg text-sm text-teal-800 focus:outline-none focus:border-teal-500"
+              onChange={setEmail}
               placeholder="you@university.edu"
             />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-teal-700">Password</span>
-            <input
+            <Field
+              label="Password"
               type="password"
               autoComplete="current-password"
-              required
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full px-3 py-2 bg-teal-50/50 border border-teal-300 rounded-lg text-sm text-teal-800 focus:outline-none focus:border-teal-500"
+              onChange={setPassword}
               placeholder="••••••••"
             />
-          </label>
-        </div>
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-600 text-sm">
-            {error}
           </div>
-        )}
 
-        <button
-          type="submit"
-          disabled={submitting || !email.trim() || !password.trim()}
-          className="w-full px-4 py-3 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 text-white rounded-xl font-semibold shadow-sm"
-        >
-          {submitting ? 'Signing in…' : 'Sign in'}
-        </button>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className="text-sm text-rose-700 bg-rose-50 border border-rose-200/70 rounded-lg px-3 py-2"
+              role="alert"
+            >
+              {error}
+            </motion.div>
+          )}
 
-        <p className="text-xs text-teal-500 leading-relaxed text-center">
-          Faculty: your administrator will email you a temporary password. If you don't have one
-          yet, contact them.
-        </p>
-      </form>
+          <button
+            type="submit"
+            disabled={submitting || !email.trim() || !password.trim()}
+            className="w-full inline-flex items-center justify-center h-11 rounded-xl bg-teal-700 hover:bg-teal-800 active:bg-teal-900 disabled:bg-stone-300 disabled:cursor-not-allowed text-white text-sm font-medium tracking-tight transition-colors duration-150"
+          >
+            {submitting ? (
+              <span className="inline-flex items-center gap-2">
+                <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                Signing in
+              </span>
+            ) : (
+              'Sign in'
+            )}
+          </button>
+
+          <p className="text-xs text-stone-500 leading-relaxed pt-1 border-t border-stone-100 -mx-2 sm:-mx-4 px-2 sm:px-4 pt-5">
+            Faculty: your administrator will share a temporary password with you. If you don't have
+            one, please ask them to add you on the Faculty Management page.
+          </p>
+        </motion.form>
+      </main>
+    </div>
+  );
+}
+
+/**
+ * Form field with label-above layout. Generous touch target, subtle focus ring
+ * tinted with the brand teal — the only place we use that colour on this screen
+ * besides the submit button.
+ */
+function Field({
+  label,
+  type,
+  value,
+  onChange,
+  placeholder,
+  autoComplete,
+}: {
+  label: string;
+  type: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  autoComplete?: string;
+}) {
+  const id = `field-${label.toLowerCase()}`;
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="block text-[12px] font-medium text-stone-700 tracking-tight">
+        {label}
+      </label>
+      <input
+        id={id}
+        type={type}
+        autoComplete={autoComplete}
+        required
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="block w-full h-11 px-3.5 rounded-lg bg-white border border-stone-300 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-600/10 transition-[border-color,box-shadow] duration-150"
+      />
     </div>
   );
 }
