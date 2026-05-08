@@ -57,12 +57,26 @@ export default function UserMenu() {
               <p className="text-xs text-teal-600 mt-0.5">{roleLabel}</p>
             </div>
             {user.role === 'administrator' && (
-              <a
-                href="/admin/faculty"
-                className="block px-3 py-2 text-sm text-teal-700 hover:bg-teal-50"
-              >
-                Faculty management
-              </a>
+              <>
+                <a
+                  href="/admin/faculty"
+                  className="block px-3 py-2 text-sm text-teal-700 hover:bg-teal-50"
+                >
+                  Faculty management
+                </a>
+                <a
+                  href="/admin/archive"
+                  className="block px-3 py-2 text-sm text-teal-700 hover:bg-teal-50"
+                >
+                  Curriculum archive
+                </a>
+                <a
+                  href="/admin/analytics"
+                  className="block px-3 py-2 text-sm text-teal-700 hover:bg-teal-50"
+                >
+                  Analytics
+                </a>
+              </>
             )}
             <button
               onClick={() => {

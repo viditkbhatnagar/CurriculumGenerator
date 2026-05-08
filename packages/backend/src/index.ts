@@ -36,6 +36,7 @@ import { createTutorBotRouter } from './routes/tutorBot';
 import { createSimulationsRouter } from './routes/simulations';
 import newWorkflowRoutes from './routes/newWorkflowRoutes';
 import workflowRoutes from './routes/workflowRoutes';
+import archiveRoutes from './routes/archiveRoutes';
 import step7StreamRoutes from './routes/step7StreamRoutes';
 import pptRoutes from './routes/pptRoutes';
 import standaloneRoutes from './routes/standaloneRoutes';
@@ -246,6 +247,8 @@ app.use('/api/v3/ppt', pptRoutes);
 
 // Standalone Step Execution routes - Execute individual steps without workflow
 app.use('/api/v3/standalone', standaloneRoutes);
+// Read-only access to legacy v1/v2 curriculum data (admin-only)
+app.use('/api/v3/archive', archiveRoutes);
 
 // Sentry error handler (must be before other error handlers)
 app.use(errorTrackingService.getErrorHandler());
