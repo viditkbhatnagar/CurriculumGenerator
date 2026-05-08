@@ -54,11 +54,12 @@ test.describe('Faculty admin UI', () => {
     await page.getByLabel('Password').fill(adminPassword);
     await page.getByRole('button', { name: /^Sign in$/ }).click();
 
-    // Wait for login to actually complete — the UserMenu is rendered with
-    // title=email once AuthContext has the user. Without this, the next
-    // page.goto would race the login POST and land on /admin/faculty
-    // without a token in localStorage.
-    await expect(page.getByTitle(adminEmail)).toBeVisible({ timeout: 30_000 });
+    // Wait for the login screen to disappear — the AuthGate replaces it
+    // with children once AuthContext has the user. The homepage doesn't
+    // render UserMenu, so we can't key on that here.
+    await expect(page.getByText('Sign in to access your programmes.')).not.toBeVisible({
+      timeout: 30_000,
+    });
 
     // ----- 2. Open Faculty Management -----
     await page.goto('/admin/faculty');
@@ -130,7 +131,13 @@ test.describe('Faculty admin UI', () => {
     await page.getByLabel('Password').fill(generatedPassword!);
     await page.getByRole('button', { name: /^Sign in$/ }).click();
 
-    // The faculty user should land in the app — UserMenu shows their email
+    // Login screen disappears once AuthContext has the faculty user
+    await expect(page.getByText('Sign in to access your programmes.')).not.toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Navigate to /workflow so UserMenu is in the rendered shell, then assert
+    await page.goto('/workflow');
     await expect(page.getByTitle(testEmail)).toBeVisible({ timeout: 30_000 });
   });
 });
