@@ -140,4 +140,52 @@ test.describe('Faculty admin UI', () => {
     await page.goto('/workflow');
     await expect(page.getByTitle(testEmail)).toBeVisible({ timeout: 30_000 });
   });
+
+  /**
+   * Regression for the bug Logan reported on 2026-05-08:
+   *   "I signed in as Logan there is no faculty management button anywhere"
+   *
+   * The UserMenu (which contains the Faculty management link) only renders
+   * on /workflow* and /admin/faculty. After sign-in the user previously
+   * landed on /, which has neither — so admins had no way to reach the
+   * admin tools without typing the URL.
+   *
+   * Fix: AuthContext.login() routes to /workflow on success when the user
+   * was on /. This test exercises Logan's exact path:
+   *   sign in → expect /workflow → click avatar → click "Faculty management"
+   *   → land on the admin page heading.
+   */
+  test('after admin login, Faculty management is reachable from the UserMenu without typing URLs', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await expect(page.getByText('Sign in to access your programmes.')).toBeVisible({
+      timeout: 30_000,
+    });
+
+    await page.getByLabel('Email').fill(adminEmail);
+    await page.getByLabel('Password').fill(adminPassword);
+    await page.getByRole('button', { name: /^Sign in$/ }).click();
+
+    // After successful login, the post-login redirect should land us on
+    // /workflow (where the UserMenu lives). Wait for the URL change first
+    // — that's the load-bearing assertion of the fix.
+    await page.waitForURL('**/workflow', { timeout: 30_000 });
+
+    // The UserMenu trigger is keyed by title=email
+    const userMenuTrigger = page.getByTitle(adminEmail);
+    await expect(userMenuTrigger).toBeVisible({ timeout: 15_000 });
+    await userMenuTrigger.click();
+
+    // The dropdown shows a "Faculty management" link for administrators
+    const facultyLink = page.getByRole('link', { name: /Faculty management/i });
+    await expect(facultyLink).toBeVisible({ timeout: 5_000 });
+    await facultyLink.click();
+
+    // Land on the admin page heading
+    await expect(page.getByRole('heading', { name: /Faculty Management/i })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page).toHaveURL(/\/admin\/faculty$/);
+  });
 });
