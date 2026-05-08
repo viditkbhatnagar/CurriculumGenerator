@@ -54,6 +54,12 @@ test.describe('Faculty admin UI', () => {
     await page.getByLabel('Password').fill(adminPassword);
     await page.getByRole('button', { name: /^Sign in$/ }).click();
 
+    // Wait for login to actually complete — the UserMenu is rendered with
+    // title=email once AuthContext has the user. Without this, the next
+    // page.goto would race the login POST and land on /admin/faculty
+    // without a token in localStorage.
+    await expect(page.getByTitle(adminEmail)).toBeVisible({ timeout: 30_000 });
+
     // ----- 2. Open Faculty Management -----
     await page.goto('/admin/faculty');
     await expect(page.getByRole('heading', { name: /Faculty Management/i })).toBeVisible({
