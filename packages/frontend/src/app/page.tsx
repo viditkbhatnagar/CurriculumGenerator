@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { useAuth } from '@/components/auth/AuthContext';
 import {
   ArrowRight,
   Sparkles,
@@ -122,6 +124,16 @@ const staggerItem = {
 
 export default function Home() {
   const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Authenticated users have no business on the marketing homepage —
+  // they need the workflow list (which also has the UserMenu so admins
+  // can reach Faculty management).
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.replace('/workflow');
+    }
+  }, [isAuthenticated, isLoading, router]);
 
   return (
     <div className="min-h-screen gradient-mesh-hero">

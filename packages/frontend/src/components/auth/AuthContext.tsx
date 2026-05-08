@@ -92,6 +92,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     writeToken(token);
     setUser({ id: userData.id, email: userData.email, role: userData.role });
+    // Land on the workflow list — that's where the UserMenu (and so the
+    // Faculty management link, for admins) is reachable. Without this the
+    // marketing homepage at `/` shows after login and there's no nav surface.
+    if (typeof window !== 'undefined') {
+      const dest = window.location.pathname === '/' ? '/workflow' : window.location.pathname;
+      // Use full navigation so the new page mounts cleanly with the auth state.
+      if (dest === '/workflow') window.location.href = '/workflow';
+    }
   }, []);
 
   const logout = useCallback(() => {

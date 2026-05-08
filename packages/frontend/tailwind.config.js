@@ -11,7 +11,10 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        // Display face for headings — humanistic grotesque, warmer than
+        // a default sans without tipping into novelty.
+        display: ['"Bricolage Grotesque"', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'Fira Code', 'monospace'],
       },
       colors: {
         // Semantic tokens from CSS variables

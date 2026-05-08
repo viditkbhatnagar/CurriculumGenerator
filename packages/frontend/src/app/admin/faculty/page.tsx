@@ -154,7 +154,7 @@ export default function FacultyAdminPage() {
           transition={{ duration: 0.28, ease: [0.2, 0.65, 0.3, 1] }}
           className="space-y-1.5"
         >
-          <h1 className="text-[28px] sm:text-[32px] leading-[1.1] font-semibold tracking-tight text-stone-900">
+          <h1 className="font-display text-[32px] sm:text-[36px] leading-[1.05] font-semibold tracking-[-0.02em] text-stone-900">
             Faculty Management
           </h1>
           <p className="text-[15px] text-stone-600 leading-relaxed max-w-[58ch]">
@@ -351,7 +351,7 @@ export default function FacultyAdminPage() {
                     Temporary password
                   </p>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-lg text-[13px] text-stone-900 font-mono tracking-tight select-all break-all">
+                    <code className="flex-1 px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-lg text-[13px] text-stone-900 font-mono tracking-[-0.01em] select-all break-all">
                       {newCredential.password}
                     </code>
                     <button

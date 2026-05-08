@@ -61,7 +61,7 @@ export default function LoginScreen() {
           className="w-full max-w-[420px] bg-white rounded-2xl border border-stone-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.08)] p-8 sm:p-10 space-y-7"
         >
           <div className="space-y-2">
-            <h1 className="text-[26px] leading-[1.15] font-semibold tracking-tight text-stone-900">
+            <h1 className="font-display text-[28px] leading-[1.1] font-semibold tracking-[-0.02em] text-stone-900">
               Welcome back.
             </h1>
             <p className="text-sm text-stone-600 leading-relaxed">
