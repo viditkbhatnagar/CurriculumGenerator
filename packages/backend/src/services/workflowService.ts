@@ -7155,12 +7155,20 @@ Return ONLY valid JSON:
       };
     }
 
-    // Step 10 - Lesson Plans (FULL DATA so AI can find/edit any lesson by number, title, or module)
+    // Step 10 - Lesson Plans (TITLES ONLY — full bodies would blow the
+    // context window for any workflow with ≥3 modules approved. The AI
+    // can still locate a lesson by number/title/module via the flat
+    // index; if it needs to edit body content it returns proposedChanges
+    // and the apply-edit handler fetches the full lesson from Mongo.)
     if ((workflow as any).step10) {
       const s10 = (workflow as any).step10;
-      // Build a flat global index of every lesson with a sequential globalLessonNumber
-      // so users can say things like "lesson plan 11" and the AI can locate it.
-      const flatLessons: any[] = [];
+      const flatLessons: Array<{
+        globalLessonNumber: number;
+        lessonId: string;
+        lessonNumber: number;
+        lessonTitle: string;
+        moduleCode: string;
+      }> = [];
       let globalLessonNumber = 0;
       (s10.moduleLessonPlans || []).forEach((mp: any) => {
         (mp.lessons || []).forEach((l: any) => {
@@ -7170,21 +7178,7 @@ Return ONLY valid JSON:
             lessonId: l.lessonId,
             lessonNumber: l.lessonNumber,
             lessonTitle: l.lessonTitle,
-            duration: l.duration,
-            bloomLevel: l.bloomLevel,
-            objectives: l.objectives,
-            linkedMLOs: l.linkedMLOs,
-            moduleId: mp.moduleId,
             moduleCode: mp.moduleCode,
-            moduleTitle: mp.moduleTitle,
-            instructorNotes: l.instructorNotes,
-            independentStudy: l.independentStudy
-              ? {
-                  estimatedEffort: l.independentStudy.estimatedEffort,
-                  coreReadings: (l.independentStudy.coreReadings || []).slice(0, 3),
-                }
-              : undefined,
-            formativeChecks: l.formativeChecks?.slice(0, 3),
           });
         });
       });
@@ -7192,20 +7186,16 @@ Return ONLY valid JSON:
       fullWorkflowData.step10 = {
         totalModules: s10.moduleLessonPlans?.length || 0,
         totalLessons: flatLessons.length,
-        // Module-level summary (one row per module)
+        // Module-level summary only — no per-lesson titles here (they're
+        // in the flat array below, which the AI can scan for matches)
         moduleLessonPlans: (s10.moduleLessonPlans || []).map((mp: any) => ({
           moduleId: mp.moduleId,
           moduleCode: mp.moduleCode,
           moduleTitle: mp.moduleTitle,
           totalContactHours: mp.totalContactHours,
           totalLessons: mp.totalLessons,
-          lessonTitles: (mp.lessons || []).map((l: any) => ({
-            lessonId: l.lessonId,
-            lessonNumber: l.lessonNumber,
-            lessonTitle: l.lessonTitle,
-          })),
         })),
-        // Flat lessons array — so user can reference "lesson plan 11" globally
+        // Flat lesson index — titles only, ~80 chars per entry
         lessons: flatLessons,
       };
     }
