@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkflows, useCreateWorkflow, useDeleteWorkflow } from '@/hooks/useWorkflow';
 import { CurriculumWorkflow, WorkflowStep, STEP_NAMES, WorkflowStatus } from '@/types/workflow';
@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Loader2,
   UserPlus,
+  ChevronDown,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -65,6 +66,28 @@ export default function WorkflowListPage() {
   const [facultyOptions, setFacultyOptions] = useState<Array<{ id: string; email: string }>>([]);
   const [assignTargetId, setAssignTargetId] = useState<string>('');
   const [assigning, setAssigning] = useState(false);
+  const [assignDropdownOpen, setAssignDropdownOpen] = useState(false);
+  const assignDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close the assign dropdown when clicking anywhere outside it.
+  useEffect(() => {
+    if (!assignDropdownOpen) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (assignDropdownRef.current && !assignDropdownRef.current.contains(e.target as Node)) {
+        setAssignDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [assignDropdownOpen]);
+
+  // Reset dropdown state whenever the modal opens or closes.
+  useEffect(() => {
+    if (!assignModal.show) {
+      setAssignDropdownOpen(false);
+      setAssignTargetId('');
+    }
+  }, [assignModal.show]);
 
   const { data: workflows, isLoading, error } = useWorkflows();
   const createWorkflow = useCreateWorkflow();
@@ -568,6 +591,8 @@ export default function WorkflowListPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center">
@@ -589,23 +614,61 @@ export default function WorkflowListPage() {
               <label className="block text-xs font-medium text-foreground-muted mb-1.5">
                 Faculty member
               </label>
-              <select
-                value={assignTargetId}
-                onChange={(e) => setAssignTargetId(e.target.value)}
-                disabled={assigning || facultyOptions.length === 0}
-                className="w-full px-3 py-2 mb-5 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-primary"
-              >
-                <option value="">
-                  {facultyOptions.length === 0
-                    ? 'No faculty invited yet — go to Faculty management first'
-                    : 'Choose a faculty member…'}
-                </option>
-                {facultyOptions.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.email}
-                  </option>
-                ))}
-              </select>
+              <div ref={assignDropdownRef} className="relative mb-5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (assigning || facultyOptions.length === 0) return;
+                    setAssignDropdownOpen((o) => !o);
+                  }}
+                  disabled={assigning || facultyOptions.length === 0}
+                  className="w-full flex items-center justify-between px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground hover:border-primary/60 focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                >
+                  <span className={cn('truncate', !assignTargetId && 'text-foreground-muted')}>
+                    {facultyOptions.length === 0
+                      ? 'No faculty invited yet — go to Faculty management first'
+                      : assignTargetId
+                        ? facultyOptions.find((f) => f.id === assignTargetId)?.email ||
+                          'Choose a faculty member…'
+                        : 'Choose a faculty member…'}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      'w-4 h-4 text-foreground-muted transition-transform',
+                      assignDropdownOpen && 'rotate-180'
+                    )}
+                  />
+                </button>
+                <AnimatePresence>
+                  {assignDropdownOpen && facultyOptions.length > 0 && (
+                    <motion.ul
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.12 }}
+                      className="absolute z-20 mt-1 left-0 right-0 max-h-56 overflow-auto bg-background border border-border rounded-lg shadow-modal py-1"
+                    >
+                      {facultyOptions.map((f) => (
+                        <li key={f.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAssignTargetId(f.id);
+                              setAssignDropdownOpen(false);
+                            }}
+                            className={cn(
+                              'w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors truncate',
+                              assignTargetId === f.id && 'bg-accent text-primary'
+                            )}
+                          >
+                            {f.email}
+                          </button>
+                        </li>
+                      ))}
+                    </motion.ul>
+                  )}
+                </AnimatePresence>
+              </div>
 
               <div className="flex gap-2">
                 <button
