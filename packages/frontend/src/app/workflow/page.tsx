@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkflows, useCreateWorkflow, useDeleteWorkflow } from '@/hooks/useWorkflow';
 import { CurriculumWorkflow, WorkflowStep, STEP_NAMES, WorkflowStatus } from '@/types/workflow';
@@ -14,11 +14,15 @@ import {
   AlertTriangle,
   ArrowRight,
   Loader2,
+  UserPlus,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import UserMenu from '@/components/auth/UserMenu';
+import { useAuth } from '@/components/auth/AuthContext';
+import { api } from '@/lib/api';
+import { toast } from '@/stores/toastStore';
 
 function formatStatus(status: WorkflowStatus): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
@@ -44,6 +48,8 @@ function getStatusBadge(status: string) {
 
 export default function WorkflowListPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'administrator';
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
@@ -51,9 +57,69 @@ export default function WorkflowListPage() {
     workflow?: CurriculumWorkflow;
   }>({ show: false });
 
+  // Assign-to-faculty modal state (admin only)
+  const [assignModal, setAssignModal] = useState<{
+    show: boolean;
+    workflow?: CurriculumWorkflow;
+  }>({ show: false });
+  const [facultyOptions, setFacultyOptions] = useState<Array<{ id: string; email: string }>>([]);
+  const [assignTargetId, setAssignTargetId] = useState<string>('');
+  const [assigning, setAssigning] = useState(false);
+
   const { data: workflows, isLoading, error } = useWorkflows();
   const createWorkflow = useCreateWorkflow();
   const deleteWorkflow = useDeleteWorkflow();
+
+  // Pre-load the faculty roster when an admin opens the page so the
+  // assign modal can render instantly when triggered.
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await api.get('/api/users?role=faculty&limit=200');
+        if (!cancelled) {
+          setFacultyOptions(
+            (resp.data?.users || []).map((u: { id: string; email: string }) => ({
+              id: u.id,
+              email: u.email,
+            }))
+          );
+        }
+      } catch {
+        // Non-fatal — admin can still type an email if the list is empty
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin]);
+
+  const handleAssign = async () => {
+    if (!assignModal.workflow || !assignTargetId) return;
+    setAssigning(true);
+    try {
+      const resp = await api.post(`/api/v3/workflow/${assignModal.workflow._id}/assign`, {
+        userId: assignTargetId,
+      });
+      const newOwner = resp.data?.data?.newOwner;
+      toast.success(
+        'Workflow reassigned',
+        `${assignModal.workflow.projectName} is now owned by ${newOwner?.email || 'the selected faculty'}.`
+      );
+      setAssignModal({ show: false });
+      setAssignTargetId('');
+    } catch (err: unknown) {
+      const message =
+        err && typeof err === 'object' && 'response' in err
+          ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (err as any).response?.data?.error
+          : null;
+      toast.error('Reassign failed', message || 'Could not reassign workflow');
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   const handleCreateWorkflow = async () => {
     if (!newProjectName.trim()) return;
@@ -213,6 +279,21 @@ export default function WorkflowListPage() {
                       style={{ width: `${progress}%` }}
                     />
                   </div>
+
+                  {/* Admin-only: assign workflow to a faculty member */}
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAssignModal({ show: true, workflow });
+                        setAssignTargetId('');
+                      }}
+                      className="absolute top-3 right-11 z-10 p-1.5 rounded-md bg-teal-50 text-teal-700 opacity-0 group-hover:opacity-100 hover:bg-teal-100 transition-all"
+                      title="Assign to faculty"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                    </button>
+                  )}
 
                   {/* Delete button */}
                   <button
@@ -460,6 +541,92 @@ export default function WorkflowListPage() {
                     </>
                   ) : (
                     'Delete Permanently'
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Assign-to-Faculty Modal (admin only) */}
+      <AnimatePresence>
+        {assignModal.show && assignModal.workflow && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div
+              className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
+              onClick={() => !assigning && setAssignModal({ show: false })}
+            />
+            <motion.div
+              className="card relative p-6 w-full max-w-md shadow-modal"
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center">
+                  <UserPlus className="w-5 h-5 text-teal-700" />
+                </div>
+                <h2 className="text-lg font-semibold text-foreground">Assign to faculty</h2>
+              </div>
+
+              <p className="text-sm text-foreground mb-1">
+                <span className="font-semibold">
+                  &ldquo;{assignModal.workflow.projectName}&rdquo;
+                </span>
+              </p>
+              <p className="text-xs text-foreground-muted mb-4">
+                The selected faculty member will become the owner and see this programme on their
+                Workflows page. You&rsquo;ll still see it (admins see everything).
+              </p>
+
+              <label className="block text-xs font-medium text-foreground-muted mb-1.5">
+                Faculty member
+              </label>
+              <select
+                value={assignTargetId}
+                onChange={(e) => setAssignTargetId(e.target.value)}
+                disabled={assigning || facultyOptions.length === 0}
+                className="w-full px-3 py-2 mb-5 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-primary"
+              >
+                <option value="">
+                  {facultyOptions.length === 0
+                    ? 'No faculty invited yet — go to Faculty management first'
+                    : 'Choose a faculty member…'}
+                </option>
+                {facultyOptions.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.email}
+                  </option>
+                ))}
+              </select>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setAssignModal({ show: false })}
+                  disabled={assigning}
+                  className="btn-secondary flex-1 py-2.5 text-sm rounded-lg disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAssign}
+                  disabled={assigning || !assignTargetId}
+                  className="flex-1 py-2.5 text-sm rounded-lg font-medium bg-teal-700 text-white hover:bg-teal-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                >
+                  {assigning ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Assigning…
+                    </>
+                  ) : (
+                    'Assign'
                   )}
                 </button>
               </div>

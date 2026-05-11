@@ -4051,6 +4051,88 @@ router.get(
 );
 
 /**
+ * POST /api/v3/workflow/:id/assign
+ * Reassign a workflow to a different user (admin only).
+ *
+ * Body: { userId: string } OR { email: string }
+ *
+ * Faculty members only see workflows they own (createdBy === their user
+ * id). Admins use this endpoint to transfer ownership — for example,
+ * Logan can create the skeleton of a programme and then hand it off to
+ * the faculty member responsible for finishing it.
+ */
+router.post('/:id/assign', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const role = (req as any).user?.role;
+    if (role !== 'administrator') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only administrators can reassign workflows',
+      });
+    }
+
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    if (!workflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+
+    const { userId, email } = req.body || {};
+    if (!userId && !email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Provide either userId or email of the new owner',
+      });
+    }
+
+    // Resolve to a user document so we can fail-fast on unknown targets.
+    const { User } = await import('../models/User');
+    const target = userId
+      ? await User.findById(userId)
+      : await User.findOne({ email: String(email).toLowerCase().trim() });
+
+    if (!target) {
+      return res.status(404).json({
+        success: false,
+        error: `No user found for ${userId ? `id ${userId}` : `email ${email}`}`,
+      });
+    }
+
+    const oldOwner = String(workflow.createdBy);
+    workflow.createdBy = target._id as any;
+    await workflow.save();
+
+    loggingService.info('Workflow reassigned', {
+      workflowId: workflow._id,
+      from: oldOwner,
+      to: String(target._id),
+      newOwnerEmail: target.email,
+    });
+
+    res.json({
+      success: true,
+      message: `Workflow reassigned to ${target.email}`,
+      data: {
+        workflowId: String(workflow._id),
+        newOwner: {
+          id: String(target._id),
+          email: target.email,
+          role: target.role,
+        },
+      },
+    });
+  } catch (error) {
+    loggingService.error('Error reassigning workflow', {
+      error,
+      workflowId: req.params.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to reassign workflow',
+    });
+  }
+});
+
+/**
  * POST /api/v3/workflow/:id/complete
  * Mark workflow as complete and ready for final review
  */
