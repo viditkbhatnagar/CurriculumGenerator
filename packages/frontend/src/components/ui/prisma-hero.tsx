@@ -3,7 +3,6 @@
 import { motion, useInView } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { useRef } from 'react';
-import { useRouter } from 'next/navigation';
 
 /* ---------------- WordsPullUp ---------------- */
 interface WordsPullUpProps {
@@ -92,106 +91,89 @@ export const WordsPullUpMultiStyle = ({
   );
 };
 
-/* ---------------- Hero ---------------- */
-const navItems: { label: string; href: string }[] = [
-  { label: 'Workflows', href: '/workflow' },
-  { label: 'Standalone', href: '/standalone' },
-  { label: 'Archive', href: '/admin/archive' },
-  { label: 'Faculty', href: '/admin/faculty' },
-  { label: 'Sign in', href: '/login' },
-];
+/* ---------------- Hero ----------------
+ * Visual structure is the literal Prisma hero from 21st.dev (video bg,
+ * top-centered black pill nav, big pulled-up word with asterisk,
+ * bottom-right description + cream pill CTA). Content is adapted for
+ * AGCQ — and the CTA action is injected so the consumer can decide what
+ * "Sign in" means (open a modal, navigate, etc).
+ */
 
-interface CurriculumHeroProps {
-  /** Primary CTA target. Defaults to /login. */
-  ctaHref?: string;
+const defaultNavItems = ['About', 'Programmes', 'Faculty', 'Standards', 'Contact'];
+
+interface PrismaHeroProps {
+  /** Top-centered nav labels. Defaults to AGCQ-flavoured items. */
+  navItems?: string[];
+  /** Big pulled-up word at the bottom-left. */
+  word?: string;
+  /** Whether to render the asterisk on the last word. */
+  showAsterisk?: boolean;
+  /** Description paragraph (bottom-right column). */
+  description?: string;
+  /** CTA pill label. */
   ctaLabel?: string;
+  /** Called when the CTA pill is clicked. */
+  onCtaClick?: () => void;
+  /** Called when a nav item is clicked. Receives the label. */
+  onNavClick?: (label: string) => void;
 }
 
-const CurriculumHero = ({ ctaHref = '/login', ctaLabel = 'Sign in' }: CurriculumHeroProps) => {
-  const router = useRouter();
-
+const PrismaHero = ({
+  navItems = defaultNavItems,
+  word = 'Curricula',
+  showAsterisk = true,
+  description = 'AGCQ is the curriculum atelier for serious institutions — a 13-step AI workflow with SME checkpoints, AGI-compliant source validation, and complete programme specifications drafted in hours, not months.',
+  ctaLabel = 'Sign in',
+  onCtaClick,
+  onNavClick,
+}: PrismaHeroProps) => {
   return (
-    <section className="h-screen w-full p-2 sm:p-3">
+    <section className="h-screen w-full">
       <div className="relative h-full w-full overflow-hidden rounded-2xl md:rounded-[2rem]">
-        {/* Deep jewel-tone gradient base — replaces the demo video.
-            Layered radial gradients evoke a stage-lit auditorium. */}
-        <div
-          aria-hidden
-          className="absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(at 22% 28%, rgb(76 29 99) 0%, transparent 55%), ' +
-              'radial-gradient(at 82% 18%, rgb(11 78 79) 0%, transparent 50%), ' +
-              'radial-gradient(at 78% 82%, rgb(120 38 78) 0%, transparent 55%), ' +
-              'radial-gradient(at 14% 88%, rgb(8 38 62) 0%, transparent 50%), ' +
-              'linear-gradient(135deg, rgb(7 8 24) 0%, rgb(11 13 32) 50%, rgb(6 7 20) 100%)',
-          }}
+        {/* Background video — exact URL from the reference */}
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 h-full w-full object-cover"
+          src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260405_170732_8a9ccda6-5cff-4628-b164-059c500a2b41.mp4"
         />
 
-        {/* Soft animated bloom */}
-        <motion.div
-          aria-hidden
-          className="absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(circle at 50% 60%, rgba(168, 85, 247, 0.18) 0%, transparent 45%)',
-          }}
-          animate={{ opacity: [0.6, 0.9, 0.6] }}
-          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-        />
+        {/* Noise overlay */}
+        <div className="noise-overlay pointer-events-none absolute inset-0 opacity-[0.7] mix-blend-overlay" />
 
-        {/* Noise overlay (defined in globals.css) */}
-        <div className="noise-overlay pointer-events-none absolute inset-0 opacity-[0.5] mix-blend-overlay" />
-
-        {/* Gradient vignette */}
+        {/* Gradient overlay */}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" />
 
         {/* Navbar */}
         <nav className="absolute left-1/2 top-0 z-20 -translate-x-1/2">
-          <div className="flex items-center gap-3 rounded-b-2xl bg-black/85 px-4 py-2 backdrop-blur sm:gap-6 md:gap-10 md:rounded-b-3xl md:px-8 lg:gap-12">
+          <div className="flex items-center gap-3 rounded-b-2xl bg-black px-4 py-2 sm:gap-6 md:gap-12 md:rounded-b-3xl md:px-8 lg:gap-14">
             {navItems.map((item) => (
               <button
-                key={item.label}
+                key={item}
                 type="button"
-                onClick={() => router.push(item.href)}
-                className="text-[10px] tracking-wide transition-colors sm:text-xs md:text-sm"
+                onClick={() => onNavClick?.(item)}
+                className="text-[10px] transition-colors sm:text-xs md:text-sm"
                 style={{ color: 'rgba(225, 224, 204, 0.8)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = '#E1E0CC')}
                 onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(225, 224, 204, 0.8)')}
               >
-                {item.label}
+                {item}
               </button>
             ))}
           </div>
         </nav>
-
-        {/* Brand mark — top-left */}
-        <div className="absolute left-5 top-5 z-20 flex items-center gap-2 sm:left-8 sm:top-8">
-          <div
-            className="flex h-7 w-7 items-center justify-center rounded-md"
-            style={{
-              background: 'linear-gradient(135deg, #E1E0CC 0%, rgba(225,224,204,0.7) 100%)',
-            }}
-          >
-            <span className="text-[11px] font-bold tracking-tight text-black">A</span>
-          </div>
-          <span
-            className="text-xs font-semibold tracking-[0.25em]"
-            style={{ color: 'rgba(225, 224, 204, 0.85)' }}
-          >
-            AGCQ
-          </span>
-        </div>
 
         {/* Hero content */}
         <div className="absolute bottom-0 left-0 right-0 px-4 pb-2 sm:px-6 md:px-10">
           <div className="grid grid-cols-12 items-end gap-4">
             <div className="col-span-12 lg:col-span-8">
               <h1
-                className="font-display font-medium leading-[0.85] tracking-[-0.07em] text-[24vw] sm:text-[22vw] md:text-[20vw] lg:text-[18vw] xl:text-[17vw] 2xl:text-[18vw]"
+                className="font-medium leading-[0.85] tracking-[-0.07em] text-[26vw] sm:text-[24vw] md:text-[22vw] lg:text-[20vw] xl:text-[19vw] 2xl:text-[20vw]"
                 style={{ color: '#E1E0CC' }}
               >
-                <WordsPullUp text="Curricula" showAsterisk />
+                <WordsPullUp text={word} showAsterisk={showAsterisk} />
               </h1>
             </div>
 
@@ -201,21 +183,19 @@ const CurriculumHero = ({ ctaHref = '/login', ctaLabel = 'Sign in' }: Curriculum
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.8, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
                 className="text-xs sm:text-sm md:text-base"
-                style={{ color: 'rgba(225, 224, 204, 0.78)', lineHeight: 1.35 }}
+                style={{ lineHeight: 1.2, color: 'rgba(225, 224, 204, 0.7)' }}
               >
-                AGCQ is the curriculum atelier for serious institutions — a 13-step AI workflow with
-                SME checkpoints, AGI-compliant source validation, and complete programme
-                specifications drafted in hours, not months.
+                {description}
               </motion.p>
 
               <motion.button
                 type="button"
-                onClick={() => router.push(ctaHref)}
+                onClick={onCtaClick}
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.8, delay: 0.7, ease: [0.16, 1, 0.3, 1] }}
                 className="group inline-flex items-center gap-2 self-start rounded-full py-1 pl-5 pr-1 text-sm font-medium transition-all hover:gap-3 sm:text-base"
-                style={{ background: '#E1E0CC', color: '#0a0a18' }}
+                style={{ background: '#E1E0CC', color: '#000' }}
               >
                 {ctaLabel}
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black transition-transform group-hover:scale-110 sm:h-10 sm:w-10">
@@ -230,4 +210,4 @@ const CurriculumHero = ({ ctaHref = '/login', ctaLabel = 'Sign in' }: Curriculum
   );
 };
 
-export { CurriculumHero };
+export { PrismaHero };
