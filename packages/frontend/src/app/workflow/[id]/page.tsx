@@ -401,9 +401,24 @@ export default function WorkflowDetailPage() {
   const isStepAccessible = (step: WorkflowStep): boolean => {
     // Can access any completed step or the current step
     if (step <= workflow.currentStep) return true;
-    // Can access next step if previous is complete
-    const prevStep = workflow.stepProgress.find((p) => p.step === step - 1);
-    return prevStep?.status === 'approved' || prevStep?.status === 'completed';
+
+    // Can access next step if the previous one is done. We check two
+    // sources of truth because they can drift: the stepProgress row's
+    // status, and the step's own approvedAt field. Real-world
+    // observation (2026-05-11): a workflow whose step13 had been
+    // approved in March was showing stepProgress[13].status =
+    // 'in_progress' today, blocking step 14 even though the step's
+    // approvedAt was still set. Trusting either signal keeps the
+    // user un-stuck while the underlying drift is investigated.
+    const prevIdx = step - 1;
+    const prevProgress = workflow.stepProgress.find((p) => p.step === prevIdx);
+    if (prevProgress?.status === 'approved' || prevProgress?.status === 'completed') {
+      return true;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const prevStepData = (workflow as any)[`step${prevIdx}`];
+    if (prevStepData?.approvedAt) return true;
+    return false;
   };
 
   return (
