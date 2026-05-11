@@ -21,15 +21,19 @@
     --border: 226 232 240;
     --border-subtle: 241 245 249;
 
-    --primary: 13 148 136;
-    --primary-hover: 15 118 110;
+    /* Richer jewel teal — deeper than teal-600, still in the teal family
+       so the 400+ hardcoded teal-* utility overrides keep cohering. */
+    --primary: 15 118 110;
+    --primary-hover: 17 94 89;
     --primary-foreground: 255 255 255;
     --primary-muted: 204 251 241;
 
-    --accent: 99 102 241;
-    --accent-hover: 79 70 229;
+    /* Switched from indigo-500 to a saturated violet — richer, more
+       editorial; pairs better with the deepened teal primary. */
+    --accent: 124 58 237;
+    --accent-hover: 109 40 217;
     --accent-foreground: 255 255 255;
-    --accent-muted: 224 231 255;
+    --accent-muted: 237 233 254;
 
     --success: 22 163 74;
     --success-muted: 220 252 231;
@@ -71,12 +75,13 @@
     --primary: 45 212 191;
     --primary-hover: 94 234 212;
     --primary-foreground: 9 9 18;
-    --primary-muted: 13 148 136 / 0.15;
+    --primary-muted: 15 118 110 / 0.18;
 
-    --accent: 129 140 248;
-    --accent-hover: 165 180 252;
+    /* Violet accent that pairs with deeper light-mode primary. */
+    --accent: 167 139 250;
+    --accent-hover: 196 181 253;
     --accent-foreground: 9 9 18;
-    --accent-muted: 99 102 241 / 0.15;
+    --accent-muted: 124 58 237 / 0.18;
 
     --success: 74 222 128;
     --success-muted: 22 163 74 / 0.15;
@@ -281,10 +286,18 @@
 
   .gradient-mesh-hero {
     background:
-      radial-gradient(at 0% 0%, rgb(var(--primary) / 0.12) 0%, transparent 50%),
-      radial-gradient(at 100% 0%, rgb(var(--accent) / 0.08) 0%, transparent 50%),
-      radial-gradient(at 50% 100%, rgb(var(--primary) / 0.06) 0%, transparent 50%),
+      radial-gradient(at 0% 0%, rgb(var(--primary) / 0.18) 0%, transparent 55%),
+      radial-gradient(at 100% 0%, rgb(var(--accent) / 0.14) 0%, transparent 55%),
+      radial-gradient(at 100% 100%, rgb(244 114 182 / 0.08) 0%, transparent 50%),
+      radial-gradient(at 50% 100%, rgb(var(--primary) / 0.1) 0%, transparent 60%),
       rgb(var(--background));
+  }
+
+  /* ── Film-grain noise overlay used in the hero ── */
+  .noise-overlay {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.55 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    background-size: 240px 240px;
+    background-repeat: repeat;
   }
 
   /* ── Skeleton Loading ── */

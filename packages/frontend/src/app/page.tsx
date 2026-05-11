@@ -4,108 +4,25 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/components/auth/AuthContext';
+import { CurriculumHero } from '@/components/ui/prisma-hero';
 import {
   ArrowRight,
   Sparkles,
+  Layers,
+  Target,
+  Shield,
+  Clock,
+  Globe2,
   BookOpen,
   Zap,
-  Target,
-  Layers,
-  FileText,
-  Lightbulb,
-  GraduationCap,
-  Search,
-  BookMarked,
-  CheckSquare,
-  Building2,
-  Book,
-  FileEdit,
-  Presentation,
-  Clock,
-  Shield,
-  Globe2,
 } from 'lucide-react';
-
-const WORKFLOW_STEPS = [
-  {
-    step: 1,
-    name: 'Program Foundation',
-    time: '15-20 min',
-    icon: FileText,
-    color: 'from-teal-500 to-emerald-500',
-  },
-  {
-    step: 2,
-    name: 'Competency Framework',
-    time: '10-15 min',
-    icon: Target,
-    color: 'from-blue-500 to-cyan-500',
-  },
-  {
-    step: 3,
-    name: 'Learning Outcomes',
-    time: '15-20 min',
-    icon: Lightbulb,
-    color: 'from-amber-500 to-orange-500',
-  },
-  {
-    step: 4,
-    name: 'Course Framework',
-    time: '25-30 min',
-    icon: GraduationCap,
-    color: 'from-purple-500 to-violet-500',
-  },
-  {
-    step: 5,
-    name: 'Topic Sources',
-    time: '10 min',
-    icon: Search,
-    color: 'from-rose-500 to-pink-500',
-  },
-  {
-    step: 6,
-    name: 'Reading Lists',
-    time: '8 min',
-    icon: BookMarked,
-    color: 'from-indigo-500 to-blue-500',
-  },
-  {
-    step: 7,
-    name: 'Assessments',
-    time: '15-20 min',
-    icon: CheckSquare,
-    color: 'from-emerald-500 to-teal-500',
-  },
-  {
-    step: 8,
-    name: 'Case Studies',
-    time: '10-15 min',
-    icon: Building2,
-    color: 'from-cyan-500 to-sky-500',
-  },
-  { step: 9, name: 'Glossary', time: '5 min', icon: Book, color: 'from-violet-500 to-purple-500' },
-  {
-    step: 10,
-    name: 'Lesson Plans',
-    time: '10-15 min',
-    icon: FileEdit,
-    color: 'from-orange-500 to-red-500',
-  },
-  {
-    step: 11,
-    name: 'PPT Generation',
-    time: '10-15 min',
-    icon: Presentation,
-    color: 'from-sky-500 to-indigo-500',
-  },
-];
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.08, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
+    transition: { delay: i * 0.06, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
   }),
 };
 
@@ -113,14 +30,52 @@ const staggerContainer = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.06, delayChildren: 0.2 },
+    transition: { staggerChildren: 0.06, delayChildren: 0.1 },
   },
 };
 
 const staggerItem = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
 };
+
+const STATS = [
+  { value: '13', label: 'Workflow steps', icon: Layers },
+  { value: '~2h', label: 'Programme draft', icon: Clock },
+  { value: '100%', label: 'Auto-gradable', icon: Shield },
+  { value: '3', label: 'Credit systems', icon: Globe2 },
+];
+
+const PILLARS = [
+  {
+    icon: Target,
+    eyebrow: 'Pedagogy',
+    title: 'Outcome-led, not template-led',
+    body: 'Every artefact — PLOs, MLOs, assessments, lessons — is traced back to a single competency framework and stays consistent across the whole programme.',
+    accent: 'from-teal-500/30 via-teal-400/20 to-transparent',
+  },
+  {
+    icon: BookOpen,
+    eyebrow: 'Standards',
+    title: 'AGI-compliant sources, by default',
+    body: 'Peer-reviewed journals under five years old, structured APA citations, semantic deduping. Drift-prone references are caught before they reach the page.',
+    accent: 'from-violet-500/30 via-violet-400/20 to-transparent',
+  },
+  {
+    icon: Zap,
+    eyebrow: 'Velocity',
+    title: 'Hours, not months',
+    body: 'A GPT-5 RAG pipeline drafts each section while you keep approval at every checkpoint. Faculty edits, AI redrafts — the loop is fast and visible.',
+    accent: 'from-rose-500/25 via-rose-400/15 to-transparent',
+  },
+  {
+    icon: Sparkles,
+    eyebrow: 'Composition',
+    title: 'One workbench, every artefact',
+    body: 'Programme spec, unit specs, reading lists, case studies, glossaries, lesson plans, slides, assignments and the summative exam — all in one place.',
+    accent: 'from-amber-500/25 via-amber-400/15 to-transparent',
+  },
+];
 
 export default function Home() {
   const router = useRouter();
@@ -136,97 +91,37 @@ export default function Home() {
   }, [isAuthenticated, isLoading, router]);
 
   return (
-    <div className="min-h-screen gradient-mesh-hero">
-      {/* Nav Bar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-teal-400 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-base font-semibold text-foreground tracking-tight">AGCQ</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="btn-ghost px-4 py-2 text-sm rounded-lg"
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => router.push('/workflow')}
-              className="btn-primary px-4 py-2 text-sm rounded-lg"
-            >
-              Get Started
-            </button>
-          </div>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-background">
+      {/* Cinematic hero */}
+      <CurriculumHero ctaHref="/login" ctaLabel="Sign in" />
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-5xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-          >
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-medium mb-8 border border-primary/20">
+      {/* Eyebrow strip — anchors the reader after the hero */}
+      <section className="px-4 pt-20 pb-10 sm:px-6 lg:px-8">
+        <motion.div
+          className="max-w-5xl mx-auto"
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="text-center mb-3">
+            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium tracking-wide uppercase bg-primary/10 text-primary border border-primary/20">
               <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-              AI-Powered Workflow v2.2
-            </div>
-          </motion.div>
-
-          <motion.h1
-            className="text-5xl sm:text-6xl lg:text-7xl font-bold text-foreground mb-6 tracking-tight leading-[1.1]"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-          >
-            Build Complete{' '}
-            <span className="bg-gradient-to-r from-primary via-teal-400 to-accent bg-clip-text text-transparent">
-              Curricula
+              How AGCQ works
             </span>
-            <br />
-            in Hours, Not Months
-          </motion.h1>
-
-          <motion.p
-            className="text-lg sm:text-xl text-foreground-muted mb-10 max-w-2xl mx-auto leading-relaxed"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            11-step AI workflow with SME checkpoints, auto-gradable assessments, and full credit
-            system support. AGI-compliant from start to finish.
-          </motion.p>
-
-          <motion.div
-            className="flex flex-col sm:flex-row gap-3 justify-center"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-          >
-            <button
-              onClick={() => router.push('/workflow')}
-              className="group btn-primary px-7 py-3.5 text-base rounded-xl inline-flex items-center justify-center gap-2"
-            >
-              Start New Curriculum
-              <ArrowRight className="w-4.5 h-4.5 group-hover:translate-x-0.5 transition-transform" />
-            </button>
-            <button
-              onClick={() => router.push('/standalone')}
-              className="btn-secondary px-7 py-3.5 text-base rounded-xl inline-flex items-center justify-center gap-2"
-            >
-              <Layers className="w-4.5 h-4.5" />
-              Standalone Step
-            </button>
-          </motion.div>
-        </div>
+          </div>
+          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-medium text-foreground text-center tracking-tight leading-[1.05]">
+            A workbench, not a wizard.
+          </h2>
+          <p className="text-base sm:text-lg text-foreground-muted text-center mt-5 max-w-2xl mx-auto leading-relaxed">
+            Drafting a programme is a long conversation between framework, faculty, and evidence.
+            AGCQ keeps all three in one room.
+          </p>
+        </motion.div>
       </section>
 
-      {/* Stats Row */}
-      <section className="pb-16 px-4 sm:px-6 lg:px-8">
+      {/* Stats — rich gradient cards */}
+      <section className="px-4 pb-16 sm:px-6 lg:px-8">
         <motion.div
           className="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-3"
           variants={staggerContainer}
@@ -234,192 +129,133 @@ export default function Home() {
           whileInView="visible"
           viewport={{ once: true, margin: '-50px' }}
         >
-          {[
-            { value: '11', label: 'Steps', icon: Layers },
-            { value: '~2h', label: 'Total Time', icon: Clock },
-            { value: '100%', label: 'Auto-Gradable', icon: Shield },
-            { value: '3', label: 'Credit Systems', icon: Globe2 },
-          ].map((stat) => (
+          {STATS.map((stat) => (
             <motion.div
               key={stat.label}
               variants={staggerItem}
-              className="card p-5 text-center group hover:shadow-card-hover transition-all"
+              className="relative overflow-hidden rounded-2xl border border-border bg-card p-5 text-center group hover:shadow-card-hover transition-all"
             >
-              <stat.icon className="w-5 h-5 text-primary mx-auto mb-2 group-hover:scale-110 transition-transform" />
-              <div className="text-2xl font-bold text-foreground">{stat.value}</div>
-              <div className="text-xs text-foreground-muted mt-0.5">{stat.label}</div>
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.04] via-transparent to-accent/[0.04] pointer-events-none" />
+              <stat.icon className="relative w-5 h-5 text-primary mx-auto mb-2 group-hover:scale-110 transition-transform" />
+              <div className="relative font-display text-3xl font-medium text-foreground tracking-tight">
+                {stat.value}
+              </div>
+              <div className="relative text-xs text-foreground-muted mt-1 tracking-wide">
+                {stat.label}
+              </div>
             </motion.div>
           ))}
         </motion.div>
       </section>
 
-      {/* Workflow Steps Grid */}
-      <section className="pb-20 px-4 sm:px-6 lg:px-8">
+      {/* Pillars — large editorial cards with subtle jewel-tone accents */}
+      <section className="px-4 pb-24 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           <motion.div
-            className="text-center mb-10"
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-          >
-            <h2 className="text-3xl font-bold text-foreground mb-3 tracking-tight">
-              11-Step Workflow
-            </h2>
-            <p className="text-foreground-muted max-w-lg mx-auto">
-              Each step builds on the last, with AI generation and human review at every checkpoint.
-            </p>
-          </motion.div>
-
-          <motion.div
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
+            className="grid grid-cols-1 md:grid-cols-2 gap-4"
             variants={staggerContainer}
             initial="hidden"
             whileInView="visible"
-            viewport={{ once: true, margin: '-50px' }}
+            viewport={{ once: true, margin: '-60px' }}
           >
-            {WORKFLOW_STEPS.map((step) => {
-              const IconComponent = step.icon;
+            {PILLARS.map((p, i) => {
+              const Icon = p.icon;
               return (
                 <motion.div
-                  key={step.step}
+                  key={p.title}
                   variants={staggerItem}
-                  className="card-interactive group p-4 cursor-default"
+                  custom={i}
+                  className="relative overflow-hidden rounded-2xl border border-border bg-card p-7 group hover:border-primary/30 hover:shadow-card-hover transition-all"
                 >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`w-9 h-9 rounded-lg bg-gradient-to-br ${step.color} flex items-center justify-center flex-shrink-0 shadow-sm group-hover:shadow-md transition-shadow`}
-                    >
-                      <IconComponent className="w-4.5 h-4.5 text-white" />
+                  <div
+                    className={`absolute -top-24 -right-24 w-64 h-64 rounded-full bg-gradient-radial ${p.accent} blur-2xl opacity-80 pointer-events-none`}
+                    style={{
+                      background: `radial-gradient(circle, ${
+                        i === 0
+                          ? 'rgba(15,118,110,0.22)'
+                          : i === 1
+                            ? 'rgba(124,58,237,0.22)'
+                            : i === 2
+                              ? 'rgba(244,63,94,0.18)'
+                              : 'rgba(245,158,11,0.18)'
+                      } 0%, transparent 70%)`,
+                    }}
+                  />
+                  <div className="relative">
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/15 transition-colors">
+                        <Icon className="w-5 h-5 text-primary" />
+                      </div>
+                      <span className="text-[10px] tracking-[0.2em] uppercase text-foreground-muted font-medium">
+                        {p.eyebrow}
+                      </span>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-foreground-muted">Step {step.step}</p>
-                      <p className="text-sm font-semibold text-foreground leading-tight mt-0.5 truncate">
-                        {step.name}
-                      </p>
-                      <p className="text-xs text-foreground-muted mt-1">{step.time}</p>
-                    </div>
+                    <h3 className="font-display text-xl sm:text-2xl font-medium text-foreground leading-tight mb-3 tracking-tight">
+                      {p.title}
+                    </h3>
+                    <p className="text-sm sm:text-base text-foreground-muted leading-relaxed">
+                      {p.body}
+                    </p>
                   </div>
                 </motion.div>
               );
             })}
-
-            {/* CTA Card */}
-            <motion.div
-              variants={staggerItem}
-              onClick={() => router.push('/workflow')}
-              className="card-interactive group p-4 cursor-pointer flex items-center justify-center"
-            >
-              <div className="text-center">
-                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2 group-hover:bg-primary/20 transition-colors">
-                  <ArrowRight className="w-4.5 h-4.5 text-primary" />
-                </div>
-                <p className="text-sm font-semibold text-primary">Get Started</p>
-              </div>
-            </motion.div>
           </motion.div>
         </div>
       </section>
 
-      {/* Feature Bento Grid */}
-      <section className="pb-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-5xl mx-auto">
-          <motion.div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3"
-            variants={staggerContainer}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: '-50px' }}
-          >
-            <motion.div
-              variants={staggerItem}
-              onClick={() => router.push('/standalone')}
-              className="card-interactive group p-6 cursor-pointer lg:col-span-2"
-            >
-              <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mb-4 group-hover:bg-accent/20 transition-colors">
-                <Layers className="w-5 h-5 text-accent" />
-              </div>
-              <h3 className="text-base font-semibold text-foreground mb-1.5">Standalone Steps</h3>
-              <p className="text-sm text-foreground-muted leading-relaxed">
-                Generate individual curriculum components without a full workflow. Quick, flexible,
-                and perfect for iterating on specific sections.
-              </p>
-            </motion.div>
-
-            <motion.div variants={staggerItem} className="card p-6">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                <Zap className="w-5 h-5 text-primary" />
-              </div>
-              <h3 className="text-base font-semibold text-foreground mb-1.5">MCQ-First</h3>
-              <p className="text-sm text-foreground-muted leading-relaxed">
-                Auto-gradable only. MCQ with optional Cloze. Zero manual grading.
-              </p>
-            </motion.div>
-
-            <motion.div variants={staggerItem} className="card p-6">
-              <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center mb-4">
-                <BookOpen className="w-5 h-5 text-success" />
-              </div>
-              <h3 className="text-base font-semibold text-foreground mb-1.5">AGI Standards</h3>
-              <p className="text-sm text-foreground-muted leading-relaxed">
-                Strict source validation. Peer-reviewed journals &lt;5 years.
-              </p>
-            </motion.div>
-
-            <motion.div variants={staggerItem} className="card p-6 lg:col-span-2">
-              <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center mb-4">
-                <Target className="w-5 h-5 text-warning" />
-              </div>
-              <h3 className="text-base font-semibold text-foreground mb-1.5">
-                Multi-Credit Systems
-              </h3>
-              <p className="text-sm text-foreground-muted leading-relaxed">
-                UK Credits, ECTS, US Semester Hours. Automatic contact hour calculations with full
-                compliance verification.
-              </p>
-            </motion.div>
-
-            <motion.div variants={staggerItem} className="card p-6 lg:col-span-2">
-              <div className="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center mb-4">
-                <Sparkles className="w-5 h-5 text-info" />
-              </div>
-              <h3 className="text-base font-semibold text-foreground mb-1.5">AI-Powered</h3>
-              <p className="text-sm text-foreground-muted leading-relaxed">
-                GPT-5 with RAG-enhanced generation, semantic search across your knowledge base, and
-                intelligent content validation at every step.
-              </p>
-            </motion.div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="pb-24 px-4 sm:px-6 lg:px-8">
+      {/* CTA — full-width rich gradient panel */}
+      <section className="px-4 pb-24 sm:px-6 lg:px-8">
         <motion.div
-          className="max-w-3xl mx-auto"
-          initial={{ opacity: 0, y: 20 }}
+          className="max-w-5xl mx-auto"
+          initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.6 }}
         >
-          <div className="card p-8 sm:p-10 text-center relative overflow-hidden">
-            {/* Subtle gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 pointer-events-none" />
-
+          <div
+            className="relative overflow-hidden rounded-3xl p-10 sm:p-14 text-center"
+            style={{
+              background:
+                'radial-gradient(at 20% 20%, rgba(15,118,110,0.55) 0%, transparent 55%), ' +
+                'radial-gradient(at 80% 30%, rgba(124,58,237,0.45) 0%, transparent 55%), ' +
+                'radial-gradient(at 50% 100%, rgba(244,114,182,0.30) 0%, transparent 60%), ' +
+                'linear-gradient(135deg, rgb(15 19 42) 0%, rgb(10 13 28) 100%)',
+            }}
+          >
+            <div className="noise-overlay absolute inset-0 opacity-30 mix-blend-overlay pointer-events-none" />
             <div className="relative">
-              <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-3 tracking-tight">
-                Ready to Start?
-              </h2>
-              <p className="text-foreground-muted mb-6 max-w-md mx-auto">
-                Create your first curriculum in about 2 hours with AI assistance at every step.
-              </p>
-              <button
-                onClick={() => router.push('/workflow')}
-                className="group btn-primary px-8 py-3.5 text-base rounded-xl inline-flex items-center gap-2"
+              <p
+                className="text-xs tracking-[0.25em] uppercase mb-4 font-medium"
+                style={{ color: 'rgba(225,224,204,0.7)' }}
               >
-                Create New Curriculum
-                <ArrowRight className="w-4.5 h-4.5 group-hover:translate-x-0.5 transition-transform" />
-              </button>
+                Ready when you are
+              </p>
+              <h2
+                className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium tracking-tight leading-[1.05] mb-5"
+                style={{ color: '#E1E0CC' }}
+              >
+                Begin a programme, not a project.
+              </h2>
+              <p
+                className="text-sm sm:text-base max-w-xl mx-auto mb-8 leading-relaxed"
+                style={{ color: 'rgba(225,224,204,0.78)' }}
+              >
+                Sign in to draft your first programme spec. Faculty invites, archive of legacy
+                curricula, and full analytics are one click away.
+              </p>
+              <motion.button
+                onClick={() => router.push('/login')}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="group inline-flex items-center gap-2 self-start rounded-full py-2.5 pl-7 pr-2 text-sm font-medium transition-all hover:gap-3 sm:text-base"
+                style={{ background: '#E1E0CC', color: '#0a0a18' }}
+              >
+                Sign in to AGCQ
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black transition-transform group-hover:scale-110 sm:h-10 sm:w-10">
+                  <ArrowRight className="h-4 w-4" style={{ color: '#E1E0CC' }} />
+                </span>
+              </motion.button>
             </div>
           </div>
         </motion.div>
