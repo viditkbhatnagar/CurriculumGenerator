@@ -17,6 +17,10 @@ import {
   UserPlus,
   ChevronDown,
   X,
+  Search,
+  Layers,
+  Sparkles,
+  Rocket,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -68,6 +72,12 @@ export default function WorkflowListPage() {
   const [assigning, setAssigning] = useState(false);
   const [assignDropdownOpen, setAssignDropdownOpen] = useState(false);
   const assignDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Toolbar state — search + status filter chips
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'in_progress' | 'completed' | 'published'
+  >('all');
 
   // Close the assign dropdown when clicking anywhere outside it.
   useEffect(() => {
@@ -216,25 +226,90 @@ export default function WorkflowListPage() {
     );
   }
 
+  // Classify workflows into mutually-exclusive buckets so the filter chip
+  // counts add up to the total — the previous logic let a single workflow
+  // count in both "In Progress" and "Completed".
+  const classify = (w: CurriculumWorkflow): 'in_progress' | 'completed' | 'published' => {
+    if (w.status === 'published') return 'published';
+    if (w.status.includes('complete') || w.status === 'review_pending') return 'completed';
+    return 'in_progress';
+  };
+
   const totalWorkflows = workflows?.length || 0;
-  const inProgress = workflows?.filter((w) => !w.status.includes('published')).length || 0;
-  const completed =
-    workflows?.filter((w) => w.status === 'step9_complete' || w.status === 'review_pending')
-      .length || 0;
-  const published = workflows?.filter((w) => w.status === 'published').length || 0;
+  const inProgress = workflows?.filter((w) => classify(w) === 'in_progress').length || 0;
+  const completed = workflows?.filter((w) => classify(w) === 'completed').length || 0;
+  const published = workflows?.filter((w) => classify(w) === 'published').length || 0;
+
+  // Apply search + filter to derive the visible list
+  const visibleWorkflows = (workflows || []).filter((w) => {
+    if (statusFilter !== 'all' && classify(w) !== statusFilter) return false;
+    const q = searchQuery.trim().toLowerCase();
+    if (q && !w.projectName.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const filterChips = [
+    { key: 'all' as const, label: 'All', count: totalWorkflows, icon: Layers },
+    { key: 'in_progress' as const, label: 'In progress', count: inProgress, icon: Clock },
+    { key: 'completed' as const, label: 'Completed', count: completed, icon: CheckCircle2 },
+    { key: 'published' as const, label: 'Published', count: published, icon: Rocket },
+  ];
+
+  const statCards = [
+    {
+      label: 'Total',
+      value: totalWorkflows,
+      icon: Layers,
+      tint: 'rgba(15,118,110,0.10)',
+      iconColor: 'rgb(15 118 110)',
+    },
+    {
+      label: 'In progress',
+      value: inProgress,
+      icon: Clock,
+      tint: 'rgba(234,179,8,0.12)',
+      iconColor: 'rgb(180 83 9)',
+    },
+    {
+      label: 'Completed',
+      value: completed,
+      icon: CheckCircle2,
+      tint: 'rgba(22,163,74,0.12)',
+      iconColor: 'rgb(21 128 61)',
+    },
+    {
+      label: 'Published',
+      value: published,
+      icon: Rocket,
+      tint: 'rgba(124,58,237,0.12)',
+      iconColor: 'rgb(109 40 217)',
+    },
+  ];
 
   return (
     <div className="min-h-screen gradient-mesh">
-      {/* Header */}
-      <header className="sticky top-0 z-10 glass border-b border-border/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
-              Curriculum Workflows
-            </h1>
-            <p className="text-sm text-foreground-muted mt-0.5">11-Step AI-Integrated Generation</p>
+      {/* Header — glass strip with brand mark + actions */}
+      <header className="sticky top-0 z-30 glass border-b border-border/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className="hidden sm:flex h-9 w-9 items-center justify-center rounded-xl shrink-0"
+              style={{
+                background: 'linear-gradient(135deg, rgb(15 118 110) 0%, rgb(124 58 237) 100%)',
+              }}
+            >
+              <Sparkles className="w-4 h-4 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="font-display text-lg sm:text-xl font-medium text-foreground tracking-tight truncate">
+                Curriculum Workflows
+              </h1>
+              <p className="text-[11px] sm:text-xs text-foreground-muted mt-0.5 truncate">
+                13-Step AI-Integrated Generation
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => router.push('/dashboard')}
               className="btn-secondary px-3 py-2 text-sm rounded-lg inline-flex items-center gap-2"
@@ -244,10 +319,11 @@ export default function WorkflowListPage() {
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="btn-primary px-4 py-2 text-sm rounded-lg inline-flex items-center gap-2"
+              className="btn-primary px-4 py-2 text-sm rounded-lg inline-flex items-center gap-2 shadow-glow-sm"
             >
               <Plus className="w-4 h-4" />
-              New Curriculum
+              <span className="hidden sm:inline">New Curriculum</span>
+              <span className="sm:hidden">New</span>
             </button>
             <UserMenu />
           </div>
@@ -255,24 +331,103 @@ export default function WorkflowListPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-          {[
-            { label: 'Total', value: totalWorkflows, color: 'text-foreground' },
-            { label: 'In Progress', value: inProgress, color: 'text-warning' },
-            { label: 'Completed', value: completed, color: 'text-success' },
-            { label: 'Published', value: published, color: 'text-primary' },
-          ].map((stat) => (
-            <div key={stat.label} className="card p-4">
-              <p className="text-xs text-foreground-muted font-medium">{stat.label}</p>
-              <p className={cn('text-2xl font-bold mt-1', stat.color)}>{stat.value}</p>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        {/* Stats — gradient-tinted cards */}
+        <motion.div
+          className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          {statCards.map((s) => (
+            <div
+              key={s.label}
+              className="relative overflow-hidden card p-4 sm:p-5 hover:shadow-card-hover transition-shadow"
+            >
+              <div
+                aria-hidden
+                className="absolute -top-12 -right-12 w-32 h-32 rounded-full pointer-events-none"
+                style={{ background: `radial-gradient(circle, ${s.tint} 0%, transparent 70%)` }}
+              />
+              <div className="relative flex items-start justify-between">
+                <div>
+                  <p className="text-[11px] tracking-[0.12em] uppercase font-medium text-foreground-muted">
+                    {s.label}
+                  </p>
+                  <p className="font-display text-3xl sm:text-4xl font-medium text-foreground mt-1 tracking-tight tabular-nums">
+                    {s.value}
+                  </p>
+                </div>
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: s.tint }}
+                >
+                  <s.icon className="w-4 h-4" style={{ color: s.iconColor }} />
+                </div>
+              </div>
             </div>
           ))}
+        </motion.div>
+
+        {/* Toolbar — search + filter chips */}
+        <div className="flex flex-col lg:flex-row gap-3 mb-6">
+          {/* Search */}
+          <div className="relative flex-1 lg:max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search programmes by name…"
+              className="w-full pl-10 pr-9 py-2.5 bg-card border border-border rounded-xl text-sm text-foreground placeholder:text-foreground-muted/60 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-background-secondary text-foreground-muted hover:text-foreground transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Filter chips */}
+          <div className="flex gap-2 flex-wrap">
+            {filterChips.map((f) => {
+              const Icon = f.icon;
+              const active = statusFilter === f.key;
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setStatusFilter(f.key)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all',
+                    active
+                      ? 'bg-foreground text-background shadow-sm'
+                      : 'bg-card border border-border text-foreground-muted hover:text-foreground hover:border-foreground/20'
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {f.label}
+                  <span
+                    className={cn(
+                      'inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums',
+                      active
+                        ? 'bg-background/20 text-background'
+                        : 'bg-background-secondary text-foreground-muted'
+                    )}
+                  >
+                    {f.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Workflow Grid */}
-        {workflows && workflows.length > 0 ? (
+        {workflows && workflows.length > 0 && visibleWorkflows.length > 0 ? (
           <motion.div
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
             initial="hidden"
@@ -281,7 +436,7 @@ export default function WorkflowListPage() {
               visible: { transition: { staggerChildren: 0.05 } },
             }}
           >
-            {workflows.map((workflow) => {
+            {visibleWorkflows.map((workflow) => {
               const progress = getProgressPercent(workflow);
               const badge = getStatusBadge(workflow.status);
               const BadgeIcon = badge.icon;
@@ -402,8 +557,30 @@ export default function WorkflowListPage() {
               );
             })}
           </motion.div>
+        ) : workflows && workflows.length > 0 ? (
+          /* Filter / search returned nothing */
+          <div className="text-center py-20">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-background-secondary flex items-center justify-center">
+              <Search className="w-6 h-6 text-foreground-muted" />
+            </div>
+            <h3 className="text-base font-semibold text-foreground mb-1.5">No matches</h3>
+            <p className="text-sm text-foreground-muted mb-5 max-w-sm mx-auto">
+              {searchQuery
+                ? `Nothing matches "${searchQuery}"${statusFilter !== 'all' ? ' with that status' : ''}.`
+                : 'No programmes in this status yet.'}
+            </p>
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setStatusFilter('all');
+              }}
+              className="btn-secondary px-4 py-2 text-sm rounded-lg inline-flex items-center gap-2"
+            >
+              Clear filters
+            </button>
+          </div>
         ) : (
-          /* Empty State */
+          /* No workflows exist at all */
           <div className="text-center py-24">
             <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-primary/10 flex items-center justify-center">
               <FolderOpen className="w-8 h-8 text-primary" />

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from './AuthContext';
@@ -19,6 +20,7 @@ import { WordsPullUp } from '@/components/ui/prisma-hero';
  */
 export default function LoginScreen() {
   const { login } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -31,6 +33,8 @@ export default function LoginScreen() {
     setError(null);
     try {
       await login(email.trim(), password);
+      // Land on the workflow list (skips a marketing-page flash on /).
+      router.replace('/workflow');
     } catch (err: unknown) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const e = err as any;
