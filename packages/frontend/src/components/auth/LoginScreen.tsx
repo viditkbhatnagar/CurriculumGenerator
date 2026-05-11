@@ -7,20 +7,16 @@ import { useAuth } from './AuthContext';
 import { WordsPullUp } from '@/components/ui/prisma-hero';
 
 /**
- * Faculty sign-in. The full Prisma hero is visible (video background,
- * nav, "Curricula*" pulled-up word) and a compact sign-in form sits
- * inline in the bottom-right column — where the description + CTA
- * lived in the reference design. No modal, no overlay covering the
- * cinematic visual.
+ * Faculty sign-in. The full Prisma hero is visible (video, noise,
+ * gradient) with no top nav. "Curriculum Generator" sits as a
+ * tasteful display heading at the bottom-left, and a compact
+ * sign-in form is anchored vertically-centered on the right.
  *
  * Test contracts preserved (used by e2e/tests/auth-admin.spec.ts):
  *   - text "Sign in to access your programmes." present
  *   - inputs labelled "Email" and "Password"
  *   - submit button text matches /^Sign in$/
  */
-
-const navItems = ['About', 'Programmes', 'Faculty', 'Standards', 'Contact'];
-
 export default function LoginScreen() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
@@ -65,134 +61,143 @@ export default function LoginScreen() {
         />
 
         {/* Noise overlay */}
-        <div className="noise-overlay pointer-events-none absolute inset-0 opacity-[0.7] mix-blend-overlay" />
+        <div className="noise-overlay pointer-events-none absolute inset-0 opacity-[0.65] mix-blend-overlay" />
 
-        {/* Gradient overlay */}
+        {/* Gradient overlay — slightly heavier on the right to seat the form */}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/70" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-l from-black/45 via-transparent to-transparent" />
 
-        {/* Navbar */}
-        <nav className="absolute left-1/2 top-0 z-20 -translate-x-1/2">
-          <div className="flex items-center gap-3 rounded-b-2xl bg-black px-4 py-2 sm:gap-6 md:gap-12 md:rounded-b-3xl md:px-8 lg:gap-14">
-            {navItems.map((item) => (
-              <a
-                key={item}
-                href="#"
-                className="text-[10px] transition-colors sm:text-xs md:text-sm"
-                style={{ color: 'rgba(225, 224, 204, 0.8)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#E1E0CC')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(225, 224, 204, 0.8)')}
-              >
-                {item}
-              </a>
-            ))}
+        {/* AGCQ brand mark — top-left, replaces the navbar */}
+        <div className="absolute z-20 top-6 left-6 sm:top-8 sm:left-10 flex items-center gap-2.5">
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-md"
+            style={{
+              background: 'linear-gradient(135deg, #E1E0CC 0%, rgba(225,224,204,0.7) 100%)',
+            }}
+          >
+            <span className="text-[12px] font-bold tracking-tight text-black">A</span>
           </div>
-        </nav>
+          <span
+            className="text-xs font-semibold tracking-[0.25em]"
+            style={{ color: 'rgba(225, 224, 204, 0.85)' }}
+          >
+            AGCQ
+          </span>
+        </div>
 
-        {/* Hero content */}
-        <div className="absolute bottom-0 left-0 right-0 px-4 pb-2 sm:px-6 md:px-10">
-          <div className="grid grid-cols-12 items-end gap-4">
-            {/* Big pulled-up word — left column, exactly like the Prisma reference */}
-            <div className="col-span-12 lg:col-span-8">
-              <h1
-                className="font-medium leading-[0.85] tracking-[-0.07em] text-[26vw] sm:text-[24vw] md:text-[22vw] lg:text-[20vw] xl:text-[19vw] 2xl:text-[20vw]"
-                style={{ color: '#E1E0CC' }}
+        {/* "Curriculum Generator" — bottom-left, smaller than the big Prisma word */}
+        <div className="absolute z-10 bottom-6 left-6 sm:bottom-10 sm:left-10 right-6 sm:right-auto pointer-events-none">
+          <h1
+            className="font-medium leading-[0.95] tracking-[-0.04em] text-[10vw] sm:text-[8vw] md:text-[6.5vw] lg:text-[5vw] xl:text-[4.5vw] max-w-[14ch]"
+            style={{ color: '#E1E0CC' }}
+          >
+            <WordsPullUp text="Curriculum Generator" />
+          </h1>
+        </div>
+
+        {/* Sign-in form — right edge, vertically centered */}
+        <div className="absolute inset-y-0 right-0 z-20 flex items-center px-4 sm:px-8 lg:px-12">
+          <motion.form
+            onSubmit={handleSubmit}
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.7, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-[360px] flex flex-col gap-3.5 rounded-2xl p-6 sm:p-7"
+            style={{
+              background: 'rgba(10, 10, 16, 0.55)',
+              border: '1px solid rgba(225, 224, 204, 0.15)',
+              backdropFilter: 'blur(18px)',
+              WebkitBackdropFilter: 'blur(18px)',
+            }}
+          >
+            <div className="space-y-1">
+              <p
+                className="text-[10px] font-semibold tracking-[0.22em] uppercase"
+                style={{ color: 'rgba(225, 224, 204, 0.55)' }}
               >
-                <WordsPullUp text="Curricula" showAsterisk />
-              </h1>
+                AGCQ · Curriculum
+              </p>
+              <p
+                className="text-sm sm:text-base"
+                style={{ lineHeight: 1.3, color: 'rgba(225, 224, 204, 0.85)' }}
+              >
+                Welcome back. Sign in to access your programmes.
+              </p>
             </div>
 
-            {/* Compact sign-in form — replaces the description + CTA column */}
-            <div className="col-span-12 flex flex-col gap-4 pb-6 lg:col-span-4 lg:pb-10">
-              <motion.form
-                onSubmit={handleSubmit}
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ duration: 0.8, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                className="flex flex-col gap-3 max-w-[360px]"
+            <Field
+              label="Email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={setEmail}
+              placeholder="you@university.edu"
+            />
+            <Field
+              label="Password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={setPassword}
+              placeholder="••••••••"
+            />
+
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="text-[11px] rounded-md px-2.5 py-1.5"
+                style={{
+                  color: 'rgb(254 202 202)',
+                  background: 'rgba(127, 29, 29, 0.35)',
+                  border: '1px solid rgba(248, 113, 113, 0.35)',
+                }}
+                role="alert"
               >
-                <div className="space-y-1">
-                  <p
-                    className="text-[10px] font-semibold tracking-[0.22em] uppercase"
-                    style={{ color: 'rgba(225, 224, 204, 0.55)' }}
-                  >
-                    AGCQ · Curriculum
-                  </p>
-                  <p
-                    className="text-xs sm:text-sm md:text-base"
-                    style={{ lineHeight: 1.25, color: 'rgba(225, 224, 204, 0.8)' }}
-                  >
-                    Welcome back. Sign in to access your programmes.
-                  </p>
-                </div>
+                {error}
+              </motion.div>
+            )}
 
-                <Field
-                  label="Email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={setEmail}
-                  placeholder="you@university.edu"
-                />
-                <Field
-                  label="Password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={setPassword}
-                  placeholder="••••••••"
-                />
+            <button
+              type="submit"
+              disabled={submitDisabled}
+              className="group mt-1 inline-flex items-center gap-2 self-start rounded-full py-1 pl-5 pr-1 text-sm font-medium transition-all hover:gap-3 sm:text-base disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ background: '#E1E0CC', color: '#000' }}
+            >
+              {submitting ? (
+                <>
+                  Signing in
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black sm:h-10 sm:w-10">
+                    <span
+                      className="w-3.5 h-3.5 rounded-full border-2 animate-spin"
+                      style={{
+                        borderColor: 'rgba(225,224,204,0.3)',
+                        borderTopColor: '#E1E0CC',
+                      }}
+                    />
+                  </span>
+                </>
+              ) : (
+                <>
+                  Sign in
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black transition-transform group-hover:scale-110 sm:h-10 sm:w-10">
+                    <ArrowRight className="h-4 w-4" style={{ color: '#E1E0CC' }} />
+                  </span>
+                </>
+              )}
+            </button>
 
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="text-[11px] rounded-md px-2.5 py-1.5"
-                    style={{
-                      color: 'rgb(254 202 202)',
-                      background: 'rgba(127, 29, 29, 0.35)',
-                      border: '1px solid rgba(248, 113, 113, 0.35)',
-                    }}
-                    role="alert"
-                  >
-                    {error}
-                  </motion.div>
-                )}
-
-                <motion.button
-                  type="submit"
-                  disabled={submitDisabled}
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 0.8, delay: 0.7, ease: [0.16, 1, 0.3, 1] }}
-                  className="group inline-flex items-center gap-2 self-start rounded-full py-1 pl-5 pr-1 text-sm font-medium transition-all hover:gap-3 sm:text-base disabled:cursor-not-allowed disabled:opacity-60"
-                  style={{ background: '#E1E0CC', color: '#000' }}
-                >
-                  {submitting ? (
-                    <>
-                      Signing in
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black sm:h-10 sm:w-10">
-                        <span
-                          className="w-3.5 h-3.5 rounded-full border-2 animate-spin"
-                          style={{
-                            borderColor: 'rgba(225,224,204,0.3)',
-                            borderTopColor: '#E1E0CC',
-                          }}
-                        />
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      Sign in
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black transition-transform group-hover:scale-110 sm:h-10 sm:w-10">
-                        <ArrowRight className="h-4 w-4" style={{ color: '#E1E0CC' }} />
-                      </span>
-                    </>
-                  )}
-                </motion.button>
-              </motion.form>
-            </div>
-          </div>
+            <p
+              className="text-[11px] leading-relaxed pt-3 mt-1"
+              style={{
+                color: 'rgba(225, 224, 204, 0.5)',
+                borderTop: '1px solid rgba(225, 224, 204, 0.1)',
+              }}
+            >
+              Faculty: your administrator will share a temporary password with you.
+            </p>
+          </motion.form>
         </div>
       </div>
     </section>
@@ -200,10 +205,8 @@ export default function LoginScreen() {
 }
 
 /**
- * Glass-effect input that blends with the cinematic hero — cream
- * border + cream text on a frosted dark fill. Compact (h-10) so the
- * form fits neatly into the Prisma column without overpowering the
- * big pulled-up word.
+ * Glass-effect input — frosted dark fill + cream border + cream text.
+ * Blends with the cinematic hero without going opaque-card.
  */
 function Field({
   label,
