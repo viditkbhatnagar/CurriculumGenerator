@@ -12,6 +12,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",
+    "@types/jszip": "^3.4.0",
+    "jszip": "^3.10.1",
     "typescript": "^5.3.3"
   }
 }

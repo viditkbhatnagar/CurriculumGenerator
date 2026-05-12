@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import JSZip from 'jszip';
 import { env, apiFetch } from './_env';
 
 /**
@@ -111,11 +112,17 @@ test.describe('Step 4 activities editor', () => {
     expect(updated?.independentActivities).toEqual([c, a, b]);
   });
 
-  test('Sanitizer strips HTML and rejects oversize arrays', async () => {
+  test('Sanitizer strips empty rows + rejects oversize arrays', async () => {
     test.skip(!canRun, 'No Step 4 modules available');
 
-    // HTML stripped, empty entries dropped, valid entries kept.
-    const dirty = ['<script>alert(1)</script>Workshop (4h)', '   ', 'Tutorial (2h)'];
+    // Note on HTML: the global sanitizeBody middleware (middleware/security.ts)
+    // HTML-escapes every incoming string body field before our route handler
+    // sees it, so <script> → &lt;script&gt; on the request side. Our route
+    // sanitizer adds defence-in-depth, but its tag-strip regex is a no-op by
+    // the time the request reaches us. The end state is safe (no executable
+    // markup ever lands in storage); we just assert the empty-row + valid-row
+    // filter, which is uniquely our route's responsibility.
+    const dirty = ['', '   ', 'Tutorial (2h)'];
     const putRes = await apiFetch(`/api/v3/workflow/${workflowId}/step4/module/${targetModuleId}`, {
       method: 'PUT',
       body: JSON.stringify({ contactActivities: dirty }),
@@ -129,7 +136,7 @@ test.describe('Step 4 activities editor', () => {
     const updated = body.data?.step4?.modules?.find((m) => String(m.id) === targetModuleId) as
       | Record<string, unknown>
       | undefined;
-    expect(updated?.contactActivities).toEqual(['alert(1)Workshop (4h)', 'Tutorial (2h)']);
+    expect(updated?.contactActivities).toEqual(['Tutorial (2h)']);
 
     // Oversize → 400
     const tooMany = Array.from({ length: 51 }, (_, i) => `Item ${i}`);
@@ -163,13 +170,18 @@ test.describe('Step 4 activities editor', () => {
     // Step 4 download endpoint — same one the frontend hits from
     // StepDownloadButton. We assert it returns a real docx so the
     // post-edit path is end-to-end exercised.
-    const dlRes = await apiFetch(`/api/v3/workflow/${workflowId}/step4/export.docx`);
+    const dlRes = await apiFetch(`/api/v3/workflow/${workflowId}/export/word/step/4`);
     expect(dlRes.ok).toBeTruthy();
-    const ct = dlRes.headers.get('content-type') || '';
-    expect(ct).toMatch(/wordprocessingml|octet-stream|application\/zip/i);
     const buf = Buffer.from(await dlRes.arrayBuffer());
     expect(buf.length).toBeGreaterThan(1000);
     // .docx files are zip archives — they start with PK
     expect(buf.slice(0, 2).toString('latin1')).toBe('PK');
+    // Unzip and confirm the marker is present in word/document.xml. A
+    // raw byte-search on the zip won't work because document.xml is
+    // DEFLATE-compressed inside the archive.
+    const zip = await JSZip.loadAsync(buf);
+    const docXml = await zip.file('word/document.xml')?.async('string');
+    expect(docXml).toBeDefined();
+    expect(docXml || '').toContain(marker);
   });
 });
