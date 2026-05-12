@@ -335,9 +335,13 @@ export interface Module {
   // Topics
   topics: Topic[];
 
-  // Optional detailed breakdown
-  contactActivities?: ContactActivity[];
-  independentActivities?: IndependentActivity[];
+  // Activity strings. Free-text — SMEs write things like:
+  //   "Lecture: Programme orientation and the fashion retail landscape (4h)"
+  // The AI populates these on generation; this PR makes them editable
+  // post-generation. ContactActivity / IndependentActivity object types
+  // remain in this file for any future structured use.
+  contactActivities?: string[];
+  independentActivities?: string[];
 
   // Progressive complexity (enforced per workflow v2.2)
   phase: ModulePhase; // early (1-2), middle (3-5), late (6-8)

@@ -365,6 +365,304 @@ function MLOEditModal({
   );
 }
 
+// Activity Edit Modal — single free-text input. Mirrors ModuleEditModal /
+// MLOEditModal in structure so SMEs see a consistent edit experience.
+function ActivityEditModal({
+  initialValue,
+  kind,
+  moduleCode,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  initialValue: string;
+  kind: 'contact' | 'independent';
+  moduleCode: string;
+  onSave: (value: string) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [value, setValue] = useState(initialValue);
+  const trimmed = value.trim();
+  const isValid = trimmed.length > 0 && trimmed.length <= 500;
+  const charLabel =
+    trimmed.length > 500 ? `${trimmed.length}/500 — too long` : `${trimmed.length}/500`;
+  const accent =
+    kind === 'contact'
+      ? 'from-blue-500 to-cyan-600 hover:from-blue-400 hover:to-cyan-500'
+      : 'from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500';
+  const title = kind === 'contact' ? 'contact activity' : 'independent activity';
+
+  return (
+    <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-teal-200 w-full max-w-2xl">
+        <div className="p-6 border-b border-teal-200">
+          <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
+            {initialValue ? 'Edit' : 'Add'} {title}
+            <span className="text-teal-500 text-sm">in {moduleCode}</span>
+          </h3>
+        </div>
+
+        <div className="p-6 space-y-3">
+          <label className="block text-sm font-medium text-teal-700">Activity</label>
+          <textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            rows={4}
+            autoFocus
+            className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
+            placeholder={
+              kind === 'contact'
+                ? 'e.g. Lecture: Programme orientation and the fashion retail landscape (4h)'
+                : 'e.g. Reading: Selected chapters from Levy & Weitz, Retailing Management (8h)'
+            }
+            aria-label={`${title} text`}
+          />
+          <p
+            className={`text-xs ${trimmed.length > 500 ? 'text-red-500' : 'text-teal-500'}`}
+            aria-live="polite"
+          >
+            {charLabel}. Free-text — write the activity exactly as it should appear in the exported
+            syllabus.
+          </p>
+        </div>
+
+        <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-5 py-2.5 text-teal-600 hover:text-teal-700 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => isValid && onSave(trimmed)}
+            disabled={isSaving || !isValid}
+            className={`px-5 py-2.5 bg-gradient-to-r ${accent} text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2`}
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saving…
+              </>
+            ) : initialValue ? (
+              'Save changes'
+            ) : (
+              'Add activity'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Defensive formatter: legacy data has objects { type, title, hours };
+// new data is plain strings. Mirrors the Word export logic.
+function formatActivityRow(raw: unknown): string {
+  if (typeof raw === 'string') return raw;
+  if (raw && typeof raw === 'object') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = raw as any;
+    const type = typeof r.type === 'string' ? r.type : '';
+    const title = typeof r.title === 'string' ? r.title : '';
+    const hours = typeof r.hours === 'number' ? `${r.hours}h` : '';
+    const typeCap = type ? type[0].toUpperCase() + type.slice(1) : '';
+    const head = [typeCap, title].filter(Boolean).join(': ');
+    return hours ? `${head} (${hours})` : head;
+  }
+  return '';
+}
+
+// Collapsible list of free-text activity strings for a module. Renders
+// rows with up/down reorder, edit, delete; an "Add activity" button at
+// the bottom; and an empty state when no activities exist yet.
+function ActivitiesSection({
+  kind,
+  items,
+  moduleCode,
+  onAdd,
+  onEdit,
+  onDelete,
+  onReorder,
+}: {
+  kind: 'contact' | 'independent';
+  // Accept the raw data shape — legacy workflows may have object items.
+  items: unknown[];
+  moduleCode: string;
+  onAdd: () => void;
+  onEdit: (index: number) => void;
+  onDelete: (index: number) => void;
+  onReorder: (from: number, to: number) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const label = kind === 'contact' ? 'Contact activities' : 'Independent activities';
+  // Distinct visual treatment — blue for contact, orange for independent.
+  // Stakeholders confuse the two when they're both teal.
+  const headerColor = kind === 'contact' ? 'text-blue-700' : 'text-orange-700';
+  const dotBg = kind === 'contact' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700';
+  const addBtn =
+    kind === 'contact'
+      ? 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'
+      : 'bg-orange-50 hover:bg-orange-100 text-orange-700 border-orange-200';
+  const count = items.length;
+
+  return (
+    <div className="rounded-lg border border-teal-200 bg-white overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-teal-50/40 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className={`text-sm font-medium ${headerColor}`}>{label}</span>
+          <span
+            className={`inline-flex items-center justify-center min-w-[1.5rem] h-5 px-2 rounded-full text-[11px] font-semibold ${dotBg}`}
+          >
+            {count}
+          </span>
+          <span className="text-xs text-teal-500">{count === 1 ? 'item' : 'items'}</span>
+        </div>
+        <svg
+          className={`w-4 h-4 text-teal-500 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-teal-200 p-3 space-y-2 bg-teal-50/20">
+          {count === 0 ? (
+            <p className="text-xs text-teal-600 py-3 px-2 leading-relaxed">
+              No {kind === 'contact' ? 'contact' : 'independent'} activities yet — AI generation is
+              still in progress, or click <span className="font-semibold">Add activity</span> to
+              start.
+            </p>
+          ) : (
+            items.map((activity, idx) => {
+              const text = formatActivityRow(activity);
+              return (
+                <div
+                  key={`${idx}-${text.slice(0, 16)}`}
+                  className="group flex items-start gap-2 bg-white rounded-md border border-teal-200/70 px-3 py-2"
+                >
+                  <div className="flex flex-col gap-0.5 pt-0.5">
+                    <button
+                      onClick={() => idx > 0 && onReorder(idx, idx - 1)}
+                      disabled={idx === 0}
+                      aria-label="Move up"
+                      className="w-5 h-5 rounded text-teal-500 hover:bg-teal-100 disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-center"
+                    >
+                      <svg
+                        className="w-3 h-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2.5}
+                          d="M5 15l7-7 7 7"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => idx < items.length - 1 && onReorder(idx, idx + 1)}
+                      disabled={idx === items.length - 1}
+                      aria-label="Move down"
+                      className="w-5 h-5 rounded text-teal-500 hover:bg-teal-100 disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-center"
+                    >
+                      <svg
+                        className="w-3 h-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2.5}
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="flex-1 text-sm text-teal-800 leading-snug break-words">{text}</p>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => onEdit(idx)}
+                      aria-label="Edit activity"
+                      className="p-1.5 rounded text-cyan-600 hover:bg-cyan-50"
+                    >
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => onDelete(idx)}
+                      aria-label="Delete activity"
+                      className="p-1.5 rounded text-rose-600 hover:bg-rose-50"
+                    >
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+
+          {count < 50 && (
+            <button
+              onClick={onAdd}
+              className={`w-full mt-1 py-2 border border-dashed rounded-md text-xs font-medium flex items-center justify-center gap-1.5 ${addBtn}`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2.5}
+                  d="M12 5v14M5 12h14"
+                />
+              </svg>
+              Add activity
+            </button>
+          )}
+          {count >= 50 && (
+            <p className="text-[11px] text-teal-500 text-center py-1">
+              Maximum 50 activities per module reached.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // MLO Card Component
 function MLOCard({ mlo, onEdit }: { mlo: MLO; onEdit?: (mlo: MLO) => void }) {
   return (
@@ -419,6 +717,10 @@ function ModuleCard({
   onEdit,
   onEditModule,
   onEditMlo,
+  onAddActivity,
+  onEditActivity,
+  onDeleteActivity,
+  onReorderActivity,
 }: {
   module: Module;
   totalProgramHours: number;
@@ -426,6 +728,20 @@ function ModuleCard({
   onEdit?: (target: EditTarget) => void;
   onEditModule?: (module: Module) => void;
   onEditMlo?: (mlo: MLO, moduleId: string, moduleCode: string) => void;
+  onAddActivity?: (moduleId: string, moduleCode: string, kind: 'contact' | 'independent') => void;
+  onEditActivity?: (
+    moduleId: string,
+    moduleCode: string,
+    kind: 'contact' | 'independent',
+    index: number
+  ) => void;
+  onDeleteActivity?: (moduleId: string, kind: 'contact' | 'independent', index: number) => void;
+  onReorderActivity?: (
+    moduleId: string,
+    kind: 'contact' | 'independent',
+    from: number,
+    to: number
+  ) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hoursPercent =
@@ -579,6 +895,42 @@ function ModuleCard({
             </div>
           )}
 
+          {/* Activities — contact + independent. Editable post-generation;
+              the Word export reads these arrays so post-edit data flows
+              through immediately on the next download. */}
+          {(onAddActivity || onEditActivity || onDeleteActivity || onReorderActivity) && (
+            <div className="space-y-2">
+              <ActivitiesSection
+                kind="contact"
+                items={module.contactActivities || []}
+                moduleCode={module.code}
+                onAdd={() => onAddActivity && onAddActivity(module.id, module.code, 'contact')}
+                onEdit={(idx) =>
+                  onEditActivity && onEditActivity(module.id, module.code, 'contact', idx)
+                }
+                onDelete={(idx) => onDeleteActivity && onDeleteActivity(module.id, 'contact', idx)}
+                onReorder={(from, to) =>
+                  onReorderActivity && onReorderActivity(module.id, 'contact', from, to)
+                }
+              />
+              <ActivitiesSection
+                kind="independent"
+                items={module.independentActivities || []}
+                moduleCode={module.code}
+                onAdd={() => onAddActivity && onAddActivity(module.id, module.code, 'independent')}
+                onEdit={(idx) =>
+                  onEditActivity && onEditActivity(module.id, module.code, 'independent', idx)
+                }
+                onDelete={(idx) =>
+                  onDeleteActivity && onDeleteActivity(module.id, 'independent', idx)
+                }
+                onReorder={(from, to) =>
+                  onReorderActivity && onReorderActivity(module.id, 'independent', from, to)
+                }
+              />
+            </div>
+          )}
+
           {/* Topics */}
           {module.topics && module.topics.length > 0 && (
             <div>
@@ -648,6 +1000,29 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
   const [editingMloModuleId, setEditingMloModuleId] = useState<string>('');
   const [editingMloModuleCode, setEditingMloModuleCode] = useState<string>('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Activity edit state — single in-flight modal at a time (consistent
+  // with module/MLO editors above). `index === null` ⇒ creating a new
+  // row; a number ⇒ editing an existing row at that index.
+  const [activityEdit, setActivityEdit] = useState<{
+    moduleId: string;
+    moduleCode: string;
+    kind: 'contact' | 'independent';
+    index: number | null;
+    initialValue: string;
+  } | null>(null);
+  const [isSavingActivity, setIsSavingActivity] = useState(false);
+  const [activityToast, setActivityToast] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+
+  // Auto-dismiss the toast after 3.5s so it doesn't linger.
+  useEffect(() => {
+    if (!activityToast) return;
+    const t = setTimeout(() => setActivityToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [activityToast]);
 
   const isCurrentlyGenerating =
     isGenerating(workflow._id, 4) || submitStep4.isPending || isPolling || isQueueActive;
@@ -763,6 +1138,137 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
     setEditingMlo(null);
     setEditingMloModuleId('');
     setEditingMloModuleCode('');
+  };
+
+  // ──────────────────────────────────────────────────────────────────
+  // Activities (contact + independent) — edit / add / delete / reorder.
+  // All four mutators share one persistence path: rebuild the module's
+  // activity array locally, then PATCH the module with the updated
+  // array. The existing PUT module route now accepts the arrays.
+  // ──────────────────────────────────────────────────────────────────
+
+  const getModule = (moduleId: string): Module | undefined =>
+    workflow.step4?.modules?.find((m) => m.id === moduleId);
+
+  // Some legacy workflows have activities stored as { type, title, hours }
+  // objects rather than plain strings — the AI generator used to emit
+  // structured objects. The Word export already normalises both shapes;
+  // the editor does the same so SMEs can edit either, and saving always
+  // persists a string (matching the new contract).
+  const formatActivity = (raw: unknown): string => {
+    if (typeof raw === 'string') return raw;
+    if (raw && typeof raw === 'object') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const r = raw as any;
+      const type = typeof r.type === 'string' ? r.type : '';
+      const title = typeof r.title === 'string' ? r.title : '';
+      const hours = typeof r.hours === 'number' ? `${r.hours}h` : '';
+      const typeCap = type ? type[0].toUpperCase() + type.slice(1) : '';
+      const head = [typeCap, title].filter(Boolean).join(': ');
+      return hours ? `${head} (${hours})` : head;
+    }
+    return '';
+  };
+
+  const getArray = (mod: Module, kind: 'contact' | 'independent'): string[] => {
+    const src = kind === 'contact' ? mod.contactActivities : mod.independentActivities;
+    if (!Array.isArray(src)) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (src as any[]).map(formatActivity).filter((s: string) => s.length > 0);
+  };
+
+  const persistActivities = async (
+    moduleId: string,
+    kind: 'contact' | 'independent',
+    nextArr: string[],
+    actionLabel: string
+  ) => {
+    setIsSavingActivity(true);
+    setError(null);
+    try {
+      const body =
+        kind === 'contact' ? { contactActivities: nextArr } : { independentActivities: nextArr };
+      await api.put(`/api/v3/workflow/${workflow._id}/step4/module/${moduleId}`, body);
+      await onRefresh();
+      setActivityToast({ type: 'success', text: actionLabel });
+      return true;
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to save activity changes';
+      setError(msg);
+      setActivityToast({ type: 'error', text: msg });
+      return false;
+    } finally {
+      setIsSavingActivity(false);
+    }
+  };
+
+  const handleAddActivity = (
+    moduleId: string,
+    moduleCode: string,
+    kind: 'contact' | 'independent'
+  ) => {
+    setActivityEdit({ moduleId, moduleCode, kind, index: null, initialValue: '' });
+  };
+
+  const handleEditActivity = (
+    moduleId: string,
+    moduleCode: string,
+    kind: 'contact' | 'independent',
+    index: number
+  ) => {
+    const mod = getModule(moduleId);
+    if (!mod) return;
+    const arr = getArray(mod, kind);
+    if (index < 0 || index >= arr.length) return;
+    setActivityEdit({ moduleId, moduleCode, kind, index, initialValue: arr[index] });
+  };
+
+  const handleSaveActivity = async (value: string) => {
+    if (!activityEdit) return;
+    const mod = getModule(activityEdit.moduleId);
+    if (!mod) return;
+    const arr = getArray(mod, activityEdit.kind);
+    if (activityEdit.index === null) {
+      arr.push(value);
+    } else {
+      arr[activityEdit.index] = value;
+    }
+    const ok = await persistActivities(
+      activityEdit.moduleId,
+      activityEdit.kind,
+      arr,
+      activityEdit.index === null ? 'Activity added' : 'Activity updated'
+    );
+    if (ok) setActivityEdit(null);
+  };
+
+  const handleDeleteActivity = async (
+    moduleId: string,
+    kind: 'contact' | 'independent',
+    index: number
+  ) => {
+    const mod = getModule(moduleId);
+    if (!mod) return;
+    const arr = getArray(mod, kind);
+    if (index < 0 || index >= arr.length) return;
+    if (!confirm(`Delete this ${kind} activity? This cannot be undone in-app.`)) return;
+    arr.splice(index, 1);
+    await persistActivities(moduleId, kind, arr, 'Activity removed');
+  };
+
+  const handleReorderActivity = async (
+    moduleId: string,
+    kind: 'contact' | 'independent',
+    from: number,
+    to: number
+  ) => {
+    const mod = getModule(moduleId);
+    if (!mod) return;
+    const arr = getArray(mod, kind);
+    if (from === to || from < 0 || to < 0 || from >= arr.length || to >= arr.length) return;
+    const [moved] = arr.splice(from, 1);
+    arr.splice(to, 0, moved);
+    await persistActivities(moduleId, kind, arr, 'Order updated');
   };
 
   const hasStep4Data = workflow.step4 && workflow.step4.modules?.length > 0;
@@ -1057,6 +1563,10 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                   onEdit={onOpenCanvas}
                   onEditModule={handleEditModule}
                   onEditMlo={handleEditMlo}
+                  onAddActivity={handleAddActivity}
+                  onEditActivity={handleEditActivity}
+                  onDeleteActivity={handleDeleteActivity}
+                  onReorderActivity={handleReorderActivity}
                 />
               ))}
             </div>
@@ -1139,6 +1649,33 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
           onCancel={handleCancelMloEdit}
           isSaving={isSavingEdit}
         />
+      )}
+
+      {/* Activity Edit Modal */}
+      {activityEdit && (
+        <ActivityEditModal
+          initialValue={activityEdit.initialValue}
+          kind={activityEdit.kind}
+          moduleCode={activityEdit.moduleCode}
+          onSave={handleSaveActivity}
+          onCancel={() => setActivityEdit(null)}
+          isSaving={isSavingActivity}
+        />
+      )}
+
+      {/* Activity save toast */}
+      {activityToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed bottom-6 right-6 z-[60] px-4 py-3 rounded-lg shadow-lg border text-sm font-medium ${
+            activityToast.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              : 'bg-rose-50 border-rose-200 text-rose-700'
+          }`}
+        >
+          {activityToast.text}
+        </div>
       )}
     </div>
   );

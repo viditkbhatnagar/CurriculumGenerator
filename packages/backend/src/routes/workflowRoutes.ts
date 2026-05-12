@@ -30,6 +30,8 @@ import { lessonPlanService } from '../services/lessonPlanService';
 import { syllabusService } from '../services/syllabusService';
 import { syllabusExportService } from '../services/syllabusExportService';
 import { addStepJob, getStepJobStatus, stepQueue, removeStepJob } from '../queues/stepQueue';
+import { createAuditLog } from '../services/auditService';
+import { sanitizeActivityArray } from '../services/activitySanitizer';
 
 const router = Router();
 
@@ -1029,10 +1031,49 @@ router.put(
 
       // Capture old title BEFORE we apply updates so we can propagate if it changed
       const oldTitle = (module as any).title;
+      // Snapshot the old activities so we can audit-log the actual diff
+      // rather than just "edited" — provenance Logan asked for.
+      const oldContactActivities: string[] = Array.isArray((module as any).contactActivities)
+        ? [...(module as any).contactActivities]
+        : [];
+      const oldIndependentActivities: string[] = Array.isArray(
+        (module as any).independentActivities
+      )
+        ? [...(module as any).independentActivities]
+        : [];
 
       // Apply updates (excluding mlos to prevent accidental overwrites)
-      const { mlos, ...moduleUpdates } = updates;
+      const { mlos, contactActivities, independentActivities, ...moduleUpdates } = updates;
+
+      // Validate + sanitize the activity arrays if the client sent them.
+      // We accept partial updates — only the arrays that appear in the body
+      // are touched; the others stay as they were.
+      let nextContactActivities: string[] | undefined;
+      let nextIndependentActivities: string[] | undefined;
+      try {
+        if (contactActivities !== undefined) {
+          nextContactActivities = sanitizeActivityArray(contactActivities, 'contactActivities');
+        }
+        if (independentActivities !== undefined) {
+          nextIndependentActivities = sanitizeActivityArray(
+            independentActivities,
+            'independentActivities'
+          );
+        }
+      } catch (validationErr: any) {
+        return res.status(400).json({
+          success: false,
+          error: validationErr?.message || 'Invalid activities payload',
+        });
+      }
+
       Object.assign(module, moduleUpdates);
+      if (nextContactActivities !== undefined) {
+        (module as any).contactActivities = nextContactActivities;
+      }
+      if (nextIndependentActivities !== undefined) {
+        (module as any).independentActivities = nextIndependentActivities;
+      }
 
       // Recalculate hours integrity
       const totalModuleHours = workflow.step4.modules.reduce(
@@ -1059,10 +1100,58 @@ router.put(
       workflow.markModified('step4');
       await workflow.save();
 
+      // Audit-log activity edits at granular level. We only record an audit
+      // entry when the activity arrays were actually included in the
+      // request body — otherwise every module edit (title / hours) would
+      // produce noisy "activities unchanged" rows.
+      const activitiesEdited =
+        nextContactActivities !== undefined || nextIndependentActivities !== undefined;
+      if (activitiesEdited) {
+        const userId = (req as any).user?.id;
+        if (userId) {
+          try {
+            await createAuditLog({
+              userId,
+              action: 'step4.module.activities.update',
+              resourceType: 'curriculumWorkflow',
+              resourceId: String(workflow._id),
+              details: {
+                moduleId,
+                moduleCode: (module as any).code,
+                contact:
+                  nextContactActivities !== undefined
+                    ? {
+                        previous: oldContactActivities,
+                        next: nextContactActivities,
+                        previousCount: oldContactActivities.length,
+                        nextCount: nextContactActivities.length,
+                      }
+                    : undefined,
+                independent:
+                  nextIndependentActivities !== undefined
+                    ? {
+                        previous: oldIndependentActivities,
+                        next: nextIndependentActivities,
+                        previousCount: oldIndependentActivities.length,
+                        nextCount: nextIndependentActivities.length,
+                      }
+                    : undefined,
+              },
+              ipAddress: req.ip,
+              userAgent: req.get('user-agent'),
+            });
+          } catch (auditErr) {
+            // Non-fatal — the edit landed, just log and move on.
+            loggingService.warn('Audit log for activities update failed', { auditErr });
+          }
+        }
+      }
+
       loggingService.info('Module updated successfully', {
         moduleId,
         titleChanged,
         hasStep10Plans,
+        activitiesEdited,
       });
 
       res.json({
