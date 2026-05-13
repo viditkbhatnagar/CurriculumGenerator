@@ -18,10 +18,19 @@ test.describe('Step 14: Course Syllabus', () => {
       const res = await apiFetch(`/api/v3/workflow/${env.syllabusWorkflowId}`);
       if (!res.ok) return;
       const body = (await res.json()) as {
-        data?: { stepProgress?: Array<{ step: number; status: string }> };
+        data?: {
+          step14?: { approvedAt?: string | null };
+          stepProgress?: Array<{ step: number; status: string }>;
+        };
       };
       const step13 = body.data?.stepProgress?.find((p) => p.step === 13);
-      canRun = step13?.status === 'approved' || step13?.status === 'completed';
+      // The Generate/Regenerate flow only renders pre-approval — once
+      // step14 has approvedAt set, Step14View swaps to the approved
+      // read-only state and the button disappears. Skip cleanly so the
+      // suite stays green when run against an already-approved fixture.
+      const step14NotApproved = !body.data?.step14?.approvedAt;
+      canRun =
+        (step13?.status === 'approved' || step13?.status === 'completed') && step14NotApproved;
 
       if (canRun) {
         // Pre-save instructor + schedule so the form is hydrated. Idempotent.
