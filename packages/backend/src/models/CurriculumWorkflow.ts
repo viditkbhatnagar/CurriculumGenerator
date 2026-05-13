@@ -1253,7 +1253,17 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
     currentStep: {
       type: Number,
       min: 1,
-      max: 13,
+      // Step 14 (Course Syllabus) was added after the original 13-step
+      // workflow shipped. Schema cap stayed at 13, which silently broke:
+      //   - any save of a workflow whose currentStep had been advanced to 14
+      //     (e.g. by the step14 approve route which sets currentStep = 14
+      //     before save), throwing "Path `currentStep` (14) is more than
+      //     maximum allowed value (13)";
+      //   - and downstream — saves on workflows in that state failed even
+      //     when the edit had nothing to do with currentStep, because
+      //     Mongoose validates the whole document on save. Logan hit this
+      //     editing Step 4 activities (2026-05-12).
+      max: 14,
       default: 1,
       required: true,
       index: true,
