@@ -15,6 +15,7 @@ import {
 } from '@/types/workflow';
 import { useGeneration } from '@/contexts/GenerationContext';
 import StepDownloadButton from './StepDownloadButton';
+import { isStepDone } from '@/lib/stepGating';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -232,17 +233,8 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
   const completedModules = Math.max(_completedMods, (statusData as any)?.modulesGenerated ?? 0);
   const isAllModulesComplete = hasStep12Data && completedModules >= totalModules;
 
-  // Check if Step 11 is approved
-  const validStatuses = [
-    'step11_complete',
-    'step12_pending',
-    'step12_complete',
-    'step13_pending',
-    'step13_complete',
-    'review_pending',
-    'published',
-  ];
-  const isStep11Approved = validStatuses.includes(workflow.status);
+  // Step 11 done — drift-tolerant gate. See packages/frontend/src/lib/stepGating.ts.
+  const isStep11Approved = isStepDone(workflow, 11);
 
   // Auto-select first module
   useEffect(() => {

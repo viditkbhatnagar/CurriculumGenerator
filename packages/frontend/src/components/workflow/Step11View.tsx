@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep11, useApproveStep11, useStep11Status } from '@/hooks/useWorkflow';
 import { CurriculumWorkflow } from '@/types/workflow';
+import { isStepDone } from '@/lib/stepGating';
 import { useGeneration } from '@/contexts/GenerationContext';
 import { api } from '@/lib/api';
 import StepDownloadButton from './StepDownloadButton';
@@ -261,19 +262,8 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
   const validation = workflow.step11?.validation;
   const isApproved = !!workflow.step11?.approvedAt;
 
-  // Check if Step 10 is approved (required for Step 11)
-  const validStatuses = [
-    'step10_complete',
-    'step11_pending',
-    'step11_complete',
-    'step12_pending',
-    'step12_complete',
-    'step13_pending',
-    'step13_complete',
-    'review_pending',
-    'published',
-  ];
-  const isStep10Approved = validStatuses.includes(workflow.status);
+  // Step 10 done — drift-tolerant gate. See packages/frontend/src/lib/stepGating.ts.
+  const isStep10Approved = isStepDone(workflow, 10);
 
   // Check completion status - count unique completed modules by matching with step10 moduleIds
   // This handles cases where there might be duplicate entries in step11.modulePPTDecks

@@ -32,6 +32,7 @@ import FinalReviewView from '@/components/workflow/FinalReviewView';
 import CanvasChatbot from '@/components/workflow/CanvasChatbot';
 import { EditTarget } from '@/components/workflow/EditWithAIButton';
 import UserMenu from '@/components/auth/UserMenu';
+import { isStepDone } from '@/lib/stepGating';
 
 // Step icons
 const STEP_ICONS: Record<WorkflowStep, React.ReactNode> = {
@@ -399,26 +400,12 @@ export default function WorkflowDetailPage() {
   };
 
   const isStepAccessible = (step: WorkflowStep): boolean => {
-    // Can access any completed step or the current step
     if (step <= workflow.currentStep) return true;
-
-    // Can access next step if the previous one is done. We check two
-    // sources of truth because they can drift: the stepProgress row's
-    // status, and the step's own approvedAt field. Real-world
-    // observation (2026-05-11): a workflow whose step13 had been
-    // approved in March was showing stepProgress[13].status =
-    // 'in_progress' today, blocking step 14 even though the step's
-    // approvedAt was still set. Trusting either signal keeps the
-    // user un-stuck while the underlying drift is investigated.
-    const prevIdx = step - 1;
-    const prevProgress = workflow.stepProgress.find((p) => p.step === prevIdx);
-    if (prevProgress?.status === 'approved' || prevProgress?.status === 'completed') {
-      return true;
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const prevStepData = (workflow as any)[`step${prevIdx}`];
-    if (prevStepData?.approvedAt) return true;
-    return false;
+    // Otherwise, the previous step must be done. Delegates to the shared
+    // drift-tolerant helper so this gate stays in sync with every other
+    // step-gating check (Step{N}View buttons, the backend lesson-plan /
+    // PPT gates, etc.) — see packages/frontend/src/lib/stepGating.ts.
+    return isStepDone(workflow, step - 1);
   };
 
   return (

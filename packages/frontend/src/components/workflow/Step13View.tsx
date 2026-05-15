@@ -11,6 +11,7 @@ import {
 } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import StepDownloadButton from './StepDownloadButton';
+import { isStepDone } from '@/lib/stepGating';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -138,15 +139,8 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
   const isApproved = !!workflow.step13?.approvedAt;
   const exam = workflow.step13;
 
-  // Check if Step 12 is approved
-  const validStatuses = [
-    'step12_complete',
-    'step13_pending',
-    'step13_complete',
-    'review_pending',
-    'published',
-  ];
-  const isStep12Approved = validStatuses.includes(workflow.status);
+  // Step 12 done — drift-tolerant gate. See packages/frontend/src/lib/stepGating.ts.
+  const isStep12Approved = isStepDone(workflow, 12);
 
   // Determine if Section B is excluded (self-study mode)
   const deliveryMode = workflow.step1?.delivery?.mode;

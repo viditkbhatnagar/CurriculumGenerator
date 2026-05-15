@@ -5,6 +5,7 @@ import { useSubmitStep10, useApproveStep10 } from '@/hooks/useWorkflow';
 import { useStep10Status } from '@/hooks/useStep10Status';
 import { api } from '@/lib/api';
 import { CurriculumWorkflow, LessonPlan } from '@/types/workflow';
+import { isStepDone } from '@/lib/stepGating';
 import { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
 import { toast } from '@/stores/toastStore';
@@ -781,15 +782,9 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   const validation = workflow.step10?.validation;
   const isApproved = !!workflow.step10?.approvedAt;
 
-  // Check if Step 9 is approved
-  const validStatuses = [
-    'step9_complete',
-    'step10_pending',
-    'step10_complete',
-    'review_pending',
-    'published',
-  ];
-  const isStep9Approved = validStatuses.includes(workflow.status);
+  // Step 9 done — drift-tolerant gate (status alone breaks once workflow
+  // advances past 'step10_*'). See packages/frontend/src/lib/stepGating.ts.
+  const isStep9Approved = isStepDone(workflow, 9);
 
   // Build a lookup of completed modules — handles duplicates and supports
   // matching by moduleId OR moduleCode (fallback for ID mismatches)
