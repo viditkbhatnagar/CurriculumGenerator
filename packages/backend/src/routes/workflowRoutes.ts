@@ -2442,15 +2442,20 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
       });
     }
 
-    // Check if Step 9 is approved (status must be step9_complete or later)
-    const validStatuses = [
-      'step9_complete',
-      'step10_pending',
-      'step10_complete',
-      'review_pending',
-      'published',
-    ];
-    if (!validStatuses.includes(existingWorkflow.status)) {
+    // Step 9 done — trust any sufficient signal. The previous status-allowlist
+    // check broke whenever the workflow advanced past Step 10 (e.g. status =
+    // step14_pending), even though Step 9 was clearly done. Real workflow seen
+    // 2026-05-13: currentStep=14, status=step14_pending, stepProgress[9].status
+    // ='completed', step10 already generated for 4 modules — and the gate was
+    // still 400-ing. Trust either stepProgress, step9.approvedAt, or the fact
+    // that the workflow has advanced past Step 9.
+    const sp9 = existingWorkflow.stepProgress?.find((p: any) => p.step === 9);
+    const step9Done =
+      sp9?.status === 'approved' ||
+      sp9?.status === 'completed' ||
+      !!(existingWorkflow.step9 as any)?.approvedAt ||
+      existingWorkflow.currentStep > 9;
+    if (!step9Done) {
       return res.status(400).json({
         success: false,
         error: 'Step 9 must be approved before proceeding to Step 10. Please approve Step 9 first.',
@@ -2972,15 +2977,16 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
       });
     }
 
-    // Check if Step 10 is approved
-    const validStatuses = [
-      'step10_complete',
-      'step11_pending',
-      'step11_complete',
-      'review_pending',
-      'published',
-    ];
-    if (!validStatuses.includes(existingWorkflow.status)) {
+    // Step 10 done — trust any sufficient signal (same drift-tolerant logic
+    // as the Step 9 gate above). Status-allowlist alone breaks once the
+    // workflow advances past Step 11.
+    const sp10 = existingWorkflow.stepProgress?.find((p: any) => p.step === 10);
+    const step10Done =
+      sp10?.status === 'approved' ||
+      sp10?.status === 'completed' ||
+      !!(existingWorkflow.step10 as any)?.approvedAt ||
+      existingWorkflow.currentStep > 10;
+    if (!step10Done) {
       return res.status(400).json({
         success: false,
         error:
