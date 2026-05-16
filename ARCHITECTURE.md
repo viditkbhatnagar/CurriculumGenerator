@@ -1,5 +1,6 @@
 # Architecture Documentation
 
+#vidit
 This document provides a comprehensive overview of the Curriculum Generator App architecture, data models, and system design.
 
 ## Table of Contents
