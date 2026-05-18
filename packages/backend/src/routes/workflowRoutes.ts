@@ -33,6 +33,8 @@ import { addStepJob, getStepJobStatus, stepQueue, removeStepJob } from '../queue
 import { createAuditLog } from '../services/auditService';
 import { sanitizeActivityArray } from '../services/activitySanitizer';
 import { isStepDone } from '../services/stepGating';
+import { sanitizeReadingPayload } from '../services/readingValidator';
+import crypto from 'crypto';
 
 const router = Router();
 
@@ -1602,6 +1604,286 @@ router.put(
         success: false,
         error: 'Failed to update reading item',
       });
+    }
+  }
+);
+
+/**
+ * POST /api/v3/workflow/:id/step6/reading
+ * Add a manually-authored reading to Step 6. Used when an SME wants a
+ * source the AI pipeline didn't surface — Logan / LUC, 2026-05-17.
+ *
+ * Manually added entries get userAdded=true and agiCompliant=false so
+ * the review UI can distinguish them from AI-vetted sources.
+ */
+router.post('/:id/step6/reading', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const workflow = await CurriculumWorkflow.findById(id);
+    if (!workflow || !workflow.step6) {
+      return res.status(404).json({ success: false, error: 'Workflow or Step 6 not found' });
+    }
+
+    // Validate + sanitize
+    let payload: ReturnType<typeof sanitizeReadingPayload>;
+    try {
+      payload = sanitizeReadingPayload(req.body);
+    } catch (validationErr: any) {
+      return res.status(400).json({
+        success: false,
+        error: validationErr?.message || 'Invalid reading payload',
+      });
+    }
+
+    const step6 = workflow.step6 as any;
+    // Confirm the target module exists on the workflow
+    const moduleExists = workflow.step4?.modules?.some(
+      (m: any) => m.id === payload.moduleId || m.code === payload.moduleId
+    );
+    if (!moduleExists) {
+      return res.status(400).json({
+        success: false,
+        error: `Module "${payload.moduleId}" not found on this workflow`,
+      });
+    }
+
+    const readingId = `rd-${crypto.randomBytes(6).toString('hex')}`;
+    const sourceId = `src-user-${crypto.randomBytes(6).toString('hex')}`;
+    const reading = {
+      id: readingId,
+      sourceId,
+      moduleId: payload.moduleId,
+      category: payload.category,
+      title: payload.title,
+      authors: payload.authors,
+      year: payload.year,
+      citation: payload.citation,
+      doi: payload.doi,
+      url: payload.url,
+      specificChapters: payload.specificChapters,
+      pageRange: payload.pageRange,
+      notes: payload.notes,
+      contentType: payload.contentType,
+      readingType: payload.readingType,
+      complexity: payload.complexity,
+      estimatedReadingMinutes: payload.estimatedReadingMinutes,
+      suggestedWeek: payload.suggestedWeek,
+      linkedMLOs: payload.linkedMLOs,
+      assessmentRelevance: payload.assessmentRelevance,
+      agiCompliant: false, // SME-added, not AI-vetted
+      userAdded: true,
+      complianceBadges: {
+        peerReviewed: false,
+        academicText: false,
+        professionalBody: false,
+        recent: false,
+        seminal: false,
+        verifiedAccess: false,
+        apaValidated: false,
+      },
+    };
+
+    // Push to the flat list
+    if (!Array.isArray(step6.readings)) step6.readings = [];
+    step6.readings.push(reading);
+
+    // Push to per-module index (the field the UI reads when a module
+    // is selected). Initialise if absent.
+    if (!step6.moduleReadings || typeof step6.moduleReadings !== 'object') {
+      step6.moduleReadings = {};
+    }
+    if (!Array.isArray(step6.moduleReadings[payload.moduleId])) {
+      step6.moduleReadings[payload.moduleId] = [];
+    }
+    step6.moduleReadings[payload.moduleId].push(reading);
+
+    // Bump counts on the per-module summary if it exists. Validation
+    // flags stay untouched — adding a manual entry shouldn't silently
+    // flip "all sources AGI-compliant" from false to true.
+    const summary = Array.isArray(step6.moduleSummaries)
+      ? step6.moduleSummaries.find((s: any) => s.moduleId === payload.moduleId)
+      : null;
+    if (summary) {
+      if (payload.category === 'core') {
+        summary.coreCount = (summary.coreCount || 0) + 1;
+        summary.coreReadingMinutes =
+          (summary.coreReadingMinutes || 0) + payload.estimatedReadingMinutes;
+      } else {
+        summary.supplementaryCount = (summary.supplementaryCount || 0) + 1;
+        summary.supplementaryReadingMinutes =
+          (summary.supplementaryReadingMinutes || 0) + payload.estimatedReadingMinutes;
+      }
+      summary.totalReadings = (summary.totalReadings || 0) + 1;
+      summary.totalReadingMinutes =
+        (summary.totalReadingMinutes || 0) + payload.estimatedReadingMinutes;
+      summary.agiCompliant = false;
+    }
+
+    // Top-level totals
+    step6.totalReadings = (step6.totalReadings || 0) + 1;
+    if (payload.category === 'core') {
+      step6.coreCount = (step6.coreCount || 0) + 1;
+      step6.totalCoreMinutes = (step6.totalCoreMinutes || 0) + payload.estimatedReadingMinutes;
+    } else {
+      step6.supplementaryCount = (step6.supplementaryCount || 0) + 1;
+      step6.totalSupplementaryMinutes =
+        (step6.totalSupplementaryMinutes || 0) + payload.estimatedReadingMinutes;
+    }
+    step6.totalReadingMinutes = (step6.totalReadingMinutes || 0) + payload.estimatedReadingMinutes;
+
+    // Persist
+    workflow.markModified('step6');
+    await workflow.save();
+
+    // Audit
+    const userId = (req as any).user?.id;
+    if (userId) {
+      try {
+        await createAuditLog({
+          userId,
+          action: 'step6.reading.add',
+          resourceType: 'curriculumWorkflow',
+          resourceId: String(workflow._id),
+          details: {
+            readingId,
+            moduleId: payload.moduleId,
+            category: payload.category,
+            title: payload.title,
+            authors: payload.authors,
+            year: payload.year,
+            userAdded: true,
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+        });
+      } catch (auditErr) {
+        loggingService.warn('Audit log for reading add failed', { auditErr });
+      }
+    }
+
+    loggingService.info('Reading added to Step 6', {
+      workflowId: id,
+      readingId,
+      moduleId: payload.moduleId,
+      category: payload.category,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: reading,
+      message: 'Reading added',
+    });
+  } catch (error) {
+    loggingService.error('Error adding reading', { error });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add reading',
+    });
+  }
+});
+
+/**
+ * DELETE /api/v3/workflow/:id/step6/reading/:readingId
+ * Remove a reading from Step 6 — symmetric with the add route for
+ * undoing accidental SME additions. Also lets reviewers prune
+ * AI-generated entries that aren't a fit.
+ */
+router.delete(
+  '/:id/step6/reading/:readingId',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, readingId } = req.params;
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !workflow.step6) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 6 not found' });
+      }
+
+      const step6 = workflow.step6 as any;
+      const flat: any[] = Array.isArray(step6.readings) ? step6.readings : [];
+      const idx = flat.findIndex((r: any) => r.id === readingId);
+      if (idx === -1) {
+        return res.status(404).json({ success: false, error: 'Reading not found' });
+      }
+      const removed = flat.splice(idx, 1)[0];
+
+      // Remove from per-module index too
+      const moduleId = removed?.moduleId;
+      if (moduleId && step6.moduleReadings && Array.isArray(step6.moduleReadings[moduleId])) {
+        step6.moduleReadings[moduleId] = step6.moduleReadings[moduleId].filter(
+          (r: any) => r.id !== readingId
+        );
+      }
+
+      // Decrement summary counts
+      const summary = Array.isArray(step6.moduleSummaries)
+        ? step6.moduleSummaries.find((s: any) => s.moduleId === moduleId)
+        : null;
+      const mins = removed?.estimatedReadingMinutes || 0;
+      if (summary) {
+        if (removed?.category === 'core') {
+          summary.coreCount = Math.max(0, (summary.coreCount || 0) - 1);
+          summary.coreReadingMinutes = Math.max(0, (summary.coreReadingMinutes || 0) - mins);
+        } else {
+          summary.supplementaryCount = Math.max(0, (summary.supplementaryCount || 0) - 1);
+          summary.supplementaryReadingMinutes = Math.max(
+            0,
+            (summary.supplementaryReadingMinutes || 0) - mins
+          );
+        }
+        summary.totalReadings = Math.max(0, (summary.totalReadings || 0) - 1);
+        summary.totalReadingMinutes = Math.max(0, (summary.totalReadingMinutes || 0) - mins);
+      }
+
+      step6.totalReadings = Math.max(0, (step6.totalReadings || 0) - 1);
+      if (removed?.category === 'core') {
+        step6.coreCount = Math.max(0, (step6.coreCount || 0) - 1);
+        step6.totalCoreMinutes = Math.max(0, (step6.totalCoreMinutes || 0) - mins);
+      } else {
+        step6.supplementaryCount = Math.max(0, (step6.supplementaryCount || 0) - 1);
+        step6.totalSupplementaryMinutes = Math.max(
+          0,
+          (step6.totalSupplementaryMinutes || 0) - mins
+        );
+      }
+      step6.totalReadingMinutes = Math.max(0, (step6.totalReadingMinutes || 0) - mins);
+
+      workflow.markModified('step6');
+      await workflow.save();
+
+      const userId = (req as any).user?.id;
+      if (userId) {
+        try {
+          await createAuditLog({
+            userId,
+            action: 'step6.reading.delete',
+            resourceType: 'curriculumWorkflow',
+            resourceId: String(workflow._id),
+            details: {
+              readingId,
+              moduleId,
+              wasUserAdded: !!removed?.userAdded,
+              title: removed?.title,
+            },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+          });
+        } catch (auditErr) {
+          loggingService.warn('Audit log for reading delete failed', { auditErr });
+        }
+      }
+
+      loggingService.info('Reading removed from Step 6', {
+        workflowId: id,
+        readingId,
+        moduleId,
+      });
+
+      res.json({ success: true, message: 'Reading removed' });
+    } catch (error) {
+      loggingService.error('Error removing reading', { error });
+      res.status(500).json({ success: false, error: 'Failed to remove reading' });
     }
   }
 );

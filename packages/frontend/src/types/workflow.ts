@@ -611,6 +611,12 @@ export interface ReadingItem {
   // Cross-module reference
   isReference?: boolean; // True if this is a reference to another module's reading
   originalModuleId?: string; // "See Module X, Reading Y"
+
+  // SME-added flag. True for readings inserted via the manual add form
+  // (POST /step6/reading) — they skip AGI compliance checks and render
+  // with a small badge so reviewers can see at a glance which entries
+  // bypassed the standard pipeline.
+  userAdded?: boolean;
 }
 
 export interface ModuleReadingSummary {
