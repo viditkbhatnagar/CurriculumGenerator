@@ -110,4 +110,50 @@ describe('sanitizeSourcePayload', () => {
     expect(out.publisher).toBe('Wiley');
     expect(out.complexityLevel).toBe('advanced');
   });
+
+  it('omits uploadedFile when not provided', () => {
+    expect(sanitizeSourcePayload(minimalValid).uploadedFile).toBeUndefined();
+  });
+
+  it('accepts a well-formed uploadedFile reference', () => {
+    const out = sanitizeSourcePayload({
+      ...minimalValid,
+      uploadedFile: {
+        fileId: '665f1a2b3c4d5e6f70819203',
+        filename: 'brand-guidelines.pdf',
+        mimeType: 'application/pdf',
+        size: 482311,
+      },
+    });
+    expect(out.uploadedFile).toEqual({
+      fileId: '665f1a2b3c4d5e6f70819203',
+      filename: 'brand-guidelines.pdf',
+      mimeType: 'application/pdf',
+      size: 482311,
+    });
+  });
+
+  it('defaults mimeType + size when the uploadedFile omits them', () => {
+    const out = sanitizeSourcePayload({
+      ...minimalValid,
+      uploadedFile: { fileId: 'abc123', filename: 'notes.docx' },
+    });
+    expect(out.uploadedFile?.mimeType).toBe('application/octet-stream');
+    expect(out.uploadedFile?.size).toBe(0);
+  });
+
+  it('rejects an uploadedFile missing fileId or filename', () => {
+    expect(() =>
+      sanitizeSourcePayload({ ...minimalValid, uploadedFile: { filename: 'x.pdf' } })
+    ).toThrow(/uploadedFile/);
+    expect(() =>
+      sanitizeSourcePayload({ ...minimalValid, uploadedFile: { fileId: 'abc' } })
+    ).toThrow(/uploadedFile/);
+  });
+
+  it('rejects a non-object uploadedFile', () => {
+    expect(() => sanitizeSourcePayload({ ...minimalValid, uploadedFile: 'a-file' })).toThrow(
+      /uploadedFile/
+    );
+  });
 });

@@ -50,6 +50,13 @@ function cleanAuthors(raw: unknown): string[] {
   return cleaned;
 }
 
+export interface UploadedFileRef {
+  fileId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface SanitizedSource {
   moduleId: string;
   title: string;
@@ -64,6 +71,34 @@ export interface SanitizedSource {
   doi?: string;
   isbn?: string;
   complianceNotes?: string;
+  uploadedFile?: UploadedFileRef;
+}
+
+/**
+ * Validate the optional uploadedFile reference. The actual bytes already
+ * live in GridFS (uploaded via POST /api/v3/files/upload) — here we only
+ * sanity-check the pointer the client sends back. Returns undefined when
+ * no file is attached; throws on a malformed object.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function cleanUploadedFile(raw: any): UploadedFileRef | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw !== 'object') {
+    throw new Error('uploadedFile must be an object');
+  }
+  const fileId = cleanString(raw.fileId, 100);
+  const filename = cleanString(raw.filename, 300);
+  const mimeType = cleanString(raw.mimeType, 200);
+  if (!fileId || !filename) {
+    throw new Error('uploadedFile requires fileId and filename');
+  }
+  const size = typeof raw.size === 'number' && Number.isFinite(raw.size) ? raw.size : 0;
+  return {
+    fileId,
+    filename,
+    mimeType: mimeType || 'application/octet-stream',
+    size,
+  };
 }
 
 /**
@@ -112,6 +147,7 @@ export function sanitizeSourcePayload(raw: any): SanitizedSource {
   const doi = cleanString(raw.doi, 200) || undefined;
   const isbn = cleanString(raw.isbn, 40) || undefined;
   const complianceNotes = cleanString(raw.complianceNotes, NOTES_MAX) || undefined;
+  const uploadedFile = cleanUploadedFile(raw.uploadedFile);
 
   // Build an APA-ish citation if the client didn't send one.
   const providedCitation = cleanString(raw.citation, STRING_MAX);
@@ -133,5 +169,6 @@ export function sanitizeSourcePayload(raw: any): SanitizedSource {
     doi,
     isbn,
     complianceNotes,
+    uploadedFile,
   };
 }

@@ -478,6 +478,15 @@ export interface Source {
   // compliance pipeline and render with a badge.
   userAdded?: boolean;
   resourceType?: 'document' | 'video' | 'ebook' | 'article' | 'book' | 'webpage' | 'other';
+
+  // Optional file uploaded to MongoDB GridFS (POST /api/v3/files/upload).
+  // Present when an SME attached an actual document rather than a link.
+  uploadedFile?: {
+    fileId: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+  };
 }
 
 export interface ModuleSourceSummary {

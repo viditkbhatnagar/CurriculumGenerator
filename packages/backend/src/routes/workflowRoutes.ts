@@ -1487,6 +1487,8 @@ router.post('/:id/step5/source', validateJWT, loadUser, async (req: Request, res
       complexityLevel: payload.complexityLevel,
       userAdded: true,
       resourceType: payload.resourceType,
+      // Optional: an actual file uploaded to GridFS via /api/v3/files/upload.
+      ...(payload.uploadedFile ? { uploadedFile: payload.uploadedFile } : {}),
     };
 
     if (!Array.isArray(step5.sources)) step5.sources = [];
