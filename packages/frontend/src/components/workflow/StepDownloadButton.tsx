@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { downloadFile } from '@/lib/download';
 import { api } from '@/lib/api';
 
@@ -49,6 +49,12 @@ export default function StepDownloadButton({
   const [downloading, setDownloading] = useState(false);
   const [cache, setCache] = useState<CacheStatus | null>(null);
 
+  // In-app preview modal state.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
+
   const moduleParam = moduleIndex !== undefined ? `?module=${moduleIndex}` : '';
   const exportPath = `/api/v3/workflow/${workflowId}/export/word/step/${stepNumber}${moduleParam}`;
 
@@ -88,16 +94,55 @@ export default function StepDownloadButton({
     }
   };
 
-  // Open the cached .docx in Microsoft's Office Online viewer — browsers
-  // can't render .docx inline, and the export endpoint is public so the
-  // viewer can fetch it directly.
-  const handlePreview = () => {
-    const fileUrl = `${API_BASE}${exportPath}`;
-    const viewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(
-      fileUrl
-    )}`;
-    window.open(viewerUrl, '_blank', 'noopener,noreferrer');
-  };
+  // Render the cached .docx inside the app (docx-preview) — no new tab,
+  // no third-party viewer, no server-side conversion.
+  useEffect(() => {
+    if (!previewOpen) return;
+    const container = previewRef.current;
+    if (!container) return;
+
+    let cancelled = false;
+    container.innerHTML = '';
+    setPreviewLoading(true);
+    setPreviewError(null);
+
+    (async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        const resp = await fetch(`${API_BASE}${exportPath}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        if (cancelled) return;
+        // Loaded on demand — keeps docx-preview out of the main bundle.
+        const { renderAsync } = await import('docx-preview');
+        if (cancelled || !previewRef.current) return;
+        await renderAsync(blob, previewRef.current);
+      } catch (err) {
+        console.error('Step preview failed:', err);
+        if (!cancelled) {
+          setPreviewError('Could not load the preview. Try downloading the file instead.');
+        }
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [previewOpen, exportPath]);
+
+  // Close the preview on Escape.
+  useEffect(() => {
+    if (!previewOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [previewOpen]);
 
   // A cached copy is offered only when it exists AND still matches the
   // current curriculum content (a stale copy stays hidden — the normal
@@ -154,55 +199,123 @@ export default function StepDownloadButton({
   }
 
   return (
-    <div className={`inline-flex flex-col gap-1 ${className || ''}`}>
-      <div className="flex items-center gap-2">
-        <button
-          onClick={handleDownload}
-          disabled={disabled || downloading}
-          title={
-            hasSavedCopy
-              ? 'A saved copy exists — this download is instant'
-              : 'Render and download this step as a Word document'
-          }
-          className="px-3 py-1.5 bg-[#80A3A2] hover:bg-[#6b8e8d] text-white border border-[#80A3A2] rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          {downloading ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Downloading...
-            </>
-          ) : (
-            <>
-              {downloadIcon}
-              {moduleCode ? `Download ${moduleCode}` : 'Download Word'}
-            </>
-          )}
-        </button>
-
-        {/* Extra option — only shown once a current cached export exists. */}
-        {hasSavedCopy && !downloading && (
+    <>
+      <div className={`inline-flex flex-col gap-1 ${className || ''}`}>
+        <div className="flex items-center gap-2">
           <button
-            onClick={handlePreview}
-            title="Preview the saved copy in your browser"
-            className="px-3 py-1.5 bg-transparent hover:bg-[#80A3A2]/10 text-[#80A3A2] border border-[#80A3A2] rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            onClick={handleDownload}
+            disabled={disabled || downloading}
+            title={
+              hasSavedCopy
+                ? 'A saved copy exists — this download is instant'
+                : 'Render and download this step as a Word document'
+            }
+            className="px-3 py-1.5 bg-[#80A3A2] hover:bg-[#6b8e8d] text-white border border-[#80A3A2] rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {eyeIcon}
-            Preview
+            {downloading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Downloading...
+              </>
+            ) : (
+              <>
+                {downloadIcon}
+                {moduleCode ? `Download ${moduleCode}` : 'Download Word'}
+              </>
+            )}
           </button>
+
+          {/* Extra option — only shown once a current cached export exists. */}
+          {hasSavedCopy && !downloading && (
+            <button
+              onClick={() => setPreviewOpen(true)}
+              title="Preview the saved copy in the app"
+              className="px-3 py-1.5 bg-transparent hover:bg-[#80A3A2]/10 text-[#80A3A2] border border-[#80A3A2] rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              {eyeIcon}
+              Preview
+            </button>
+          )}
+        </div>
+
+        {/* "Saved copy" indicator — clarifies the download is cached/instant. */}
+        {hasSavedCopy && !downloading && (
+          <span className="text-xs text-[#80A3A2] flex items-center gap-1">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+            Saved copy available
+            {cache?.generatedAt ? ` · exported ${relativeTime(cache.generatedAt)}` : ''} · downloads
+            instantly
+          </span>
         )}
       </div>
 
-      {/* "Saved copy" indicator — clarifies the download is cached/instant. */}
-      {hasSavedCopy && !downloading && (
-        <span className="text-xs text-[#80A3A2] flex items-center gap-1">
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-          Saved copy available
-          {cache?.generatedAt ? ` · exported ${relativeTime(cache.generatedAt)}` : ''} · downloads
-          instantly
-        </span>
+      {/* In-app preview modal — renders the cached .docx with docx-preview. */}
+      {previewOpen && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setPreviewOpen(false)}
+        >
+          <div
+            className="bg-white rounded-lg w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">
+                  {moduleCode ? `${moduleCode} — Preview` : `Step ${stepNumber} — Preview`}
+                </h3>
+                <p className="text-xs text-gray-400">
+                  Rendered preview — formatting may differ slightly from the Word file
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className="px-3 py-1.5 bg-[#80A3A2] hover:bg-[#6b8e8d] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-40 flex items-center gap-2"
+                >
+                  {downloadIcon}
+                  Download
+                </button>
+                <button
+                  onClick={() => setPreviewOpen(false)}
+                  aria-label="Close preview"
+                  className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto bg-gray-100 p-4">
+              {previewLoading && (
+                <div className="flex items-center justify-center gap-2 py-16 text-gray-500 text-sm">
+                  <div className="w-5 h-5 border-2 border-[#80A3A2] border-t-transparent rounded-full animate-spin" />
+                  Loading preview…
+                </div>
+              )}
+              {previewError && (
+                <div className="py-16 text-center text-sm text-rose-600">{previewError}</div>
+              )}
+              <div ref={previewRef} />
+            </div>
+          </div>
+        </div>
       )}
-    </div>
+    </>
   );
 }
