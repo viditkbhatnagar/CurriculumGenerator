@@ -30,9 +30,7 @@ import {
   hashExportInput,
   stepExportArtifact,
   stepExportContentHash,
-  stepPdfArtifact,
   peekCache,
-  getCachedBuffer,
 } from '../services/exportCacheService';
 import { analyticsStorageService } from '../services/analyticsStorageService';
 import { lessonPlanService } from '../services/lessonPlanService';
@@ -5041,91 +5039,6 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
     res.status(500).json({
       success: false,
       error: 'Failed to export step document',
-    });
-  }
-});
-
-/**
- * GET /api/v3/workflow/:id/export/pdf/step/:stepNumber
- * Render a single step as a PDF, served inline so the browser displays
- * it directly — used by the per-step "Preview" action. Cached in S3.
- * Query params: ?module=<0-based-index> (optional, steps 10-12).
- */
-router.get('/:id/export/pdf/step/:stepNumber', async (req: Request, res: Response) => {
-  try {
-    const stepNumber = parseInt(req.params.stepNumber, 10);
-    if (isNaN(stepNumber) || stepNumber < 1 || stepNumber > 13) {
-      return res.status(400).json({ success: false, error: 'Invalid step number (1-13)' });
-    }
-
-    const workflow = await CurriculumWorkflow.findById(req.params.id);
-    if (!workflow) {
-      return res.status(404).json({ success: false, error: 'Workflow not found' });
-    }
-
-    const stepKey = `step${stepNumber}` as keyof typeof workflow;
-    if (!workflow[stepKey]) {
-      return res.status(400).json({ success: false, error: `Step ${stepNumber} has no data yet` });
-    }
-
-    const moduleIndex =
-      req.query.module !== undefined ? parseInt(req.query.module as string, 10) : undefined;
-    if (moduleIndex !== undefined && ![10, 11, 12].includes(stepNumber)) {
-      return res
-        .status(400)
-        .json({ success: false, error: 'Module param only valid for steps 10-12' });
-    }
-
-    const workflowData: any = {
-      projectName: workflow.projectName,
-      step1: workflow.step1,
-      step2: workflow.step2,
-    };
-    workflowData[`step${stepNumber}`] = workflow[stepKey];
-
-    const programSlug = workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum';
-    const moduleSlug = moduleIndex !== undefined ? `-Module-${moduleIndex + 1}` : '';
-    const filename = `${programSlug}-Step${stepNumber}${moduleSlug}.pdf`;
-
-    await serveCachedExport(res, {
-      workflowId: String(workflow._id),
-      artifact: stepPdfArtifact(stepNumber, moduleIndex),
-      // Same source data as the Word export — so editing the step
-      // invalidates both the .docx and the .pdf together.
-      contentHash: stepExportContentHash(workflow, stepNumber, moduleIndex),
-      contentType: 'application/pdf',
-      disposition: 'inline',
-      filename,
-      generate: async () => {
-        // Reuse the already-cached .docx when it is current — avoids
-        // re-running the formatting LLM just to produce a PDF.
-        let wordBuffer = await getCachedBuffer(
-          String(workflow._id),
-          stepExportArtifact(stepNumber, moduleIndex),
-          stepExportContentHash(workflow, stepNumber, moduleIndex)
-        );
-        if (!wordBuffer) {
-          wordBuffer = await wordExportService.generateStepDocument(
-            workflowData,
-            stepNumber,
-            moduleIndex !== undefined ? { moduleIndex } : undefined
-          );
-        }
-        const convertAsync = promisify(libreofficeConvert.convert);
-        return (await convertAsync(wordBuffer, '.pdf', undefined)) as Buffer;
-      },
-    });
-
-    loggingService.info('Step PDF export served', {
-      workflowId: workflow._id,
-      stepNumber,
-      moduleIndex,
-    });
-  } catch (error) {
-    loggingService.error('Error exporting step PDF', { error });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to render step PDF. PDF conversion may be unavailable.',
     });
   }
 });
