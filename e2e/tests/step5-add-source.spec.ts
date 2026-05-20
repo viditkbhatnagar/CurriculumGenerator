@@ -87,7 +87,6 @@ test.describe('Step 5 add source', () => {
 
     const cases = [
       { ...baseValid(targetModuleId), title: '' },
-      { ...baseValid(targetModuleId), authors: [] },
       { ...baseValid(targetModuleId), year: 'not a number' },
       { ...baseValid(targetModuleId), resourceType: 'podcast' },
       { ...baseValid(targetModuleId), moduleId: '' },
@@ -100,6 +99,25 @@ test.describe('Step 5 add source', () => {
       });
       expect(res.status).toBe(400);
     }
+  });
+
+  test('POST accepts a source with no authors (e.g. a webpage)', async () => {
+    test.skip(!canRun, 'No Step 5 on the fixture workflow');
+
+    const res = await apiFetch(`/api/v3/workflow/${workflowId}/step5/source`, {
+      method: 'POST',
+      body: JSON.stringify({
+        moduleId: targetModuleId,
+        title: `E2E authorless webpage ${Date.now()}`,
+        year: 2026,
+        resourceType: 'webpage',
+        url: 'https://example.com/no-author',
+      }),
+    });
+    expect(res.status).toBe(201);
+    const { data } = (await res.json()) as { data: { id: string; authors: string[] } };
+    expect(data.authors).toEqual([]);
+    addedIds.push(data.id);
   });
 
   test('DELETE removes a source and decrements totalSources', async () => {

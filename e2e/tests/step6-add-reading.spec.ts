@@ -91,7 +91,6 @@ test.describe('Step 6 add reading', () => {
 
     const cases = [
       { ...baseValid(targetModuleId), title: '' },
-      { ...baseValid(targetModuleId), authors: [] },
       { ...baseValid(targetModuleId), year: 'not a number' },
       { ...baseValid(targetModuleId), category: 'maybe' },
       { ...baseValid(targetModuleId), moduleId: '' },
@@ -103,6 +102,26 @@ test.describe('Step 6 add reading', () => {
       });
       expect(res.status).toBe(400);
     }
+  });
+
+  test('POST accepts a reading with no authors (e.g. a webpage)', async () => {
+    test.skip(!canRun, 'No Step 6 on the fixture workflow');
+
+    const res = await apiFetch(`/api/v3/workflow/${workflowId}/step6/reading`, {
+      method: 'POST',
+      body: JSON.stringify({
+        moduleId: targetModuleId,
+        title: `E2E authorless reading ${Date.now()}`,
+        year: 2026,
+        category: 'supplementary',
+        contentType: 'online_article',
+        url: 'https://example.com/no-author',
+      }),
+    });
+    expect(res.status).toBe(201);
+    const { data } = (await res.json()) as { data: { id: string; authors: string[] } };
+    expect(data.authors).toEqual([]);
+    addedIds.push(data.id);
   });
 
   test('POST rejects unknown moduleId with 400', async () => {
