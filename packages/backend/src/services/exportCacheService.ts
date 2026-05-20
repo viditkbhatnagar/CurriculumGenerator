@@ -53,6 +53,8 @@ export interface ExportCacheOptions {
   filename: string;
   /** Renders the export. Only invoked on a cache miss / stale entry. */
   generate: () => Promise<Buffer>;
+  /** 'attachment' (default) downloads the file; 'inline' lets the browser display it. */
+  disposition?: 'attachment' | 'inline';
 }
 
 /**
@@ -63,10 +65,11 @@ export interface ExportCacheOptions {
  */
 export async function serveCachedExport(res: Response, opts: ExportCacheOptions): Promise<void> {
   const { workflowId, artifact, contentHash, contentType, filename, generate } = opts;
+  const disposition = opts.disposition || 'attachment';
 
   const send = (buffer: Buffer, cacheState: 'hit' | 'miss' | 'bypass') => {
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${filename}"`);
     res.setHeader('Content-Length', buffer.length);
     res.setHeader('X-Export-Cache', cacheState);
     res.send(buffer);
@@ -138,6 +141,13 @@ export function stepExportArtifact(stepNumber: number, moduleIndex?: number): st
     : `step${stepNumber}.docx`;
 }
 
+/** S3 artifact filename for a per-step PDF export (used for in-browser preview). */
+export function stepPdfArtifact(stepNumber: number, moduleIndex?: number): string {
+  return moduleIndex !== undefined
+    ? `step${stepNumber}-module${moduleIndex}.pdf`
+    : `step${stepNumber}.pdf`;
+}
+
 /**
  * Content hash for a per-step Word export. Covers the step's own data
  * plus step1/step2 (which generateStepDocument also renders from), so any
@@ -196,5 +206,35 @@ export async function peekCache(
       loggingService.warn('Export cache peek failed', { workflowId, artifact, err });
     }
     return { cached: false, current: false };
+  }
+}
+
+/**
+ * Fetch a cached export's bytes, but only if it exists AND is still
+ * current (content-hash match). Returns null otherwise. Lets one export
+ * reuse another's render — e.g. the PDF preview converting the already
+ * cached .docx instead of re-running the formatting LLM.
+ */
+export async function getCachedBuffer(
+  workflowId: string,
+  artifact: string,
+  contentHash: string
+): Promise<Buffer | null> {
+  if (!config.s3.enabled) return null;
+  const key = `exports/${workflowId}/${artifact}`;
+  try {
+    const obj = await getS3Client().send(
+      new GetObjectCommand({ Bucket: config.s3.bucket, Key: key })
+    );
+    if (obj.Metadata?.contenthash !== contentHash) return null; // stale
+    return await streamToBuffer(obj.Body as NodeJS.ReadableStream);
+  } catch (err: any) {
+    const code = err?.name || err?.Code;
+    const missing =
+      code === 'NotFound' || code === 'NoSuchKey' || err?.$metadata?.httpStatusCode === 404;
+    if (!missing) {
+      loggingService.warn('getCachedBuffer failed', { workflowId, artifact, err });
+    }
+    return null;
   }
 }
