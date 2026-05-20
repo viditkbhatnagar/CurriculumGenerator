@@ -19,11 +19,16 @@ describe('sanitizeSourcePayload', () => {
     expect(() => sanitizeSourcePayload({ ...minimalValid, title: '  ' })).toThrow(/title/);
   });
 
-  it('requires a non-empty authors array', () => {
-    expect(() => sanitizeSourcePayload({ ...minimalValid, authors: [] })).toThrow(/authors/);
-    expect(() => sanitizeSourcePayload({ ...minimalValid, authors: 'x' as any })).toThrow(
-      /authors/
-    );
+  it('accepts an empty / missing authors array (optional — e.g. a webpage)', () => {
+    expect(sanitizeSourcePayload({ ...minimalValid, authors: [] }).authors).toEqual([]);
+    const { authors: _drop, ...noAuthors } = minimalValid;
+    expect(sanitizeSourcePayload(noAuthors).authors).toEqual([]);
+  });
+
+  it('builds an author-less citation leading with the year', () => {
+    const { authors: _drop, ...noAuthors } = minimalValid;
+    const out = sanitizeSourcePayload(noAuthors);
+    expect(out.citation).toBe('(2017). Designing Brand Identity.');
   });
 
   it('requires a numeric year in range', () => {

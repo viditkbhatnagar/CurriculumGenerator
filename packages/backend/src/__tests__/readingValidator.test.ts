@@ -19,11 +19,10 @@ describe('sanitizeReadingPayload', () => {
     expect(() => sanitizeReadingPayload({ ...minimalValid, title: '   ' })).toThrow(/title/);
   });
 
-  it('requires a non-empty authors array', () => {
-    expect(() => sanitizeReadingPayload({ ...minimalValid, authors: [] })).toThrow(/authors/);
-    expect(() => sanitizeReadingPayload({ ...minimalValid, authors: 'nope' as any })).toThrow(
-      /authors/
-    );
+  it('accepts an empty / missing authors array (optional — e.g. a webpage)', () => {
+    expect(sanitizeReadingPayload({ ...minimalValid, authors: [] }).authors).toEqual([]);
+    const { authors: _drop, ...noAuthors } = minimalValid;
+    expect(sanitizeReadingPayload(noAuthors).authors).toEqual([]);
   });
 
   it('requires a numeric year in range', () => {

@@ -424,15 +424,15 @@ function SourceAddModal({
   };
   const removeAuthor = (i: number) => setAuthors(authors.filter((_, ix) => ix !== i));
 
-  // An author counts whether it's been committed as a chip OR is still
-  // sitting un-"Add"ed in the input — SMEs routinely type one author and
-  // click "Add resource" straight away without pressing Add/Enter first.
-  const hasAuthor = authors.length > 0 || authorsInput.trim().length > 0;
-  const canSave = title.trim().length > 0 && hasAuthor && !!moduleId && year >= 1800;
+  // Authors are optional — a webpage / video resource often has no
+  // clear author, and requiring one blocked SMEs from adding plain
+  // links. Only title / module / year gate the save.
+  const canSave = title.trim().length > 0 && !!moduleId && year >= 1800;
 
   const handleSave = () => {
     if (!canSave) return;
-    // Fold any pending author text into the list so it isn't lost.
+    // Fold any pending (un-"Add"ed) author text into the list so a
+    // typed-but-uncommitted name isn't lost.
     const pending = authorsInput.trim();
     const finalAuthors = pending ? [...authors, pending] : authors;
     onSave(
@@ -516,7 +516,7 @@ function SourceAddModal({
           {/* Authors */}
           <div>
             <label className="block text-sm font-medium text-teal-700 mb-2">
-              Author(s) / channel
+              Author(s) / channel (optional)
             </label>
             <div className="flex gap-2 mb-2">
               <input

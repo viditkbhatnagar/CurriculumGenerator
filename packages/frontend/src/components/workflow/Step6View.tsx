@@ -575,14 +575,14 @@ function ReadingAddModal({
   };
   const removeAuthor = (i: number) => setAuthors(authors.filter((_, ix) => ix !== i));
 
-  // An author counts whether committed as a chip OR still un-"Add"ed in
-  // the input — SMEs routinely type one author then click the save
-  // button straight away without pressing Add/Enter first.
-  const hasAuthor = authors.length > 0 || authorsInput.trim().length > 0;
-  const canSave = title.trim().length > 0 && hasAuthor && !!moduleId && year >= 1800;
+  // Authors are optional — a webpage / video reading often has no clear
+  // author, and requiring one blocked SMEs from adding plain links.
+  // Only title / module / year gate the save.
+  const canSave = title.trim().length > 0 && !!moduleId && year >= 1800;
 
   const handleSave = () => {
     if (!canSave) return;
+    // Fold any pending (un-"Add"ed) author text in so it isn't lost.
     const pending = authorsInput.trim();
     const finalAuthors = pending ? [...authors, pending] : authors;
     onSave({
@@ -669,7 +669,9 @@ function ReadingAddModal({
 
           {/* Authors */}
           <div>
-            <label className="block text-sm font-medium text-teal-700 mb-2">Authors</label>
+            <label className="block text-sm font-medium text-teal-700 mb-2">
+              Authors (optional)
+            </label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"

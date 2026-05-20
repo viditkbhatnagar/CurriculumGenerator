@@ -83,8 +83,9 @@ export function sanitizeReadingPayload(raw: any): SanitizedReading {
   const title = cleanString(raw.title);
   if (!title) throw new Error('title is required');
 
+  // Authors are optional — a webpage / video resource often has no
+  // clear author. Stored as-is when present, empty array otherwise.
   const authors = cleanAuthors(raw.authors);
-  if (authors.length === 0) throw new Error('authors must be a non-empty array of strings');
 
   const yearNum = typeof raw.year === 'string' ? parseInt(raw.year, 10) : raw.year;
   if (
@@ -134,7 +135,8 @@ export function sanitizeReadingPayload(raw: any): SanitizedReading {
 
   // Build a citation if the client didn't send one — APA-ish.
   const providedCitation = cleanString(raw.citation, STRING_MAX);
-  const citation = providedCitation || `${authors.join(', ')} (${yearNum}). ${title}.`;
+  const authorPart = authors.length ? `${authors.join(', ')} ` : '';
+  const citation = providedCitation || `${authorPart}(${yearNum}). ${title}.`;
 
   return {
     moduleId,
