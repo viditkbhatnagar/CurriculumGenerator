@@ -15,6 +15,7 @@ import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationConte
 import { useStepStatus } from '@/hooks/useStepStatus';
 import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
+import { downloadFile } from '@/lib/download';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -365,19 +366,22 @@ function SourceAddModal({
 }: {
   moduleOptions: Array<{ id: string; code: string; title: string }>;
   defaultModuleId: string;
-  onSave: (payload: {
-    moduleId: string;
-    title: string;
-    authors: string[];
-    year: number;
-    resourceType: string;
-    type: 'academic' | 'applied' | 'industry';
-    complexityLevel: 'introductory' | 'intermediate' | 'advanced';
-    publisher?: string;
-    url?: string;
-    isbn?: string;
-    complianceNotes?: string;
-  }) => void;
+  onSave: (
+    payload: {
+      moduleId: string;
+      title: string;
+      authors: string[];
+      year: number;
+      resourceType: string;
+      type: 'academic' | 'applied' | 'industry';
+      complexityLevel: 'introductory' | 'intermediate' | 'advanced';
+      publisher?: string;
+      url?: string;
+      isbn?: string;
+      complianceNotes?: string;
+    },
+    file?: File | null
+  ) => void;
   onCancel: () => void;
   isSaving: boolean;
 }) {
@@ -395,6 +399,21 @@ function SourceAddModal({
   const [url, setUrl] = useState('');
   const [isbn, setIsbn] = useState('');
   const [complianceNotes, setComplianceNotes] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+
+  const MAX_FILE_MB = 25;
+  const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files?.[0] || null;
+    if (picked && picked.size > MAX_FILE_MB * 1024 * 1024) {
+      setFileError(`File is too large — maximum ${MAX_FILE_MB}MB.`);
+      setFile(null);
+      e.target.value = '';
+      return;
+    }
+    setFileError(null);
+    setFile(picked);
+  };
 
   const addAuthor = () => {
     const v = authorsInput.trim();
@@ -409,19 +428,22 @@ function SourceAddModal({
 
   const handleSave = () => {
     if (!canSave) return;
-    onSave({
-      moduleId,
-      title: title.trim(),
-      authors,
-      year,
-      resourceType,
-      type,
-      complexityLevel,
-      publisher: publisher.trim() || undefined,
-      url: url.trim() || undefined,
-      isbn: isbn.trim() || undefined,
-      complianceNotes: complianceNotes.trim() || undefined,
-    });
+    onSave(
+      {
+        moduleId,
+        title: title.trim(),
+        authors,
+        year,
+        resourceType,
+        type,
+        complexityLevel,
+        publisher: publisher.trim() || undefined,
+        url: url.trim() || undefined,
+        isbn: isbn.trim() || undefined,
+        complianceNotes: complianceNotes.trim() || undefined,
+      },
+      file
+    );
   };
 
   return (
@@ -620,6 +642,41 @@ function SourceAddModal({
               placeholder="Why this resource belongs on the list"
             />
           </div>
+
+          {/* File upload — optional. The actual file is stored in MongoDB
+              (GridFS); the source links to it with a download link. */}
+          <div>
+            <label className="block text-sm font-medium text-teal-700 mb-2">
+              Attach a file (optional)
+            </label>
+            {file ? (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                <span className="text-sm text-teal-800 truncate">
+                  📎 {file.name}{' '}
+                  <span className="text-teal-500">({(file.size / 1024).toFixed(0)} KB)</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFile(null)}
+                  className="text-sm text-rose-500 hover:text-rose-600 shrink-0"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <input
+                type="file"
+                onChange={handleFilePick}
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.epub,.mobi,.rtf,.txt"
+                className="block w-full text-sm text-teal-700 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-cyan-500/15 file:text-cyan-700 hover:file:bg-cyan-500/25 file:cursor-pointer cursor-pointer"
+              />
+            )}
+            <p className="text-xs text-teal-500 mt-1">
+              Word, PDF, PowerPoint, Excel, EPUB, MOBI, RTF or text — up to 25MB. Stored securely in
+              the curriculum database.
+            </p>
+            {fileError && <p className="text-xs text-rose-500 mt-1">{fileError}</p>}
+          </div>
         </div>
 
         <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
@@ -721,6 +778,31 @@ function SourceCard({
         <p className="text-xs text-teal-500 font-mono bg-teal-50 p-2 rounded mt-2">
           {source.citation}
         </p>
+
+        {/* Uploaded file — download from GridFS via the auth-aware helper */}
+        {(source as any).uploadedFile?.fileId && (
+          <button
+            type="button"
+            onClick={() =>
+              downloadFile(
+                `/api/v3/files/${(source as any).uploadedFile.fileId}`,
+                (source as any).uploadedFile.filename || 'source-file'
+              ).catch(() => alert('Could not download the file.'))
+            }
+            className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 mt-2 bg-cyan-500/15 text-cyan-700 rounded hover:bg-cyan-500/25 transition-colors"
+            title="Download the attached file"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              />
+            </svg>
+            {(source as any).uploadedFile.filename || 'Download file'}
+          </button>
+        )}
 
         {/* Clickable DOI/URL Links */}
         {(source.doi || source.url) && (
@@ -1160,17 +1242,33 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
     setEditingSource(null);
   };
 
-  // Add source — POSTs to the new /step5/source route. Backend builds
-  // the full Source with userAdded=true; we just refresh + toast.
+  // Add source — when a file is attached, upload it to GridFS first
+  // (POST /api/v3/files/upload), then POST the source with the file
+  // reference. Backend builds the full Source with userAdded=true.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleAddSource = async (payload: any) => {
+  const handleAddSource = async (payload: any, file?: File | null) => {
     setIsAddingSource(true);
     setError(null);
     try {
-      await api.post(`/api/v3/workflow/${workflow._id}/step5/source`, payload);
+      let uploadedFile;
+      if (file) {
+        const form = new FormData();
+        form.append('file', file);
+        const uploadResp = await api.post('/api/v3/files/upload', form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        uploadedFile = uploadResp.data?.data;
+      }
+      await api.post(`/api/v3/workflow/${workflow._id}/step5/source`, {
+        ...payload,
+        ...(uploadedFile ? { uploadedFile } : {}),
+      });
       setAddingSource(false);
       await onRefresh();
-      setSourceToast({ type: 'success', text: 'Resource added' });
+      setSourceToast({
+        type: 'success',
+        text: file ? 'Resource + file added' : 'Resource added',
+      });
     } catch (err: any) {
       const msg = err?.response?.data?.error || err?.message || 'Failed to add resource';
       setError(msg);
