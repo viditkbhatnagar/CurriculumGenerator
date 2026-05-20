@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch-logs": "^3.919.0",
+    "@aws-sdk/client-s3": "^3.1050.0",
     "@curriculum-app/shared-types": "*",
     "@langchain/community": "^1.0.0",
     "@langchain/core": "^1.0.2",

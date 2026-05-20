@@ -29,6 +29,13 @@ interface Config {
     uploadDir: string;
     maxFileSize: number;
   };
+  s3: {
+    enabled: boolean;
+    region: string;
+    bucket: string;
+    accessKeyId: string;
+    secretAccessKey: string;
+  };
   monitoring: {
     sentryDsn: string;
     logLevel: string;
@@ -50,6 +57,13 @@ interface Config {
     apiSigningSecret: string;
   };
 }
+
+// S3 is opt-in: only "enabled" when the bucket + both credentials are
+// present. Without them, source-file uploads fall back to MongoDB GridFS.
+const s3Bucket = process.env.S3_BUCKET || '';
+const s3AccessKeyId = process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '';
+const s3SecretAccessKey =
+  process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '';
 
 const config: Config = {
   port: parseInt(process.env.PORT || '4000', 10),
@@ -80,6 +94,13 @@ const config: Config = {
     type: (process.env.STORAGE_TYPE as 'render_disk' | 'cloudinary' | 'local') || 'local',
     uploadDir: process.env.UPLOAD_DIR || './uploads',
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '52428800', 10), // 50MB default
+  },
+  s3: {
+    enabled: Boolean(s3Bucket && s3AccessKeyId && s3SecretAccessKey),
+    region: process.env.S3_REGION || process.env.AWS_REGION || 'us-east-1',
+    bucket: s3Bucket,
+    accessKeyId: s3AccessKeyId,
+    secretAccessKey: s3SecretAccessKey,
   },
   monitoring: {
     sentryDsn: process.env.SENTRY_DSN || '',

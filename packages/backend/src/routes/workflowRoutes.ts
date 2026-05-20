@@ -25,6 +25,7 @@ import { workflowService } from '../services/workflowService';
 import { loggingService } from '../services/loggingService';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { wordExportService } from '../services/wordExportService';
+import { serveCachedExport, hashExportInput } from '../services/exportCacheService';
 import { analyticsStorageService } from '../services/analyticsStorageService';
 import { lessonPlanService } from '../services/lessonPlanService';
 import { syllabusService } from '../services/syllabusService';
@@ -1455,6 +1456,16 @@ router.post('/:id/step5/source', validateJWT, loadUser, async (req: Request, res
     }
 
     const sourceId = `src-user-${crypto.randomBytes(6).toString('hex')}`;
+
+    // SME-attached files. Current clients send uploadedFiles[]; older ones
+    // sent a single uploadedFile — normalise both to an array.
+    const attachedFiles =
+      payload.uploadedFiles && payload.uploadedFiles.length
+        ? payload.uploadedFiles
+        : payload.uploadedFile
+          ? [payload.uploadedFile]
+          : [];
+
     const source = {
       id: sourceId,
       title: payload.title,
@@ -1487,8 +1498,9 @@ router.post('/:id/step5/source', validateJWT, loadUser, async (req: Request, res
       complexityLevel: payload.complexityLevel,
       userAdded: true,
       resourceType: payload.resourceType,
-      // Optional: an actual file uploaded to GridFS via /api/v3/files/upload.
-      ...(payload.uploadedFile ? { uploadedFile: payload.uploadedFile } : {}),
+      // Optional: actual file(s) the SME attached, stored in S3 (or
+      // MongoDB GridFS as a fallback) via /api/v3/files/upload.
+      ...(attachedFiles.length ? { uploadedFiles: attachedFiles } : {}),
     };
 
     if (!Array.isArray(step5.sources)) step5.sources = [];
@@ -4857,21 +4869,36 @@ router.get('/:id/export/word', async (req: Request, res: Response) => {
       updatedAt: workflow.updatedAt?.toISOString(),
     };
 
-    const buffer = await wordExportService.generateDocument(workflowData);
-
     // Generate filename
     const filename = `${workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}-${new Date().toISOString().split('T')[0]}.docx`;
 
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    );
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', buffer.length);
+    // Served through the S3 export cache — a re-download of an unchanged
+    // curriculum skips generation (and its per-section OpenAI calls).
+    await serveCachedExport(res, {
+      workflowId: String(workflow._id),
+      artifact: 'full-word.docx',
+      contentHash: hashExportInput({
+        projectName: workflow.projectName,
+        step1: workflow.step1,
+        step2: workflow.step2,
+        step3: workflow.step3,
+        step4: workflow.step4,
+        step5: workflow.step5,
+        step6: workflow.step6,
+        step7: workflow.step7,
+        step8: workflow.step8,
+        step9: workflow.step9,
+        step10: workflow.step10,
+        step11: workflow.step11,
+        step12: workflow.step12,
+        step13: workflow.step13,
+      }),
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      filename,
+      generate: () => wordExportService.generateDocument(workflowData),
+    });
 
-    res.send(buffer);
-
-    loggingService.info('Word document exported', {
+    loggingService.info('Word document export served', {
       workflowId: workflow._id,
       filename,
     });
@@ -4923,12 +4950,6 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
     };
     workflowData[`step${stepNumber}`] = workflow[stepKey];
 
-    const buffer = await wordExportService.generateStepDocument(
-      workflowData,
-      stepNumber,
-      moduleIndex !== undefined ? { moduleIndex } : undefined
-    );
-
     const STEP_SLUGS: Record<number, string> = {
       1: 'Program-Foundation',
       2: 'Competency-Framework',
@@ -4951,15 +4972,35 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
     const dateSlug = new Date().toISOString().split('T')[0];
     const filename = `${programSlug}-${stepSlug}${moduleSlug}-${dateSlug}.docx`;
 
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    );
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', buffer.length);
-    res.send(buffer);
+    // One cached object per (step[, module]); content hash covers the
+    // step's data plus step1/step2, which generateStepDocument also uses.
+    const artifact =
+      moduleIndex !== undefined
+        ? `step${stepNumber}-module${moduleIndex}.docx`
+        : `step${stepNumber}.docx`;
 
-    loggingService.info('Step Word document exported', {
+    await serveCachedExport(res, {
+      workflowId: String(workflow._id),
+      artifact,
+      contentHash: hashExportInput({
+        projectName: workflow.projectName,
+        step1: workflow.step1,
+        step2: workflow.step2,
+        stepNumber,
+        moduleIndex,
+        target: workflow[stepKey],
+      }),
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      filename,
+      generate: () =>
+        wordExportService.generateStepDocument(
+          workflowData,
+          stepNumber,
+          moduleIndex !== undefined ? { moduleIndex } : undefined
+        ),
+    });
+
+    loggingService.info('Step Word document export served', {
       workflowId: workflow._id,
       stepNumber,
       moduleIndex,
@@ -5014,24 +5055,41 @@ router.get('/:id/export/pdf', async (req: Request, res: Response) => {
       updatedAt: workflow.updatedAt?.toISOString(),
     };
 
-    const wordBuffer = await wordExportService.generateDocument(workflowData);
-
-    // Convert Word to PDF using libre-office or similar
-    // For now, we'll use a simple approach: convert via docx-pdf library
-    const convertAsync = promisify(libreofficeConvert.convert);
-
-    const pdfBuffer = await convertAsync(wordBuffer, '.pdf', undefined);
-
     // Generate filename
     const filename = `${workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}-${new Date().toISOString().split('T')[0]}.pdf`;
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', pdfBuffer.length);
+    // Cached in S3 — a re-download skips both the Word render (per-section
+    // OpenAI calls) and the LibreOffice conversion.
+    await serveCachedExport(res, {
+      workflowId: String(workflow._id),
+      artifact: 'curriculum.pdf',
+      contentHash: hashExportInput({
+        projectName: workflow.projectName,
+        step1: workflow.step1,
+        step2: workflow.step2,
+        step3: workflow.step3,
+        step4: workflow.step4,
+        step5: workflow.step5,
+        step6: workflow.step6,
+        step7: workflow.step7,
+        step8: workflow.step8,
+        step9: workflow.step9,
+        step10: workflow.step10,
+        step11: workflow.step11,
+        step12: workflow.step12,
+        step13: workflow.step13,
+      }),
+      contentType: 'application/pdf',
+      filename,
+      generate: async () => {
+        const wordBuffer = await wordExportService.generateDocument(workflowData);
+        // Convert Word → PDF via LibreOffice.
+        const convertAsync = promisify(libreofficeConvert.convert);
+        return (await convertAsync(wordBuffer, '.pdf', undefined)) as Buffer;
+      },
+    });
 
-    res.send(pdfBuffer);
-
-    loggingService.info('PDF document exported', {
+    loggingService.info('PDF document export served', {
       workflowId: workflow._id,
       filename,
     });
@@ -5066,10 +5124,25 @@ router.post('/:id/export/scorm', async (req: Request, res: Response) => {
       projectName: workflow.projectName,
     });
 
-    const zip = new JSZip();
+    const filename = `${workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}-SCORM-${new Date().toISOString().split('T')[0]}.zip`;
 
-    // SCORM 1.2 manifest
-    const manifest = `<?xml version="1.0" encoding="UTF-8"?>
+    // Cached in S3 — keyed on the modules (step4) and lesson plans
+    // (step10) that the package is built from.
+    await serveCachedExport(res, {
+      workflowId: String(workflow._id),
+      artifact: 'scorm.zip',
+      contentHash: hashExportInput({
+        projectName: workflow.projectName,
+        step4: workflow.step4,
+        step10: workflow.step10,
+      }),
+      contentType: 'application/zip',
+      filename,
+      generate: async () => {
+        const zip = new JSZip();
+
+        // SCORM 1.2 manifest
+        const manifest = `<?xml version="1.0" encoding="UTF-8"?>
 <manifest identifier="curriculum_${workflow._id}" version="1.0"
           xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
           xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"
@@ -5110,17 +5183,17 @@ router.post('/:id/export/scorm', async (req: Request, res: Response) => {
   </resources>
 </manifest>`;
 
-    zip.file('imsmanifest.xml', manifest);
+        zip.file('imsmanifest.xml', manifest);
 
-    // Create HTML content for each module
-    if (workflow.step4?.modules) {
-      for (let i = 0; i < workflow.step4.modules.length; i++) {
-        const module = workflow.step4.modules[i];
-        const moduleLessonPlan = workflow.step10?.moduleLessonPlans?.find(
-          (mlp: any) => mlp.moduleId === module.id
-        );
+        // Create HTML content for each module
+        if (workflow.step4?.modules) {
+          for (let i = 0; i < workflow.step4.modules.length; i++) {
+            const module = workflow.step4.modules[i];
+            const moduleLessonPlan = workflow.step10?.moduleLessonPlans?.find(
+              (mlp: any) => mlp.moduleId === module.id
+            );
 
-        const html = `<!DOCTYPE html>
+            const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -5184,12 +5257,12 @@ router.post('/:id/export/scorm', async (req: Request, res: Response) => {
 </body>
 </html>`;
 
-        zip.folder(`module_${i + 1}`)?.file('index.html', html);
-      }
-    }
+            zip.folder(`module_${i + 1}`)?.file('index.html', html);
+          }
+        }
 
-    // Add SCORM API wrapper
-    const scormAPI = `
+        // Add SCORM API wrapper
+        const scormAPI = `
 var API = {
   LMSInitialize: function(param) { return "true"; },
   LMSFinish: function(param) { return "true"; },
@@ -5201,19 +5274,12 @@ var API = {
   LMSGetDiagnostic: function(errorCode) { return "No error"; }
 };`;
 
-    zip.file('scorm_api.js', scormAPI);
+        zip.file('scorm_api.js', scormAPI);
 
-    // Generate ZIP buffer
-    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
-
-    // Generate filename
-    const filename = `${workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}-SCORM-${new Date().toISOString().split('T')[0]}.zip`;
-
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', zipBuffer.length);
-
-    res.send(zipBuffer);
+        // Generate ZIP buffer
+        return zip.generateAsync({ type: 'nodebuffer' });
+      },
+    });
 
     loggingService.info('SCORM package exported', {
       workflowId: workflow._id,

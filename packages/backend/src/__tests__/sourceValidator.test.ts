@@ -161,4 +161,76 @@ describe('sanitizeSourcePayload', () => {
       /uploadedFile/
     );
   });
+
+  it('preserves a known storage backend on uploadedFile', () => {
+    const out = sanitizeSourcePayload({
+      ...minimalValid,
+      uploadedFile: { fileId: 'abc123', filename: 'notes.docx', storage: 's3' },
+    });
+    expect(out.uploadedFile?.storage).toBe('s3');
+  });
+
+  it('drops an unknown storage value', () => {
+    const out = sanitizeSourcePayload({
+      ...minimalValid,
+      uploadedFile: { fileId: 'abc123', filename: 'notes.docx', storage: 'dropbox' },
+    });
+    expect(out.uploadedFile?.storage).toBeUndefined();
+  });
+
+  it('omits uploadedFiles when not provided', () => {
+    expect(sanitizeSourcePayload(minimalValid).uploadedFiles).toBeUndefined();
+  });
+
+  it('accepts a multi-file uploadedFiles array', () => {
+    const out = sanitizeSourcePayload({
+      ...minimalValid,
+      uploadedFiles: [
+        {
+          fileId: 'a1b2c3d4-e5f6-7890-abcd-ef0123456789.pdf',
+          filename: 'brand-guidelines.pdf',
+          mimeType: 'application/pdf',
+          size: 482311,
+          storage: 's3',
+        },
+        { fileId: 'second-file-key.docx', filename: 'notes.docx' },
+      ],
+    });
+    expect(out.uploadedFiles).toHaveLength(2);
+    expect(out.uploadedFiles?.[0].filename).toBe('brand-guidelines.pdf');
+    expect(out.uploadedFiles?.[0].storage).toBe('s3');
+    // Missing mimeType / size fall back to defaults.
+    expect(out.uploadedFiles?.[1].mimeType).toBe('application/octet-stream');
+    expect(out.uploadedFiles?.[1].size).toBe(0);
+  });
+
+  it('rejects a non-array uploadedFiles', () => {
+    expect(() =>
+      sanitizeSourcePayload({ ...minimalValid, uploadedFiles: { fileId: 'x', filename: 'y.pdf' } })
+    ).toThrow(/uploadedFiles must be an array/);
+  });
+
+  it('rejects an uploadedFiles array with a malformed item', () => {
+    expect(() =>
+      sanitizeSourcePayload({
+        ...minimalValid,
+        uploadedFiles: [{ fileId: 'ok', filename: 'a.pdf' }, { filename: 'missing-id.pdf' }],
+      })
+    ).toThrow(/uploadedFile/);
+  });
+
+  it('caps uploadedFiles at 10 entries', () => {
+    const many = Array.from({ length: 15 }, (_, i) => ({
+      fileId: `file-${i}`,
+      filename: `doc-${i}.pdf`,
+    }));
+    const out = sanitizeSourcePayload({ ...minimalValid, uploadedFiles: many });
+    expect(out.uploadedFiles).toHaveLength(10);
+  });
+
+  it('omits uploadedFiles when given an empty array', () => {
+    expect(
+      sanitizeSourcePayload({ ...minimalValid, uploadedFiles: [] }).uploadedFiles
+    ).toBeUndefined();
+  });
 });

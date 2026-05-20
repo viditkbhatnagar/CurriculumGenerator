@@ -479,14 +479,20 @@ export interface Source {
   userAdded?: boolean;
   resourceType?: 'document' | 'video' | 'ebook' | 'article' | 'book' | 'webpage' | 'other';
 
-  // Optional file uploaded to MongoDB GridFS (POST /api/v3/files/upload).
-  // Present when an SME attached an actual document rather than a link.
-  uploadedFile?: {
-    fileId: string;
-    filename: string;
-    mimeType: string;
-    size: number;
-  };
+  // Optional file(s) the SME attached — stored in S3 (or MongoDB GridFS
+  // as a fallback) via POST /api/v3/files/upload. `uploadedFiles` is the
+  // current multi-file shape; `uploadedFile` is the legacy single-file
+  // one, still rendered for sources created before multi-upload.
+  uploadedFile?: UploadedFile;
+  uploadedFiles?: UploadedFile[];
+}
+
+export interface UploadedFile {
+  fileId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  storage?: 's3' | 'gridfs';
 }
 
 export interface ModuleSourceSummary {

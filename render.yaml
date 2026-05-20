@@ -71,5 +71,16 @@ services:
         value: "100"
       - key: LOG_LEVEL
         value: info
+      # AWS S3 — SME source-file uploads + cached curriculum exports.
+      # Set the bucket name and credentials in the Render dashboard.
+      # If left unset, the app falls back to MongoDB GridFS automatically.
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        value: us-east-1
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
     healthCheckPath: /health
     autoDeploy: true

@@ -380,7 +380,7 @@ function SourceAddModal({
       isbn?: string;
       complianceNotes?: string;
     },
-    file?: File | null
+    files?: File[]
   ) => void;
   onCancel: () => void;
   isSaving: boolean;
@@ -399,20 +399,41 @@ function SourceAddModal({
   const [url, setUrl] = useState('');
   const [isbn, setIsbn] = useState('');
   const [complianceNotes, setComplianceNotes] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
 
   const MAX_FILE_MB = 25;
+  const MAX_FILES = 10;
   const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const picked = e.target.files?.[0] || null;
-    if (picked && picked.size > MAX_FILE_MB * 1024 * 1024) {
-      setFileError(`File is too large — maximum ${MAX_FILE_MB}MB.`);
-      setFile(null);
-      e.target.value = '';
+    const picked = Array.from(e.target.files || []);
+    e.target.value = ''; // reset so the same file can be re-picked / more added
+    if (!picked.length) return;
+
+    const tooBig = picked.find((f) => f.size > MAX_FILE_MB * 1024 * 1024);
+    if (tooBig) {
+      setFileError(`"${tooBig.name}" is too large — maximum ${MAX_FILE_MB}MB per file.`);
       return;
     }
+    // Append, skipping duplicates (same name + size), capping at MAX_FILES.
+    setFiles((prev) => {
+      const merged = [...prev];
+      for (const f of picked) {
+        if (!merged.some((m) => m.name === f.name && m.size === f.size)) {
+          merged.push(f);
+        }
+      }
+      if (merged.length > MAX_FILES) {
+        setFileError(`You can attach up to ${MAX_FILES} files.`);
+        return merged.slice(0, MAX_FILES);
+      }
+      setFileError(null);
+      return merged;
+    });
+  };
+
+  const removeFile = (idx: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
     setFileError(null);
-    setFile(picked);
   };
 
   const addAuthor = () => {
@@ -449,7 +470,7 @@ function SourceAddModal({
         isbn: isbn.trim() || undefined,
         complianceNotes: complianceNotes.trim() || undefined,
       },
-      file
+      files
     );
   };
 
@@ -650,38 +671,53 @@ function SourceAddModal({
             />
           </div>
 
-          {/* File upload — optional. The actual file is stored in MongoDB
-              (GridFS); the source links to it with a download link. */}
+          {/* File upload — optional, multiple. Files are stored in S3
+              (MongoDB GridFS as a fallback); the source links to each
+              with its own download button. */}
           <div>
             <label className="block text-sm font-medium text-teal-700 mb-2">
-              Attach a file (optional)
+              Attach file(s) (optional)
             </label>
-            {file ? (
-              <div className="flex items-center justify-between gap-3 px-4 py-3 bg-cyan-50 border border-cyan-200 rounded-lg">
-                <span className="text-sm text-teal-800 truncate">
-                  📎 {file.name}{' '}
-                  <span className="text-teal-500">({(file.size / 1024).toFixed(0)} KB)</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setFile(null)}
-                  className="text-sm text-rose-500 hover:text-rose-600 shrink-0"
-                >
-                  Remove
-                </button>
-              </div>
-            ) : (
+            {files.length > 0 && (
+              <ul className="space-y-2 mb-2">
+                {files.map((f, i) => (
+                  <li
+                    key={`${f.name}-${f.size}-${i}`}
+                    className="flex items-center justify-between gap-3 px-4 py-2.5 bg-cyan-50 border border-cyan-200 rounded-lg"
+                  >
+                    <span className="text-sm text-teal-800 truncate">
+                      📎 {f.name}{' '}
+                      <span className="text-teal-500">({(f.size / 1024).toFixed(0)} KB)</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(i)}
+                      className="text-sm text-rose-500 hover:text-rose-600 shrink-0"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {files.length < MAX_FILES && (
               <input
                 type="file"
+                multiple
                 onChange={handleFilePick}
                 accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.epub,.mobi,.rtf,.txt"
                 className="block w-full text-sm text-teal-700 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-cyan-500/15 file:text-cyan-700 hover:file:bg-cyan-500/25 file:cursor-pointer cursor-pointer"
               />
             )}
             <p className="text-xs text-teal-500 mt-1">
-              Word, PDF, PowerPoint, Excel, EPUB, MOBI, RTF or text — up to 25MB. Stored securely in
-              the curriculum database.
+              Word, PDF, PowerPoint, Excel, EPUB, MOBI, RTF or text — up to {MAX_FILE_MB}MB each,{' '}
+              {MAX_FILES} files max. Stored securely in cloud storage.
             </p>
+            {files.length > 0 && (
+              <p className="text-xs text-teal-500 mt-0.5">
+                {files.length} file{files.length === 1 ? '' : 's'} attached.
+              </p>
+            )}
             {fileError && <p className="text-xs text-rose-500 mt-1">{fileError}</p>}
           </div>
         </div>
@@ -786,30 +822,53 @@ function SourceCard({
           {source.citation}
         </p>
 
-        {/* Uploaded file — download from GridFS via the auth-aware helper */}
-        {(source as any).uploadedFile?.fileId && (
-          <button
-            type="button"
-            onClick={() =>
-              downloadFile(
-                `/api/v3/files/${(source as any).uploadedFile.fileId}`,
-                (source as any).uploadedFile.filename || 'source-file'
-              ).catch(() => alert('Could not download the file.'))
-            }
-            className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 mt-2 bg-cyan-500/15 text-cyan-700 rounded hover:bg-cyan-500/25 transition-colors"
-            title="Download the attached file"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              />
-            </svg>
-            {(source as any).uploadedFile.filename || 'Download file'}
-          </button>
-        )}
+        {/* Uploaded file(s) — download via the auth-aware helper. New
+            sources carry uploadedFiles[]; legacy ones a single
+            uploadedFile — render both. */}
+        {(() => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const s = source as any;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const attached: any[] =
+            Array.isArray(s.uploadedFiles) && s.uploadedFiles.length
+              ? s.uploadedFiles
+              : s.uploadedFile?.fileId
+                ? [s.uploadedFile]
+                : [];
+          if (!attached.length) return null;
+          return (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {attached.map((f, i) => (
+                <button
+                  key={f.fileId || i}
+                  type="button"
+                  onClick={() =>
+                    downloadFile(`/api/v3/files/${f.fileId}`, f.filename || 'source-file').catch(
+                      () => alert('Could not download the file.')
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 bg-cyan-500/15 text-cyan-700 rounded hover:bg-cyan-500/25 transition-colors max-w-full"
+                  title="Download the attached file"
+                >
+                  <svg
+                    className="w-3.5 h-3.5 shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                    />
+                  </svg>
+                  <span className="truncate">{f.filename || 'Download file'}</span>
+                </button>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* Clickable DOI/URL Links */}
         {(source.doi || source.url) && (
@@ -1249,32 +1308,37 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
     setEditingSource(null);
   };
 
-  // Add source — when a file is attached, upload it to GridFS first
-  // (POST /api/v3/files/upload), then POST the source with the file
-  // reference. Backend builds the full Source with userAdded=true.
+  // Add source — when files are attached, upload them all first
+  // (POST /api/v3/files/upload, one multipart request), then POST the
+  // source with the file references. Backend builds the full Source
+  // with userAdded=true.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleAddSource = async (payload: any, file?: File | null) => {
+  const handleAddSource = async (payload: any, files?: File[]) => {
     setIsAddingSource(true);
     setError(null);
     try {
-      let uploadedFile;
-      if (file) {
+      let uploadedFiles;
+      if (files && files.length > 0) {
         const form = new FormData();
-        form.append('file', file);
+        files.forEach((f) => form.append('files', f));
         const uploadResp = await api.post('/api/v3/files/upload', form, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
-        uploadedFile = uploadResp.data?.data;
+        uploadedFiles = uploadResp.data?.files;
       }
       await api.post(`/api/v3/workflow/${workflow._id}/step5/source`, {
         ...payload,
-        ...(uploadedFile ? { uploadedFile } : {}),
+        ...(uploadedFiles && uploadedFiles.length ? { uploadedFiles } : {}),
       });
       setAddingSource(false);
       await onRefresh();
+      const fileCount = files?.length || 0;
       setSourceToast({
         type: 'success',
-        text: file ? 'Resource + file added' : 'Resource added',
+        text:
+          fileCount > 0
+            ? `Resource + ${fileCount} file${fileCount === 1 ? '' : 's'} added`
+            : 'Resource added',
       });
     } catch (err: any) {
       const msg = err?.response?.data?.error || err?.message || 'Failed to add resource';

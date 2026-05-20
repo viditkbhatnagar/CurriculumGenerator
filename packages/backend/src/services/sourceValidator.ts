@@ -14,6 +14,8 @@ const STRING_MAX = 500;
 const NOTES_MAX = 1500;
 const AUTHORS_MAX = 20;
 const AUTHOR_MAX = 200;
+// How many files one source may carry — matches the upload route's cap.
+const UPLOADED_FILES_MAX = 10;
 
 // Descriptive resource kind — what the SME is actually adding. Distinct
 // from the academic `category` enum (which the AGI pipeline uses).
@@ -55,6 +57,7 @@ export interface UploadedFileRef {
   filename: string;
   mimeType: string;
   size: number;
+  storage?: 's3' | 'gridfs';
 }
 
 export interface SanitizedSource {
@@ -72,6 +75,7 @@ export interface SanitizedSource {
   isbn?: string;
   complianceNotes?: string;
   uploadedFile?: UploadedFileRef;
+  uploadedFiles?: UploadedFileRef[];
 }
 
 /**
@@ -93,12 +97,34 @@ function cleanUploadedFile(raw: any): UploadedFileRef | undefined {
     throw new Error('uploadedFile requires fileId and filename');
   }
   const size = typeof raw.size === 'number' && Number.isFinite(raw.size) ? raw.size : 0;
+  const storage = raw.storage === 's3' || raw.storage === 'gridfs' ? raw.storage : undefined;
   return {
     fileId,
     filename,
     mimeType: mimeType || 'application/octet-stream',
     size,
+    ...(storage ? { storage } : {}),
   };
+}
+
+/**
+ * Validate the optional uploadedFiles array — the multi-file shape sent
+ * by the current "add a source" form (an SME can attach several
+ * documents to one source). Returns undefined when nothing is attached;
+ * throws on a non-array or a malformed item.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function cleanUploadedFiles(raw: any): UploadedFileRef[] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new Error('uploadedFiles must be an array');
+  }
+  const cleaned: UploadedFileRef[] = [];
+  for (const item of raw.slice(0, UPLOADED_FILES_MAX)) {
+    const ref = cleanUploadedFile(item);
+    if (ref) cleaned.push(ref);
+  }
+  return cleaned.length ? cleaned : undefined;
 }
 
 /**
@@ -149,6 +175,7 @@ export function sanitizeSourcePayload(raw: any): SanitizedSource {
   const isbn = cleanString(raw.isbn, 40) || undefined;
   const complianceNotes = cleanString(raw.complianceNotes, NOTES_MAX) || undefined;
   const uploadedFile = cleanUploadedFile(raw.uploadedFile);
+  const uploadedFiles = cleanUploadedFiles(raw.uploadedFiles);
 
   // Build an APA-ish citation if the client didn't send one. When there
   // are no authors (e.g. a webpage) the citation simply leads with the
@@ -173,5 +200,6 @@ export function sanitizeSourcePayload(raw: any): SanitizedSource {
     isbn,
     complianceNotes,
     uploadedFile,
+    uploadedFiles,
   };
 }
