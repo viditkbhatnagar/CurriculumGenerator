@@ -575,14 +575,20 @@ function ReadingAddModal({
   };
   const removeAuthor = (i: number) => setAuthors(authors.filter((_, ix) => ix !== i));
 
-  const canSave = title.trim().length > 0 && authors.length > 0 && !!moduleId && year >= 1800;
+  // An author counts whether committed as a chip OR still un-"Add"ed in
+  // the input — SMEs routinely type one author then click the save
+  // button straight away without pressing Add/Enter first.
+  const hasAuthor = authors.length > 0 || authorsInput.trim().length > 0;
+  const canSave = title.trim().length > 0 && hasAuthor && !!moduleId && year >= 1800;
 
   const handleSave = () => {
     if (!canSave) return;
+    const pending = authorsInput.trim();
+    const finalAuthors = pending ? [...authors, pending] : authors;
     onSave({
       moduleId,
       title: title.trim(),
-      authors,
+      authors: finalAuthors,
       year,
       category,
       contentType,
