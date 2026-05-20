@@ -130,3 +130,71 @@ export async function serveCachedExport(res: Response, opts: ExportCacheOptions)
   }
   send(buffer, 'miss');
 }
+
+/** S3 artifact filename for a per-step Word export. */
+export function stepExportArtifact(stepNumber: number, moduleIndex?: number): string {
+  return moduleIndex !== undefined
+    ? `step${stepNumber}-module${moduleIndex}.docx`
+    : `step${stepNumber}.docx`;
+}
+
+/**
+ * Content hash for a per-step Word export. Covers the step's own data
+ * plus step1/step2 (which generateStepDocument also renders from), so any
+ * edit that would change the document invalidates the cached copy.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function stepExportContentHash(
+  workflow: any,
+  stepNumber: number,
+  moduleIndex?: number
+): string {
+  return hashExportInput({
+    projectName: workflow.projectName,
+    step1: workflow.step1,
+    step2: workflow.step2,
+    stepNumber,
+    moduleIndex,
+    target: workflow[`step${stepNumber}`],
+  });
+}
+
+export interface CachePeekResult {
+  cached: boolean; // an export object exists in S3
+  current: boolean; // it was rendered from the current content (not stale)
+  generatedAt?: string;
+  sizeBytes?: number;
+}
+
+/**
+ * Check whether an export is already cached in S3 without downloading it.
+ * `current` is true only when the cached object's content hash still
+ * matches `contentHash` — i.e. the curriculum hasn't changed since.
+ */
+export async function peekCache(
+  workflowId: string,
+  artifact: string,
+  contentHash: string
+): Promise<CachePeekResult> {
+  if (!config.s3.enabled) return { cached: false, current: false };
+  const key = `exports/${workflowId}/${artifact}`;
+  try {
+    const head = await getS3Client().send(
+      new HeadObjectCommand({ Bucket: config.s3.bucket, Key: key })
+    );
+    return {
+      cached: true,
+      current: head.Metadata?.contenthash === contentHash,
+      generatedAt: head.Metadata?.generatedat,
+      sizeBytes: head.ContentLength,
+    };
+  } catch (err: any) {
+    const code = err?.name || err?.Code;
+    const missing =
+      code === 'NotFound' || code === 'NoSuchKey' || err?.$metadata?.httpStatusCode === 404;
+    if (!missing) {
+      loggingService.warn('Export cache peek failed', { workflowId, artifact, err });
+    }
+    return { cached: false, current: false };
+  }
+}

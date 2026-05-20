@@ -25,7 +25,13 @@ import { workflowService } from '../services/workflowService';
 import { loggingService } from '../services/loggingService';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { wordExportService } from '../services/wordExportService';
-import { serveCachedExport, hashExportInput } from '../services/exportCacheService';
+import {
+  serveCachedExport,
+  hashExportInput,
+  stepExportArtifact,
+  stepExportContentHash,
+  peekCache,
+} from '../services/exportCacheService';
 import { analyticsStorageService } from '../services/analyticsStorageService';
 import { lessonPlanService } from '../services/lessonPlanService';
 import { syllabusService } from '../services/syllabusService';
@@ -4912,6 +4918,40 @@ router.get('/:id/export/word', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/v3/workflow/:id/export/word/step/:stepNumber/cache-status
+ * Reports whether this step's Word export is already cached in S3 and
+ * still current (rendered from the latest content). Lets the UI show a
+ * "saved copy" action without downloading anything.
+ * Query params: ?module=<0-based-index> (optional, steps 10-12).
+ */
+router.get(
+  '/:id/export/word/step/:stepNumber/cache-status',
+  async (req: Request, res: Response) => {
+    try {
+      const stepNumber = parseInt(req.params.stepNumber, 10);
+      if (isNaN(stepNumber) || stepNumber < 1 || stepNumber > 13) {
+        return res.status(400).json({ success: false, error: 'Invalid step number (1-13)' });
+      }
+      const workflow = await CurriculumWorkflow.findById(req.params.id);
+      if (!workflow) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+      const moduleIndex =
+        req.query.module !== undefined ? parseInt(req.query.module as string, 10) : undefined;
+      const peek = await peekCache(
+        String(workflow._id),
+        stepExportArtifact(stepNumber, moduleIndex),
+        stepExportContentHash(workflow, stepNumber, moduleIndex)
+      );
+      res.json({ success: true, data: peek });
+    } catch (error) {
+      loggingService.error('Error checking step export cache status', { error });
+      res.status(500).json({ success: false, error: 'Failed to check cache status' });
+    }
+  }
+);
+
+/**
  * GET /api/v3/workflow/:id/export/word/step/:stepNumber
  * Export a single step as a standalone Word document
  * Query params: ?module=<0-based-index> (optional, only for steps 10-12)
@@ -4972,24 +5012,12 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
     const dateSlug = new Date().toISOString().split('T')[0];
     const filename = `${programSlug}-${stepSlug}${moduleSlug}-${dateSlug}.docx`;
 
-    // One cached object per (step[, module]); content hash covers the
-    // step's data plus step1/step2, which generateStepDocument also uses.
-    const artifact =
-      moduleIndex !== undefined
-        ? `step${stepNumber}-module${moduleIndex}.docx`
-        : `step${stepNumber}.docx`;
-
+    // One cached object per (step[, module]); the hash covers the step's
+    // data plus step1/step2, which generateStepDocument also renders from.
     await serveCachedExport(res, {
       workflowId: String(workflow._id),
-      artifact,
-      contentHash: hashExportInput({
-        projectName: workflow.projectName,
-        step1: workflow.step1,
-        step2: workflow.step2,
-        stepNumber,
-        moduleIndex,
-        target: workflow[stepKey],
-      }),
+      artifact: stepExportArtifact(stepNumber, moduleIndex),
+      contentHash: stepExportContentHash(workflow, stepNumber, moduleIndex),
       contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       filename,
       generate: () =>
