@@ -34,6 +34,7 @@ import { createAuditLog } from '../services/auditService';
 import { sanitizeActivityArray } from '../services/activitySanitizer';
 import { isStepDone } from '../services/stepGating';
 import { sanitizeReadingPayload } from '../services/readingValidator';
+import { sanitizeSourcePayload } from '../services/sourceValidator';
 import crypto from 'crypto';
 
 const router = Router();
@@ -1411,6 +1412,217 @@ router.put(
         success: false,
         error: 'Failed to update source',
       });
+    }
+  }
+);
+
+/**
+ * POST /api/v3/workflow/:id/step5/source
+ * Add a manually-authored source to Step 5. SMEs use this to drop in
+ * resources the AI pipeline didn't surface — documents, YouTube links,
+ * e-books, articles, physical books (Athira / LUC, 2026-05-18).
+ *
+ * Manually added entries get userAdded=true and agiCompliant=false so
+ * the review UI can distinguish them from AI-vetted sources.
+ */
+router.post('/:id/step5/source', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const workflow = await CurriculumWorkflow.findById(id);
+    if (!workflow || !workflow.step5) {
+      return res.status(404).json({ success: false, error: 'Workflow or Step 5 not found' });
+    }
+
+    let payload: ReturnType<typeof sanitizeSourcePayload>;
+    try {
+      payload = sanitizeSourcePayload(req.body);
+    } catch (validationErr: any) {
+      return res.status(400).json({
+        success: false,
+        error: validationErr?.message || 'Invalid source payload',
+      });
+    }
+
+    const step5 = workflow.step5 as any;
+    const moduleExists = workflow.step4?.modules?.some(
+      (m: any) => m.id === payload.moduleId || m.code === payload.moduleId
+    );
+    if (!moduleExists) {
+      return res.status(400).json({
+        success: false,
+        error: `Module "${payload.moduleId}" not found on this workflow`,
+      });
+    }
+
+    const sourceId = `src-user-${crypto.randomBytes(6).toString('hex')}`;
+    const source = {
+      id: sourceId,
+      title: payload.title,
+      authors: payload.authors,
+      year: payload.year,
+      publisher: payload.publisher || '',
+      citation: payload.citation,
+      doi: payload.doi,
+      url: payload.url,
+      isbn: payload.isbn,
+      // Best-fit academic category for an SME-added resource — open_access
+      // is the least-restrictive value and doesn't trip validation logic.
+      category: 'open_access',
+      type: payload.type,
+      accessStatus: 'open_access',
+      complianceBadges: {
+        peerReviewed: false,
+        academicText: false,
+        professionalBody: false,
+        recent: false,
+        seminal: false,
+        verifiedAccess: false,
+        apaValidated: false,
+      },
+      agiCompliant: false, // SME-added, not AI-vetted
+      complianceNotes: payload.complianceNotes,
+      relevantTopics: [],
+      linkedMLOs: [],
+      moduleId: payload.moduleId,
+      complexityLevel: payload.complexityLevel,
+      userAdded: true,
+      resourceType: payload.resourceType,
+    };
+
+    if (!Array.isArray(step5.sources)) step5.sources = [];
+    step5.sources.push(source);
+
+    if (!step5.sourcesByModule || typeof step5.sourcesByModule !== 'object') {
+      step5.sourcesByModule = {};
+    }
+    if (!Array.isArray(step5.sourcesByModule[payload.moduleId])) {
+      step5.sourcesByModule[payload.moduleId] = [];
+    }
+    step5.sourcesByModule[payload.moduleId].push(source);
+
+    // Bump the per-module summary count if it exists. Validation flags
+    // stay untouched — a manual add must not flip "all AGI-compliant".
+    const summary = Array.isArray(step5.moduleSummaries)
+      ? step5.moduleSummaries.find((s: any) => s.moduleId === payload.moduleId)
+      : null;
+    if (summary) {
+      summary.totalSources = (summary.totalSources || 0) + 1;
+      summary.agiCompliant = false;
+    }
+    step5.totalSources = (step5.totalSources || 0) + 1;
+
+    workflow.markModified('step5');
+    await workflow.save();
+
+    const userId = (req as any).user?.id;
+    if (userId) {
+      try {
+        await createAuditLog({
+          userId,
+          action: 'step5.source.add',
+          resourceType: 'curriculumWorkflow',
+          resourceId: String(workflow._id),
+          details: {
+            sourceId,
+            moduleId: payload.moduleId,
+            resourceType: payload.resourceType,
+            title: payload.title,
+            authors: payload.authors,
+            year: payload.year,
+            userAdded: true,
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+        });
+      } catch (auditErr) {
+        loggingService.warn('Audit log for source add failed', { auditErr });
+      }
+    }
+
+    loggingService.info('Source added to Step 5', {
+      workflowId: id,
+      sourceId,
+      moduleId: payload.moduleId,
+      resourceType: payload.resourceType,
+    });
+
+    res.status(201).json({ success: true, data: source, message: 'Source added' });
+  } catch (error) {
+    loggingService.error('Error adding source', { error });
+    res.status(500).json({ success: false, error: 'Failed to add source' });
+  }
+});
+
+/**
+ * DELETE /api/v3/workflow/:id/step5/source/:sourceId
+ * Remove a source from Step 5 — symmetric with the add route, also
+ * lets reviewers prune AI-generated sources that aren't a fit.
+ */
+router.delete(
+  '/:id/step5/source/:sourceId',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, sourceId } = req.params;
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !workflow.step5) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 5 not found' });
+      }
+
+      const step5 = workflow.step5 as any;
+      const flat: any[] = Array.isArray(step5.sources) ? step5.sources : [];
+      const idx = flat.findIndex((s: any) => s.id === sourceId);
+      if (idx === -1) {
+        return res.status(404).json({ success: false, error: 'Source not found' });
+      }
+      const removed = flat.splice(idx, 1)[0];
+
+      const moduleId = removed?.moduleId;
+      if (moduleId && step5.sourcesByModule && Array.isArray(step5.sourcesByModule[moduleId])) {
+        step5.sourcesByModule[moduleId] = step5.sourcesByModule[moduleId].filter(
+          (s: any) => s.id !== sourceId
+        );
+      }
+
+      const summary = Array.isArray(step5.moduleSummaries)
+        ? step5.moduleSummaries.find((s: any) => s.moduleId === moduleId)
+        : null;
+      if (summary) {
+        summary.totalSources = Math.max(0, (summary.totalSources || 0) - 1);
+      }
+      step5.totalSources = Math.max(0, (step5.totalSources || 0) - 1);
+
+      workflow.markModified('step5');
+      await workflow.save();
+
+      const userId = (req as any).user?.id;
+      if (userId) {
+        try {
+          await createAuditLog({
+            userId,
+            action: 'step5.source.delete',
+            resourceType: 'curriculumWorkflow',
+            resourceId: String(workflow._id),
+            details: {
+              sourceId,
+              moduleId,
+              wasUserAdded: !!removed?.userAdded,
+              title: removed?.title,
+            },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+          });
+        } catch (auditErr) {
+          loggingService.warn('Audit log for source delete failed', { auditErr });
+        }
+      }
+
+      loggingService.info('Source removed from Step 5', { workflowId: id, sourceId, moduleId });
+      res.json({ success: true, message: 'Source removed' });
+    } catch (error) {
+      loggingService.error('Error removing source', { error });
+      res.status(500).json({ success: false, error: 'Failed to remove source' });
     }
   }
 );

@@ -472,6 +472,12 @@ export interface Source {
   qualityScore?: number;
   impactFactor?: number; // For journals
   authorCredentialsVerified?: boolean;
+
+  // SME-added flag + descriptive resource kind. Set on sources inserted
+  // via the manual add form (POST /step5/source) — they skip the AGI
+  // compliance pipeline and render with a badge.
+  userAdded?: boolean;
+  resourceType?: 'document' | 'video' | 'ebook' | 'article' | 'book' | 'webpage' | 'other';
 }
 
 export interface ModuleSourceSummary {
