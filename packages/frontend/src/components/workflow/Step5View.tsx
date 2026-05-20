@@ -343,12 +343,320 @@ function SourceEditModal({
   );
 }
 
+// Source Add Modal — compact form for SMEs to drop in a resource the
+// AI pipeline didn't surface (documents, YouTube links, e-books,
+// articles, physical books). Backend fills defaults for the rest.
+const RESOURCE_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'document', label: 'Document' },
+  { value: 'video', label: 'YouTube / video' },
+  { value: 'ebook', label: 'E-book' },
+  { value: 'article', label: 'Article' },
+  { value: 'book', label: 'Physical book' },
+  { value: 'webpage', label: 'Webpage' },
+  { value: 'other', label: 'Other' },
+];
+
+function SourceAddModal({
+  moduleOptions,
+  defaultModuleId,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  moduleOptions: Array<{ id: string; code: string; title: string }>;
+  defaultModuleId: string;
+  onSave: (payload: {
+    moduleId: string;
+    title: string;
+    authors: string[];
+    year: number;
+    resourceType: string;
+    type: 'academic' | 'applied' | 'industry';
+    complexityLevel: 'introductory' | 'intermediate' | 'advanced';
+    publisher?: string;
+    url?: string;
+    isbn?: string;
+    complianceNotes?: string;
+  }) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
+  const [moduleId, setModuleId] = useState(defaultModuleId);
+  const [title, setTitle] = useState('');
+  const [authors, setAuthors] = useState<string[]>([]);
+  const [authorsInput, setAuthorsInput] = useState('');
+  const [year, setYear] = useState<number>(new Date().getFullYear());
+  const [resourceType, setResourceType] = useState<string>('article');
+  const [type, setType] = useState<'academic' | 'applied' | 'industry'>('applied');
+  const [complexityLevel, setComplexityLevel] = useState<
+    'introductory' | 'intermediate' | 'advanced'
+  >('intermediate');
+  const [publisher, setPublisher] = useState('');
+  const [url, setUrl] = useState('');
+  const [isbn, setIsbn] = useState('');
+  const [complianceNotes, setComplianceNotes] = useState('');
+
+  const addAuthor = () => {
+    const v = authorsInput.trim();
+    if (v) {
+      setAuthors([...authors, v]);
+      setAuthorsInput('');
+    }
+  };
+  const removeAuthor = (i: number) => setAuthors(authors.filter((_, ix) => ix !== i));
+
+  const canSave = title.trim().length > 0 && authors.length > 0 && !!moduleId && year >= 1800;
+
+  const handleSave = () => {
+    if (!canSave) return;
+    onSave({
+      moduleId,
+      title: title.trim(),
+      authors,
+      year,
+      resourceType,
+      type,
+      complexityLevel,
+      publisher: publisher.trim() || undefined,
+      url: url.trim() || undefined,
+      isbn: isbn.trim() || undefined,
+      complianceNotes: complianceNotes.trim() || undefined,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-teal-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-teal-200">
+          <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
+            Add resource
+            <span className="text-xs font-normal text-teal-500">
+              (manual — bypasses AGI compliance checks)
+            </span>
+          </h3>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Module + Resource type */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Module</label>
+              <select
+                value={moduleId}
+                onChange={(e) => setModuleId(e.target.value)}
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-cyan-500"
+              >
+                {moduleOptions.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.code} — {m.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Resource type</label>
+              <select
+                value={resourceType}
+                onChange={(e) => setResourceType(e.target.value)}
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-cyan-500"
+              >
+                {RESOURCE_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-teal-700 mb-2">
+              Title / resource name
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-cyan-500"
+              placeholder="e.g. Designing Brand Identity"
+              autoFocus
+            />
+          </div>
+
+          {/* Authors */}
+          <div>
+            <label className="block text-sm font-medium text-teal-700 mb-2">
+              Author(s) / channel
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={authorsInput}
+                onChange={(e) => setAuthorsInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAuthor())}
+                className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-cyan-500"
+                placeholder="Add an author and press Enter (e.g. Wheeler, A.)"
+              />
+              <button
+                type="button"
+                onClick={addAuthor}
+                className="px-4 py-2 bg-cyan-500/20 text-cyan-500 rounded-lg hover:bg-cyan-500/30 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            {authors.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {authors.map((a, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {a}
+                    <button
+                      type="button"
+                      onClick={() => removeAuthor(i)}
+                      className="text-teal-500 hover:text-red-400"
+                      aria-label={`Remove ${a}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Year + Type + Complexity */}
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Year</label>
+              <input
+                type="number"
+                value={year}
+                onChange={(e) => setYear(parseInt(e.target.value) || new Date().getFullYear())}
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Type</label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as 'academic' | 'applied' | 'industry')}
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-cyan-500"
+              >
+                <option value="academic">Academic</option>
+                <option value="applied">Applied</option>
+                <option value="industry">Industry</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-teal-700 mb-2">Complexity</label>
+              <select
+                value={complexityLevel}
+                onChange={(e) =>
+                  setComplexityLevel(e.target.value as 'introductory' | 'intermediate' | 'advanced')
+                }
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-cyan-500"
+              >
+                <option value="introductory">Introductory</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+            </div>
+          </div>
+
+          {/* URL */}
+          <div>
+            <label className="block text-sm font-medium text-teal-700 mb-2">
+              Link / URL (optional)
+            </label>
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-cyan-500"
+              placeholder="https://… (YouTube link, article URL, e-book link)"
+            />
+          </div>
+
+          {/* Publisher + ISBN */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-teal-700 mb-2">
+                Publisher (optional)
+              </label>
+              <input
+                type="text"
+                value={publisher}
+                onChange={(e) => setPublisher(e.target.value)}
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-cyan-500"
+                placeholder="e.g. Wiley"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-teal-700 mb-2">
+                ISBN (optional, for books)
+              </label>
+              <input
+                type="text"
+                value={isbn}
+                onChange={(e) => setIsbn(e.target.value)}
+                className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-cyan-500"
+                placeholder="978-…"
+              />
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-sm font-medium text-teal-700 mb-2">Notes (optional)</label>
+            <textarea
+              value={complianceNotes}
+              onChange={(e) => setComplianceNotes(e.target.value)}
+              rows={2}
+              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-cyan-500 resize-none"
+              placeholder="Why this resource belongs on the list"
+            />
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-5 py-2.5 text-teal-600 hover:text-teal-700 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !canSave}
+            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Adding…
+              </>
+            ) : (
+              'Add resource'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Source Card Component
 function SourceCard({
   source,
   onAccept,
   onReject,
   onEdit,
+  onDelete,
   status = 'pending',
   isReplacement = false,
 }: {
@@ -356,6 +664,7 @@ function SourceCard({
   onAccept?: (sourceId: string) => void;
   onReject?: (sourceId: string) => void;
   onEdit?: (source: Source) => void;
+  onDelete?: (source: Source) => void;
   status?: SourceStatus;
   isReplacement?: boolean;
 }) {
@@ -395,6 +704,16 @@ function SourceCard({
             >
               {source.agiCompliant ? '✓ AGI Compliant' : '✗ Non-compliant'}
             </span>
+            {/* SME-added marker — reviewers can spot which entries
+                bypassed the AGI compliance pipeline. */}
+            {(source as any).userAdded && (
+              <span
+                className="text-xs px-2 py-0.5 rounded-full border border-amber-400 text-amber-700 bg-amber-50"
+                title="Added manually — skips AGI compliance checks"
+              >
+                Added manually
+              </span>
+            )}
           </div>
         </div>
 
@@ -578,15 +897,26 @@ function SourceCard({
           </div>
         )}
 
-        {/* Edit with AI Button */}
-        {onEdit && (
-          <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={() => onEdit(source)}
-              className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
-            >
-              Edit
-            </button>
+        {/* Edit + Delete */}
+        {(onEdit || onDelete) && (
+          <div className="mt-2 flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+            {onEdit && (
+              <button
+                onClick={() => onEdit(source)}
+                className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
+              >
+                Edit
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => onDelete(source)}
+                className="text-xs text-rose-500 hover:text-rose-600 transition-colors"
+                title="Remove this source from the list"
+              >
+                Delete
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -733,6 +1063,19 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
   // Edit state for sources
   const [editingSource, setEditingSource] = useState<Source | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  // Add-source modal state
+  const [addingSource, setAddingSource] = useState(false);
+  const [isAddingSource, setIsAddingSource] = useState(false);
+  // Inline toast for add / delete (auto-dismisses after 3.5s)
+  const [sourceToast, setSourceToast] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+  useEffect(() => {
+    if (!sourceToast) return;
+    const t = setTimeout(() => setSourceToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [sourceToast]);
 
   const handleAcceptSource = (sourceId: string) => {
     setSourceStatuses((prev) => ({ ...prev, [sourceId]: 'accepted' }));
@@ -815,6 +1158,41 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
   // Handle canceling source edit
   const handleCancelSourceEdit = () => {
     setEditingSource(null);
+  };
+
+  // Add source — POSTs to the new /step5/source route. Backend builds
+  // the full Source with userAdded=true; we just refresh + toast.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleAddSource = async (payload: any) => {
+    setIsAddingSource(true);
+    setError(null);
+    try {
+      await api.post(`/api/v3/workflow/${workflow._id}/step5/source`, payload);
+      setAddingSource(false);
+      await onRefresh();
+      setSourceToast({ type: 'success', text: 'Resource added' });
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to add resource';
+      setError(msg);
+      setSourceToast({ type: 'error', text: msg });
+    } finally {
+      setIsAddingSource(false);
+    }
+  };
+
+  // Delete source — confirmed inline, hits DELETE /step5/source/:id.
+  const handleDeleteSource = async (source: Source) => {
+    if (!confirm(`Remove "${source.title}" from the sources list?`)) return;
+    setError(null);
+    try {
+      await api.delete(`/api/v3/workflow/${workflow._id}/step5/source/${source.id}`);
+      await onRefresh();
+      setSourceToast({ type: 'success', text: 'Resource removed' });
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to remove resource';
+      setError(msg);
+      setSourceToast({ type: 'error', text: msg });
+    }
   };
 
   const submitStep5 = useSubmitStep5();
@@ -1155,12 +1533,31 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
 
           {/* Sources List */}
           <div>
-            <h3 className="text-lg font-semibold text-teal-800 mb-4">
-              Sources ({displayedSources.length})
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-teal-800">
+                Sources ({displayedSources.length})
+              </h3>
+              {workflow.step4?.modules && workflow.step4.modules.length > 0 && (
+                <button
+                  onClick={() => setAddingSource(true)}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-700 border border-cyan-200 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <span className="text-lg leading-none">+</span>
+                  Add resource
+                  {selectedModule && (
+                    <span className="text-xs text-cyan-500">to {selectedModule}</span>
+                  )}
+                </button>
+              )}
+            </div>
             <div className="space-y-3">
               {displayedSources.map((source) => (
-                <SourceCard key={source.id} source={source} onEdit={handleEditSource} />
+                <SourceCard
+                  key={source.id}
+                  source={source}
+                  onEdit={handleEditSource}
+                  onDelete={handleDeleteSource}
+                />
               ))}
             </div>
           </div>
@@ -1230,6 +1627,36 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
           onCancel={handleCancelSourceEdit}
           isSaving={isSavingEdit}
         />
+      )}
+
+      {/* Source Add Modal */}
+      {addingSource && workflow.step4?.modules && (
+        <SourceAddModal
+          moduleOptions={workflow.step4.modules.map((m) => ({
+            id: m.id,
+            code: m.code,
+            title: m.title,
+          }))}
+          defaultModuleId={selectedModule || workflow.step4.modules[0]?.id || ''}
+          onSave={handleAddSource}
+          onCancel={() => setAddingSource(false)}
+          isSaving={isAddingSource}
+        />
+      )}
+
+      {/* Add / delete toast */}
+      {sourceToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed bottom-6 right-6 z-[60] px-4 py-3 rounded-lg shadow-lg border text-sm font-medium ${
+            sourceToast.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              : 'bg-rose-50 border-rose-200 text-rose-700'
+          }`}
+        >
+          {sourceToast.text}
+        </div>
       )}
     </div>
   );
