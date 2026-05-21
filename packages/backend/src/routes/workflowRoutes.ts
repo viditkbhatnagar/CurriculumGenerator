@@ -863,6 +863,54 @@ router.post('/:id/step3', validateJWT, loadUser, async (req: Request, res: Respo
 });
 
 /**
+ * POST /api/v3/workflow/:id/step3/plo
+ * Add a manually-authored Program Learning Outcome to Step 3.
+ */
+router.post('/:id/step3/plo', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { statement, verb, bloomLevel, assessmentAlignment, jobTaskMapping, competencyLinks } =
+      req.body;
+
+    const workflow = await CurriculumWorkflow.findById(id);
+    if (!workflow || !workflow.step3) {
+      return res.status(404).json({ success: false, error: 'Workflow or Step 3 not found' });
+    }
+
+    const cleanStatement = typeof statement === 'string' ? statement.trim() : '';
+    if (!cleanStatement) {
+      return res.status(400).json({ success: false, error: 'PLO statement is required' });
+    }
+
+    const step3 = workflow.step3 as any;
+    if (!Array.isArray(step3.outcomes)) step3.outcomes = [];
+
+    const newPlo = {
+      id: `plo-user-${crypto.randomBytes(6).toString('hex')}`,
+      outcomeNumber: step3.outcomes.length + 1,
+      statement: cleanStatement,
+      verb: typeof verb === 'string' ? verb.trim() : '',
+      bloomLevel: typeof bloomLevel === 'string' && bloomLevel ? bloomLevel : 'apply',
+      competencyLinks: Array.isArray(competencyLinks) ? competencyLinks : [],
+      jobTaskMapping: Array.isArray(jobTaskMapping) ? jobTaskMapping : [],
+      assessmentAlignment:
+        typeof assessmentAlignment === 'string' ? assessmentAlignment.trim() : '',
+      userAdded: true, // SME-added, like manual Step 5 sources
+    };
+
+    step3.outcomes.push(newPlo);
+    workflow.markModified('step3');
+    await workflow.save();
+
+    loggingService.info('PLO added to Step 3', { workflowId: id, ploId: newPlo.id });
+    res.status(201).json({ success: true, data: newPlo, message: 'PLO added' });
+  } catch (error) {
+    loggingService.error('Error adding PLO', { error });
+    res.status(500).json({ success: false, error: 'Failed to add PLO' });
+  }
+});
+
+/**
  * PUT /api/v3/workflow/:id/step3/plo/:ploId
  * Edit a specific PLO item
  */
@@ -5322,6 +5370,82 @@ var API = {
     });
   }
 });
+
+/**
+ * DELETE /api/v3/workflow/:id/step10/lesson/:lessonId
+ * Remove a lesson from its module. Remaining lessons in that module are
+ * renumbered (no gaps), and the module + step-10 summary totals are
+ * recomputed.
+ */
+router.delete(
+  '/:id/step10/lesson/:lessonId',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, lessonId } = req.params;
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !workflow.step10) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 10 not found' });
+      }
+
+      // Locate the module that owns this lesson.
+      let foundModule: any = null;
+      for (const module of workflow.step10.moduleLessonPlans || []) {
+        if (module.lessons?.some((l: any) => l.lessonId === lessonId)) {
+          foundModule = module;
+          break;
+        }
+      }
+      if (!foundModule) {
+        return res.status(404).json({ success: false, error: 'Lesson not found' });
+      }
+
+      // Remove the lesson, then renumber the rest so there are no gaps.
+      foundModule.lessons = foundModule.lessons.filter((l: any) => l.lessonId !== lessonId);
+      foundModule.lessons.forEach((l: any, idx: number) => {
+        l.lessonNumber = idx + 1;
+      });
+
+      // Recompute module totals.
+      foundModule.totalLessons = foundModule.lessons.length;
+      foundModule.totalContactHours = foundModule.lessons.reduce(
+        (sum: number, l: any) => sum + (l.duration || 0) / 60,
+        0
+      );
+
+      // Recompute the step-10 summary.
+      const allLessons = (workflow.step10.moduleLessonPlans || []).flatMap(
+        (m: any) => m.lessons || []
+      );
+      if (workflow.step10.summary) {
+        workflow.step10.summary.totalLessons = allLessons.length;
+        workflow.step10.summary.totalContactHours = (
+          workflow.step10.moduleLessonPlans || []
+        ).reduce((sum: number, m: any) => sum + (m.totalContactHours || 0), 0);
+        workflow.step10.summary.averageLessonDuration = allLessons.length
+          ? Math.round(
+              allLessons.reduce((sum: number, l: any) => sum + (l.duration || 0), 0) /
+                allLessons.length
+            )
+          : 0;
+      }
+
+      workflow.markModified('step10');
+      await workflow.save();
+
+      loggingService.info('Lesson plan deleted', { workflowId: id, lessonId });
+      res.json({
+        success: true,
+        data: { moduleId: foundModule.moduleId, totalLessons: foundModule.totalLessons },
+        message: 'Lesson deleted',
+      });
+    } catch (error) {
+      loggingService.error('Error deleting lesson plan', { error });
+      res.status(500).json({ success: false, error: 'Failed to delete lesson' });
+    }
+  }
+);
 
 /**
  * PUT /api/v3/workflow/:id/step10/lesson/:lessonId

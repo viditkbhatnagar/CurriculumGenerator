@@ -68,12 +68,14 @@ function PLOEditModal({
   onSave,
   onCancel,
   isSaving,
+  isNew = false,
 }: {
   plo: PLO;
   index: number;
   onSave: (updatedPlo: PLO) => void;
   onCancel: () => void;
   isSaving: boolean;
+  isNew?: boolean;
 }) {
   const [statement, setStatement] = useState(plo.statement || '');
   const [verb, setVerb] = useState(plo.verb || '');
@@ -111,7 +113,15 @@ function PLOEditModal({
       <div className="bg-white rounded-xl border border-teal-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-teal-200">
           <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
-            Edit <span className="text-purple-400">PLO {index + 1}</span>
+            {isNew ? (
+              <>
+                Add a <span className="text-purple-400">PLO</span>
+              </>
+            ) : (
+              <>
+                Edit <span className="text-purple-400">PLO {index + 1}</span>
+              </>
+            )}
           </h3>
         </div>
 
@@ -169,7 +179,7 @@ function PLOEditModal({
               placeholder="e.g., analyze, evaluate, design"
             />
             <p className="text-xs text-teal-500 mt-1">
-              Suggested verbs for {bloomLevel}: {BLOOM_VERBS[bloomLevel]?.slice(0, 5).join(', ')}
+              Suggested verbs for {bloomLevel}: {BLOOM_VERBS[bloomLevel]?.slice(0, 12).join(', ')}
             </p>
           </div>
 
@@ -261,6 +271,8 @@ function PLOEditModal({
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Saving...
               </>
+            ) : isNew ? (
+              'Add PLO'
             ) : (
               'Save Changes'
             )}
@@ -457,6 +469,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
   // Edit state for PLOs
   const [editingPlo, setEditingPlo] = useState<PLO | null>(null);
   const [editingPloIndex, setEditingPloIndex] = useState<number>(-1);
+  const [addingPlo, setAddingPlo] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Get Essential KSCs from Step 2 for priority selection
@@ -590,6 +603,28 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
     setEditingPloIndex(-1);
   };
 
+  // Handle adding a new (manually-authored) PLO
+  const handleAddPlo = async (newPlo: PLO) => {
+    setIsSavingEdit(true);
+    setError(null);
+    try {
+      await api.post(`/api/v3/workflow/${workflow._id}/step3/plo`, {
+        statement: newPlo.statement,
+        verb: newPlo.verb,
+        bloomLevel: newPlo.bloomLevel,
+        assessmentAlignment: newPlo.assessmentAlignment,
+        jobTaskMapping: newPlo.jobTaskMapping,
+      });
+      setAddingPlo(false);
+      await onRefresh();
+    } catch (err: any) {
+      console.error('Failed to add PLO:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to add PLO');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   const hasStep3Data = workflow.step3 && workflow.step3.outcomes?.length > 0;
   const isApproved = !!workflow.step3?.approvedAt;
 
@@ -686,7 +721,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                     </div>
                     <p className="text-xs opacity-70">{BLOOM_DESCRIPTIONS[level]}</p>
                     <p className="text-xs mt-2 text-teal-500">
-                      {BLOOM_VERBS[level].slice(0, 4).join(', ')}...
+                      {BLOOM_VERBS[level].slice(0, 10).join(', ')}…
                     </p>
                   </button>
                 );
@@ -1060,9 +1095,25 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
 
           {/* PLO List */}
           <div>
-            <h3 className="text-lg font-semibold text-teal-800 mb-4">
-              Program Learning Outcomes ({workflow.step3?.outcomes?.length || 0})
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-teal-800">
+                Program Learning Outcomes ({workflow.step3?.outcomes?.length || 0})
+              </h3>
+              <button
+                onClick={() => setAddingPlo(true)}
+                className="px-3 py-1.5 bg-purple-500/15 hover:bg-purple-500/25 text-purple-600 rounded-lg transition-colors text-sm font-medium flex items-center gap-1.5"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
+                Add PLO
+              </button>
+            </div>
             <div className="space-y-4">
               {workflow.step3?.outcomes?.map((plo, index) => (
                 <PLOCard
@@ -1147,6 +1198,27 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
           index={editingPloIndex}
           onSave={handleSavePlo}
           onCancel={handleCancelPloEdit}
+          isSaving={isSavingEdit}
+        />
+      )}
+
+      {/* Add PLO Modal — reuses the editor in "new" mode */}
+      {addingPlo && (
+        <PLOEditModal
+          isNew
+          plo={
+            {
+              id: '',
+              statement: '',
+              verb: '',
+              bloomLevel: 'apply',
+              assessmentAlignment: '',
+              jobTaskMapping: [],
+            } as unknown as PLO
+          }
+          index={workflow.step3?.outcomes?.length || 0}
+          onSave={handleAddPlo}
+          onCancel={() => setAddingPlo(false)}
           isSaving={isSavingEdit}
         />
       )}

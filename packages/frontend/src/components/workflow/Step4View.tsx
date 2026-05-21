@@ -315,7 +315,7 @@ function MLOEditModal({
               placeholder="e.g., analyze, evaluate, design"
             />
             <p className="text-xs text-teal-500 mt-1">
-              Suggested verbs for {bloomLevel}: {BLOOM_VERBS[bloomLevel]?.slice(0, 5).join(', ')}
+              Suggested verbs for {bloomLevel}: {BLOOM_VERBS[bloomLevel]?.slice(0, 12).join(', ')}
             </p>
           </div>
 

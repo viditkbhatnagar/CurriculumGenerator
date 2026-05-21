@@ -723,6 +723,28 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
     setEditingLesson(null);
   };
 
+  // Handle deleting a lesson plan — confirmed inline.
+  const handleDeleteLesson = async (lesson: LessonPlan) => {
+    if (
+      !confirm(
+        `Delete "Lesson ${lesson.lessonNumber}: ${lesson.lessonTitle}"?\n\n` +
+          'Remaining lessons in the module will be renumbered.'
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    try {
+      await api.delete(`/api/v3/workflow/${workflow._id}/step10/lesson/${lesson.lessonId}`);
+      toast.success('Lesson deleted', 'The lesson has been removed.');
+      await onRefresh();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete lesson';
+      setError(errorMessage);
+      toast.error('Delete failed', errorMessage);
+    }
+  };
+
   // Regenerate one module's lesson plans (e.g. after editing the module title in Step 4)
   const [regeneratingModuleId, setRegeneratingModuleId] = useState<string | null>(null);
   const handleRegenerateModule = async (moduleId: string, moduleTitle: string) => {
@@ -1519,6 +1541,26 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                               />
                             </svg>
                             Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLesson(lesson)}
+                            className="px-3 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
+                            title="Delete lesson"
+                          >
+                            <svg
+                              className="w-3 h-3"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
+                            </svg>
+                            Delete
                           </button>
                           <svg
                             className={`w-5 h-5 text-teal-600 transition-transform ${
