@@ -15,6 +15,7 @@ import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationConte
 import { useStepStatus } from '@/hooks/useStepStatus';
 import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
+import FilePreviewModal from './FilePreviewModal';
 import { downloadFile } from '@/lib/download';
 
 interface Props {
@@ -449,6 +450,14 @@ function SourceAddModal({
   // clear author, and requiring one blocked SMEs from adding plain
   // links. Only title / module / year gate the save.
   const canSave = title.trim().length > 0 && !!moduleId && year >= 1800;
+  // What the SME still needs to fill in — surfaced next to the Add
+  // button so a disabled button isn't a silent mystery (e.g. pasting a
+  // YouTube link but leaving the title blank).
+  const missingHint = !title.trim()
+    ? 'Enter a title to add this resource.'
+    : !moduleId
+      ? 'Select a module.'
+      : 'Enter a valid year (1800 or later).';
 
   const handleSave = () => {
     if (!canSave) return;
@@ -522,7 +531,7 @@ function SourceAddModal({
           {/* Title */}
           <div>
             <label className="block text-sm font-medium text-teal-700 mb-2">
-              Title / resource name
+              Title / resource name <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
@@ -722,28 +731,35 @@ function SourceAddModal({
           </div>
         </div>
 
-        <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            disabled={isSaving}
-            className="px-5 py-2.5 text-teal-600 hover:text-teal-700 transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving || !canSave}
-            className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
-          >
-            {isSaving ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Adding…
-              </>
-            ) : (
-              'Add resource'
-            )}
-          </button>
+        <div className="p-6 border-t border-teal-200 flex items-center justify-between gap-3">
+          {!canSave && !isSaving ? (
+            <p className="text-xs text-amber-600">{missingHint}</p>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-3 shrink-0">
+            <button
+              onClick={onCancel}
+              disabled={isSaving}
+              className="px-5 py-2.5 text-teal-600 hover:text-teal-700 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving || !canSave}
+              className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+            >
+              {isSaving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Adding…
+                </>
+              ) : (
+                'Add resource'
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -769,6 +785,11 @@ function SourceCard({
   isReplacement?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [previewFile, setPreviewFile] = useState<{
+    fileId: string;
+    filename: string;
+    mimeType?: string;
+  } | null>(null);
   const currentYear = new Date().getFullYear();
   const isRecent = currentYear - source.year <= 5;
   const accessConfig =
@@ -837,21 +858,14 @@ function SourceCard({
                 : [];
           if (!attached.length) return null;
           return (
-            <div className="flex flex-wrap gap-2 mt-2">
+            <div className="flex flex-col gap-1.5 mt-2">
               {attached.map((f, i) => (
-                <button
+                <div
                   key={f.fileId || i}
-                  type="button"
-                  onClick={() =>
-                    downloadFile(`/api/v3/files/${f.fileId}`, f.filename || 'source-file').catch(
-                      () => alert('Could not download the file.')
-                    )
-                  }
-                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 bg-cyan-500/15 text-cyan-700 rounded hover:bg-cyan-500/25 transition-colors max-w-full"
-                  title="Download the attached file"
+                  className="flex items-center gap-2 text-xs bg-cyan-500/10 rounded px-2.5 py-1.5"
                 >
                   <svg
-                    className="w-3.5 h-3.5 shrink-0"
+                    className="w-3.5 h-3.5 shrink-0 text-cyan-700"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -860,15 +874,65 @@ function SourceCard({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                     />
                   </svg>
-                  <span className="truncate">{f.filename || 'Download file'}</span>
-                </button>
+                  <span className="truncate flex-1 text-teal-700">
+                    {f.filename || 'Attached file'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewFile({
+                        fileId: f.fileId,
+                        filename: f.filename || 'file',
+                        mimeType: f.mimeType,
+                      })
+                    }
+                    className="text-cyan-700 hover:text-cyan-900 font-medium shrink-0"
+                    title="Preview this file in the app"
+                  >
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadFile(`/api/v3/files/${f.fileId}`, f.filename || 'source-file').catch(
+                        () => alert('Could not download the file.')
+                      )
+                    }
+                    className="text-cyan-700 hover:text-cyan-900 shrink-0"
+                    title="Download this file"
+                    aria-label="Download file"
+                  >
+                    <svg
+                      className="w-3.5 h-3.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
+                    </svg>
+                  </button>
+                </div>
               ))}
             </div>
           );
         })()}
+
+        {previewFile && (
+          <FilePreviewModal
+            fileId={previewFile.fileId}
+            filename={previewFile.filename}
+            mimeType={previewFile.mimeType}
+            onClose={() => setPreviewFile(null)}
+          />
+        )}
 
         {/* Clickable DOI/URL Links */}
         {(source.doi || source.url) && (
@@ -1742,10 +1806,17 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
           <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
               onClick={handleGenerate}
-              disabled={submitStep5.isPending}
-              className="px-4 py-2 text-teal-600 hover:text-teal-600 transition-colors"
+              disabled={isCurrentlyGenerating}
+              className="px-4 py-2 text-teal-600 hover:text-teal-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              Regenerate
+              {isCurrentlyGenerating ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+                  Regenerating…
+                </>
+              ) : (
+                'Regenerate'
+              )}
             </button>
             <div className="flex gap-3">
               {!isApproved && (
