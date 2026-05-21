@@ -3,14 +3,15 @@ import { env, apiFetch } from './_env';
 
 /**
  * Regression coverage for SME file uploads on Step 5 sources
- * (Athira / LUC, 2026-05-20). Files are stored in MongoDB GridFS via
- * POST /api/v3/files/upload and linked onto a manually-added source.
+ * (Athira / LUC, 2026-05-20). Files are stored in AWS S3 (MongoDB
+ * GridFS as a fallback) via POST /api/v3/files/upload and linked onto
+ * a manually-added source.
  *
- * Exercises: upload round-trip, content round-trip on download, the
- * source carrying the uploadedFile reference, type/size rejection, and
- * cleanup. afterAll removes anything the run created.
+ * Exercises: upload round-trip, content round-trip on download, a
+ * source carrying its uploadedFiles[] references, type/size rejection,
+ * and cleanup. afterAll removes anything the run created.
  */
-test.describe('Step 5 file upload (GridFS)', () => {
+test.describe('Step 5 file upload', () => {
   let token = '';
   let workflowId = '';
   let targetModuleId = '';
@@ -115,45 +116,59 @@ test.describe('Step 5 file upload (GridFS)', () => {
     expect(res.status).toBe(404);
   });
 
-  test('a Step 5 source carries the uploadedFile reference end-to-end', async () => {
+  test('a Step 5 source carries its uploadedFiles end-to-end (multi-file)', async () => {
     test.skip(!canRun, 'No Step 5 fixture / no token');
 
-    // 1. Upload a file
-    const upRes = await uploadFile(pdfBytes, `e2e-attached-${Date.now()}.pdf`, 'application/pdf');
-    expect(upRes.status).toBe(201);
-    const file = ((await upRes.json()) as { data: { fileId: string; filename: string } }).data;
-    addedFileIds.push(file.fileId);
+    // 1. Upload two files
+    const up1 = await uploadFile(pdfBytes, `e2e-attached-a-${Date.now()}.pdf`, 'application/pdf');
+    const up2 = await uploadFile(pdfBytes, `e2e-attached-b-${Date.now()}.pdf`, 'application/pdf');
+    expect(up1.status).toBe(201);
+    expect(up2.status).toBe(201);
+    const file1 = ((await up1.json()) as { data: { fileId: string; filename: string } }).data;
+    const file2 = ((await up2.json()) as { data: { fileId: string; filename: string } }).data;
+    addedFileIds.push(file1.fileId, file2.fileId);
 
-    // 2. Add a source that references it
+    // 2. Add a source referencing both files via uploadedFiles[] — the
+    //    current multi-file shape.
     const addRes = await apiFetch(`/api/v3/workflow/${workflowId}/step5/source`, {
       method: 'POST',
       body: JSON.stringify({
         moduleId: targetModuleId,
-        title: `E2E source with file ${Date.now()}`,
+        title: `E2E source with files ${Date.now()}`,
         authors: ['Tester, A.'],
         year: 2024,
         resourceType: 'document',
-        uploadedFile: {
-          fileId: file.fileId,
-          filename: file.filename,
-          mimeType: 'application/pdf',
-          size: pdfBytes.length,
-        },
+        uploadedFiles: [
+          {
+            fileId: file1.fileId,
+            filename: file1.filename,
+            mimeType: 'application/pdf',
+            size: pdfBytes.length,
+          },
+          {
+            fileId: file2.fileId,
+            filename: file2.filename,
+            mimeType: 'application/pdf',
+            size: pdfBytes.length,
+          },
+        ],
       }),
     });
     expect(addRes.status).toBe(201);
     const created = ((await addRes.json()) as { data: { id: string } }).data;
     addedSourceIds.push(created.id);
 
-    // 3. GET the workflow — the source should carry the file pointer
+    // 3. GET the workflow — the source should carry both file pointers
     const wfRes = await apiFetch(`/api/v3/workflow/${workflowId}`);
     const wf = (await wfRes.json()) as {
       data?: { step5?: { sources?: Array<Record<string, any>> } };
     };
     const found = wf.data?.step5?.sources?.find((s) => s.id === created.id);
     expect(found).toBeDefined();
-    expect(found?.uploadedFile?.fileId).toBe(file.fileId);
-    expect(found?.uploadedFile?.filename).toBe(file.filename);
     expect(found?.userAdded).toBe(true);
+    const fileIds = (found?.uploadedFiles || []).map((f: { fileId: string }) => f.fileId);
+    expect(fileIds).toContain(file1.fileId);
+    expect(fileIds).toContain(file2.fileId);
+    expect(found?.uploadedFiles?.length).toBe(2);
   });
 });
