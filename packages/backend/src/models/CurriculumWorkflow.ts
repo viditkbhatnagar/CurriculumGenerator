@@ -1224,7 +1224,7 @@ export interface ICurriculumWorkflow extends Document {
   estimatedCompletionDate?: Date;
 
   // Methods
-  advanceStep(): Promise<void>;
+  advanceStep(approvedStep?: number): Promise<void>;
   approveCurrentStep(userId: string): Promise<void>;
   calculateProgress(): number;
 }
@@ -1476,10 +1476,24 @@ CurriculumWorkflowSchema.pre('save', function (next) {
   next();
 });
 
-// Advance to next step
-CurriculumWorkflowSchema.methods.advanceStep = async function (): Promise<void> {
+// Advance to next step. `approvedStep` is the step the caller just
+// approved — passed so re-approving an earlier step (the user navigated
+// back via the sidebar) doesn't shove the global pointer forward.
+CurriculumWorkflowSchema.methods.advanceStep = async function (
+  approvedStep?: number
+): Promise<void> {
+  // Re-approving a step the workflow has already moved past — leave
+  // currentStep where it is (and don't surface it as an error). Still
+  // save so the caller's changes (e.g. the re-approval timestamp) stick.
+  if (typeof approvedStep === 'number' && approvedStep < this.currentStep) {
+    await this.save();
+    return;
+  }
+  // Already at the final step — nothing to advance to. No-op rather than
+  // throw, so re-approving the last step isn't shown as an error.
   if (this.currentStep >= 14) {
-    throw new Error('Already at final step');
+    await this.save();
+    return;
   }
 
   // Mark current step as completed

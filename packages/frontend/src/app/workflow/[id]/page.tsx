@@ -436,7 +436,7 @@ export default function WorkflowDetailPage() {
               <div>
                 <h1 className="text-xl font-bold text-teal-800">{workflow.projectName}</h1>
                 <p className="text-teal-600 text-sm">
-                  Step {workflow.currentStep} of 13 •{' '}
+                  Step {workflow.currentStep} of 14 •{' '}
                   {progress?.estimatedTimeRemaining || '~2.5 hours'} remaining
                 </p>
               </div>

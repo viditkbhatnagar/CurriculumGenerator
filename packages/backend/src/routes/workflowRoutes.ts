@@ -565,7 +565,7 @@ router.post('/:id/step1/approve', validateJWT, loadUser, async (req: Request, re
     workflow.step1.approvedAt = new Date();
     workflow.step1.approvedBy = userId;
 
-    await workflow.advanceStep();
+    await workflow.advanceStep(1);
 
     res.json({
       success: true,
@@ -756,7 +756,7 @@ router.post('/:id/step2/approve', validateJWT, loadUser, async (req: Request, re
     workflow.step2.approvedAt = new Date();
     workflow.step2.approvedBy = userId;
 
-    await workflow.advanceStep();
+    await workflow.advanceStep(2);
 
     res.json({
       success: true,
@@ -943,7 +943,7 @@ router.post('/:id/step3/approve', validateJWT, loadUser, async (req: Request, re
     workflow.step3.approvedAt = new Date();
     workflow.step3.approvedBy = userId;
 
-    await workflow.advanceStep();
+    await workflow.advanceStep(3);
 
     res.json({
       success: true,
@@ -1278,7 +1278,7 @@ router.post('/:id/step4/approve', validateJWT, loadUser, async (req: Request, re
     workflow.step4.approvedAt = new Date();
     workflow.step4.approvedBy = userId;
 
-    await workflow.advanceStep();
+    await workflow.advanceStep(4);
 
     res.json({
       success: true,
@@ -1672,7 +1672,7 @@ router.post('/:id/step5/approve', validateJWT, loadUser, async (req: Request, re
     workflow.step5.approvedAt = new Date();
     workflow.step5.approvedBy = userId;
 
-    await workflow.advanceStep();
+    await workflow.advanceStep(5);
 
     res.json({
       success: true,
@@ -2136,7 +2136,7 @@ router.post('/:id/step6/approve', validateJWT, loadUser, async (req: Request, re
     workflow.step6.approvedAt = new Date();
     workflow.step6.approvedBy = userId;
 
-    await workflow.advanceStep();
+    await workflow.advanceStep(6);
 
     res.json({
       success: true,
@@ -2420,7 +2420,7 @@ router.post('/:id/step7/approve', validateJWT, loadUser, async (req: Request, re
     workflow.step7.approvedAt = new Date();
     workflow.step7.approvedBy = userId;
 
-    await workflow.advanceStep();
+    await workflow.advanceStep(7);
 
     res.json({
       success: true,
@@ -2732,7 +2732,7 @@ router.post('/:id/step8/approve', validateJWT, loadUser, async (req: Request, re
     workflow.step8.approvedAt = new Date();
     workflow.step8.approvedBy = userId;
 
-    await workflow.advanceStep();
+    await workflow.advanceStep(8);
 
     res.json({
       success: true,
@@ -2913,7 +2913,7 @@ router.post('/:id/step9/approve', validateJWT, loadUser, async (req: Request, re
     workflow.step9.approvedAt = new Date();
     workflow.step9.approvedBy = userId;
 
-    await workflow.advanceStep();
+    await workflow.advanceStep(9);
 
     res.json({
       success: true,
