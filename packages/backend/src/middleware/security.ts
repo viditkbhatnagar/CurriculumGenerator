@@ -33,14 +33,11 @@ export function sanitizeString(input: string): string {
       // Remove control characters except newlines and tabs
       // eslint-disable-next-line no-control-regex
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-      // Escape HTML special characters
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;')
-      .replace(/\//g, '&#x2F;')
   );
+  // NOTE: input is intentionally NOT HTML-escaped. Escaping on the way in
+  // corrupts stored data — a title "A & B" becomes "A &amp; B" in the DB
+  // and in every Word/PDF export. XSS is prevented at render time instead
+  // (React escapes by default; exports render text, not HTML).
 }
 
 /**
