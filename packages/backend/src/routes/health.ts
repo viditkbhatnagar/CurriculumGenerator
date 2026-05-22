@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import os from 'os';
 import { healthCheckService } from '../services/healthCheckService';
 import { monitoringService } from '../services/monitoringService';
 import { alertingService } from '../services/alertingService';
@@ -12,10 +13,19 @@ router.get('/health', async (req, res) => {
   try {
     const healthStatus = await healthCheckService.performHealthCheck();
 
-    const statusCode = healthStatus.status === 'healthy' ? 200 : 
-                       healthStatus.status === 'degraded' ? 200 : 503;
+    const statusCode =
+      healthStatus.status === 'healthy' ? 200 : healthStatus.status === 'degraded' ? 200 : 503;
 
-    res.status(statusCode).json(healthStatus);
+    // Instance memory — surfaces the actual Render plan size (a `free`
+    // 512 MB instance vs. a paid 2 GB one) for ops/debugging.
+    const mb = (n: number) => Math.round(n / 1024 / 1024);
+    res.status(statusCode).json({
+      ...healthStatus,
+      memory: {
+        instanceTotalMB: mb(os.totalmem()),
+        processRssMB: mb(process.memoryUsage().rss),
+      },
+    });
   } catch (error: any) {
     loggingService.error('Health check failed', error);
     res.status(503).json({
