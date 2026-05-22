@@ -35,11 +35,7 @@ services:
     name: curriculum-api
     runtime: node
     region: oregon
-    # `standard` = 2 GB RAM. The free/512 MB plan cannot hold the API
-    # process plus Chromium during a PDF/PPT export — the export OOM-kills
-    # the whole service. Confirm this plan in the Render dashboard so a
-    # Blueprint sync does not silently downgrade it back to free.
-    plan: standard
+    plan: free
     branch: main
     rootDir: packages/backend
     # `npm install` runs the postinstall hook, which downloads Chromium
