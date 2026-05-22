@@ -53,6 +53,10 @@ services:
         value: production
       - key: PORT
         value: 4000
+      # Lets the export route release the Word renderer's memory before
+      # the PDF render (see workflowRoutes /export/pdf).
+      - key: NODE_OPTIONS
+        value: --expose-gc
       - key: MONGODB_URI
         sync: false
       - key: REDIS_URL

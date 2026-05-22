@@ -5297,8 +5297,11 @@ router.get('/:id/export/pdf', async (req: Request, res: Response) => {
           exportContentHash
         );
         const wordBuffer = cachedDocx || (await wordExportService.generateDocument(workflowData));
-        // Word → HTML (mammoth) → PDF (Puppeteer). Render's runtime has
-        // no LibreOffice, so the old libreoffice-convert path 500'd here.
+        // Release the Word renderer's object graph before the PDF render
+        // so the two memory peaks don't stack on a small instance.
+        // No-op unless the process was started with --expose-gc.
+        if (typeof global.gc === 'function') global.gc();
+        // docx → HTML (mammoth) → PDF (pdfmake), entirely in-process.
         return docxBufferToPdf(wordBuffer);
       },
     });
