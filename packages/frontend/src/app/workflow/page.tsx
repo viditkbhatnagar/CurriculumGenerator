@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkflows, useCreateWorkflow, useDeleteWorkflow } from '@/hooks/useWorkflow';
 import { CurriculumWorkflow, WorkflowStep, STEP_NAMES, WorkflowStatus } from '@/types/workflow';
+import { useFolders, type Folder } from '@/hooks/useFolders';
+import FolderSidebar from '@/components/workflow/FolderSidebar';
+import ShareFolderDialog from '@/components/workflow/ShareFolderDialog';
+import MoveToFolderModal from '@/components/workflow/MoveToFolderModal';
 import {
   Plus,
   Trash2,
@@ -99,9 +103,17 @@ export default function WorkflowListPage() {
     }
   }, [assignModal.show]);
 
-  const { data: workflows, isLoading, error } = useWorkflows();
+  const { data: workflows, isLoading, error, refetch: refetchWorkflows } = useWorkflows();
+  const { data: folders, refetch: refetchFolders } = useFolders();
   const createWorkflow = useCreateWorkflow();
   const deleteWorkflow = useDeleteWorkflow();
+
+  // Folder organization state
+  const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
+  const [shareFolder, setShareFolder] = useState<Folder | null>(null);
+  const [moveModal, setMoveModal] = useState<{ show: boolean; workflow?: CurriculumWorkflow }>({
+    show: false,
+  });
 
   // Pre-load the faculty roster when an admin opens the page so the
   // assign modal can render instantly when triggered.
@@ -240,9 +252,29 @@ export default function WorkflowListPage() {
   const completed = workflows?.filter((w) => classify(w) === 'completed').length || 0;
   const published = workflows?.filter((w) => classify(w) === 'published').length || 0;
 
-  // Apply search + filter to derive the visible list
+  // Workflow counts per folder — drives the sidebar badges.
+  const folderCounts = {
+    all: totalWorkflows,
+    unfiled: (workflows || []).filter((w) => !(w as any).folderId).length,
+    byFolder: (workflows || []).reduce<Record<string, number>>((acc, w) => {
+      const fid = (w as any).folderId;
+      if (fid) acc[fid] = (acc[fid] || 0) + 1;
+      return acc;
+    }, {}),
+  };
+
+  // Apply folder + search + status filters to derive the visible list
   const visibleWorkflows = (workflows || []).filter((w) => {
     if (statusFilter !== 'all' && classify(w) !== statusFilter) return false;
+    const folderId = (w as any).folderId || null;
+    if (selectedFolderId === 'unfiled' && folderId) return false;
+    if (
+      selectedFolderId !== 'all' &&
+      selectedFolderId !== 'unfiled' &&
+      folderId !== selectedFolderId
+    ) {
+      return false;
+    }
     const q = searchQuery.trim().toLowerCase();
     if (q && !w.projectName.toLowerCase().includes(q)) return false;
     return true;
@@ -369,235 +401,264 @@ export default function WorkflowListPage() {
           ))}
         </motion.div>
 
-        {/* Toolbar — search + filter chips */}
-        <div className="flex flex-col lg:flex-row gap-3 mb-6">
-          {/* Search */}
-          <div className="relative flex-1 lg:max-w-md">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search programmes by name…"
-              className="w-full pl-10 pr-9 py-2.5 bg-card border border-border rounded-xl text-sm text-foreground placeholder:text-foreground-muted/60 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                aria-label="Clear search"
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-background-secondary text-foreground-muted hover:text-foreground transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Filter chips */}
-          <div className="flex gap-2 flex-wrap">
-            {filterChips.map((f) => {
-              const Icon = f.icon;
-              const active = statusFilter === f.key;
-              return (
-                <button
-                  key={f.key}
-                  onClick={() => setStatusFilter(f.key)}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all',
-                    active
-                      ? 'bg-foreground text-background shadow-sm'
-                      : 'bg-card border border-border text-foreground-muted hover:text-foreground hover:border-foreground/20'
-                  )}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {f.label}
-                  <span
-                    className={cn(
-                      'inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums',
-                      active
-                        ? 'bg-background/20 text-background'
-                        : 'bg-background-secondary text-foreground-muted'
-                    )}
-                  >
-                    {f.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Workflow Grid */}
-        {workflows && workflows.length > 0 && visibleWorkflows.length > 0 ? (
-          <motion.div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-            initial="hidden"
-            animate="visible"
-            variants={{
-              visible: { transition: { staggerChildren: 0.05 } },
+        {/* Folders sidebar + the filtered content */}
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          <FolderSidebar
+            folders={folders || []}
+            selectedFolderId={selectedFolderId}
+            onSelect={setSelectedFolderId}
+            counts={folderCounts}
+            onChanged={() => {
+              refetchFolders();
+              refetchWorkflows();
             }}
-          >
-            {visibleWorkflows.map((workflow) => {
-              const progress = getProgressPercent(workflow);
-              const badge = getStatusBadge(workflow.status);
-              const BadgeIcon = badge.icon;
-
-              return (
-                <motion.div
-                  key={workflow._id}
-                  variants={{
-                    hidden: { opacity: 0, y: 12 },
-                    visible: { opacity: 1, y: 0 },
-                  }}
-                  className="card-interactive group relative overflow-hidden"
-                >
-                  {/* Progress bar accent at top */}
-                  <div className="h-0.5 bg-border-subtle">
-                    <div
-                      className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-
-                  {/* Admin-only: assign workflow to a faculty member */}
-                  {isAdmin && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setAssignModal({ show: true, workflow });
-                        setAssignTargetId('');
-                      }}
-                      className="absolute top-3 right-11 z-10 p-1.5 rounded-md bg-teal-50 text-teal-700 opacity-0 group-hover:opacity-100 hover:bg-teal-100 transition-all"
-                      title="Assign to faculty"
-                    >
-                      <UserPlus className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-
-                  {/* Delete button */}
+            onShare={setShareFolder}
+          />
+          <div className="flex-1 min-w-0 w-full">
+            {/* Toolbar — search + filter chips */}
+            <div className="flex flex-col lg:flex-row gap-3 mb-6">
+              {/* Search */}
+              <div className="relative flex-1 lg:max-w-md">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search programmes by name…"
+                  className="w-full pl-10 pr-9 py-2.5 bg-card border border-border rounded-xl text-sm text-foreground placeholder:text-foreground-muted/60 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
+                />
+                {searchQuery && (
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteConfirmModal({ show: true, workflow });
-                    }}
-                    className="absolute top-3 right-3 z-10 p-1.5 rounded-md bg-error-muted text-error opacity-0 group-hover:opacity-100 hover:bg-error/20 transition-all"
-                    title="Delete workflow"
+                    onClick={() => setSearchQuery('')}
+                    aria-label="Clear search"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-background-secondary text-foreground-muted hover:text-foreground transition-colors"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <X className="w-3.5 h-3.5" />
                   </button>
+                )}
+              </div>
 
-                  <div
-                    onClick={() => router.push(`/workflow/${workflow._id}`)}
-                    className="cursor-pointer p-5"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors pr-8 truncate">
-                        {workflow.projectName}
-                      </h3>
-                    </div>
+              {/* Filter chips */}
+              <div className="flex gap-2 flex-wrap">
+                {filterChips.map((f) => {
+                  const Icon = f.icon;
+                  const active = statusFilter === f.key;
+                  return (
+                    <button
+                      key={f.key}
+                      onClick={() => setStatusFilter(f.key)}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all',
+                        active
+                          ? 'bg-foreground text-background shadow-sm'
+                          : 'bg-card border border-border text-foreground-muted hover:text-foreground hover:border-foreground/20'
+                      )}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {f.label}
+                      <span
+                        className={cn(
+                          'inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums',
+                          active
+                            ? 'bg-background/20 text-background'
+                            : 'bg-background-secondary text-foreground-muted'
+                        )}
+                      >
+                        {f.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-                    <div className={cn('badge gap-1 mb-3', badge.className)}>
-                      <BadgeIcon className="w-3 h-3" />
-                      {formatStatus(workflow.status)}
-                    </div>
+            {/* Workflow Grid */}
+            {workflows && workflows.length > 0 && visibleWorkflows.length > 0 ? (
+              <motion.div
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                initial="hidden"
+                animate="visible"
+                variants={{
+                  visible: { transition: { staggerChildren: 0.05 } },
+                }}
+              >
+                {visibleWorkflows.map((workflow) => {
+                  const progress = getProgressPercent(workflow);
+                  const badge = getStatusBadge(workflow.status);
+                  const BadgeIcon = badge.icon;
 
-                    {/* Current Step */}
-                    <div className="mb-4">
-                      <p className="text-xs text-foreground-muted mb-0.5">Current Step</p>
-                      <p className="text-sm font-medium text-foreground">
-                        {workflow.currentStep}. {STEP_NAMES[workflow.currentStep as WorkflowStep]}
-                      </p>
-                    </div>
-
-                    {/* Progress */}
-                    <div className="mb-4">
-                      <div className="flex justify-between text-xs mb-1.5">
-                        <span className="text-foreground-muted">Progress</span>
-                        <span className="font-medium text-foreground">{progress}%</span>
-                      </div>
-                      <div className="h-1.5 bg-background-secondary rounded-full overflow-hidden">
+                  return (
+                    <motion.div
+                      key={workflow._id}
+                      variants={{
+                        hidden: { opacity: 0, y: 12 },
+                        visible: { opacity: 1, y: 0 },
+                      }}
+                      className="card-interactive group relative overflow-hidden"
+                    >
+                      {/* Progress bar accent at top */}
+                      <div className="h-0.5 bg-border-subtle">
                         <div
-                          className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500"
+                          className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
                           style={{ width: `${progress}%` }}
                         />
                       </div>
-                    </div>
 
-                    {/* Step indicators */}
-                    <div className="flex gap-0.5 mb-4">
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((step) => {
-                        const stepProgress = workflow.stepProgress.find((p) => p.step === step);
-                        const isComplete =
-                          stepProgress?.status === 'completed' ||
-                          stepProgress?.status === 'approved';
-                        const isCurrent = workflow.currentStep === step;
+                      {/* Move to folder */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMoveModal({ show: true, workflow });
+                        }}
+                        className="absolute top-3 right-11 z-10 p-1.5 rounded-md bg-primary/10 text-primary opacity-0 group-hover:opacity-100 hover:bg-primary/20 transition-all"
+                        title="Move to folder"
+                      >
+                        <FolderOpen className="w-3.5 h-3.5" />
+                      </button>
 
-                        return (
-                          <div
-                            key={step}
-                            className={cn(
-                              'h-1 flex-1 rounded-full transition-colors',
-                              isComplete
-                                ? 'bg-primary'
-                                : isCurrent
-                                  ? 'bg-primary/40'
-                                  : 'bg-border-subtle'
-                            )}
-                          />
-                        );
-                      })}
-                    </div>
+                      {/* Admin-only: assign workflow to a faculty member */}
+                      {isAdmin && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAssignModal({ show: true, workflow });
+                            setAssignTargetId('');
+                          }}
+                          className="absolute top-3 right-[4.75rem] z-10 p-1.5 rounded-md bg-teal-50 text-teal-700 opacity-0 group-hover:opacity-100 hover:bg-teal-100 transition-all"
+                          title="Assign to faculty"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                        </button>
+                      )}
 
-                    {/* Metadata */}
-                    <div className="flex items-center justify-between text-[11px] text-foreground-muted">
-                      <span>Created {new Date(workflow.createdAt).toLocaleDateString()}</span>
-                      <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all text-primary" />
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        ) : workflows && workflows.length > 0 ? (
-          /* Filter / search returned nothing */
-          <div className="text-center py-20">
-            <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-background-secondary flex items-center justify-center">
-              <Search className="w-6 h-6 text-foreground-muted" />
-            </div>
-            <h3 className="text-base font-semibold text-foreground mb-1.5">No matches</h3>
-            <p className="text-sm text-foreground-muted mb-5 max-w-sm mx-auto">
-              {searchQuery
-                ? `Nothing matches "${searchQuery}"${statusFilter !== 'all' ? ' with that status' : ''}.`
-                : 'No programmes in this status yet.'}
-            </p>
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setStatusFilter('all');
-              }}
-              className="btn-secondary px-4 py-2 text-sm rounded-lg inline-flex items-center gap-2"
-            >
-              Clear filters
-            </button>
+                      {/* Delete button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteConfirmModal({ show: true, workflow });
+                        }}
+                        className="absolute top-3 right-3 z-10 p-1.5 rounded-md bg-error-muted text-error opacity-0 group-hover:opacity-100 hover:bg-error/20 transition-all"
+                        title="Delete workflow"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+
+                      <div
+                        onClick={() => router.push(`/workflow/${workflow._id}`)}
+                        className="cursor-pointer p-5"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors pr-8 truncate">
+                            {workflow.projectName}
+                          </h3>
+                        </div>
+
+                        <div className={cn('badge gap-1 mb-3', badge.className)}>
+                          <BadgeIcon className="w-3 h-3" />
+                          {formatStatus(workflow.status)}
+                        </div>
+
+                        {/* Current Step */}
+                        <div className="mb-4">
+                          <p className="text-xs text-foreground-muted mb-0.5">Current Step</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {workflow.currentStep}.{' '}
+                            {STEP_NAMES[workflow.currentStep as WorkflowStep]}
+                          </p>
+                        </div>
+
+                        {/* Progress */}
+                        <div className="mb-4">
+                          <div className="flex justify-between text-xs mb-1.5">
+                            <span className="text-foreground-muted">Progress</span>
+                            <span className="font-medium text-foreground">{progress}%</span>
+                          </div>
+                          <div className="h-1.5 bg-background-secondary rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Step indicators */}
+                        <div className="flex gap-0.5 mb-4">
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((step) => {
+                            const stepProgress = workflow.stepProgress.find((p) => p.step === step);
+                            const isComplete =
+                              stepProgress?.status === 'completed' ||
+                              stepProgress?.status === 'approved';
+                            const isCurrent = workflow.currentStep === step;
+
+                            return (
+                              <div
+                                key={step}
+                                className={cn(
+                                  'h-1 flex-1 rounded-full transition-colors',
+                                  isComplete
+                                    ? 'bg-primary'
+                                    : isCurrent
+                                      ? 'bg-primary/40'
+                                      : 'bg-border-subtle'
+                                )}
+                              />
+                            );
+                          })}
+                        </div>
+
+                        {/* Metadata */}
+                        <div className="flex items-center justify-between text-[11px] text-foreground-muted">
+                          <span>Created {new Date(workflow.createdAt).toLocaleDateString()}</span>
+                          <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all text-primary" />
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+            ) : workflows && workflows.length > 0 ? (
+              /* Filter / search returned nothing */
+              <div className="text-center py-20">
+                <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-background-secondary flex items-center justify-center">
+                  <Search className="w-6 h-6 text-foreground-muted" />
+                </div>
+                <h3 className="text-base font-semibold text-foreground mb-1.5">No matches</h3>
+                <p className="text-sm text-foreground-muted mb-5 max-w-sm mx-auto">
+                  {searchQuery
+                    ? `Nothing matches "${searchQuery}"${statusFilter !== 'all' ? ' with that status' : ''}.`
+                    : 'No programmes in this status yet.'}
+                </p>
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setStatusFilter('all');
+                  }}
+                  className="btn-secondary px-4 py-2 text-sm rounded-lg inline-flex items-center gap-2"
+                >
+                  Clear filters
+                </button>
+              </div>
+            ) : (
+              /* No workflows exist at all */
+              <div className="text-center py-24">
+                <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-primary/10 flex items-center justify-center">
+                  <FolderOpen className="w-8 h-8 text-primary" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">No workflows yet</h3>
+                <p className="text-sm text-foreground-muted mb-6 max-w-xs mx-auto">
+                  Create your first curriculum workflow to get started with AI-powered generation.
+                </p>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="btn-primary px-6 py-2.5 text-sm rounded-xl inline-flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Your First Curriculum
+                </button>
+              </div>
+            )}
           </div>
-        ) : (
-          /* No workflows exist at all */
-          <div className="text-center py-24">
-            <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <FolderOpen className="w-8 h-8 text-primary" />
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">No workflows yet</h3>
-            <p className="text-sm text-foreground-muted mb-6 max-w-xs mx-auto">
-              Create your first curriculum workflow to get started with AI-powered generation.
-            </p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="btn-primary px-6 py-2.5 text-sm rounded-xl inline-flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Create Your First Curriculum
-            </button>
-          </div>
-        )}
+        </div>
       </main>
 
       {/* Create Modal */}
@@ -874,6 +935,26 @@ export default function WorkflowListPage() {
           </motion.div>
         )}
       </AnimatePresence>
+      {/* Move-to-folder modal */}
+      {moveModal.show && moveModal.workflow && (
+        <MoveToFolderModal
+          workflowId={moveModal.workflow._id}
+          workflowName={moveModal.workflow.projectName}
+          currentFolderId={(moveModal.workflow as any).folderId || null}
+          folders={folders || []}
+          onClose={() => setMoveModal({ show: false })}
+          onMoved={() => refetchWorkflows()}
+        />
+      )}
+
+      {/* Share-folder dialog */}
+      {shareFolder && (
+        <ShareFolderDialog
+          folder={shareFolder}
+          onClose={() => setShareFolder(null)}
+          onSaved={() => refetchFolders()}
+        />
+      )}
     </div>
   );
 }
