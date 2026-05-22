@@ -131,6 +131,42 @@ export async function serveCachedExport(res: Response, opts: ExportCacheOptions)
   send(buffer, 'miss');
 }
 
+/**
+ * Fetch a cached export buffer if one exists and is still current (its
+ * stored content hash matches). Returns null on a miss, a stale entry,
+ * or when S3 is not configured.
+ *
+ * Lets one export reuse another's render: the PDF export pulls the
+ * already-cached Word `.docx` and only runs the docx→PDF conversion,
+ * skipping the per-section OpenAI reflow entirely.
+ */
+export async function getCachedExport(
+  workflowId: string,
+  artifact: string,
+  contentHash: string
+): Promise<Buffer | null> {
+  if (!config.s3.enabled) return null;
+  const key = `exports/${workflowId}/${artifact}`;
+  try {
+    const head = await getS3Client().send(
+      new HeadObjectCommand({ Bucket: config.s3.bucket, Key: key })
+    );
+    if (head.Metadata?.contenthash !== contentHash) return null;
+    const obj = await getS3Client().send(
+      new GetObjectCommand({ Bucket: config.s3.bucket, Key: key })
+    );
+    return await streamToBuffer(obj.Body as NodeJS.ReadableStream);
+  } catch (err: any) {
+    const code = err?.name || err?.Code;
+    const missing =
+      code === 'NotFound' || code === 'NoSuchKey' || err?.$metadata?.httpStatusCode === 404;
+    if (!missing) {
+      loggingService.warn('Export cache fetch failed', { workflowId, artifact, err });
+    }
+    return null;
+  }
+}
+
 /** S3 artifact filename for a per-step Word export. */
 export function stepExportArtifact(stepNumber: number, moduleIndex?: number): string {
   return moduleIndex !== undefined

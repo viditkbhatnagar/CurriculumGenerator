@@ -28,6 +28,7 @@ import { docxBufferToPdf } from '../services/pdfService';
 import { wordExportService } from '../services/wordExportService';
 import {
   serveCachedExport,
+  getCachedExport,
   hashExportInput,
   stepExportArtifact,
   stepExportContentHash,
@@ -5259,31 +5260,43 @@ router.get('/:id/export/pdf', async (req: Request, res: Response) => {
     // Generate filename
     const filename = `${workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}-${new Date().toISOString().split('T')[0]}.pdf`;
 
+    // The PDF and the Word export render from identical workflow data, so
+    // they share one content hash — letting the PDF reuse a cached .docx.
+    const exportContentHash = hashExportInput({
+      projectName: workflow.projectName,
+      step1: workflow.step1,
+      step2: workflow.step2,
+      step3: workflow.step3,
+      step4: workflow.step4,
+      step5: workflow.step5,
+      step6: workflow.step6,
+      step7: workflow.step7,
+      step8: workflow.step8,
+      step9: workflow.step9,
+      step10: workflow.step10,
+      step11: workflow.step11,
+      step12: workflow.step12,
+      step13: workflow.step13,
+    });
+
     // Cached in S3 — a re-download skips both the Word render (per-section
-    // OpenAI calls) and the LibreOffice conversion.
+    // OpenAI calls) and the docx→PDF conversion.
     await serveCachedExport(res, {
       workflowId: String(workflow._id),
       artifact: 'curriculum.pdf',
-      contentHash: hashExportInput({
-        projectName: workflow.projectName,
-        step1: workflow.step1,
-        step2: workflow.step2,
-        step3: workflow.step3,
-        step4: workflow.step4,
-        step5: workflow.step5,
-        step6: workflow.step6,
-        step7: workflow.step7,
-        step8: workflow.step8,
-        step9: workflow.step9,
-        step10: workflow.step10,
-        step11: workflow.step11,
-        step12: workflow.step12,
-        step13: workflow.step13,
-      }),
+      contentHash: exportContentHash,
       contentType: 'application/pdf',
       filename,
       generate: async () => {
-        const wordBuffer = await wordExportService.generateDocument(workflowData);
+        // Reuse the already-cached Word render if the curriculum hasn't
+        // changed since — this skips every per-section OpenAI call and
+        // leaves only the fast docx→PDF conversion.
+        const cachedDocx = await getCachedExport(
+          String(workflow._id),
+          'full-word.docx',
+          exportContentHash
+        );
+        const wordBuffer = cachedDocx || (await wordExportService.generateDocument(workflowData));
         // Word → HTML (mammoth) → PDF (Puppeteer). Render's runtime has
         // no LibreOffice, so the old libreoffice-convert path 500'd here.
         return docxBufferToPdf(wordBuffer);
