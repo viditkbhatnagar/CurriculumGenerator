@@ -367,6 +367,12 @@ class WorkflowService {
 
     workflow.status = completenessScore >= 70 ? 'step1_complete' : 'step1_pending';
 
+    // Keep the workflow's display name (shown in the header and the
+    // dashboard) in sync with the program title entered in Step 1.
+    if (input.programTitle && input.programTitle.trim()) {
+      workflow.projectName = input.programTitle.trim();
+    }
+
     await workflow.save();
 
     loggingService.info('Step 1 processed', {
