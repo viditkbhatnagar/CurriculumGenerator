@@ -69,6 +69,9 @@ export default function PPTGenerationPage() {
         {},
         {
           responseType: 'blob',
+          // PPT generation runs synchronously and takes a few minutes
+          // (LLM slide structure + .pptx build) — override the 60s default.
+          timeout: 900000,
         }
       );
 
@@ -119,6 +122,8 @@ export default function PPTGenerationPage() {
         {},
         {
           responseType: 'blob',
+          // All modules generated in one request — can run many minutes.
+          timeout: 1800000,
         }
       );
 
@@ -304,7 +309,9 @@ export default function PPTGenerationPage() {
 
         {/* Module List */}
         <div className="bg-white rounded-xl border border-teal-200/50 p-6 shadow-sm">
-          <h2 className="text-xl font-bold text-teal-800 mb-4">Modules ({validation.moduleCount})</h2>
+          <h2 className="text-xl font-bold text-teal-800 mb-4">
+            Modules ({validation.moduleCount})
+          </h2>
 
           <div className="space-y-3">
             {validation.modules.map((module) => {
