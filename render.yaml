@@ -38,6 +38,9 @@ services:
     plan: free
     branch: main
     rootDir: packages/backend
+    # `npm install` runs the postinstall hook, which downloads Chromium
+    # into the project-local cache (see packages/backend/.puppeteerrc.cjs)
+    # so Puppeteer-based PDF/PPT export works at runtime.
     buildCommand: npm install --production=false
     startCommand: npx tsx src/index.ts
     envVars:

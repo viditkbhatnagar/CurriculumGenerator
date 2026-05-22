@@ -46,3 +46,6 @@ Thumbs.db
 # Misc
 *.pem
 .turbo/
+
+# Puppeteer Chromium download (see packages/backend/.puppeteerrc.cjs)
+.cache/
