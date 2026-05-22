@@ -6,7 +6,7 @@
     "dev": "tsx watch src/index.ts",
     "dev:worker": "tsx watch src/worker.ts",
     "build": "tsc",
-    "postinstall": "puppeteer browsers install chrome",
+    "postinstall": "puppeteer browsers install chrome || echo 'Chromium download skipped (PPT export may be affected)'",
     "start": "node dist/index.js",
     "start:worker": "node dist/worker.js",
     "worker": "node dist/worker.js",
