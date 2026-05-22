@@ -1,12 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { useDroppable } from '@dnd-kit/core';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import type { Folder } from '@/hooks/useFolders';
 import { FolderPlus, ChevronRight, MoreHorizontal, Layers, Inbox } from 'lucide-react';
 
 const FOLDER_COLORS = ['#0f766e', '#7c3aed', '#dc2626', '#ea580c', '#2563eb', '#16a34a', '#64748b'];
+
+/** A drop target — highlights when a workflow card is dragged onto it. */
+function DroppableZone({ id, children }: { id: string; children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn('rounded-lg transition-shadow', isOver && 'ring-2 ring-primary ring-inset')}
+    >
+      {children}
+    </div>
+  );
+}
 
 interface FolderSidebarProps {
   folders: Folder[];
@@ -110,107 +124,112 @@ export default function FolderSidebar({
     const active = selectedFolderId === folder.id;
     return (
       <div key={folder.id}>
-        <div
-          className={cn(
-            'group flex items-center gap-0.5 rounded-lg pr-0.5 transition-colors',
-            active ? 'bg-primary/10' : 'hover:bg-background-secondary'
-          )}
-          style={{ paddingLeft: `${depth * 14}px` }}
-        >
-          <button
-            onClick={() => setExpanded((e) => ({ ...e, [folder.id]: !isOpen }))}
-            className={cn('p-0.5 shrink-0 text-foreground-muted', kids.length === 0 && 'invisible')}
-            aria-label={isOpen ? 'Collapse' : 'Expand'}
-          >
-            <ChevronRight
-              className={cn('w-3.5 h-3.5 transition-transform', isOpen && 'rotate-90')}
-            />
-          </button>
-          <button
-            onClick={() => onSelect(folder.id)}
-            className="flex-1 flex items-center gap-1.5 py-1.5 min-w-0 text-left"
-          >
-            <span
-              className="w-2.5 h-2.5 rounded-sm shrink-0"
-              style={{ background: folder.color || '#64748b' }}
-            />
-            <span
-              className={cn(
-                'text-sm truncate',
-                active ? 'text-foreground font-medium' : 'text-foreground-muted'
-              )}
-            >
-              {folder.name}
-            </span>
-            <span className="ml-auto text-[10px] text-foreground-muted/70 tabular-nums pl-1">
-              {counts.byFolder[folder.id] || 0}
-            </span>
-          </button>
-          <div className="relative shrink-0">
-            <button
-              onClick={() => setMenuFor(menuFor === folder.id ? null : folder.id)}
-              className="p-1 rounded text-foreground-muted opacity-0 group-hover:opacity-100 hover:bg-background-secondary transition-opacity"
-              aria-label="Folder actions"
-            >
-              <MoreHorizontal className="w-3.5 h-3.5" />
-            </button>
-            {menuFor === folder.id && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setMenuFor(null)} />
-                <div className="absolute right-0 top-7 z-20 w-44 bg-card border border-border rounded-lg shadow-lg py-1 text-sm">
-                  <button
-                    onClick={() => createFolder(folder.id)}
-                    disabled={busy}
-                    className="w-full px-3 py-1.5 text-left text-foreground hover:bg-background-secondary"
-                  >
-                    New subfolder
-                  </button>
-                  {folder.isOwner && (
-                    <>
-                      <button
-                        onClick={() => renameFolder(folder)}
-                        disabled={busy}
-                        className="w-full px-3 py-1.5 text-left text-foreground hover:bg-background-secondary"
-                      >
-                        Rename
-                      </button>
-                      <button
-                        onClick={() => {
-                          setMenuFor(null);
-                          onShare(folder);
-                        }}
-                        className="w-full px-3 py-1.5 text-left text-foreground hover:bg-background-secondary"
-                      >
-                        Share…
-                      </button>
-                      <div className="flex items-center gap-1.5 px-3 py-1.5">
-                        {FOLDER_COLORS.map((c) => (
-                          <button
-                            key={c}
-                            onClick={() => recolorFolder(folder, c)}
-                            className={cn(
-                              'w-4 h-4 rounded-sm border',
-                              folder.color === c ? 'border-foreground' : 'border-transparent'
-                            )}
-                            style={{ background: c }}
-                            aria-label={`Set colour ${c}`}
-                          />
-                        ))}
-                      </div>
-                      <button
-                        onClick={() => deleteFolder(folder)}
-                        disabled={busy}
-                        className="w-full px-3 py-1.5 text-left text-error hover:bg-error-muted"
-                      >
-                        Delete
-                      </button>
-                    </>
-                  )}
-                </div>
-              </>
+        <DroppableZone id={`folder:${folder.id}`}>
+          <div
+            className={cn(
+              'group flex items-center gap-0.5 rounded-lg pr-0.5 transition-colors',
+              active ? 'bg-primary/10' : 'hover:bg-background-secondary'
             )}
+            style={{ paddingLeft: `${depth * 14}px` }}
+          >
+            <button
+              onClick={() => setExpanded((e) => ({ ...e, [folder.id]: !isOpen }))}
+              className={cn(
+                'p-0.5 shrink-0 text-foreground-muted',
+                kids.length === 0 && 'invisible'
+              )}
+              aria-label={isOpen ? 'Collapse' : 'Expand'}
+            >
+              <ChevronRight
+                className={cn('w-3.5 h-3.5 transition-transform', isOpen && 'rotate-90')}
+              />
+            </button>
+            <button
+              onClick={() => onSelect(folder.id)}
+              className="flex-1 flex items-center gap-1.5 py-1.5 min-w-0 text-left"
+            >
+              <span
+                className="w-2.5 h-2.5 rounded-sm shrink-0"
+                style={{ background: folder.color || '#64748b' }}
+              />
+              <span
+                className={cn(
+                  'text-sm truncate',
+                  active ? 'text-foreground font-medium' : 'text-foreground-muted'
+                )}
+              >
+                {folder.name}
+              </span>
+              <span className="ml-auto text-[10px] text-foreground-muted/70 tabular-nums pl-1">
+                {counts.byFolder[folder.id] || 0}
+              </span>
+            </button>
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setMenuFor(menuFor === folder.id ? null : folder.id)}
+                className="p-1 rounded text-foreground-muted opacity-0 group-hover:opacity-100 hover:bg-background-secondary transition-opacity"
+                aria-label="Folder actions"
+              >
+                <MoreHorizontal className="w-3.5 h-3.5" />
+              </button>
+              {menuFor === folder.id && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuFor(null)} />
+                  <div className="absolute right-0 top-7 z-20 w-44 bg-card border border-border rounded-lg shadow-lg py-1 text-sm">
+                    <button
+                      onClick={() => createFolder(folder.id)}
+                      disabled={busy}
+                      className="w-full px-3 py-1.5 text-left text-foreground hover:bg-background-secondary"
+                    >
+                      New subfolder
+                    </button>
+                    {folder.isOwner && (
+                      <>
+                        <button
+                          onClick={() => renameFolder(folder)}
+                          disabled={busy}
+                          className="w-full px-3 py-1.5 text-left text-foreground hover:bg-background-secondary"
+                        >
+                          Rename
+                        </button>
+                        <button
+                          onClick={() => {
+                            setMenuFor(null);
+                            onShare(folder);
+                          }}
+                          className="w-full px-3 py-1.5 text-left text-foreground hover:bg-background-secondary"
+                        >
+                          Share…
+                        </button>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5">
+                          {FOLDER_COLORS.map((c) => (
+                            <button
+                              key={c}
+                              onClick={() => recolorFolder(folder, c)}
+                              className={cn(
+                                'w-4 h-4 rounded-sm border',
+                                folder.color === c ? 'border-foreground' : 'border-transparent'
+                              )}
+                              style={{ background: c }}
+                              aria-label={`Set colour ${c}`}
+                            />
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => deleteFolder(folder)}
+                          disabled={busy}
+                          className="w-full px-3 py-1.5 text-left text-error hover:bg-error-muted"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        </DroppableZone>
         {isOpen && kids.map((k) => renderFolder(k, depth + 1))}
       </div>
     );
@@ -248,19 +267,21 @@ export default function FolderSidebar({
           All workflows
           <span className="ml-auto text-[10px] tabular-nums">{counts.all}</span>
         </button>
-        <button
-          onClick={() => onSelect('unfiled')}
-          className={cn(
-            'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors',
-            selectedFolderId === 'unfiled'
-              ? 'bg-primary/10 text-foreground font-medium'
-              : 'text-foreground-muted hover:bg-background-secondary'
-          )}
-        >
-          <Inbox className="w-4 h-4 shrink-0" />
-          Unfiled
-          <span className="ml-auto text-[10px] tabular-nums">{counts.unfiled}</span>
-        </button>
+        <DroppableZone id="unfiled">
+          <button
+            onClick={() => onSelect('unfiled')}
+            className={cn(
+              'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors',
+              selectedFolderId === 'unfiled'
+                ? 'bg-primary/10 text-foreground font-medium'
+                : 'text-foreground-muted hover:bg-background-secondary'
+            )}
+          >
+            <Inbox className="w-4 h-4 shrink-0" />
+            Unfiled
+            <span className="ml-auto text-[10px] tabular-nums">{counts.unfiled}</span>
+          </button>
+        </DroppableZone>
 
         <div className="my-2 border-t border-border/50" />
 

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@curriculum-app/shared-types": "*",
+    "@dnd-kit/core": "^6.3.1",
     "@tanstack/react-query": "^5.14.2",
     "autoprefixer": "^10.4.16",
     "axios": "^1.6.2",
