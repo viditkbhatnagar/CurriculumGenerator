@@ -18,11 +18,16 @@ router.get('/health', async (req, res) => {
 
     // Instance memory — surfaces the actual Render plan size (a `free`
     // 512 MB instance vs. a paid 2 GB one) for ops/debugging.
+    // constrainedMemory() is the cgroup/container limit (the real cap);
+    // os.totalmem() only sees the much larger host machine.
     const mb = (n: number) => Math.round(n / 1024 / 1024);
+    const constrained =
+      typeof process.constrainedMemory === 'function' ? process.constrainedMemory() : 0;
     res.status(statusCode).json({
       ...healthStatus,
       memory: {
-        instanceTotalMB: mb(os.totalmem()),
+        containerLimitMB: constrained ? mb(constrained) : null,
+        hostTotalMB: mb(os.totalmem()),
         processRssMB: mb(process.memoryUsage().rss),
       },
     });
