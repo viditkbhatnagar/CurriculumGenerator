@@ -666,6 +666,7 @@ export interface ICurriculumWorkflow extends Document {
   // Identity
   projectName: string;
   createdBy: mongoose.Types.ObjectId;
+  folderId?: mongoose.Types.ObjectId | null;
 
   // Current State
   currentStep: number; // 1-14
@@ -1247,6 +1248,15 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
+      index: true,
+    },
+
+    // Optional dashboard folder — see the Folder model. Nullable: a
+    // workflow with no folderId is "unfiled".
+    folderId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Folder',
+      default: null,
       index: true,
     },
 

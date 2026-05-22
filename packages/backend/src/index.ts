@@ -38,6 +38,7 @@ import newWorkflowRoutes from './routes/newWorkflowRoutes';
 import workflowRoutes from './routes/workflowRoutes';
 import archiveRoutes from './routes/archiveRoutes';
 import fileRoutes from './routes/fileRoutes';
+import folderRoutes from './routes/folderRoutes';
 import step7StreamRoutes from './routes/step7StreamRoutes';
 import pptRoutes from './routes/pptRoutes';
 import standaloneRoutes from './routes/standaloneRoutes';
@@ -252,6 +253,9 @@ app.use('/api/v3/standalone', standaloneRoutes);
 app.use('/api/v3/archive', archiveRoutes);
 // SME source-file uploads stored in MongoDB GridFS
 app.use('/api/v3/files', fileRoutes);
+
+// Dashboard folder organization (workflows into folders)
+app.use('/api/v3/folders', folderRoutes);
 
 // Sentry error handler (must be before other error handlers)
 app.use(errorTrackingService.getErrorHandler());

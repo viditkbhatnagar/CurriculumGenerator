@@ -24,6 +24,7 @@ import { validateJWT, loadUser } from '../middleware/auth';
 import { workflowService } from '../services/workflowService';
 import { loggingService } from '../services/loggingService';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
+import Folder from '../models/Folder';
 import { wordExportService } from '../services/wordExportService';
 import {
   serveCachedExport,
@@ -279,7 +280,7 @@ router.get('/', validateJWT, loadUser, async (req: Request, res: Response) => {
     if (step) query.currentStep = parseInt(step as string);
 
     const workflows = await CurriculumWorkflow.find(query)
-      .select('projectName currentStep status createdAt updatedAt stepProgress createdBy')
+      .select('projectName currentStep status createdAt updatedAt stepProgress createdBy folderId')
       .sort({ updatedAt: -1 });
 
     res.json({
@@ -293,6 +294,32 @@ router.get('/', validateJWT, loadUser, async (req: Request, res: Response) => {
       success: false,
       error: 'Failed to fetch workflows',
     });
+  }
+});
+
+/**
+ * PATCH /api/v3/workflow/:id/folder
+ * Move a workflow into a folder (or out of one, with folderId = null).
+ */
+router.patch('/:id/folder', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { folderId } = req.body;
+    const workflow = await CurriculumWorkflow.findById(id).select('_id');
+    if (!workflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    if (folderId) {
+      const folder = await Folder.findById(folderId);
+      if (!folder) {
+        return res.status(400).json({ success: false, error: 'Folder not found' });
+      }
+    }
+    await CurriculumWorkflow.updateOne({ _id: id }, { $set: { folderId: folderId || null } });
+    res.json({ success: true, data: { id, folderId: folderId || null } });
+  } catch (error) {
+    loggingService.error('Error moving workflow to folder', { error });
+    res.status(500).json({ success: false, error: 'Failed to move workflow to folder' });
   }
 });
 
