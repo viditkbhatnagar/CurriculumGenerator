@@ -5,6 +5,9 @@
  * generated Word document is converted to HTML with `mammoth` and then
  * printed to PDF with the bundled Chromium via Puppeteer — both already
  * dependencies used elsewhere in the backend (PPT generation).
+ *
+ * Each stage is logged separately so a failure points at the culprit
+ * (mammoth parse vs. Chromium launch vs. PDF print) in the Render logs.
  */
 import mammoth from 'mammoth';
 import puppeteer from 'puppeteer';
@@ -33,29 +36,65 @@ const PAGE_STYLES = `
 
 /**
  * Convert a .docx buffer to a PDF buffer (A4, sensible print margins).
+ *
+ * The Chromium flags below keep memory low enough for Render's free
+ * 512 MB instances: `--disable-dev-shm-usage` is essential — containers
+ * give /dev/shm only ~64 MB and Chromium otherwise crashes mid-render.
  */
 export async function docxBufferToPdf(docxBuffer: Buffer): Promise<Buffer> {
-  const { value: bodyHtml, messages } = await mammoth.convertToHtml({ buffer: docxBuffer });
-  if (messages && messages.length) {
-    loggingService.info('mammoth docx→html conversion notes', { count: messages.length });
+  // Stage 1 — docx → HTML.
+  let bodyHtml: string;
+  try {
+    const result = await mammoth.convertToHtml({ buffer: docxBuffer });
+    bodyHtml = result.value;
+    if (result.messages && result.messages.length) {
+      loggingService.info('mammoth docx→html conversion notes', {
+        count: result.messages.length,
+      });
+    }
+  } catch (err) {
+    loggingService.error('PDF export failed at mammoth docx→html stage', { err });
+    throw err;
   }
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${PAGE_STYLES}</style></head><body>${bodyHtml}</body></html>`;
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+  // Stage 2 — launch Chromium.
+  let browser: Awaited<ReturnType<typeof puppeteer.launch>>;
+  try {
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
+      // Guard against a Chromium hang wedging the request indefinitely.
+      protocolTimeout: 180000,
+    });
+  } catch (err) {
+    loggingService.error('PDF export failed to launch Chromium', { err });
+    throw err;
+  }
+
+  // Stage 3 — render the HTML and print to PDF.
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    await page.setContent(html, { waitUntil: 'load', timeout: 120000 });
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: { top: '20mm', bottom: '20mm', left: '18mm', right: '18mm' },
     });
+    loggingService.info('PDF export rendered', { bytes: pdf.length });
     return Buffer.from(pdf);
+  } catch (err) {
+    loggingService.error('PDF export failed during Chromium render', { err });
+    throw err;
   } finally {
-    await browser.close();
+    await browser.close().catch(() => {
+      /* browser may already be gone — nothing to clean up */
+    });
   }
 }
