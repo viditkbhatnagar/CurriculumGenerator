@@ -5313,6 +5313,7 @@ router.get('/:id/export/pdf', async (req: Request, res: Response) => {
       success: false,
       error: 'Failed to export PDF document.',
       fallback: 'Please try again, or use the Word export instead.',
+      detail: error instanceof Error ? error.message : String(error),
     });
   }
 });
