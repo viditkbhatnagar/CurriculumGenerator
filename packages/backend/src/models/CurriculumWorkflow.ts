@@ -1215,6 +1215,15 @@ export interface ICurriculumWorkflow extends Document {
     reviewTimeMinutes?: number;
   }>;
 
+  // Step version history — pointers to S3/GridFS-stored JSON snapshots
+  // taken before each regeneration so a prior version can be restored.
+  stepVersions?: Array<{
+    step: number;
+    fileId: string;
+    savedAt: Date;
+    sizeBytes?: number;
+  }>;
+
   // Timeline
   createdAt: Date;
   updatedAt: Date;
@@ -1417,6 +1426,16 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
         approvedAt: Date,
         approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
         reviewTimeMinutes: Number,
+      },
+    ],
+
+    // Step version history — small pointers; snapshot JSON lives in S3/GridFS.
+    stepVersions: [
+      {
+        step: { type: Number, required: true },
+        fileId: { type: String, required: true },
+        savedAt: { type: Date, default: Date.now },
+        sizeBytes: Number,
       },
     ],
 
