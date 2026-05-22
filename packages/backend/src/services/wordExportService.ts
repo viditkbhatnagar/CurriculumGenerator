@@ -3015,65 +3015,78 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       13: 'Summative Exam',
     };
 
-    const generateStep = async (stepNum: number, fn: () => Promise<void>) => {
-      reportProgress(
-        `Step ${stepNum}: ${stepNames[stepNum]}`,
-        `Formatting ${stepNames[stepNum].toLowerCase()} (${sectionsCompleted + 1}/${totalSections})...`
-      );
-      await fn();
-      sectionsCompleted++;
-      reportProgress(
-        `Step ${stepNum}: ${stepNames[stepNum]}`,
-        `✓ Step ${stepNum} formatted (${sectionsCompleted}/${totalSections})`
-      );
+    // Each step section renders into its own children array so the
+    // per-section OpenAI reflow calls run concurrently rather than one
+    // step after another. Promise.all preserves input order, so the
+    // arrays are concatenated back in document order afterwards. The
+    // rendered document is byte-identical to the sequential version.
+    const sectionBuilders: Array<{ step: number; build: (out: any[]) => Promise<void> }> = [];
+    const addSection = (step: number, build: (out: any[]) => Promise<void>) => {
+      sectionBuilders.push({ step, build });
     };
 
     if (workflow.step1) {
-      await generateStep(1, () => this.generateStep1Section(workflow.step1, contentChildren));
+      addSection(1, (out) => this.generateStep1Section(workflow.step1, out));
     }
     if (workflow.step2) {
-      await generateStep(2, () => this.generateStep2Section(workflow.step2, contentChildren));
+      addSection(2, (out) => this.generateStep2Section(workflow.step2, out));
     }
     if (workflow.step3?.outcomes?.length) {
-      await generateStep(3, () =>
-        this.generateStep3Section(workflow.step3, contentChildren, kscMap)
-      );
+      addSection(3, (out) => this.generateStep3Section(workflow.step3, out, kscMap));
     }
     if (workflow.step4?.modules?.length) {
-      await generateStep(4, () =>
-        this.generateStep4Section(workflow.step4, contentChildren, kscMap)
-      );
+      addSection(4, (out) => this.generateStep4Section(workflow.step4, out, kscMap));
     }
     if (workflow.step5?.sources?.length) {
-      await generateStep(5, () => this.generateStep5Section(workflow.step5, contentChildren));
+      addSection(5, (out) => this.generateStep5Section(workflow.step5, out));
     }
     if (workflow.step6) {
-      await generateStep(6, () => this.generateStep6Section(workflow.step6, contentChildren));
+      addSection(6, (out) => this.generateStep6Section(workflow.step6, out));
     }
     if (
       workflow.step7?.formativeAssessments?.length ||
       workflow.step7?.summativeAssessments?.length ||
       workflow.step7?.sampleQuestions
     ) {
-      await generateStep(7, () => this.generateStep7Section(workflow.step7, contentChildren));
+      addSection(7, (out) => this.generateStep7Section(workflow.step7, out));
     }
     if (workflow.step8?.caseStudies?.length) {
-      await generateStep(8, () => this.generateStep8Section(workflow.step8, contentChildren));
+      addSection(8, (out) => this.generateStep8Section(workflow.step8, out));
     }
     if (workflow.step9?.terms?.length || workflow.step9?.glossaryTerms?.length) {
-      await generateStep(9, () => this.generateStep9Section(workflow.step9, contentChildren));
+      addSection(9, (out) => this.generateStep9Section(workflow.step9, out));
     }
     if (workflow.step10) {
-      await generateStep(10, () => this.generateStep10Section(workflow.step10, contentChildren));
+      addSection(10, (out) => this.generateStep10Section(workflow.step10, out));
     }
     if (workflow.step11) {
-      await generateStep(11, () => this.generateStep11Section(workflow.step11, contentChildren));
+      addSection(11, (out) => this.generateStep11Section(workflow.step11, out));
     }
     if (workflow.step12) {
-      await generateStep(12, () => this.generateStep12Section(workflow.step12, contentChildren));
+      addSection(12, (out) => this.generateStep12Section(workflow.step12, out));
     }
     if (workflow.step13) {
-      await generateStep(13, () => this.generateStep13Section(workflow.step13, contentChildren));
+      addSection(13, (out) => this.generateStep13Section(workflow.step13, out));
+    }
+
+    const sectionResults = await Promise.all(
+      sectionBuilders.map(async ({ step, build }) => {
+        reportProgress(
+          `Step ${step}: ${stepNames[step]}`,
+          `Formatting ${stepNames[step].toLowerCase()}...`
+        );
+        const children: any[] = [];
+        await build(children);
+        sectionsCompleted++;
+        reportProgress(
+          `Step ${step}: ${stepNames[step]}`,
+          `✓ Step ${step} formatted (${sectionsCompleted}/${totalSections})`
+        );
+        return children;
+      })
+    );
+    for (const children of sectionResults) {
+      for (const child of children) contentChildren.push(child);
     }
 
     // =========================================================================
