@@ -11,11 +11,11 @@ import {
   MLO,
   BloomLevel,
   BLOOM_LEVELS,
-  BLOOM_VERBS,
   ModulePhase,
 } from '@/types/workflow';
 import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
+import BloomVerbPicker from './BloomVerbPicker';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -307,16 +307,7 @@ function MLOEditModal({
           {/* Verb */}
           <div>
             <label className="block text-sm font-medium text-teal-700 mb-2">Bloom's Verb</label>
-            <input
-              type="text"
-              value={verb}
-              onChange={(e) => setVerb(e.target.value)}
-              className="w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500"
-              placeholder="e.g., analyze, evaluate, design"
-            />
-            <p className="text-xs text-teal-500 mt-1">
-              Suggested verbs for {bloomLevel}: {BLOOM_VERBS[bloomLevel]?.slice(0, 12).join(', ')}
-            </p>
+            <BloomVerbPicker bloomLevel={bloomLevel} value={verb} onChange={setVerb} />
           </div>
 
           {/* Linked PLOs (read-only) */}
