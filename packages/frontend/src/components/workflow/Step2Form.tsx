@@ -1138,10 +1138,10 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
           <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
               onClick={handleGenerate}
-              disabled={isCurrentlyGenerating}
+              disabled={submitStep2.isPending}
               className="px-4 py-2 text-teal-600 hover:text-teal-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {isCurrentlyGenerating ? (
+              {submitStep2.isPending ? (
                 <>
                   <span className="w-3.5 h-3.5 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
                   Regenerating…
