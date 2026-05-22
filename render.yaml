@@ -1,5 +1,8 @@
 # Render Blueprint for Curriculum Generator App
-# Two public web services on free tier
+# Two public web services. The `plan` values below must match the paid
+# plans in the Render dashboard — otherwise a Blueprint sync downgrades
+# the live services (a `free` plan here silently caps a paid instance at
+# 512 MB RAM, which OOM-crashes the curriculum exports).
 
 services:
   # ===========================================
@@ -9,7 +12,7 @@ services:
     name: curriculum-frontend
     runtime: node
     region: oregon
-    plan: free
+    plan: starter
     branch: main
     rootDir: packages/frontend
     buildCommand: npm install --production=false && npm run build
@@ -35,7 +38,9 @@ services:
     name: curriculum-api
     runtime: node
     region: oregon
-    plan: free
+    # standard = 2 GB RAM (the $25 plan). Must not be `free`, or the
+    # Blueprint caps this paid service at 512 MB and exports OOM-crash it.
+    plan: standard
     branch: main
     rootDir: packages/backend
     # `npm install` runs the postinstall hook, which downloads Chromium
