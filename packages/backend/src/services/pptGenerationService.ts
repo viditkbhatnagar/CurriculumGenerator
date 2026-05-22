@@ -228,6 +228,47 @@ export class PPTGenerationService {
       ? moduleData.topics.map((t: any) => `${t.title} (${t.hours}h)`)
       : [];
 
+    // Step 10 lesson plans for THIS module — the PPT must convert these
+    // actual lessons, so edits to the lesson plans flow through to the PPT.
+    const moduleLessonPlan = Array.isArray(curriculumData.step10?.moduleLessonPlans)
+      ? curriculumData.step10.moduleLessonPlans.find(
+          (mlp: any) => mlp.moduleId === moduleData.id || mlp.moduleCode === moduleCode
+        )
+      : null;
+    const lessons = Array.isArray(moduleLessonPlan?.lessons) ? moduleLessonPlan.lessons : [];
+    const lessonPlanSection =
+      lessons.length > 0
+        ? lessons
+            .map((l: any, i: number) => {
+              const objectives = Array.isArray(l.objectives) ? l.objectives : [];
+              const activities = Array.isArray(l.activities) ? l.activities : [];
+              const checks = Array.isArray(l.formativeChecks) ? l.formativeChecks : [];
+              const objLines =
+                objectives
+                  .map((o: any) => `    - ${typeof o === 'string' ? o : JSON.stringify(o)}`)
+                  .join('\n') || '    - Not specified';
+              const actLines =
+                activities
+                  .map(
+                    (a: any) =>
+                      `    - [${a.type || 'activity'}] ${a.title || ''}${a.description ? `: ${a.description}` : ''}`
+                  )
+                  .join('\n') || '    - Not specified';
+              const checkLines =
+                checks
+                  .map((c: any) => `    - [${c.type || 'check'}] ${c.question || ''}`)
+                  .join('\n') || '    - Not specified';
+              return `LESSON ${l.lessonNumber || i + 1}: ${l.lessonTitle || 'Untitled'} (${l.duration || 'N/A'}) [Bloom: ${l.bloomLevel || 'N/A'}]
+  Objectives:
+${objLines}
+  Activities:
+${actLines}
+  Formative Checks:
+${checkLines}`;
+            })
+            .join('\n\n')
+        : '';
+
     return `You are an academic self-study teaching-materials production engine. Your task is to generate DELIVERY-READY POWERPOINT CONTENT at the LESSON LEVEL for the module provided.
 
 DO NOT invent new lessons. DO NOT merge or split lessons. DO NOT introduce new learning outcomes or content.
@@ -282,6 +323,17 @@ ${
         .map((a: any) => `- ${a.type}: ${a.title} (${a.hours}h)`)
         .join('\n')
     : 'Not specified'
+}
+
+${
+  lessonPlanSection
+    ? `**STEP 10 LESSON PLANS — CONVERT THESE EXACT LESSONS (${lessons.length} lessons):**
+Generate ONE PPT per lesson listed below, in this order. Each lesson's
+title, duration, objectives, activities and formative checks are the
+source of truth — do not invent, merge or rename lessons.
+
+${lessonPlanSection}`
+    : '**LESSON PLANS:** Not available — derive lessons from the module topics above.'
 }
 
 **PPT SCOPE & LENGTH:**
