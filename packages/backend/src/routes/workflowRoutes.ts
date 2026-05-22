@@ -5298,9 +5298,8 @@ router.get('/:id/export/pdf', async (req: Request, res: Response) => {
     loggingService.error('Error exporting PDF document', { error });
     res.status(500).json({
       success: false,
-      error: 'Failed to export PDF document. LibreOffice conversion may not be available.',
-      fallback:
-        'Please use Word export and convert manually, or install LibreOffice for PDF conversion.',
+      error: 'Failed to export PDF document.',
+      fallback: 'Please try again, or use the Word export instead.',
     });
   }
 });
