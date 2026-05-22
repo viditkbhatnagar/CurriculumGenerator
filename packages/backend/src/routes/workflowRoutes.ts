@@ -17,8 +17,6 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { promisify } from 'util';
-import libreofficeConvert from 'libreoffice-convert';
 import JSZip from 'jszip';
 import { validateJWT, loadUser } from '../middleware/auth';
 import { workflowService } from '../services/workflowService';
@@ -26,6 +24,7 @@ import { loggingService } from '../services/loggingService';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import Folder from '../models/Folder';
 import { snapshotStep, loadSnapshot } from '../services/stepVersionService';
+import { docxBufferToPdf } from '../services/pdfService';
 import { wordExportService } from '../services/wordExportService';
 import {
   serveCachedExport,
@@ -5285,9 +5284,9 @@ router.get('/:id/export/pdf', async (req: Request, res: Response) => {
       filename,
       generate: async () => {
         const wordBuffer = await wordExportService.generateDocument(workflowData);
-        // Convert Word → PDF via LibreOffice.
-        const convertAsync = promisify(libreofficeConvert.convert);
-        return (await convertAsync(wordBuffer, '.pdf', undefined)) as Buffer;
+        // Word → HTML (mammoth) → PDF (Puppeteer). Render's runtime has
+        // no LibreOffice, so the old libreoffice-convert path 500'd here.
+        return docxBufferToPdf(wordBuffer);
       },
     });
 
