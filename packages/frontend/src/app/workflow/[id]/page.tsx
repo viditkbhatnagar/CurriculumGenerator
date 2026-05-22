@@ -29,6 +29,7 @@ import Step12View from '@/components/workflow/Step12View';
 import Step13View from '@/components/workflow/Step13View';
 import Step14View from '@/components/workflow/Step14View';
 import FinalReviewView from '@/components/workflow/FinalReviewView';
+import StepVersionHistory from '@/components/workflow/StepVersionHistory';
 import CanvasChatbot from '@/components/workflow/CanvasChatbot';
 import { EditTarget } from '@/components/workflow/EditWithAIButton';
 import UserMenu from '@/components/auth/UserMenu';
@@ -573,16 +574,27 @@ export default function WorkflowDetailPage() {
         <main className="flex-1 min-w-0">
           {/* Step Header */}
           <div className="bg-white rounded-xl border border-teal-200/50 p-6 mb-6 shadow-sm">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-100 to-teal-50 flex items-center justify-center text-teal-600">
-                {STEP_ICONS[currentStep]}
+            <div className="flex items-center justify-between gap-4 mb-4">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-100 to-teal-50 flex items-center justify-center text-teal-600 shrink-0">
+                  {STEP_ICONS[currentStep]}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-xl font-bold text-teal-800">
+                    Step {currentStep}: {STEP_NAMES[currentStep]}
+                  </h2>
+                  <p className="text-teal-600">{STEP_DESCRIPTIONS[currentStep]}</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-teal-800">
-                  Step {currentStep}: {STEP_NAMES[currentStep]}
-                </h2>
-                <p className="text-teal-600">{STEP_DESCRIPTIONS[currentStep]}</p>
-              </div>
+              {/* Version history — snapshots are taken before each
+                  regeneration of steps 1-9, so a prior version can be restored. */}
+              {currentStep <= 9 && (
+                <StepVersionHistory
+                  workflowId={workflow._id}
+                  stepNumber={currentStep}
+                  onRestored={handleRefresh}
+                />
+              )}
             </div>
           </div>
 
