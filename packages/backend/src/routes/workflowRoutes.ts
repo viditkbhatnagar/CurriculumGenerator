@@ -25,6 +25,7 @@ import { workflowService } from '../services/workflowService';
 import { loggingService } from '../services/loggingService';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import Folder from '../models/Folder';
+import { snapshotStep, loadSnapshot } from '../services/stepVersionService';
 import { wordExportService } from '../services/wordExportService';
 import {
   serveCachedExport,
@@ -324,6 +325,86 @@ router.patch('/:id/folder', validateJWT, loadUser, async (req: Request, res: Res
 });
 
 /**
+ * GET /api/v3/workflow/:id/step/:stepNumber/versions
+ * List the saved version snapshots for a step (newest first).
+ */
+router.get(
+  '/:id/step/:stepNumber/versions',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const stepNumber = parseInt(req.params.stepNumber, 10);
+      const workflow: any = await CurriculumWorkflow.findById(req.params.id).select('stepVersions');
+      if (!workflow) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+      const versions = ((workflow.stepVersions as any[]) || [])
+        .filter((v) => v.step === stepNumber)
+        .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime())
+        .map((v) => ({ fileId: v.fileId, savedAt: v.savedAt, sizeBytes: v.sizeBytes }));
+      res.json({ success: true, data: versions });
+    } catch (error) {
+      loggingService.error('Error listing step versions', { error });
+      res.status(500).json({ success: false, error: 'Failed to list versions' });
+    }
+  }
+);
+
+/**
+ * POST /api/v3/workflow/:id/step/:stepNumber/restore
+ * Restore a step to an earlier snapshot. Body: { fileId }. The current
+ * version is snapshotted first, so a restore is itself undoable.
+ */
+router.post(
+  '/:id/step/:stepNumber/restore',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const stepNumber = parseInt(req.params.stepNumber, 10);
+      const { fileId } = req.body;
+      if (isNaN(stepNumber) || stepNumber < 1 || stepNumber > 14) {
+        return res.status(400).json({ success: false, error: 'Invalid step number (1-14)' });
+      }
+      if (!fileId || typeof fileId !== 'string') {
+        return res.status(400).json({ success: false, error: 'fileId is required' });
+      }
+
+      const workflow: any = await CurriculumWorkflow.findById(id).select('stepVersions');
+      if (!workflow) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+
+      // The snapshot must belong to this workflow + step.
+      const pointer = ((workflow.stepVersions as any[]) || []).find(
+        (v) => v.fileId === fileId && v.step === stepNumber
+      );
+      if (!pointer) {
+        return res.status(404).json({ success: false, error: 'Version snapshot not found' });
+      }
+
+      const snapshot = (await loadSnapshot(fileId)) as any;
+
+      // Snapshot the current version first — restoring is itself undoable.
+      await snapshotStep(id, stepNumber);
+
+      await CurriculumWorkflow.updateOne(
+        { _id: id },
+        { $set: { [`step${stepNumber}`]: snapshot } }
+      );
+
+      loggingService.info('Step version restored', { workflowId: id, step: stepNumber, fileId });
+      res.json({ success: true, message: `Step ${stepNumber} restored to an earlier version` });
+    } catch (error) {
+      loggingService.error('Error restoring step version', { error });
+      res.status(500).json({ success: false, error: 'Failed to restore version' });
+    }
+  }
+);
+
+/**
  * GET /api/v3/workflow/:id
  * Get workflow by ID. Faculty can only fetch programs they own; admins
  * can fetch any. The mock-admin fallback (when Auth0 is unconfigured)
@@ -417,6 +498,8 @@ router.get('/:id/progress', async (req: Request, res: Response) => {
  */
 router.post('/:id/step1', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
+    // Snapshot the current version so this regeneration can be undone.
+    await snapshotStep(req.params.id, 1);
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
     const {
@@ -618,6 +701,8 @@ router.post('/:id/step1/approve', validateJWT, loadUser, async (req: Request, re
  */
 router.post('/:id/step2', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
+    // Snapshot the current version so this regeneration can be undone.
+    await snapshotStep(req.params.id, 2);
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
     const { benchmarkPrograms, industryFrameworks, institutionalFrameworks } = req.body;
@@ -809,6 +894,8 @@ router.post('/:id/step2/approve', validateJWT, loadUser, async (req: Request, re
  */
 router.post('/:id/step3', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
+    // Snapshot the current version so this regeneration can be undone.
+    await snapshotStep(req.params.id, 3);
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
     const {
@@ -1044,6 +1131,8 @@ router.post('/:id/step3/approve', validateJWT, loadUser, async (req: Request, re
  */
 router.post('/:id/step4', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
+    // Snapshot the current version so this regeneration can be undone.
+    await snapshotStep(req.params.id, 4);
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
 
@@ -1379,6 +1468,8 @@ router.post('/:id/step4/approve', validateJWT, loadUser, async (req: Request, re
  */
 router.post('/:id/step5', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
+    // Snapshot the current version so this regeneration can be undone.
+    await snapshotStep(req.params.id, 5);
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
 
@@ -1776,6 +1867,8 @@ router.post('/:id/step5/approve', validateJWT, loadUser, async (req: Request, re
  */
 router.post('/:id/step6', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
+    // Snapshot the current version so this regeneration can be undone.
+    await snapshotStep(req.params.id, 6);
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
 
@@ -2237,6 +2330,8 @@ router.post('/:id/step6/approve', validateJWT, loadUser, async (req: Request, re
  */
 router.post('/:id/step7', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
+    // Snapshot the current version so this regeneration can be undone.
+    await snapshotStep(req.params.id, 7);
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
 
@@ -2655,6 +2750,8 @@ router.put(
  */
 router.post('/:id/step8', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
+    // Snapshot the current version so this regeneration can be undone.
+    await snapshotStep(req.params.id, 8);
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
 
@@ -2833,6 +2930,8 @@ router.post('/:id/step8/approve', validateJWT, loadUser, async (req: Request, re
  */
 router.post('/:id/step9', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
+    // Snapshot the current version so this regeneration can be undone.
+    await snapshotStep(req.params.id, 9);
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
 
