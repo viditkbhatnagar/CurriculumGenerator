@@ -173,6 +173,31 @@ export class PPTGenerationService {
         throw parseError;
       }
 
+      // The model sometimes nests slides per lesson instead of returning
+      // the single flat `slides` array createPPTFile expects — flatten it.
+      if (!Array.isArray(pptStructure.slides)) {
+        const groups =
+          (Array.isArray(pptStructure.lessons) && pptStructure.lessons) ||
+          (Array.isArray(pptStructure.presentations) && pptStructure.presentations) ||
+          (Array.isArray(pptStructure.decks) && pptStructure.decks) ||
+          [];
+        const flattened: any[] = [];
+        for (const group of groups) {
+          if (Array.isArray(group?.slides)) flattened.push(...group.slides);
+        }
+        pptStructure.slides = flattened;
+        loggingService.info('Flattened nested PPT slide structure', {
+          moduleCode,
+          slideCount: flattened.length,
+        });
+      }
+
+      // Still nothing usable → fall back to the deterministic structure.
+      if (!Array.isArray(pptStructure.slides) || pptStructure.slides.length === 0) {
+        loggingService.warn('PPT structure had no usable slides; using fallback', { moduleCode });
+        return this.generateBasicStructure(moduleData, curriculumData);
+      }
+
       return pptStructure;
     } catch (error: any) {
       const moduleCode = moduleData.code || moduleData.moduleCode || 'N/A';
@@ -327,10 +352,13 @@ ${
 
 ${
   lessonPlanSection
-    ? `**STEP 10 LESSON PLANS — CONVERT THESE EXACT LESSONS (${lessons.length} lessons):**
-Generate ONE PPT per lesson listed below, in this order. Each lesson's
-title, duration, objectives, activities and formative checks are the
-source of truth — do not invent, merge or rename lessons.
+    ? `**STEP 10 LESSON PLANS — BUILD THE SLIDES FROM THESE EXACT LESSONS (${lessons.length} lessons):**
+Work through every lesson below, in order, inside the SINGLE flat "slides"
+array of the output. For each lesson emit its full slide sequence (cover,
+orientation, core content, worked examples, practice, assessment
+connection, close) before starting the next lesson. Each lesson's title,
+duration, objectives, activities and formative checks are the source of
+truth — do not invent, merge or rename lessons.
 
 ${lessonPlanSection}`
     : '**LESSON PLANS:** Not available — derive lessons from the module topics above.'
