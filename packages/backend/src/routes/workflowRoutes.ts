@@ -3671,6 +3671,25 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
       await existingWorkflow.save();
     }
 
+    // ?force=true → regenerate everything from scratch (e.g. after Step 10
+    // lesson edits). Without this, the queue would see every module already
+    // completed and short-circuit.
+    if (req.query.force === 'true' && existingWorkflow.step11?.modulePPTDecks?.length) {
+      loggingService.info('Step 11 force-regenerate requested — clearing existing decks', {
+        workflowId: id,
+        clearedModules: existingWorkflow.step11.modulePPTDecks.length,
+      });
+      existingWorkflow.step11.modulePPTDecks = [];
+      existingWorkflow.step11.lastError = undefined;
+      const step11Progress = existingWorkflow.stepProgress.find((p) => p.step === 11);
+      if (step11Progress) {
+        step11Progress.status = 'in_progress';
+        step11Progress.completedAt = undefined;
+      }
+      existingWorkflow.markModified('step11');
+      await existingWorkflow.save();
+    }
+
     // Import queue functions
     const { queueAllRemainingStep11Modules, getAllStep11Jobs, step11Queue } = await import(
       '../queues/step11Queue'

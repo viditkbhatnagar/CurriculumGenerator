@@ -157,21 +157,30 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
     await handleGenerate();
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (force = false) => {
     if (isAutoGenerating || submitStep11.isPending) {
       console.log('Generation already in progress, ignoring click');
+      return;
+    }
+
+    if (
+      force &&
+      !window.confirm(
+        'Regenerate all PowerPoint decks from the current Step 10 lesson plans? Existing decks will be replaced.'
+      )
+    ) {
       return;
     }
 
     setError(null);
     setIsAutoGenerating(true);
     generationStartedAtRef.current = Date.now();
-    // Estimate based on remaining modules
-    const remaining = _totalMods - _completedMods;
+    // Estimate based on remaining modules — a force regenerate redoes them all.
+    const remaining = force ? _totalMods : _totalMods - _completedMods;
     startGeneration(workflow._id, 11, remaining * 900);
 
     try {
-      await submitStep11.mutateAsync(workflow._id);
+      await submitStep11.mutateAsync({ id: workflow._id, force });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate PPTs';
       console.error('Failed to generate PPTs:', err);
@@ -409,7 +418,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Generate Button */}
           <button
-            onClick={handleGenerate}
+            onClick={() => handleGenerate()}
             disabled={isCurrentlyGenerating || !isStep10Approved}
             className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -459,7 +468,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
             {/* Generate All Button */}
             {!isAllModulesComplete && !isCurrentlyGenerating && (
               <button
-                onClick={handleGenerate}
+                onClick={() => handleGenerate()}
                 disabled={submitStep11.isPending}
                 className="w-full mb-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
@@ -630,7 +639,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                               </div>
                             ) : canGenerate ? (
                               <button
-                                onClick={handleGenerate}
+                                onClick={() => handleGenerate()}
                                 className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-teal-800 rounded-lg transition-all text-sm font-medium"
                               >
                                 Generate Now
@@ -859,9 +868,31 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                   <h3 className="text-xl font-bold text-orange-400 mb-2">🎉 All PPTs Generated!</h3>
                   <p className="text-teal-700 mb-4">
                     All PowerPoint decks have been generated. Review the content and approve to
-                    complete.
+                    complete. Edited Step 10 lesson plans? Use{' '}
+                    <span className="font-semibold">Regenerate All</span> to refresh the decks.
                   </p>
-                  <div className="flex items-center justify-center gap-4 mb-4">
+                  <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
+                    <button
+                      onClick={() => handleGenerate(true)}
+                      disabled={submitStep11.isPending || isAutoGenerating}
+                      className="px-5 py-3 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      title="Replace all PPT decks with fresh ones generated from the current Step 10 lesson plans"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        />
+                      </svg>
+                      Regenerate All
+                    </button>
                     <button
                       onClick={handleDownloadAllPPTs}
                       disabled={downloadingAll}
@@ -1140,7 +1171,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
-              onClick={handleGenerate}
+              onClick={() => handleGenerate()}
               disabled={submitStep11.isPending || isAllModulesComplete}
               className="px-4 py-2 text-teal-600 hover:text-teal-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >

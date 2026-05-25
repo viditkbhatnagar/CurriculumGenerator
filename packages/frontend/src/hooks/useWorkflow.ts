@@ -558,13 +558,16 @@ export function useSubmitStep11() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
-      const response: WorkflowResponse = await fetchAPI(`${WORKFLOW_BASE}/${id}/step11`, {
+    mutationFn: async (input: string | { id: string; force?: boolean }) => {
+      const { id, force } = typeof input === 'string' ? { id: input, force: false } : input;
+      const query = force ? '?force=true' : '';
+      const response: WorkflowResponse = await fetchAPI(`${WORKFLOW_BASE}/${id}/step11${query}`, {
         method: 'POST',
       });
       return response;
     },
-    onSuccess: (_, id) => {
+    onSuccess: (_, input) => {
+      const id = typeof input === 'string' ? input : input.id;
       queryClient.invalidateQueries({ queryKey: ['workflow', id] });
       queryClient.invalidateQueries({ queryKey: ['workflow', id, 'step11-status'] });
     },
