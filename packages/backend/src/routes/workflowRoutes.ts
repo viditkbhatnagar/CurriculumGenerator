@@ -3113,6 +3113,9 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
 
+    // Snapshot the current lesson plans so this regeneration can be undone.
+    await snapshotStep(id, 10);
+
     loggingService.info('Step 10 generation requested', { workflowId: id });
 
     // Validate workflow exists and step 9 is complete AND approved
@@ -5712,6 +5715,9 @@ router.post(
     try {
       const { id, moduleId } = req.params;
       const userId = (req as any).user?.id || (req as any).user?.userId;
+
+      // Snapshot the current step10 so the per-module regenerate is undoable.
+      await snapshotStep(id, 10);
 
       const workflow = await CurriculumWorkflow.findById(id);
       if (!workflow) {

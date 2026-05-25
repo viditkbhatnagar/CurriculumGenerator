@@ -16,6 +16,7 @@ import {
 import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
 import BloomVerbPicker from './BloomVerbPicker';
+import StepVersionHistory from './StepVersionHistory';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1026,6 +1027,23 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
   }, [workflow.step4, workflow._id, completeGeneration]);
 
   const handleGenerate = async () => {
+    // Guard manual edits — regenerating replaces every module, MLO and
+    // activity in this step with a fresh AI generation. The current
+    // version is auto-saved to Version history so this can be undone,
+    // but the user should opt in explicitly.
+    const hasContent = (workflow.step4?.modules?.length ?? 0) > 0;
+    if (
+      hasContent &&
+      !window.confirm(
+        'Regenerate the course framework?\n\n' +
+          'This will replace every module, MLO and activity below with a new AI-generated version. ' +
+          'Your current version is automatically saved to Version history (clock icon at the top of this step) ' +
+          'so you can restore it any time.\n\n' +
+          'Continue?'
+      )
+    ) {
+      return;
+    }
     setError(null);
     try {
       startGeneration(workflow._id, 4);
@@ -1572,20 +1590,25 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
 
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-6 border-t border-teal-200">
-            <button
-              onClick={handleGenerate}
-              disabled={submitStep4.isPending}
-              className="px-4 py-2 text-teal-600 hover:text-teal-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {submitStep4.isPending ? (
-                <>
-                  <span className="w-3.5 h-3.5 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
-                  Regenerating…
-                </>
-              ) : (
-                'Regenerate'
-              )}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleGenerate}
+                disabled={submitStep4.isPending}
+                className="px-4 py-2 text-teal-600 hover:text-teal-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {submitStep4.isPending ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+                    Regenerating…
+                  </>
+                ) : (
+                  'Regenerate'
+                )}
+              </button>
+              {/* Inline Version-history so manual edits can be restored
+                  even if the user already clicked Regenerate. */}
+              <StepVersionHistory workflowId={workflow._id} stepNumber={4} onRestored={onRefresh} />
+            </div>
             <div className="flex gap-3">
               {!isApproved && (
                 <button
