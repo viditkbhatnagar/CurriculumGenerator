@@ -1464,6 +1464,14 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
   }, [workflow.step5, workflow._id, completeGeneration]);
 
   const handleGenerate = async () => {
+    if (
+      workflow.step5?.sources?.length &&
+      !window.confirm(
+        'Regenerate the topic-level sources?\n\nThis replaces the current sources with a fresh AI generation. The current version is saved to Version history (clock icon at the top of this step) so you can restore it any time.\n\nContinue?'
+      )
+    ) {
+      return;
+    }
     setError(null);
     startGeneration(workflow._id, 5, 120);
     try {

@@ -831,6 +831,14 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
   }, [workflow.step8, workflow._id, completeGeneration]);
 
   const handleGenerateProposals = async () => {
+    if (
+      workflow.step8?.caseStudies?.length &&
+      !window.confirm(
+        'Regenerate the case studies?\n\nThis replaces the current case studies with a fresh AI generation. The current version is saved to Version history (clock icon at the top of this step) so you can restore it any time.\n\nContinue?'
+      )
+    ) {
+      return;
+    }
     setError(null);
     startGeneration(workflow._id, 8, 180);
     try {

@@ -3639,6 +3639,9 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
 
+    // Snapshot the current PPT decks before regeneration (incl. ?force=true).
+    await snapshotStep(id, 11);
+
     loggingService.info('Step 11 PPT generation requested', { workflowId: id });
 
     // Validate workflow exists and step 10 is complete AND approved
@@ -4199,6 +4202,9 @@ router.post('/:id/step12', validateJWT, loadUser, async (req: Request, res: Resp
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
 
+    // Snapshot the current assignment packs before regeneration.
+    await snapshotStep(id, 12);
+
     loggingService.info('Step 12 Assignment Pack generation requested', { workflowId: id });
 
     const existingWorkflow = await CurriculumWorkflow.findById(id);
@@ -4456,6 +4462,9 @@ router.post('/:id/step13', validateJWT, loadUser, async (req: Request, res: Resp
   try {
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
+
+    // Snapshot the current summative exam before regeneration.
+    await snapshotStep(id, 13);
 
     loggingService.info('Step 13 Summative Exam generation requested', { workflowId: id });
 

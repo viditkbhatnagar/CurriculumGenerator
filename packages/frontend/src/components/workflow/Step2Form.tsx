@@ -436,6 +436,15 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
   }, [workflow.step2, workflow._id, completeGeneration]);
 
   const handleGenerate = async () => {
+    if (
+      workflow.step2 &&
+      Object.keys(workflow.step2).length > 0 &&
+      !window.confirm(
+        'Regenerate the competency framework?\n\nThis replaces the current knowledge, skills and competencies with a fresh AI generation. The current version is saved to Version history (clock icon at the top of this step) so you can restore it any time.\n\nContinue?'
+      )
+    ) {
+      return;
+    }
     setError(null);
     try {
       startGeneration(workflow._id, 2);

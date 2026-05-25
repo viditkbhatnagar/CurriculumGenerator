@@ -587,14 +587,12 @@ export default function WorkflowDetailPage() {
                 </div>
               </div>
               {/* Version history — snapshots are taken before each
-                  regeneration of steps 1-10, so a prior version can be restored. */}
-              {currentStep <= 10 && (
-                <StepVersionHistory
-                  workflowId={workflow._id}
-                  stepNumber={currentStep}
-                  onRestored={handleRefresh}
-                />
-              )}
+                  regeneration of every step, so a prior version can be restored. */}
+              <StepVersionHistory
+                workflowId={workflow._id}
+                stepNumber={currentStep}
+                onRestored={handleRefresh}
+              />
             </div>
           </div>
 

@@ -1224,6 +1224,15 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
   }, [workflow.step6, workflow._id, completeGeneration]);
 
   const handleGenerate = async () => {
+    if (
+      workflow.step6 &&
+      Object.keys(workflow.step6).length > 0 &&
+      !window.confirm(
+        'Regenerate the reading lists?\n\nThis replaces the current reading lists with a fresh AI generation. The current version is saved to Version history (clock icon at the top of this step) so you can restore it any time.\n\nContinue?'
+      )
+    ) {
+      return;
+    }
     setError(null);
     startGeneration(workflow._id, 6, 60);
     try {

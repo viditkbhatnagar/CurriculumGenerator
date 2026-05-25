@@ -510,6 +510,14 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
   }, [workflow.step3, workflow._id, completeGeneration]);
 
   const handleGenerate = async () => {
+    if (
+      workflow.step3?.outcomes?.length &&
+      !window.confirm(
+        'Regenerate the Program Learning Outcomes?\n\nThis replaces the current PLOs with a fresh AI generation. The current version is saved to Version history (clock icon at the top of this step) so you can restore it any time.\n\nContinue?'
+      )
+    ) {
+      return;
+    }
     setError(null);
 
     // Validate Bloom's levels

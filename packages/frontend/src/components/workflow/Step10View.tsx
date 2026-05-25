@@ -750,7 +750,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   const handleRegenerateModule = async (moduleId: string, moduleTitle: string) => {
     if (
       !confirm(
-        `Regenerate lesson plans for "${moduleTitle}"?\n\nThis will discard the existing lesson plans for this module and generate new ones using the latest module title and content. It takes 2–5 minutes.`
+        `Regenerate lesson plans for "${moduleTitle}"?\n\nThis will replace the existing lesson plans for this module with fresh AI-generated ones. The current version is saved to Version history (clock icon at the top of this step) so you can restore it any time. It takes 2–5 minutes.\n\nContinue?`
       )
     ) {
       return;

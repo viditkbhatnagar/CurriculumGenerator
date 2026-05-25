@@ -715,6 +715,16 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
   }, [workflow.step9, workflow._id, completeGeneration]);
 
   const handleGenerate = async () => {
+    const hasGlossary =
+      (workflow.step9?.terms?.length || (workflow.step9 as any)?.glossaryTerms?.length || 0) > 0;
+    if (
+      hasGlossary &&
+      !window.confirm(
+        'Regenerate the glossary?\n\nThis replaces the current glossary terms with a fresh AI generation. The current version is saved to Version history (clock icon at the top of this step) so you can restore it any time.\n\nContinue?'
+      )
+    ) {
+      return;
+    }
     setError(null);
     startGeneration(workflow._id, 9, 45);
     try {
