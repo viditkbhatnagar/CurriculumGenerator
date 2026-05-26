@@ -674,6 +674,29 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         })
       );
 
+      // Module description — needed so SMEs can edit it in Word and have
+      // the change round-trip back via the curriculum re-upload feature.
+      if (module.description && String(module.description).trim()) {
+        contentChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Description: ',
+                bold: true,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+              }),
+              new TextRun({
+                text: String(module.description),
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+              }),
+            ],
+            spacing: { before: 80, after: 100, line: LINE_SPACING },
+          })
+        );
+      }
+
       // Module Learning Outcomes - in tabular format with KSC mappings
       if (module.mlos?.length) {
         contentChildren.push(
@@ -690,17 +713,22 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           })
         );
 
+        // The "Code" column carries the SME-visible MLO code (M1-LO1 etc.)
+        // The re-upload parser uses this code as the match key, so the SME
+        // can edit the statement freely without breaking the mapping.
         const mloRows = [
           new TableRow({
             children: [
-              this.createTableCell('ID', { bold: true, shading: 'e2e8f0', width: 10 }),
+              this.createTableCell('Code', { bold: true, shading: 'e2e8f0', width: 10 }),
               this.createTableCell('Learning Outcome', {
                 bold: true,
                 shading: 'e2e8f0',
-                width: 50,
+                width: 42,
               }),
-              this.createTableCell('Bloom Level', { bold: true, shading: 'e2e8f0', width: 15 }),
-              this.createTableCell('Linked KSCs', { bold: true, shading: 'e2e8f0', width: 25 }),
+              this.createTableCell('Bloom Level', { bold: true, shading: 'e2e8f0', width: 12 }),
+              this.createTableCell('Verb', { bold: true, shading: 'e2e8f0', width: 10 }),
+              this.createTableCell('Linked PLOs', { bold: true, shading: 'e2e8f0', width: 12 }),
+              this.createTableCell('Linked KSCs', { bold: true, shading: 'e2e8f0', width: 14 }),
             ],
           }),
         ];
@@ -726,12 +754,16 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             kscStatements = '-';
           }
 
+          const linkedPLOs = Array.isArray(mlo.linkedPLOs) ? mlo.linkedPLOs.join(', ') : '-';
+
           mloRows.push(
             new TableRow({
               children: [
-                this.createTableCell(mlo.id || '-'),
+                this.createTableCell(mlo.code || mlo.id || '-'),
                 this.createTableCell(mlo.statement || '-'),
                 this.createTableCell(mlo.bloomLevel || '-'),
+                this.createTableCell(mlo.verb || '-'),
+                this.createTableCell(linkedPLOs || '-'),
                 this.createTableCell(kscStatements),
               ],
             })
@@ -744,6 +776,43 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             rows: mloRows,
           })
         );
+      }
+
+      // Topics — included so SMEs can edit/reorder/add/remove them in Word.
+      // Bullet format keeps it lightweight and easy for the re-upload parser
+      // to pick up: "• [n] Title (Xh)".
+      if (Array.isArray(module.topics) && module.topics.length > 0) {
+        contentChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Topics:',
+                bold: true,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+              }),
+            ],
+            spacing: { before: 100, after: 50, line: LINE_SPACING },
+          })
+        );
+        module.topics.forEach((topic: any, idx: number) => {
+          const seq = topic.sequence ?? idx + 1;
+          const hoursPart =
+            typeof topic.hours === 'number' && topic.hours > 0 ? ` (${topic.hours}h)` : '';
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `• [${seq}] ${topic.title || 'Untitled topic'}${hoursPart}`,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { after: 30, line: LINE_SPACING },
+              indent: { left: 360 },
+            })
+          );
+        });
       }
 
       // Contact Activities
