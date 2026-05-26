@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep4, useApproveStep4 } from '@/hooks/useWorkflow';
 import { api } from '@/lib/api';
 import { useStepStatus } from '@/hooks/useStepStatus';
@@ -1144,6 +1144,173 @@ function CourseSpecificationDownload({
   );
 }
 
+// Re-upload an edited copy of the full curriculum Word export. The backend
+// matches by moduleCode + MLO code, deletes anything missing from the file,
+// and snapshots the current step4 to version history first so a bad import
+// can be rolled back from the existing history modal.
+function CurriculumReimportButton({
+  workflowId,
+  onApplied,
+}: {
+  workflowId: string;
+  onApplied: () => void;
+}) {
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [result, setResult] = useState<{
+    modulesAdded: number;
+    modulesUpdated: number;
+    modulesDeleted: number;
+    mlosAdded: number;
+    mlosUpdated: number;
+    mlosDeleted: number;
+    warnings?: string[];
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const apply = async () => {
+    if (!pendingFile) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append('file', pendingFile);
+      const response = await api.post(`/api/v3/workflow/${workflowId}/step4/import`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 120000,
+      });
+      const data = response.data?.data;
+      setResult(data);
+      setPendingFile(null);
+      onApplied();
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'Import failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => fileInput.current?.click()}
+        disabled={busy}
+        className="px-4 py-2.5 bg-white border border-purple-400 text-purple-700 hover:bg-purple-50 rounded-lg font-medium flex items-center gap-2 disabled:opacity-50"
+        title="Upload an edited copy of the full curriculum Word export"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+          />
+        </svg>
+        Upload edited Word
+      </button>
+
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) setPendingFile(f);
+          if (fileInput.current) fileInput.current.value = '';
+        }}
+      />
+
+      {/* Confirm dialog — explain that this rewrites step4. */}
+      {pendingFile && !busy && !result && (
+        <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl border border-teal-200 w-full max-w-lg p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-teal-800">Apply edited curriculum?</h3>
+            <p className="text-sm text-teal-700">
+              <span className="font-medium">{pendingFile.name}</span> will replace every module,
+              MLO, topic and activity in Step 4. Items missing from the file will be deleted.
+            </p>
+            <p className="text-xs text-teal-600 bg-teal-50 border border-teal-200 rounded p-3">
+              The current Step 4 is saved to <strong>Version history</strong> first, so this can be
+              undone from the clock icon at the top of the step.
+            </p>
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
+                {error}
+              </p>
+            )}
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setPendingFile(null);
+                  setError(null);
+                }}
+                className="px-4 py-2 text-teal-700 hover:text-teal-900"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={apply}
+                className="px-5 py-2 bg-gradient-to-r from-purple-500 to-cyan-500 text-white rounded-lg font-medium hover:from-purple-400 hover:to-cyan-400"
+              >
+                Apply changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Busy state */}
+      {busy && (
+        <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl border border-teal-200 p-6 flex items-center gap-3">
+            <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-teal-700">Applying changes…</span>
+          </div>
+        </div>
+      )}
+
+      {/* Summary toast after a successful apply */}
+      {result && (
+        <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl border border-teal-200 w-full max-w-lg p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-teal-800">Curriculum updated</h3>
+            <ul className="text-sm text-teal-700 space-y-1">
+              <li>
+                <strong>Modules</strong>: {result.modulesAdded} added, {result.modulesUpdated}{' '}
+                updated, {result.modulesDeleted} deleted
+              </li>
+              <li>
+                <strong>MLOs</strong>: {result.mlosAdded} added, {result.mlosUpdated} updated,{' '}
+                {result.mlosDeleted} deleted
+              </li>
+            </ul>
+            {result.warnings && result.warnings.length > 0 && (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
+                <p className="font-medium mb-1">Notes:</p>
+                <ul className="list-disc ml-4 space-y-0.5">
+                  {result.warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <button
+                onClick={() => setResult(null)}
+                className="px-5 py-2 bg-teal-500 hover:bg-teal-400 text-white rounded-lg font-medium"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanvas }: Props) {
   const submitStep4 = useSubmitStep4();
   const approveStep4 = useApproveStep4();
@@ -1883,6 +2050,9 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                   workflowId={workflow._id}
                   programName={workflow.projectName || workflow.step1?.programTitle || 'course'}
                 />
+              )}
+              {!!workflow.step4 && (
+                <CurriculumReimportButton workflowId={workflow._id} onApplied={() => onRefresh()} />
               )}
             </div>
           </div>
