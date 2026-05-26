@@ -38,6 +38,7 @@ import { analyticsStorageService } from '../services/analyticsStorageService';
 import { lessonPlanService } from '../services/lessonPlanService';
 import { syllabusService } from '../services/syllabusService';
 import { syllabusExportService } from '../services/syllabusExportService';
+import { courseSpecificationExportService } from '../services/courseSpecificationExportService';
 import { llmService } from '../services/llmService';
 import { addStepJob, getStepJobStatus, stepQueue, removeStepJob } from '../queues/stepQueue';
 import { createAuditLog } from '../services/auditService';
@@ -5006,6 +5007,86 @@ router.get(
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to export module syllabi zip',
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/v3/workflow/:id/course-specification/export.docx
+ * MCAST-style programme course specification — cover, programme description,
+ * PLOs, entry requirements, structure table, then one section per unit.
+ * Reads step1/step3/step4 only, so it's available as soon as Step 4 has run.
+ */
+router.get(
+  '/:id/course-specification/export.docx',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const workflow = await CurriculumWorkflow.findById(req.params.id);
+      if (!workflow) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+      const buffer = await courseSpecificationExportService.generateDocument(workflow);
+      const safeName = ((workflow as any).step1?.programTitle || workflow.projectName || 'course')
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .substring(0, 60);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${safeName}_course_specification.docx"`
+      );
+      res.send(buffer);
+    } catch (error) {
+      loggingService.error('Error exporting course specification', {
+        error,
+        workflowId: req.params.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to export course specification',
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/v3/workflow/:id/course-specification/export.pdf
+ * PDF rendering of the same document — DOCX → mammoth → pdfmake in-process.
+ */
+router.get(
+  '/:id/course-specification/export.pdf',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const workflow = await CurriculumWorkflow.findById(req.params.id);
+      if (!workflow) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+      const docxBuffer = await courseSpecificationExportService.generateDocument(workflow);
+      const pdfBuffer = await docxBufferToPdf(docxBuffer);
+      const safeName = ((workflow as any).step1?.programTitle || workflow.projectName || 'course')
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .substring(0, 60);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${safeName}_course_specification.pdf"`
+      );
+      res.send(pdfBuffer);
+    } catch (error) {
+      loggingService.error('Error exporting course specification PDF', {
+        error,
+        workflowId: req.params.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to export course specification PDF',
       });
     }
   }

@@ -18,6 +18,7 @@ import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
 import BloomVerbPicker from './BloomVerbPicker';
 import StepVersionHistory from './StepVersionHistory';
+import { downloadFile } from '@/lib/download';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1064,6 +1065,85 @@ function ModuleCard({
   );
 }
 
+// Programme-level Course Specification (MCAST format) — two-format download.
+// Doc is small + cheap to render (no LLM calls), so we generate on demand
+// rather than going through the cached-export path the full curriculum uses.
+function CourseSpecificationDownload({
+  workflowId,
+  programName,
+}: {
+  workflowId: string;
+  programName: string;
+}) {
+  const [busy, setBusy] = useState<'docx' | 'pdf' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const safeBase =
+    (programName || 'course').replace(/[^a-zA-Z0-9]+/g, '_').substring(0, 60) || 'course';
+
+  const download = async (kind: 'docx' | 'pdf') => {
+    setError(null);
+    setBusy(kind);
+    try {
+      await downloadFile(
+        `/api/v3/workflow/${workflowId}/course-specification/export.${kind}`,
+        `${safeBase}_course_specification.${kind}`,
+        { timeout: 180000 }
+      );
+    } catch (err: any) {
+      setError(err?.message || 'Download failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={() => download('docx')}
+        disabled={busy !== null}
+        className="px-4 py-2.5 bg-white border border-teal-400 text-teal-700 hover:bg-teal-50 rounded-lg font-medium flex items-center gap-2 disabled:opacity-50"
+        title="Download the MCAST-format Course Specification as Word"
+      >
+        {busy === 'docx' ? (
+          <div className="w-4 h-4 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+        )}
+        Course Spec (DOCX)
+      </button>
+      <button
+        onClick={() => download('pdf')}
+        disabled={busy !== null}
+        className="px-4 py-2.5 bg-white border border-teal-400 text-teal-700 hover:bg-teal-50 rounded-lg font-medium flex items-center gap-2 disabled:opacity-50"
+        title="Download the MCAST-format Course Specification as PDF"
+      >
+        {busy === 'pdf' ? (
+          <div className="w-4 h-4 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+        )}
+        Course Spec (PDF)
+      </button>
+      {error && <span className="text-xs text-red-500">{error}</span>}
+    </div>
+  );
+}
+
 export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanvas }: Props) {
   const submitStep4 = useSubmitStep4();
   const approveStep4 = useApproveStep4();
@@ -1796,6 +1876,12 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                   workflowId={workflow._id}
                   stepNumber={4}
                   programName={workflow.projectName || workflow.step1?.programTitle || ''}
+                />
+              )}
+              {!!workflow.step4 && (
+                <CourseSpecificationDownload
+                  workflowId={workflow._id}
+                  programName={workflow.projectName || workflow.step1?.programTitle || 'course'}
                 />
               )}
             </div>
