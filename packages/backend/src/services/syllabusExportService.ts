@@ -179,37 +179,11 @@ class SyllabusExportService {
 
     const docChildren: (Paragraph | Table)[] = [];
     docChildren.push(this.title(`${mod.moduleCode}: ${mod.moduleTitle}`));
-    docChildren.push(
-      this.subtitle(`${step1.programTitle || workflow.projectName} — ${inputs.semester}`)
-    );
+    docChildren.push(this.subtitle(step1.programTitle || workflow.projectName || ''));
 
-    // Module basics
-    docChildren.push(this.h1('Module Basics'));
-    docChildren.push(
-      ...this.kvLines([
-        ['Module', `${mod.moduleCode} — ${mod.moduleTitle}`],
-        ['Course Number', inputs.courseNumber],
-        ['Semester', inputs.semester],
-        ['Meeting Time', inputs.meetingPattern],
-        ['Location', inputs.meetingLocation],
-        ['Contact Hours', mod.contactHours ? `${mod.contactHours} h` : undefined],
-        ['Delivery Mode', step1.delivery?.mode],
-      ])
-    );
-
-    // Instructor (shared across modules)
-    docChildren.push(this.h1('Instructor Information'));
-    docChildren.push(
-      ...this.kvLines([
-        ['Name', inputs.instructor.name],
-        ['Title', inputs.instructor.title],
-        ['Email', inputs.instructor.email],
-        ['Office Hours', inputs.instructor.officeHours],
-        ['Office Location', inputs.instructor.officeLocation],
-        ['Preferred Communication', inputs.instructor.preferredCommunication],
-        ['Expected Response Time', inputs.instructor.expectedResponseTime],
-      ])
-    );
+    // Module Basics and Instructor Information are intentionally omitted from per-module
+    // syllabi — instructor, meeting time, location and hours are decided per-cohort
+    // based on faculty availability, so embedding them here produces stale documents.
 
     // Module description
     if (mod.moduleDescription) {
