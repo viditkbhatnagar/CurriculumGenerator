@@ -39,6 +39,8 @@ import { lessonPlanService } from '../services/lessonPlanService';
 import { syllabusService } from '../services/syllabusService';
 import { syllabusExportService } from '../services/syllabusExportService';
 import { courseSpecificationExportService } from '../services/courseSpecificationExportService';
+import { curriculumImportService } from '../services/curriculumImportService';
+import multer from 'multer';
 import { llmService } from '../services/llmService';
 import { addStepJob, getStepJobStatus, stepQueue, removeStepJob } from '../queues/stepQueue';
 import { createAuditLog } from '../services/auditService';
@@ -49,6 +51,23 @@ import { sanitizeSourcePayload } from '../services/sourceValidator';
 import crypto from 'crypto';
 
 const router = Router();
+
+// Single-file in-memory upload reserved for the curriculum re-import flow.
+// 10 MB ceiling matches the typical "full curriculum" Word export size.
+const curriculumDocxUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      /\.docx$/i.test(file.originalname)
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only .docx files exported by the curriculum generator are accepted.'));
+    }
+  },
+});
 
 // ============================================================================
 // TIMEOUT MIDDLEWARE FOR LONG-RUNNING AI GENERATION
@@ -1578,6 +1597,176 @@ Draft the next MLO (#${nextOutcomeNumber}) for this module. It must complement t
     }
   }
 );
+
+/**
+ * POST /api/v3/workflow/:id/step4/import
+ * Accepts an edited copy of the full curriculum Word export and rewrites
+ * step4 to match. Modules match by moduleCode and MLOs by code; items
+ * missing from the upload are deleted (strict mode). The previous step4
+ * is snapshotted to version history first so SMEs can undo a bad import.
+ */
+router.post('/:id/step4/import', validateJWT, loadUser, (req: Request, res: Response) => {
+  curriculumDocxUpload.single('file')(req, res, async (err: unknown) => {
+    if (err) {
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      return res.status(400).json({ success: false, error: message });
+    }
+    try {
+      const { id } = req.params;
+      const fileBuf = (req as Request & { file?: Express.Multer.File }).file?.buffer;
+      if (!fileBuf) {
+        return res.status(400).json({ success: false, error: 'No DOCX file uploaded' });
+      }
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !(workflow as any).step4) {
+        return res.status(404).json({
+          success: false,
+          error: 'Workflow or Step 4 not found — generate Step 4 first',
+        });
+      }
+
+      const parsed = await curriculumImportService.parseDocx(fileBuf);
+      if (parsed.modules.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error:
+            'No modules found in the uploaded document. Make sure you uploaded the full curriculum Word export (the one with the "4. Course Structure & Module Learning Outcomes" section).',
+        });
+      }
+
+      // Snapshot the current Step 4 so the import can be undone from
+      // the Version-history modal in the UI.
+      await snapshotStep(id, 4);
+
+      const step4 = (workflow as any).step4;
+      const liveByCode = new Map<string, any>();
+      step4.modules.forEach((m: any) => {
+        if (m.moduleCode) liveByCode.set(m.moduleCode, m);
+      });
+      const uploadedCodes = new Set(parsed.modules.map((m) => m.moduleCode));
+
+      const summary = {
+        modulesAdded: 0,
+        modulesUpdated: 0,
+        modulesDeleted: 0,
+        mlosAdded: 0,
+        mlosUpdated: 0,
+        mlosDeleted: 0,
+        warnings: parsed.warnings,
+      };
+
+      // Rebuild step4.modules in upload order so SME reorderings stick.
+      const newModules: any[] = [];
+      parsed.modules.forEach((pmod, idx) => {
+        const existing = liveByCode.get(pmod.moduleCode);
+        const updated: any = existing
+          ? { ...existing }
+          : {
+              id: `mod-imported-${crypto.randomBytes(6).toString('hex')}`,
+              moduleCode: pmod.moduleCode,
+              isCore: true,
+              prerequisites: [],
+              competencyLinks: [],
+            };
+
+        if (!existing) summary.modulesAdded += 1;
+        else summary.modulesUpdated += 1;
+
+        updated.title = pmod.title || updated.title;
+        updated.description = pmod.description || updated.description || '';
+        updated.sequenceOrder = idx + 1;
+        if (pmod.totalHours !== null) updated.totalHours = pmod.totalHours;
+        if (pmod.contactHours !== null) updated.contactHours = pmod.contactHours;
+        if (pmod.independentHours !== null) updated.independentHours = pmod.independentHours;
+
+        // MLO merge — match by code, fall back to order if codes missing.
+        const liveMlos = Array.isArray(updated.mlos) ? updated.mlos : [];
+        const liveMloByCode = new Map<string, any>();
+        liveMlos.forEach((m: any) => {
+          if (m.code) liveMloByCode.set(m.code, m);
+        });
+        const uploadedMloCodes = new Set(pmod.mlos.map((m) => m.code).filter(Boolean) as string[]);
+
+        const newMlos: any[] = [];
+        pmod.mlos.forEach((pmlo, mIdx) => {
+          const existingMlo = pmlo.code ? liveMloByCode.get(pmlo.code) : undefined;
+          const newMlo: any = existingMlo
+            ? { ...existingMlo }
+            : {
+                id: `mlo-imported-${crypto.randomBytes(6).toString('hex')}`,
+                competencyLinks: [],
+              };
+          if (!existingMlo) summary.mlosAdded += 1;
+          else summary.mlosUpdated += 1;
+
+          newMlo.code = pmlo.code || newMlo.code || `M${idx + 1}-LO${mIdx + 1}`;
+          newMlo.outcomeNumber = mIdx + 1;
+          newMlo.statement = pmlo.statement;
+          newMlo.bloomLevel = pmlo.bloomLevel || newMlo.bloomLevel || 'apply';
+          newMlo.verb = pmlo.verb || newMlo.verb || '';
+          newMlo.linkedPLOs = pmlo.linkedPLOs;
+
+          newMlos.push(newMlo);
+        });
+        // Count deletions: live MLOs whose code didn't appear in the upload.
+        liveMlos.forEach((m: any) => {
+          if (m.code && !uploadedMloCodes.has(m.code)) summary.mlosDeleted += 1;
+        });
+        updated.mlos = newMlos;
+
+        // Topics replace wholesale — they have weak identity (sequence
+        // numbers shift) and SMEs typically edit the whole list.
+        updated.topics = pmod.topics.map((t, tIdx) => ({
+          id: `topic-${crypto.randomBytes(4).toString('hex')}`,
+          sequence: t.sequence || tIdx + 1,
+          title: t.title,
+          hours: t.hours,
+        }));
+
+        // Activities — string arrays; replace wholesale, drop empties.
+        updated.contactActivities = pmod.contactActivities.filter((s) => s.trim());
+        updated.independentActivities = pmod.independentActivities.filter((s) => s.trim());
+
+        newModules.push(updated);
+      });
+
+      // Strict-mode deletions: live modules whose code didn't appear in
+      // the upload are removed. Snapshot above lets the SME recover.
+      step4.modules.forEach((m: any) => {
+        if (m.moduleCode && !uploadedCodes.has(m.moduleCode)) {
+          summary.modulesDeleted += 1;
+        }
+      });
+
+      step4.modules = newModules;
+      // Recompute totals from the new module list.
+      step4.totalProgramHours = newModules.reduce((sum, m) => sum + (m.totalHours || 0), 0);
+      step4.totalContactHours = newModules.reduce((sum, m) => sum + (m.contactHours || 0), 0);
+      step4.totalIndependentHours = newModules.reduce(
+        (sum, m) => sum + (m.independentHours || 0),
+        0
+      );
+      step4.hoursIntegrity = true; // SME-edited; re-evaluate on approve.
+
+      (workflow as any).markModified('step4');
+      await workflow.save();
+
+      loggingService.info('Curriculum re-import applied', {
+        workflowId: id,
+        summary,
+      });
+
+      res.json({ success: true, data: summary });
+    } catch (error: any) {
+      loggingService.error('Curriculum import failed', { error: error?.message || error });
+      res.status(500).json({
+        success: false,
+        error: error?.message || 'Failed to import curriculum',
+      });
+    }
+  });
+});
 
 /**
  * POST /api/v3/workflow/:id/step4/approve
