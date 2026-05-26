@@ -9,6 +9,7 @@ import {
   CurriculumWorkflow,
   Module,
   MLO,
+  PLO,
   BloomLevel,
   BLOOM_LEVELS,
   ModulePhase,
@@ -223,12 +224,14 @@ function ModuleEditModal({
 function MLOEditModal({
   mlo,
   moduleCode,
+  availablePLOs,
   onSave,
   onCancel,
   isSaving,
 }: {
   mlo: MLO;
   moduleCode: string;
+  availablePLOs: PLO[];
   onSave: (updatedMlo: Partial<MLO>) => void;
   onCancel: () => void;
   isSaving: boolean;
@@ -237,6 +240,13 @@ function MLOEditModal({
   const [code, setCode] = useState(mlo.code || '');
   const [bloomLevel, setBloomLevel] = useState<BloomLevel>(mlo.bloomLevel || 'apply');
   const [verb, setVerb] = useState(mlo.verb || '');
+  const [linkedPLOs, setLinkedPLOs] = useState<string[]>(mlo.linkedPLOs || []);
+
+  const togglePLO = (code: string) => {
+    setLinkedPLOs((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
+    );
+  };
 
   const handleSave = () => {
     onSave({
@@ -244,6 +254,7 @@ function MLOEditModal({
       code,
       bloomLevel,
       verb,
+      linkedPLOs,
     });
   };
 
@@ -311,22 +322,41 @@ function MLOEditModal({
             <BloomVerbPicker bloomLevel={bloomLevel} value={verb} onChange={setVerb} />
           </div>
 
-          {/* Linked PLOs (read-only) */}
-          {mlo.linkedPLOs && mlo.linkedPLOs.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-teal-700 mb-2">Linked PLOs</label>
+          {/* Linked PLOs (multi-select) */}
+          <div>
+            <label className="block text-sm font-medium text-teal-700 mb-2">
+              Linked PLOs
+              <span className="ml-2 text-xs font-normal text-teal-500">
+                Click to toggle. At least one PLO should be linked.
+              </span>
+            </label>
+            {availablePLOs.length === 0 ? (
+              <p className="text-sm text-teal-500 italic">
+                No PLOs defined yet — complete Step 3 first.
+              </p>
+            ) : (
               <div className="flex flex-wrap gap-2">
-                {mlo.linkedPLOs.map((plo) => (
-                  <span
-                    key={plo}
-                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm"
-                  >
-                    {plo}
-                  </span>
-                ))}
+                {availablePLOs.map((plo) => {
+                  const isLinked = linkedPLOs.includes(plo.code);
+                  return (
+                    <button
+                      key={plo.id || plo.code}
+                      type="button"
+                      onClick={() => togglePLO(plo.code)}
+                      title={plo.statement}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all border ${
+                        isLinked
+                          ? 'bg-teal-500 text-white border-teal-500 shadow-sm'
+                          : 'bg-white text-teal-600 border-teal-300 hover:border-teal-500 hover:bg-teal-50'
+                      }`}
+                    >
+                      {plo.code}
+                    </button>
+                  );
+                })}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="p-6 border-t border-teal-200 flex justify-end gap-3">
@@ -1666,6 +1696,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
         <MLOEditModal
           mlo={editingMlo}
           moduleCode={editingMloModuleCode}
+          availablePLOs={workflow.step3?.outcomes || []}
           onSave={handleSaveMlo}
           onCancel={handleCancelMloEdit}
           isSaving={isSavingEdit}
