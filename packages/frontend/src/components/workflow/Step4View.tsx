@@ -225,6 +225,7 @@ function MLOEditModal({
   mlo,
   moduleCode,
   availablePLOs,
+  isNew,
   onSave,
   onCancel,
   isSaving,
@@ -232,6 +233,7 @@ function MLOEditModal({
   mlo: MLO;
   moduleCode: string;
   availablePLOs: PLO[];
+  isNew?: boolean;
   onSave: (updatedMlo: Partial<MLO>) => void;
   onCancel: () => void;
   isSaving: boolean;
@@ -263,7 +265,8 @@ function MLOEditModal({
       <div className="bg-white rounded-xl border border-teal-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-teal-200">
           <h3 className="text-lg font-semibold text-teal-800 flex items-center gap-2">
-            Edit MLO <span className="text-cyan-400">{mlo.code}</span>
+            {isNew ? 'Add MLO' : 'Edit MLO'}{' '}
+            <span className="text-cyan-400">{code || mlo.code}</span>
             <span className="text-teal-500 text-sm">in {moduleCode}</span>
           </h3>
         </div>
@@ -739,6 +742,9 @@ function ModuleCard({
   onEdit,
   onEditModule,
   onEditMlo,
+  onAddMloManual,
+  onSuggestMlo,
+  isSuggestingMlo,
   onAddActivity,
   onEditActivity,
   onDeleteActivity,
@@ -750,6 +756,9 @@ function ModuleCard({
   onEdit?: (target: EditTarget) => void;
   onEditModule?: (module: Module) => void;
   onEditMlo?: (mlo: MLO, moduleId: string, moduleCode: string) => void;
+  onAddMloManual?: (moduleId: string, moduleCode: string) => void;
+  onSuggestMlo?: (moduleId: string, moduleCode: string) => void;
+  isSuggestingMlo?: boolean;
   onAddActivity?: (moduleId: string, moduleCode: string, kind: 'contact' | 'independent') => void;
   onEditActivity?: (
     moduleId: string,
@@ -900,20 +909,85 @@ function ModuleCard({
       {expanded && (
         <div className="p-4 space-y-4 border-t border-teal-200/50">
           {/* MLOs */}
-          {module.mlos && module.mlos.length > 0 && (
+          {(module.mlos?.length > 0 || onAddMloManual || onSuggestMlo) && (
             <div>
-              <h5 className="text-sm font-medium text-teal-700 mb-2">
-                Module Learning Outcomes ({module.mlos.length})
-              </h5>
-              <div className="space-y-2">
-                {module.mlos.map((mlo) => (
-                  <MLOCard
-                    key={mlo.id}
-                    mlo={mlo}
-                    onEdit={onEditMlo ? (m) => onEditMlo(m, module.id, module.code) : undefined}
-                  />
-                ))}
+              <div className="flex items-center justify-between mb-2">
+                <h5 className="text-sm font-medium text-teal-700">
+                  Module Learning Outcomes ({module.mlos?.length || 0})
+                </h5>
+                <div className="flex items-center gap-2">
+                  {onAddMloManual && (
+                    <button
+                      onClick={() => onAddMloManual(module.id, module.code)}
+                      disabled={isSuggestingMlo}
+                      className="px-2.5 py-1 text-xs font-medium rounded border border-teal-300 text-teal-700 hover:bg-teal-50 disabled:opacity-50 flex items-center gap-1"
+                      title="Add a new MLO and write its statement yourself"
+                    >
+                      <svg
+                        className="w-3 h-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 4v16m8-8H4"
+                        />
+                      </svg>
+                      Add MLO
+                    </button>
+                  )}
+                  {onSuggestMlo && (
+                    <button
+                      onClick={() => onSuggestMlo(module.id, module.code)}
+                      disabled={isSuggestingMlo}
+                      className="px-2.5 py-1 text-xs font-medium rounded bg-gradient-to-r from-purple-500 to-cyan-500 text-white hover:from-purple-400 hover:to-cyan-400 disabled:opacity-50 flex items-center gap-1"
+                      title="Ask AI to draft the next MLO based on this module's context"
+                    >
+                      {isSuggestingMlo ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Thinking...
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                            />
+                          </svg>
+                          Suggest with AI
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
+              {module.mlos?.length > 0 ? (
+                <div className="space-y-2">
+                  {module.mlos.map((mlo) => (
+                    <MLOCard
+                      key={mlo.id}
+                      mlo={mlo}
+                      onEdit={onEditMlo ? (m) => onEditMlo(m, module.id, module.code) : undefined}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-teal-500 italic">
+                  No MLOs yet. Add one manually or let AI draft the first.
+                </p>
+              )}
             </div>
           )}
 
@@ -1021,7 +1095,9 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
   const [editingMlo, setEditingMlo] = useState<MLO | null>(null);
   const [editingMloModuleId, setEditingMloModuleId] = useState<string>('');
   const [editingMloModuleCode, setEditingMloModuleCode] = useState<string>('');
+  const [editingMloIsNew, setEditingMloIsNew] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [suggestingMloModuleId, setSuggestingMloModuleId] = useState<string>('');
 
   // Activity edit state — single in-flight modal at a time (consistent
   // with module/MLO editors above). `index === null` ⇒ creating a new
@@ -1138,27 +1214,76 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
     setEditingMlo(mlo);
     setEditingMloModuleId(moduleId);
     setEditingMloModuleCode(moduleCode);
+    setEditingMloIsNew(false);
   };
 
-  // Handle saving edited MLO
+  // Open the modal with a blank draft so the SME can hand-write a new MLO.
+  // The next code (Mn-Lxx) is computed from the module's sequence + existing
+  // MLO count so the SME doesn't have to guess the next code by hand.
+  const openMloDraft = (moduleId: string, moduleCode: string, draft: Partial<MLO>) => {
+    const module = workflow.step4?.modules.find((m) => m.id === moduleId);
+    const nextNumber = (module?.mlos?.length || 0) + 1;
+    const sequence = module?.sequence || 1;
+    const fallbackCode = `M${sequence}-L${String(nextNumber).padStart(2, '0')}`;
+
+    setEditingMlo({
+      id: '',
+      code: draft.code || fallbackCode,
+      statement: draft.statement || '',
+      bloomLevel: (draft.bloomLevel as any) || 'apply',
+      verb: draft.verb || '',
+      linkedPLOs: draft.linkedPLOs || [],
+    } as MLO);
+    setEditingMloModuleId(moduleId);
+    setEditingMloModuleCode(moduleCode);
+    setEditingMloIsNew(true);
+  };
+
+  const handleAddMloManual = (moduleId: string, moduleCode: string) => {
+    openMloDraft(moduleId, moduleCode, {});
+  };
+
+  const handleSuggestMlo = async (moduleId: string, moduleCode: string) => {
+    setError(null);
+    setSuggestingMloModuleId(moduleId);
+    try {
+      const response = await api.post(
+        `/api/v3/workflow/${workflow._id}/step4/module/${moduleId}/suggest-mlo`
+      );
+      const draft = response.data?.data || {};
+      openMloDraft(moduleId, moduleCode, draft);
+    } catch (err: any) {
+      console.error('Failed to suggest MLO:', err);
+      setError(err.response?.data?.error || err.message || 'AI could not draft an MLO right now');
+    } finally {
+      setSuggestingMloModuleId('');
+    }
+  };
+
+  // Handle saving edited MLO (or creating a new one when editingMloIsNew)
   const handleSaveMlo = async (updates: Partial<MLO>) => {
     if (!editingMlo || !editingMloModuleId) return;
 
     setIsSavingEdit(true);
     setError(null);
 
-    console.log('Saving MLO:', editingMlo.id, updates);
-
     try {
-      const response = await api.put(
-        `/api/v3/workflow/${workflow._id}/step4/module/${editingMloModuleId}/mlo/${editingMlo.id}`,
-        updates
-      );
-      console.log('Save response:', response.data);
+      if (editingMloIsNew) {
+        await api.post(
+          `/api/v3/workflow/${workflow._id}/step4/module/${editingMloModuleId}/mlo`,
+          updates
+        );
+      } else {
+        await api.put(
+          `/api/v3/workflow/${workflow._id}/step4/module/${editingMloModuleId}/mlo/${editingMlo.id}`,
+          updates
+        );
+      }
 
       setEditingMlo(null);
       setEditingMloModuleId('');
       setEditingMloModuleCode('');
+      setEditingMloIsNew(false);
       await onRefresh();
     } catch (err: any) {
       console.error('Failed to save MLO:', err);
@@ -1177,6 +1302,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
     setEditingMlo(null);
     setEditingMloModuleId('');
     setEditingMloModuleCode('');
+    setEditingMloIsNew(false);
   };
 
   // ──────────────────────────────────────────────────────────────────
@@ -1602,6 +1728,9 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                   onEdit={onOpenCanvas}
                   onEditModule={handleEditModule}
                   onEditMlo={handleEditMlo}
+                  onAddMloManual={handleAddMloManual}
+                  onSuggestMlo={handleSuggestMlo}
+                  isSuggestingMlo={suggestingMloModuleId === module.id}
                   onAddActivity={handleAddActivity}
                   onEditActivity={handleEditActivity}
                   onDeleteActivity={handleDeleteActivity}
@@ -1697,6 +1826,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
           mlo={editingMlo}
           moduleCode={editingMloModuleCode}
           availablePLOs={workflow.step3?.outcomes || []}
+          isNew={editingMloIsNew}
           onSave={handleSaveMlo}
           onCancel={handleCancelMloEdit}
           isSaving={isSavingEdit}

@@ -38,6 +38,7 @@ import { analyticsStorageService } from '../services/analyticsStorageService';
 import { lessonPlanService } from '../services/lessonPlanService';
 import { syllabusService } from '../services/syllabusService';
 import { syllabusExportService } from '../services/syllabusExportService';
+import { llmService } from '../services/llmService';
 import { addStepJob, getStepJobStatus, stepQueue, removeStepJob } from '../queues/stepQueue';
 import { createAuditLog } from '../services/auditService';
 import { sanitizeActivityArray } from '../services/activitySanitizer';
@@ -1407,6 +1408,171 @@ router.put(
       res.status(500).json({
         success: false,
         error: 'Failed to update MLO',
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/v3/workflow/:id/step4/module/:moduleId/mlo
+ * Append a new MLO to a module. Used by the "+ Add MLO" button on Step 4 —
+ * the SME may have realised an outcome was missing after generation.
+ */
+router.post(
+  '/:id/step4/module/:moduleId/mlo',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, moduleId } = req.params;
+      const { statement, code, bloomLevel, verb, linkedPLOs } = req.body || {};
+
+      if (!statement || typeof statement !== 'string' || !statement.trim()) {
+        return res.status(400).json({ success: false, error: 'MLO statement is required' });
+      }
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !(workflow as any).step4) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 4 not found' });
+      }
+
+      const module = (workflow as any).step4.modules.find((m: any) => m.id === moduleId);
+      if (!module) {
+        return res.status(404).json({ success: false, error: 'Module not found' });
+      }
+
+      const existing = module.mlos || [];
+      const nextOutcomeNumber =
+        existing.reduce((max: number, m: any) => Math.max(max, m.outcomeNumber || 0), 0) + 1;
+      const moduleSequence = module.sequenceOrder || module.sequence || 1;
+      const fallbackCode = `M${moduleSequence}-L${String(nextOutcomeNumber).padStart(2, '0')}`;
+
+      const newMlo: any = {
+        id: `mlo-user-${crypto.randomBytes(6).toString('hex')}`,
+        outcomeNumber: nextOutcomeNumber,
+        code: (code && String(code).trim()) || fallbackCode,
+        statement: statement.trim(),
+        bloomLevel: bloomLevel || 'apply',
+        verb: verb || '',
+        linkedPLOs: Array.isArray(linkedPLOs) ? linkedPLOs : [],
+        competencyLinks: [],
+      };
+
+      module.mlos = [...existing, newMlo];
+      (workflow as any).markModified('step4');
+      await workflow.save();
+
+      loggingService.info('MLO created', {
+        workflowId: id,
+        moduleId,
+        mloId: newMlo.id,
+        code: newMlo.code,
+      });
+
+      res.json({ success: true, data: newMlo });
+    } catch (error) {
+      loggingService.error('Error creating MLO', { error });
+      res.status(500).json({ success: false, error: 'Failed to create MLO' });
+    }
+  }
+);
+
+/**
+ * POST /api/v3/workflow/:id/step4/module/:moduleId/suggest-mlo
+ * Ask the LLM to draft the next MLO for a module given context (module
+ * description, existing MLOs, PLOs). Returns the draft without saving —
+ * the user reviews + saves through the standard create endpoint.
+ */
+router.post(
+  '/:id/step4/module/:moduleId/suggest-mlo',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, moduleId } = req.params;
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !(workflow as any).step4) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 4 not found' });
+      }
+
+      const module = (workflow as any).step4.modules.find((m: any) => m.id === moduleId);
+      if (!module) {
+        return res.status(404).json({ success: false, error: 'Module not found' });
+      }
+
+      const plos = (workflow as any).step3?.outcomes || [];
+      const existing = module.mlos || [];
+      const nextOutcomeNumber =
+        existing.reduce((max: number, m: any) => Math.max(max, m.outcomeNumber || 0), 0) + 1;
+      const moduleSequence = module.sequenceOrder || module.sequence || 1;
+      const draftCode = `M${moduleSequence}-L${String(nextOutcomeNumber).padStart(2, '0')}`;
+
+      const ploLines =
+        plos.map((p: any) => `- ${p.code}: ${p.statement}`).join('\n') || '(no PLOs yet)';
+      const existingMloLines = existing.length
+        ? existing
+            .map(
+              (m: any, i: number) =>
+                `${i + 1}. [${m.bloomLevel}] ${m.statement} (links: ${(m.linkedPLOs || []).join(', ') || 'none'})`
+            )
+            .join('\n')
+        : '(none yet — this will be the first MLO)';
+
+      const systemPrompt = `You are a senior learning design specialist. You write precise, measurable Module Learning Outcomes (MLOs) using Bloom's Revised Taxonomy.
+
+Rules for every MLO:
+1. Structure: [Bloom verb] + [specific task] + [context/criterion]
+2. ≤25 words
+3. Single observable behaviour
+4. Genuinely assessable
+5. Complements (does not duplicate) the module's existing MLOs
+6. Aligns with one or more PLOs
+
+Return STRICT JSON only, no commentary:
+{"statement": string, "bloomLevel": "remember"|"understand"|"apply"|"analyze"|"evaluate"|"create", "verb": string, "suggestedLinkedPLOs": string[]}`;
+
+      const userPrompt = `MODULE
+Code: ${module.moduleCode || module.code}
+Title: ${module.title}
+Description: ${module.description || '(none)'}
+Total hours: ${module.totalHours} (Contact ${module.contactHours} / Independent ${module.independentHours || module.selfStudyHours || 0})
+
+EXISTING MLOs in this module:
+${existingMloLines}
+
+PROGRAMME LEARNING OUTCOMES (pick the codes most aligned with the new MLO):
+${ploLines}
+
+Draft the next MLO (#${nextOutcomeNumber}) for this module. It must complement the existing MLOs (different Bloom level or different aspect, not a near-duplicate).`;
+
+      const raw = await llmService.generateStructuredOutput<{
+        statement: string;
+        bloomLevel: string;
+        verb: string;
+        suggestedLinkedPLOs?: string[];
+      }>(userPrompt, systemPrompt);
+
+      const ploCodes = new Set(plos.map((p: any) => p.code));
+      const safeLinked = Array.isArray(raw.suggestedLinkedPLOs)
+        ? raw.suggestedLinkedPLOs.filter((c) => ploCodes.has(c))
+        : [];
+
+      res.json({
+        success: true,
+        data: {
+          code: draftCode,
+          statement: (raw.statement || '').trim(),
+          bloomLevel: raw.bloomLevel || 'apply',
+          verb: (raw.verb || '').trim(),
+          linkedPLOs: safeLinked,
+        },
+      });
+    } catch (error: any) {
+      loggingService.error('Error suggesting MLO', { error: error?.message || error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to suggest MLO',
       });
     }
   }
