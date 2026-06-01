@@ -88,22 +88,27 @@ class CurriculumImportService {
     // robust to headings that carry no code (title-only) and to Word/LibreOffice
     // re-saves that reshuffle run boundaries.
     const HOURS_RE = /Hours:\s*(\d+)\s*\(\s*Contact:\s*(\d+|-)\s*,\s*Independent:\s*(\d+|-)\s*\)/i;
-    // Optional "{CODE}: {title}" prefix. Code = 3+ chars, starts with a letter,
-    // then letters/digits/hyphens (e.g. DFE101, CAFHN-406-1701, MOD201).
-    const CODE_TITLE_RE = /^([A-Za-z][A-Za-z0-9-]{2,30})\s*:\s+(.+)$/;
+    // Optional "{CODE}: {title}" prefix. A real module code is uppercase and
+    // carries at least one digit (DFE101, CAFHN-406-1701, MOD201). Requiring a
+    // digit stops a normal title that merely contains a colon — e.g.
+    // "Capstone: Seasonal Capsule" — from being mis-split into code + title.
+    const CODE_TITLE_RE = /^([A-Z][A-Z0-9-]*\d[A-Z0-9-]*)\s*:\s+(.+)$/;
 
     const textOf = (i: number): string =>
       i >= 0 && i < children.length ? $(children[i]).text().replace(/\s+/g, ' ').trim() : '';
 
-    // Is the FIRST non-empty sibling a module Hours line? In the export the
-    // Hours line immediately follows the module heading, so we check only the
-    // next non-empty element — a wider window would catch the *following*
-    // module's Hours line and mis-detect summary/activity lines as headings.
-    const nextIsHoursLine = (from: number): boolean => {
+    // Signals that the FIRST non-empty sibling marks the start of a module
+    // body: the Hours line (normal case), or — if an SME deleted the Hours
+    // line in Word — the Description line or the MLO-table header. We only
+    // look at the immediate next non-empty element so we never catch the
+    // *following* module's Hours line (which would mis-detect summary and
+    // activity lines as headings).
+    const MODULE_BODY_START_RE = /^(Hours:|Description:|Module Learning Outcomes:)/i;
+    const nextStartsModuleBody = (from: number): boolean => {
       for (let j = from + 1; j < children.length; j++) {
         const t = textOf(j);
         if (!t) continue; // skip blank paragraphs a re-save may insert
-        return HOURS_RE.test(t);
+        return HOURS_RE.test(t) || MODULE_BODY_START_RE.test(t);
       }
       return false;
     };
@@ -164,7 +169,7 @@ class CurriculumImportService {
           text
         );
       const looksLikeParagraph = tag === 'p' || /^h[1-6]$/.test(tag);
-      if (looksLikeParagraph && !isSubHeader && nextIsHoursLine(idx)) {
+      if (looksLikeParagraph && !isSubHeader && nextStartsModuleBody(idx)) {
         startModule(text);
         continue;
       }
@@ -188,15 +193,24 @@ class CurriculumImportService {
         );
         const colIndex: Record<string, number> = {};
         headers.forEach((h, i) => {
-          if (h.includes('code')) colIndex.code = i;
-          else if (h.includes('learning outcome') || h === 'outcome') colIndex.statement = i;
+          if (h === 'code' || h.includes(' code') || h.endsWith('code') || h === 'id')
+            colIndex.code = i;
+          else if (
+            /learning\s+(outcome|objective|goal|statement)|^(outcome|objective|mlo|lo)\b/.test(h)
+          )
+            colIndex.statement = i;
           else if (h.includes('bloom')) colIndex.bloom = i;
           else if (h === 'verb') colIndex.verb = i;
-          else if (h.includes('linked plo') || h === 'plos') colIndex.plos = i;
+          else if (h.includes('linked plo') || h === 'plos' || h === 'plo') colIndex.plos = i;
         });
+        // Fallback: if no statement header matched but a code column exists,
+        // the statement is almost always the column immediately after it.
+        if (colIndex.statement === undefined && colIndex.code !== undefined) {
+          colIndex.statement = colIndex.code + 1;
+        }
         if (colIndex.statement === undefined) {
           warnings.push(
-            `Module ${currentModule.moduleCode}: skipped a table that didn't look like the MLO table.`
+            `Module ${currentModule.moduleCode || currentModule.title}: could not find a Learning Outcome column in its MLO table (headers seen: ${headers.join(', ')}). Its MLOs were left unchanged.`
           );
           continue;
         }
@@ -260,6 +274,16 @@ class CurriculumImportService {
 
     finishCurrent();
 
+    // A module with no hours usually means its "Hours:" line was deleted or
+    // mangled during editing — surface it rather than silently keeping nulls.
+    modules.forEach((m) => {
+      if (m.totalHours === null) {
+        warnings.push(
+          `Module "${m.moduleCode || m.title}" had no readable Hours line — its hours were left unchanged. Check the "Hours: N (Contact: N, Independent: N)" line wasn't deleted.`
+        );
+      }
+    });
+
     loggingService.info('Curriculum DOCX parsed', {
       modules: modules.length,
       totalMlos: modules.reduce((sum, m) => sum + m.mlos.length, 0),
@@ -307,10 +331,18 @@ class CurriculumImportService {
           next = next.next;
           continue;
         }
-        // Some exporters emit numbered bullets without symbols — accept
-        // those only if we haven't found anything yet (avoids eating the
-        // next module heading).
-        if (lines.length === 0 && /^\[?\d+\]?\s+/.test(text)) {
+        // A Word/LibreOffice re-save can strip the bullet symbol from list
+        // items. For the FIRST item only, accept any line that isn't itself
+        // a heading (module heading / sub-header) — otherwise we'd drop a
+        // de-bulleted item. Subsequent lines still require a bullet symbol so
+        // we never run past the block into the next module.
+        const isHeadingLike =
+          /^(Hours:|Description:|Module Learning Outcomes:|Topics:|Contact Activities:|Independent Activities:)/i.test(
+            text
+          ) || /^[A-Z][A-Z0-9-]*\d[A-Z0-9-]*\s*:\s+/.test(text);
+        if (lines.length === 0 && !isHeadingLike) {
+          // Keep the raw text — the Topics branch still needs any "[n]" prefix
+          // to recover the sequence number.
           lines.push(text);
           next = next.next;
           continue;

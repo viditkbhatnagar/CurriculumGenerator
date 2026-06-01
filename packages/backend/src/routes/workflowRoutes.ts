@@ -1739,14 +1739,26 @@ router.post('/:id/step4/import', validateJWT, loadUser, (req: Request, res: Resp
         });
         updated.mlos = newMlos;
 
-        // Topics replace wholesale — they have weak identity (sequence
-        // numbers shift) and SMEs typically edit the whole list.
-        updated.topics = pmod.topics.map((t, tIdx) => ({
-          id: `topic-${crypto.randomBytes(4).toString('hex')}`,
-          sequence: t.sequence || tIdx + 1,
-          title: t.title,
-          hours: t.hours,
-        }));
+        // Topics replace wholesale — they have weak identity (sequence numbers
+        // shift) and SMEs typically edit the whole list. The export doesn't
+        // carry a topic's description/linkedMLOs, so preserve those from the
+        // matching existing topic (by title) instead of dropping them.
+        const liveTopics: any[] = Array.isArray(updated.topics) ? updated.topics : [];
+        const liveTopicByTitle = new Map<string, any>();
+        liveTopics.forEach((t: any) => {
+          if (t.title) liveTopicByTitle.set(norm(t.title), t);
+        });
+        updated.topics = pmod.topics.map((t, tIdx) => {
+          const prior = liveTopicByTitle.get(norm(t.title));
+          return {
+            id: prior?.id || `topic-${crypto.randomBytes(4).toString('hex')}`,
+            sequence: t.sequence || tIdx + 1,
+            title: t.title,
+            hours: t.hours,
+            description: prior?.description || '',
+            ...(prior?.linkedMLOs ? { linkedMLOs: prior.linkedMLOs } : {}),
+          };
+        });
 
         // Activities — string arrays; replace wholesale, drop empties.
         updated.contactActivities = pmod.contactActivities.filter((s) => s.trim());
