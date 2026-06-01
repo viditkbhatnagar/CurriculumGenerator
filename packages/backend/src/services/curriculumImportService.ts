@@ -82,7 +82,51 @@ class CurriculumImportService {
     const isOtherStepHeading = (text: string) =>
       /^\s*(\d{1,2})\.\s+[A-Z]/.test(text) && !isStep4Heading(text);
 
-    for (const el of children) {
+    // "Hours: X (Contact: Y, Independent: Z)" — the most reliable anchor in a
+    // module body. We use it two ways: to read the hours, and (via lookahead)
+    // to recognise the paragraph just before it as a module heading. This is
+    // robust to headings that carry no code (title-only) and to Word/LibreOffice
+    // re-saves that reshuffle run boundaries.
+    const HOURS_RE = /Hours:\s*(\d+)\s*\(\s*Contact:\s*(\d+|-)\s*,\s*Independent:\s*(\d+|-)\s*\)/i;
+    // Optional "{CODE}: {title}" prefix. Code = 3+ chars, starts with a letter,
+    // then letters/digits/hyphens (e.g. DFE101, CAFHN-406-1701, MOD201).
+    const CODE_TITLE_RE = /^([A-Za-z][A-Za-z0-9-]{2,30})\s*:\s+(.+)$/;
+
+    const textOf = (i: number): string =>
+      i >= 0 && i < children.length ? $(children[i]).text().replace(/\s+/g, ' ').trim() : '';
+
+    // Is the FIRST non-empty sibling a module Hours line? In the export the
+    // Hours line immediately follows the module heading, so we check only the
+    // next non-empty element — a wider window would catch the *following*
+    // module's Hours line and mis-detect summary/activity lines as headings.
+    const nextIsHoursLine = (from: number): boolean => {
+      for (let j = from + 1; j < children.length; j++) {
+        const t = textOf(j);
+        if (!t) continue; // skip blank paragraphs a re-save may insert
+        return HOURS_RE.test(t);
+      }
+      return false;
+    };
+
+    const startModule = (headingText: string) => {
+      finishCurrent();
+      const m = headingText.match(CODE_TITLE_RE);
+      currentModule = {
+        moduleCode: m ? m[1].trim() : '',
+        title: m ? m[2].trim() : headingText.trim(),
+        description: '',
+        totalHours: null,
+        contactHours: null,
+        independentHours: null,
+        mlos: [],
+        topics: [],
+        contactActivities: [],
+        independentActivities: [],
+      };
+    };
+
+    for (let idx = 0; idx < children.length; idx++) {
+      const el = children[idx];
       const $el = $(el);
       const tag = (el as any).tagName?.toLowerCase?.() || '';
       const text = $el.text().replace(/\s+/g, ' ').trim();
@@ -103,12 +147,8 @@ class CurriculumImportService {
 
       // Inside Step 4 ---------------------------------------------------
 
-      // A "Hours: X (Contact: Y, Independent: Z)" paragraph is the most
-      // reliable anchor — it tells us we're inside a module body and lets
-      // us pull the three hour values in one shot.
-      const hoursMatch = text.match(
-        /Hours:\s*(\d+)\s*\(\s*Contact:\s*(\d+|-)\s*,\s*Independent:\s*(\d+|-)\s*\)/i
-      );
+      // Hours line for the current module.
+      const hoursMatch = text.match(HOURS_RE);
       if (hoursMatch && currentModule) {
         currentModule.totalHours = Number(hoursMatch[1]);
         currentModule.contactHours = hoursMatch[2] === '-' ? null : Number(hoursMatch[2]);
@@ -116,30 +156,16 @@ class CurriculumImportService {
         continue;
       }
 
-      // Module heading: text shape "{CODE}: {title}" rendered as a bold
-      // paragraph. We treat any paragraph that contains a colon and looks
-      // code-like at the start as a module heading, but only when we're
-      // not inside the MLO table / activities block already.
-      const moduleHeadingMatch = text.match(/^([A-Z][A-Z0-9](?:[A-Z0-9-]{2,30}))\s*:\s+(.+)$/);
-      const looksBold = tag === 'p' && ($el.find('strong, b').length > 0 || /^[A-Z]/.test(text));
-      if (
-        moduleHeadingMatch &&
-        looksBold &&
-        !/Hours|Description|Outcomes|Topics|Activities/i.test(text)
-      ) {
-        finishCurrent();
-        currentModule = {
-          moduleCode: moduleHeadingMatch[1].trim(),
-          title: moduleHeadingMatch[2].trim(),
-          description: '',
-          totalHours: null,
-          contactHours: null,
-          independentHours: null,
-          mlos: [],
-          topics: [],
-          contactActivities: [],
-          independentActivities: [],
-        };
+      // Module heading detection. A paragraph is a module heading when the
+      // next line (within a short window) is a Hours line — this holds whether
+      // or not the heading carries a code, and survives Word re-saves.
+      const isSubHeader =
+        /^(Hours|Description|Module Learning Outcomes|Topics|Contact Activities|Independent Activities)\b/i.test(
+          text
+        );
+      const looksLikeParagraph = tag === 'p' || /^h[1-6]$/.test(tag);
+      if (looksLikeParagraph && !isSubHeader && nextIsHoursLine(idx)) {
+        startModule(text);
         continue;
       }
 

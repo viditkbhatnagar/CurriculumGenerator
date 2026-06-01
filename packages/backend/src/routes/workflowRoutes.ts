@@ -1641,10 +1641,16 @@ router.post('/:id/step4/import', validateJWT, loadUser, (req: Request, res: Resp
 
       const step4 = (workflow as any).step4;
       const liveByCode = new Map<string, any>();
+      // Generated modules store their code under `code` (frontend shape); the
+      // typed model calls it `moduleCode`. Match on whichever is present, and
+      // keep a normalised-title map as a fallback for code-less headings.
+      const norm = (s: string) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const liveByTitle = new Map<string, any>();
       step4.modules.forEach((m: any) => {
-        if (m.moduleCode) liveByCode.set(m.moduleCode, m);
+        const code = m.code || m.moduleCode;
+        if (code) liveByCode.set(code, m);
+        if (m.title) liveByTitle.set(norm(m.title), m);
       });
-      const uploadedCodes = new Set(parsed.modules.map((m) => m.moduleCode));
 
       const summary = {
         modulesAdded: 0,
@@ -1656,31 +1662,48 @@ router.post('/:id/step4/import', validateJWT, loadUser, (req: Request, res: Resp
         warnings: parsed.warnings,
       };
 
+      const matchedLiveIds = new Set<string>();
+
       // Rebuild step4.modules in upload order so SME reorderings stick.
       const newModules: any[] = [];
       parsed.modules.forEach((pmod, idx) => {
-        const existing = liveByCode.get(pmod.moduleCode);
+        const existing =
+          (pmod.moduleCode && liveByCode.get(pmod.moduleCode)) || liveByTitle.get(norm(pmod.title));
         const updated: any = existing
           ? { ...existing }
           : {
               id: `mod-imported-${crypto.randomBytes(6).toString('hex')}`,
-              moduleCode: pmod.moduleCode,
               isCore: true,
               prerequisites: [],
-              competencyLinks: [],
+              linkedPLOs: [],
+              phase: 'middle',
+              credits: 0,
             };
 
-        if (!existing) summary.modulesAdded += 1;
-        else summary.modulesUpdated += 1;
+        if (existing) {
+          matchedLiveIds.add(existing.id);
+          summary.modulesUpdated += 1;
+        } else {
+          summary.modulesAdded += 1;
+        }
 
+        // Canonical code lives on `code` (what the UI + downstream read); we
+        // mirror it to `moduleCode` so the typed model stays consistent too.
+        const code = pmod.moduleCode || updated.code || updated.moduleCode || '';
+        updated.code = code;
+        updated.moduleCode = code;
         updated.title = pmod.title || updated.title;
         updated.description = pmod.description || updated.description || '';
+        updated.sequence = idx + 1;
         updated.sequenceOrder = idx + 1;
         if (pmod.totalHours !== null) updated.totalHours = pmod.totalHours;
         if (pmod.contactHours !== null) updated.contactHours = pmod.contactHours;
-        if (pmod.independentHours !== null) updated.independentHours = pmod.independentHours;
+        if (pmod.independentHours !== null) {
+          updated.selfStudyHours = pmod.independentHours; // frontend field
+          updated.independentHours = pmod.independentHours; // typed-model field
+        }
 
-        // MLO merge — match by code, fall back to order if codes missing.
+        // MLO merge — match by code (real data uses id === code), preserve id.
         const liveMlos = Array.isArray(updated.mlos) ? updated.mlos : [];
         const liveMloByCode = new Map<string, any>();
         liveMlos.forEach((m: any) => {
@@ -1691,16 +1714,17 @@ router.post('/:id/step4/import', validateJWT, loadUser, (req: Request, res: Resp
         const newMlos: any[] = [];
         pmod.mlos.forEach((pmlo, mIdx) => {
           const existingMlo = pmlo.code ? liveMloByCode.get(pmlo.code) : undefined;
+          const mloCode = pmlo.code || existingMlo?.code || `M${idx + 1}-LO${mIdx + 1}`;
           const newMlo: any = existingMlo
             ? { ...existingMlo }
             : {
-                id: `mlo-imported-${crypto.randomBytes(6).toString('hex')}`,
+                id: mloCode, // real MLOs use id === code; keep that convention
                 competencyLinks: [],
               };
           if (!existingMlo) summary.mlosAdded += 1;
           else summary.mlosUpdated += 1;
 
-          newMlo.code = pmlo.code || newMlo.code || `M${idx + 1}-LO${mIdx + 1}`;
+          newMlo.code = mloCode;
           newMlo.outcomeNumber = mIdx + 1;
           newMlo.statement = pmlo.statement;
           newMlo.bloomLevel = pmlo.bloomLevel || newMlo.bloomLevel || 'apply';
@@ -1731,20 +1755,19 @@ router.post('/:id/step4/import', validateJWT, loadUser, (req: Request, res: Resp
         newModules.push(updated);
       });
 
-      // Strict-mode deletions: live modules whose code didn't appear in
-      // the upload are removed. Snapshot above lets the SME recover.
+      // Strict-mode deletions: live modules not matched by any uploaded module
+      // are removed. The snapshot above lets the SME recover from the modal.
       step4.modules.forEach((m: any) => {
-        if (m.moduleCode && !uploadedCodes.has(m.moduleCode)) {
-          summary.modulesDeleted += 1;
-        }
+        if (!matchedLiveIds.has(m.id)) summary.modulesDeleted += 1;
       });
 
       step4.modules = newModules;
-      // Recompute totals from the new module list.
+      // Recompute totals from the new module list (selfStudyHours is the
+      // canonical independent-hours field on generated modules).
       step4.totalProgramHours = newModules.reduce((sum, m) => sum + (m.totalHours || 0), 0);
       step4.totalContactHours = newModules.reduce((sum, m) => sum + (m.contactHours || 0), 0);
       step4.totalIndependentHours = newModules.reduce(
-        (sum, m) => sum + (m.independentHours || 0),
+        (sum, m) => sum + (m.selfStudyHours ?? m.independentHours ?? 0),
         0
       );
       step4.hoursIntegrity = true; // SME-edited; re-evaluate on approve.

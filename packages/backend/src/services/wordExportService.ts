@@ -649,18 +649,22 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     );
 
     for (const module of step4.modules) {
+      // Real generated modules store the code under `code` (frontend shape);
+      // the typed model calls it `moduleCode`. Accept either so the heading
+      // always carries a code — the re-import parser keys modules on it.
+      const moduleCode = module.moduleCode || module.code;
       const independentHours =
         module.independentHours !== undefined && module.independentHours !== null
           ? module.independentHours
-          : module.totalHours && module.contactHours
-            ? module.totalHours - module.contactHours
-            : '-';
+          : module.selfStudyHours !== undefined && module.selfStudyHours !== null
+            ? module.selfStudyHours
+            : module.totalHours && module.contactHours
+              ? module.totalHours - module.contactHours
+              : '-';
 
       contentChildren.push(
         this.createH3(
-          module.moduleCode
-            ? `${module.moduleCode}: ${module.title || 'Untitled'}`
-            : module.title || 'Untitled'
+          moduleCode ? `${moduleCode}: ${module.title || 'Untitled'}` : module.title || 'Untitled'
         ),
         new Paragraph({
           children: [
