@@ -96,6 +96,21 @@ class CurriculumImportService {
 
     const textOf = (i: number): string =>
       i >= 0 && i < children.length ? $(children[i]).text().replace(/\s+/g, ' ').trim() : '';
+    const tagOf = (i: number): string =>
+      i >= 0 && i < children.length ? (children[i] as any).tagName?.toLowerCase?.() || '' : '';
+    // Index of the next element that is either a table or carries text.
+    const firstContentIdx = (from: number): number => {
+      for (let j = from + 1; j < children.length; j++) {
+        if (tagOf(j) === 'table' || textOf(j)) return j;
+      }
+      return -1;
+    };
+    // The header labels of the MLO grid — used to recognise the start of a
+    // flattened (de-tabled) MLO block and to count its columns.
+    const isMloHeaderLabel = (t: string): boolean =>
+      /^(code|id|learning outcome|learning objective|outcome|objective|mlo|lo|bloom level|bloom|verb|linked plos?|plos?|linked kscs?|kscs?|linked competenc\w*)$/i.test(
+        t
+      );
 
     // Signals that the FIRST non-empty sibling marks the start of a module
     // body: the Hours line (normal case), or — if an SME deleted the Hours
@@ -168,8 +183,18 @@ class CurriculumImportService {
         /^(Hours|Description|Module Learning Outcomes|Topics|Contact Activities|Independent Activities)\b/i.test(
           text
         );
+      // Never treat these as a module heading, even if the line after them
+      // happens to look like a module body (which can occur when a re-save
+      // drops/merges the real heading): the programme-summary line, a bullet
+      // (topic/activity), or a flattened MLO-table column label.
+      const isNotAHeading =
+        isSubHeader ||
+        /^[•‣◦-]\s/.test(text) ||
+        /total\s+program(me)?\s+hours/i.test(text) ||
+        / \| contact:/i.test(text) ||
+        isMloHeaderLabel(text);
       const looksLikeParagraph = tag === 'p' || /^h[1-6]$/.test(tag);
-      if (looksLikeParagraph && !isSubHeader && nextStartsModuleBody(idx)) {
+      if (looksLikeParagraph && !isNotAHeading && nextStartsModuleBody(idx)) {
         startModule(text);
         continue;
       }
@@ -182,57 +207,84 @@ class CurriculumImportService {
         continue;
       }
 
-      // MLO table ----------------------------------------------------------
+      // MLO data — case 1: Word kept the real <table>.
       if (tag === 'table') {
         const rows = $el.find('tr').toArray();
         if (rows.length < 2) continue;
-        // First row is header — figure out column order by header text.
-        const headerCells = $(rows[0]).find('th, td').toArray();
-        const headers = headerCells.map((c) =>
-          $(c).text().replace(/\s+/g, ' ').trim().toLowerCase()
-        );
-        const colIndex: Record<string, number> = {};
-        headers.forEach((h, i) => {
-          if (h === 'code' || h.includes(' code') || h.endsWith('code') || h === 'id')
-            colIndex.code = i;
-          else if (
-            /learning\s+(outcome|objective|goal|statement)|^(outcome|objective|mlo|lo)\b/.test(h)
-          )
-            colIndex.statement = i;
-          else if (h.includes('bloom')) colIndex.bloom = i;
-          else if (h === 'verb') colIndex.verb = i;
-          else if (h.includes('linked plo') || h === 'plos' || h === 'plo') colIndex.plos = i;
-        });
-        // Fallback: if no statement header matched but a code column exists,
-        // the statement is almost always the column immediately after it.
-        if (colIndex.statement === undefined && colIndex.code !== undefined) {
-          colIndex.statement = colIndex.code + 1;
-        }
-        if (colIndex.statement === undefined) {
-          warnings.push(
-            `Module ${currentModule.moduleCode || currentModule.title}: could not find a Learning Outcome column in its MLO table (headers seen: ${headers.join(', ')}). Its MLOs were left unchanged.`
-          );
-          continue;
-        }
+        const headers = $(rows[0])
+          .find('th, td')
+          .toArray()
+          .map((c) => $(c).text().replace(/\s+/g, ' ').trim());
+        // Flatten every body cell into one ordered list; buildMlosFromGrid
+        // re-chunks it by the header count, so the table and the de-tabled
+        // (re-saved) form share one code path.
+        const cells: string[] = [];
         rows.slice(1).forEach((row) => {
-          const cells = $(row).find('td, th').toArray();
-          if (cells.length === 0) return;
-          const cellText = (i: number | undefined) =>
-            i === undefined ? '' : $(cells[i]).text().replace(/\s+/g, ' ').trim();
-          const code = cellText(colIndex.code);
-          const statement = cellText(colIndex.statement);
-          if (!statement || statement === '-') return;
-          currentModule!.mlos.push({
-            code: code && code !== '-' ? code : '',
-            statement,
-            bloomLevel: (cellText(colIndex.bloom) || 'apply').toLowerCase().replace(/^-$/, 'apply'),
-            verb: cellText(colIndex.verb).replace(/^-$/, ''),
-            linkedPLOs: cellText(colIndex.plos)
-              .split(/[,;]+/)
-              .map((s) => s.trim())
-              .filter((s) => s && s !== '-'),
-          });
+          $(row)
+            .find('td, th')
+            .toArray()
+            .forEach((c) => cells.push($(c).text().replace(/\s+/g, ' ').trim()));
         });
+        const { mlos, ok } = this.buildMlosFromGrid(headers, cells);
+        if (ok) currentModule.mlos.push(...mlos);
+        else
+          warnings.push(
+            `Module ${currentModule.moduleCode || currentModule.title}: could not read its MLO table (headers seen: ${headers.join(', ')}). Its MLOs were left unchanged.`
+          );
+        continue;
+      }
+
+      // MLO data — case 2: a re-save (Word/LibreOffice) flattened the table
+      // into plain paragraphs. The "Module Learning Outcomes:" sub-header is
+      // followed by the column labels as separate paragraphs, then the row
+      // cells. Collect the labels, then read cells until the next sub-header
+      // or module, and re-chunk by the column count.
+      if (/^Module Learning Outcomes\s*:?\s*$/i.test(text)) {
+        const firstIdx = firstContentIdx(idx);
+        // If a real table follows, the table branch above handles it.
+        if (firstIdx >= 0 && tagOf(firstIdx) !== 'table' && isMloHeaderLabel(textOf(firstIdx))) {
+          const headerLabels: string[] = [];
+          let j = firstIdx;
+          while (j < children.length) {
+            const t = textOf(j);
+            if (!t) {
+              j++;
+              continue;
+            }
+            if (isMloHeaderLabel(t)) {
+              headerLabels.push(t);
+              j++;
+            } else break;
+          }
+          const columnCount = headerLabels.length;
+          if (columnCount >= 2) {
+            const isStop = (k: number): boolean => {
+              const tg = tagOf(k);
+              if (tg === 'table' || tg === 'ul' || tg === 'ol') return true;
+              const t = textOf(k);
+              if (!t) return false;
+              if (
+                /^(Topics:|Contact Activities:|Independent Activities:|Description:|Module Learning Outcomes:)/i.test(
+                  t
+                )
+              )
+                return true;
+              if (isOtherStepHeading(t)) return true;
+              // The next module's heading sits directly above its Hours line.
+              if ((tg === 'p' || /^h[1-6]$/.test(tg)) && nextStartsModuleBody(k)) return true;
+              return false;
+            };
+            const cells: string[] = [];
+            while (j < children.length && !isStop(j)) {
+              const t = textOf(j);
+              if (t) cells.push(t);
+              j++;
+            }
+            const { mlos } = this.buildMlosFromGrid(headerLabels, cells);
+            if (mlos.length) currentModule.mlos.push(...mlos);
+            idx = j - 1; // resume at the stop element (loop will idx++)
+          }
+        }
         continue;
       }
 
@@ -291,6 +343,60 @@ class CurriculumImportService {
     });
 
     return { modules, warnings };
+  }
+
+  /**
+   * Build MLOs from a flat grid of header labels + ordered data cells. Works
+   * for both a real <table> (cells listed row by row) and a re-save-flattened
+   * table (each cell its own paragraph), since both reduce to "headers + a
+   * stream of cells re-chunked by column count". Returns ok=false when the
+   * headers don't look like an MLO table at all.
+   */
+  private buildMlosFromGrid(
+    headerTexts: string[],
+    dataCells: string[]
+  ): { mlos: ParsedMlo[]; ok: boolean } {
+    const headers = headerTexts.map((h) => h.replace(/\s+/g, ' ').trim().toLowerCase());
+    const colIndex: Record<string, number> = {};
+    headers.forEach((h, i) => {
+      if (h === 'code' || h.includes(' code') || h.endsWith('code') || h === 'id')
+        colIndex.code = i;
+      else if (
+        /learning\s+(outcome|objective|goal|statement)|^(outcome|objective|mlo|lo)\b/.test(h)
+      )
+        colIndex.statement = i;
+      else if (h.includes('bloom')) colIndex.bloom = i;
+      else if (h === 'verb') colIndex.verb = i;
+      else if (h.includes('linked plo') || h === 'plos' || h === 'plo') colIndex.plos = i;
+    });
+    // Statement is almost always the column right after the code column.
+    if (colIndex.statement === undefined && colIndex.code !== undefined) {
+      colIndex.statement = colIndex.code + 1;
+    }
+    const columnCount = headers.length;
+    if (colIndex.statement === undefined || columnCount < 2) {
+      return { mlos: [], ok: false };
+    }
+
+    const mlos: ParsedMlo[] = [];
+    for (let r = 0; r + columnCount <= dataCells.length; r += columnCount) {
+      const row = dataCells.slice(r, r + columnCount);
+      const cell = (i: number | undefined) => (i === undefined ? '' : (row[i] || '').trim());
+      const statement = cell(colIndex.statement);
+      if (!statement || statement === '-') continue;
+      const code = cell(colIndex.code);
+      mlos.push({
+        code: code && code !== '-' ? code : '',
+        statement,
+        bloomLevel: (cell(colIndex.bloom) || 'apply').toLowerCase().replace(/^-$/, 'apply'),
+        verb: cell(colIndex.verb).replace(/^-$/, ''),
+        linkedPLOs: cell(colIndex.plos)
+          .split(/[,;]+/)
+          .map((s) => s.trim())
+          .filter((s) => s && s !== '-'),
+      });
+    }
+    return { mlos, ok: true };
   }
 
   private detectListHeading(text: string): 'topics' | 'contact' | 'independent' | null {
