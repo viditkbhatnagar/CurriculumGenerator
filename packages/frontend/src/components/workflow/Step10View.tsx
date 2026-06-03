@@ -1034,6 +1034,15 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                 const modulePlan =
                   workflow.step10?.moduleLessonPlans?.find((m) => m.moduleId === module.id) ||
                   completedByCode.get(module.code);
+                // The per-module Word export is indexed by position in
+                // step10.moduleLessonPlans (NOT the Step 4 module index) —
+                // lesson plans are generated incrementally so the two arrays
+                // can diverge in order/length.
+                const lessonPlanIndex =
+                  workflow.step10?.moduleLessonPlans?.findIndex(
+                    (m) =>
+                      m.moduleId === module.id || (!!module.code && m.moduleCode === module.code)
+                  ) ?? -1;
                 // Module is complete if we have its data OR polling says it's done
                 const isComplete = !!modulePlan || index < completedModules;
                 const isThisModuleGenerating =
@@ -1130,12 +1139,26 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                           {/* Action Button */}
                           <div className="flex-shrink-0">
                             {isComplete ? (
-                              <button
-                                onClick={() => handleViewDetails(module.id)}
-                                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors text-sm font-semibold shadow-sm"
-                              >
-                                View Details
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleViewDetails(module.id)}
+                                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors text-sm font-semibold shadow-sm"
+                                >
+                                  View Details
+                                </button>
+                                {lessonPlanIndex >= 0 && (
+                                  <StepDownloadButton
+                                    workflowId={workflow._id}
+                                    stepNumber={10}
+                                    programName={
+                                      workflow.projectName || workflow.step1?.programTitle || ''
+                                    }
+                                    moduleIndex={lessonPlanIndex}
+                                    moduleCode={module.code}
+                                    variant="icon"
+                                  />
+                                )}
+                              </div>
                             ) : isThisModuleGenerating ? (
                               <div className="px-4 py-2 bg-teal-500/20 text-teal-600 rounded-lg text-sm font-medium flex items-center gap-2">
                                 <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
