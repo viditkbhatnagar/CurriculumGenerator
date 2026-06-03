@@ -144,6 +144,36 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   }
 
   /**
+   * Split prose into readable paragraphs WITHOUT an OpenAI round-trip.
+   * Used for content that is already well-formed (e.g. generated lesson-plan
+   * guidance) where calling formatTextIntelligently per item would add a
+   * network call per lesson and make large exports time out. Honours existing
+   * blank-line breaks; otherwise groups sentences into ~4-sentence blocks.
+   */
+  private splitIntoParagraphs(text: string): string[] {
+    const trimmed = (text || '').trim();
+    if (!trimmed) return [];
+    const byBlankLine = trimmed
+      .split(/\n\s*\n+/)
+      .map((p) => p.replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    if (byBlankLine.length > 1) return byBlankLine;
+    const sentences = trimmed.replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [
+      trimmed,
+    ];
+    const paras: string[] = [];
+    for (let i = 0; i < sentences.length; i += 4) {
+      paras.push(
+        sentences
+          .slice(i, i + 4)
+          .join('')
+          .trim()
+      );
+    }
+    return paras.filter(Boolean);
+  }
+
+  /**
    * Create formatted paragraphs with Times New Roman font and proper spacing
    */
   private createFormattedParagraphs(
@@ -1891,12 +1921,13 @@ If the content is better as bullets, put it in bullets array and leave paragraph
               );
 
               if (lesson.instructorNotes.pedagogicalGuidance) {
-                const formatted = await this.formatTextIntelligently(
-                  lesson.instructorNotes.pedagogicalGuidance,
-                  'Pedagogical Guidance'
-                );
-                if (formatted.paragraphs.length > 0) {
-                  contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+                // Plain split — no OpenAI call per lesson. With many lessons
+                // the per-lesson round-trip was the dominant cost and made the
+                // full Step 10 export time out (~5 min); the guidance text is
+                // already well-formed prose.
+                const paras = this.splitIntoParagraphs(lesson.instructorNotes.pedagogicalGuidance);
+                if (paras.length > 0) {
+                  contentChildren.push(...this.createFormattedParagraphs(paras));
                 }
               }
 
