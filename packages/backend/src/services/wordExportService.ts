@@ -1594,6 +1594,30 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       this.createH1('10. Lesson Plans & PPT Generation')
     );
 
+    // Counts computed LIVE from the lesson plans actually present (the array
+    // is filtered to one module for per-module exports). step10.summary is
+    // written once at generation time and goes stale after modules are
+    // regenerated — that caused the screen/doc lesson-count mismatch and made
+    // per-module files repeat whole-programme totals.
+    const plans: any[] = Array.isArray(step10.moduleLessonPlans) ? step10.moduleLessonPlans : [];
+    const allLessons: any[] = plans.flatMap((p: any) =>
+      Array.isArray(p.lessons) ? p.lessons : []
+    );
+    const liveLessonCount =
+      allLessons.length || plans.reduce((s: number, p: any) => s + (p.totalLessons || 0), 0);
+    const liveContactHours =
+      Math.round(plans.reduce((s: number, p: any) => s + (p.totalContactHours || 0), 0) * 100) /
+      100;
+    const liveCaseStudies = allLessons.filter((l: any) => l.caseStudyActivity).length;
+    const liveFormative = allLessons.reduce(
+      (s: number, l: any) => s + (Array.isArray(l.formativeChecks) ? l.formativeChecks.length : 0),
+      0
+    );
+    const liveAvgDuration =
+      liveLessonCount > 0 ? Math.round((liveContactHours * 60) / liveLessonCount) : 0;
+    const allHaveLessons =
+      plans.length > 0 && plans.every((p: any) => (p.lessons?.length || p.totalLessons || 0) > 0);
+
     // Validation Summary
     if (step10.validation) {
       contentChildren.push(this.createH2('10.1 Validation Summary'));
@@ -1608,7 +1632,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         new TableRow({
           children: [
             this.createTableCell('All Modules Have Lesson Plans'),
-            this.createTableCell(step10.validation.allModulesHaveLessonPlans ? '✓ Pass' : '✗ Fail'),
+            this.createTableCell(allHaveLessons ? '✓ Pass' : '✗ Fail'),
           ],
         }),
         new TableRow({
@@ -1652,8 +1676,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       );
     }
 
-    // Summary Statistics
-    if (step10.summary) {
+    // Summary Statistics — computed live (see note above) so the figures
+    // always match the lessons actually in this document.
+    if (plans.length) {
       contentChildren.push(this.createH2('10.2 Summary Statistics'));
 
       const summaryRows = [
@@ -1666,31 +1691,31 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         new TableRow({
           children: [
             this.createTableCell('Total Lessons'),
-            this.createTableCell(String(step10.summary.totalLessons || 0)),
+            this.createTableCell(String(liveLessonCount)),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('Total Contact Hours'),
-            this.createTableCell(String(step10.summary.totalContactHours || 0)),
+            this.createTableCell(String(liveContactHours)),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('Average Lesson Duration (minutes)'),
-            this.createTableCell(String(Math.round(step10.summary.averageLessonDuration || 0))),
+            this.createTableCell(String(liveAvgDuration)),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('Case Studies Included'),
-            this.createTableCell(String(step10.summary.caseStudiesIncluded || 0)),
+            this.createTableCell(String(liveCaseStudies)),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('Formative Checks Included'),
-            this.createTableCell(String(step10.summary.formativeChecksIncluded || 0)),
+            this.createTableCell(String(liveFormative)),
           ],
         }),
       ];
@@ -1719,7 +1744,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           new Paragraph({
             children: [
               new TextRun({
-                text: `Total Contact Hours: ${modulePlan.totalContactHours || 0} | Total Lessons: ${modulePlan.totalLessons || 0}`,
+                text: `Total Contact Hours: ${modulePlan.totalContactHours || 0} | Total Lessons: ${modulePlan.lessons?.length ?? modulePlan.totalLessons ?? 0}`,
                 size: FONT_SIZES.BODY,
                 font: FONT_FAMILY,
                 italics: true,
@@ -3261,6 +3286,26 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         ? this.buildKSCMap(workflow.step2)
         : new Map<string, string>();
 
+    // For a per-module export (steps 10-12) label the cover with the ACTUAL
+    // module's code/title, not its positional index — the module arrays can be
+    // out of order, so "Module {index+1}" mislabelled files (a "Module 6" file
+    // could contain Module 8's content).
+    let moduleLabel = '';
+    if (options?.moduleIndex !== undefined) {
+      const moduleArrayKeys: Record<number, string> = {
+        10: 'moduleLessonPlans',
+        11: 'modulePPTDecks',
+        12: 'moduleAssignmentPacks',
+      };
+      const arrKey = moduleArrayKeys[stepNumber];
+      const mod = arrKey
+        ? ((workflow as any)[`step${stepNumber}`]?.[arrKey] || [])[options.moduleIndex]
+        : undefined;
+      const code = mod?.moduleCode || mod?.code || '';
+      const title = mod?.moduleTitle || mod?.title || '';
+      moduleLabel = [code, title].filter(Boolean).join(': ') || `Module ${options.moduleIndex + 1}`;
+    }
+
     // Mini title page
     const titleSection = {
       properties: {},
@@ -3295,7 +3340,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
               new Paragraph({
                 children: [
                   new TextRun({
-                    text: `Module ${options.moduleIndex + 1}`,
+                    text: moduleLabel,
                     size: 28,
                     font: FONT_FAMILY,
                     color: '718096',

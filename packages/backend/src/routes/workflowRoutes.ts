@@ -78,6 +78,47 @@ function normalizeStep3PloCodes(step3: any): boolean {
   return changed;
 }
 
+/**
+ * Recompute step10.summary from the lesson plans actually present. The summary
+ * is written once at generation and goes stale after modules are regenerated,
+ * which made the screen show a different lesson count from the exported doc.
+ * Returns true if any figure changed.
+ */
+function recomputeStep10Summary(step10: any): boolean {
+  if (!step10 || !Array.isArray(step10.moduleLessonPlans)) return false;
+  const plans = step10.moduleLessonPlans;
+  const allLessons = plans.flatMap((p: any) => (Array.isArray(p.lessons) ? p.lessons : []));
+  const totalLessons =
+    allLessons.length || plans.reduce((s: number, p: any) => s + (p.totalLessons || 0), 0);
+  const totalContactHours =
+    Math.round(plans.reduce((s: number, p: any) => s + (p.totalContactHours || 0), 0) * 100) / 100;
+  const caseStudiesIncluded = allLessons.filter((l: any) => l.caseStudyActivity).length;
+  const formativeChecksIncluded = allLessons.reduce(
+    (s: number, l: any) => s + (Array.isArray(l.formativeChecks) ? l.formativeChecks.length : 0),
+    0
+  );
+  const averageLessonDuration =
+    totalLessons > 0 ? Math.round((totalContactHours * 60) / totalLessons) : 0;
+  const prev = step10.summary || {};
+  if (
+    prev.totalLessons === totalLessons &&
+    prev.totalContactHours === totalContactHours &&
+    prev.caseStudiesIncluded === caseStudiesIncluded &&
+    prev.formativeChecksIncluded === formativeChecksIncluded
+  ) {
+    return false;
+  }
+  step10.summary = {
+    ...prev,
+    totalLessons,
+    totalContactHours,
+    caseStudiesIncluded,
+    formativeChecksIncluded,
+    averageLessonDuration,
+  };
+  return true;
+}
+
 // Single-file in-memory upload reserved for the curriculum re-import flow.
 // 10 MB ceiling matches the typical "full curriculum" Word export size.
 const curriculumDocxUpload = multer({
@@ -487,6 +528,18 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
         { $set: { 'step3.outcomes': (workflow as any).step3.outcomes } }
       ).catch((e) =>
         loggingService.warn('PLO code backfill persist failed', { error: e?.message })
+      );
+    }
+
+    // Keep the Step 10 summary (lesson count / contact hours / etc.) in sync
+    // with the lesson plans actually present, so the screen and the exported
+    // document show the same figures.
+    if (recomputeStep10Summary((workflow as any).step10)) {
+      CurriculumWorkflow.updateOne(
+        { _id: (workflow as any)._id },
+        { $set: { 'step10.summary': (workflow as any).step10.summary } }
+      ).catch((e) =>
+        loggingService.warn('Step10 summary recompute persist failed', { error: e?.message })
       );
     }
 
