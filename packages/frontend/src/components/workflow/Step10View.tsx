@@ -671,6 +671,37 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   };
 
   // Handle saving edited lesson plan
+  // "Add Lesson" — manually append a lesson to a module that's missing some.
+  const [addLessonFor, setAddLessonFor] = useState<{
+    moduleId: string;
+    moduleCode: string;
+  } | null>(null);
+  const [isAddingLesson, setIsAddingLesson] = useState(false);
+
+  const handleAddLesson = async (title: string, durationMin: number) => {
+    if (!addLessonFor) return;
+    setIsAddingLesson(true);
+    setError(null);
+    try {
+      await api.post(
+        `/api/v3/workflow/${workflow._id}/step10/module/${addLessonFor.moduleId}/lesson`,
+        {
+          lessonTitle: title.trim() || 'New lesson',
+          duration: durationMin,
+        }
+      );
+      setAddLessonFor(null);
+      toast.success('Lesson added', 'You can now open the module to edit its details.');
+      await onRefresh();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to add lesson';
+      setError(msg);
+      toast.error('Add failed', msg);
+    } finally {
+      setIsAddingLesson(false);
+    }
+  };
+
   const handleSaveLesson = async (updatedLesson: LessonPlan) => {
     setIsSavingEdit(true);
     setError(null);
@@ -1123,17 +1154,49 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                               Module {index + 1}: {module.code}
                             </h4>
                             <p className="text-teal-600 text-sm mb-2">{module.title}</p>
-                            <div className="flex items-center gap-4 text-xs text-teal-500">
-                              <span>{module.contactHours}h contact hours</span>
-                              {modulePlan && (
-                                <>
-                                  <span>•</span>
-                                  <span className="text-emerald-400">
-                                    {modulePlan.totalLessons} lessons generated
+                            {(() => {
+                              // Expected hours come from Step 4; generated hours
+                              // and the live lesson count come from the plan that
+                              // was actually produced. Remaining = expected − generated.
+                              const expected = Math.round((module.contactHours || 0) * 10) / 10;
+                              const generated = modulePlan
+                                ? Math.round((modulePlan.totalContactHours || 0) * 10) / 10
+                                : 0;
+                              const remaining = Math.round((expected - generated) * 10) / 10;
+                              const liveLessons =
+                                modulePlan?.lessons?.length ?? modulePlan?.totalLessons ?? 0;
+                              return (
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                  <span className="text-teal-600">
+                                    Expected: <span className="font-semibold">{expected}h</span>
                                   </span>
-                                </>
-                              )}
-                            </div>
+                                  <span className="text-teal-300">•</span>
+                                  <span className="text-emerald-500">
+                                    Generated: <span className="font-semibold">{generated}h</span>
+                                  </span>
+                                  <span className="text-teal-300">•</span>
+                                  <span
+                                    className={
+                                      Math.abs(remaining) < 0.5
+                                        ? 'text-emerald-500'
+                                        : remaining > 0
+                                          ? 'text-amber-600'
+                                          : 'text-rose-500'
+                                    }
+                                  >
+                                    Remaining: <span className="font-semibold">{remaining}h</span>
+                                  </span>
+                                  {modulePlan && (
+                                    <>
+                                      <span className="text-teal-300">•</span>
+                                      <span className="text-teal-500">
+                                        {liveLessons} lesson{liveLessons === 1 ? '' : 's'}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
 
                           {/* Action Button */}
@@ -1146,6 +1209,33 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                                 >
                                   View Details
                                 </button>
+                                {modulePlan && (
+                                  <button
+                                    onClick={() =>
+                                      setAddLessonFor({
+                                        moduleId: modulePlan.moduleId || module.id,
+                                        moduleCode: module.code,
+                                      })
+                                    }
+                                    className="px-3 py-2 bg-white border border-teal-400 text-teal-700 hover:bg-teal-50 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
+                                    title="Manually add a lesson to this module"
+                                  >
+                                    <svg
+                                      className="w-4 h-4"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M12 4v16m8-8H4"
+                                      />
+                                    </svg>
+                                    Add Lesson
+                                  </button>
+                                )}
                                 {lessonPlanIndex >= 0 && (
                                   <StepDownloadButton
                                     workflowId={workflow._id}
@@ -2073,6 +2163,92 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
           isSaving={isSavingEdit}
         />
       )}
+
+      {/* Add Lesson Modal */}
+      {addLessonFor && (
+        <AddLessonModal
+          moduleCode={addLessonFor.moduleCode}
+          isSaving={isAddingLesson}
+          onCancel={() => setAddLessonFor(null)}
+          onSave={handleAddLesson}
+        />
+      )}
+    </div>
+  );
+}
+
+// Small modal to manually add a lesson (title + duration). Full lesson detail
+// is then editable via the normal lesson editor.
+function AddLessonModal({
+  moduleCode,
+  isSaving,
+  onCancel,
+  onSave,
+}: {
+  moduleCode: string;
+  isSaving: boolean;
+  onCancel: () => void;
+  onSave: (title: string, durationMin: number) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [duration, setDuration] = useState(90);
+  return (
+    <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-teal-200 w-full max-w-md p-6 space-y-4">
+        <h3 className="text-lg font-semibold text-teal-800">
+          Add lesson to <span className="text-cyan-500">{moduleCode}</span>
+        </h3>
+        <div>
+          <label className="block text-sm font-medium text-teal-700 mb-1">Lesson title</label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Introduction to fabric sourcing"
+            className="w-full px-3 py-2 border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
+            autoFocus
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-teal-700 mb-1">Duration (minutes)</label>
+          <input
+            type="number"
+            min={15}
+            max={300}
+            step={15}
+            value={duration}
+            onChange={(e) => setDuration(Number(e.target.value) || 90)}
+            className="w-32 px-3 py-2 border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
+          />
+        </div>
+        <p className="text-xs text-teal-500">
+          The lesson is added with these basics — open the module and use the lesson editor to fill
+          in objectives, activities and notes.
+        </p>
+        <div className="flex justify-end gap-3 pt-1">
+          <button
+            onClick={onCancel}
+            disabled={isSaving}
+            className="px-4 py-2 text-teal-700 hover:text-teal-900 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave(title, duration)}
+            disabled={isSaving || !title.trim()}
+            className="px-5 py-2 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-lg font-medium hover:from-teal-400 hover:to-cyan-400 disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Adding…
+              </>
+            ) : (
+              'Add Lesson'
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

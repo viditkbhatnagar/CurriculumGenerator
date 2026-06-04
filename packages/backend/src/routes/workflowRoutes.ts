@@ -6283,6 +6283,89 @@ router.put(
 );
 
 /**
+ * POST /api/v3/workflow/:id/step10/module/:moduleId/lesson
+ * Append a new (manually-written) lesson to a module's lesson plan. Used by
+ * the "Add Lesson" button so an SME can fill in a lesson the generator
+ * missed. Module + step-10 totals are recomputed.
+ */
+router.post(
+  '/:id/step10/module/:moduleId/lesson',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, moduleId } = req.params;
+      const { lessonTitle, duration, objectives } = req.body || {};
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !workflow.step10) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 10 not found' });
+      }
+
+      const module = (workflow.step10.moduleLessonPlans || []).find(
+        (m: any) => m.moduleId === moduleId || m.moduleCode === moduleId
+      );
+      if (!module) {
+        return res.status(404).json({ success: false, error: 'Module not found in Step 10' });
+      }
+      if (!Array.isArray(module.lessons)) module.lessons = [];
+
+      const dur = Number(duration);
+      const newLesson: any = {
+        lessonId: `lesson-user-${crypto.randomBytes(6).toString('hex')}`,
+        lessonNumber: module.lessons.length + 1,
+        lessonTitle: (typeof lessonTitle === 'string' && lessonTitle.trim()) || 'New lesson',
+        duration: Number.isFinite(dur) && dur > 0 ? dur : 90,
+        objectives: Array.isArray(objectives)
+          ? objectives
+          : typeof objectives === 'string' && objectives.trim()
+            ? objectives
+                .split('\n')
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : [],
+        activities: [],
+        instructorNotes: {},
+        independentStudy: {},
+        formativeChecks: [],
+        userAdded: true,
+      };
+
+      module.lessons.push(newLesson);
+      module.totalLessons = module.lessons.length;
+      module.totalContactHours = module.lessons.reduce(
+        (sum: number, l: any) => sum + (l.duration || 0) / 60,
+        0
+      );
+
+      // Keep the step-10 summary in step with the new lesson.
+      const allLessons = (workflow.step10.moduleLessonPlans || []).flatMap(
+        (m: any) => m.lessons || []
+      );
+      if (workflow.step10.summary) {
+        workflow.step10.summary.totalLessons = allLessons.length;
+        workflow.step10.summary.totalContactHours = (
+          workflow.step10.moduleLessonPlans || []
+        ).reduce((sum: number, m: any) => sum + (m.totalContactHours || 0), 0);
+      }
+
+      workflow.markModified('step10');
+      await workflow.save();
+
+      loggingService.info('Lesson added', {
+        workflowId: id,
+        moduleId,
+        lessonId: newLesson.lessonId,
+      });
+      res.status(201).json({ success: true, data: newLesson, message: 'Lesson added' });
+    } catch (error) {
+      loggingService.error('Error adding lesson', { error });
+      res.status(500).json({ success: false, error: 'Failed to add lesson' });
+    }
+  }
+);
+
+/**
  * POST /api/v3/workflow/:id/step10/module/:moduleId/regenerate
  * Wipe an existing module's lesson plans and queue a fresh generation that picks
  * up the latest module title/description/MLOs. Use this after editing a module
