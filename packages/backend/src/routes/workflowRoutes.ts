@@ -52,6 +52,32 @@ import crypto from 'crypto';
 
 const router = Router();
 
+/**
+ * Ensure every Step 3 PLO carries a sequential "PLO{n}" code. SME-added PLOs
+ * were stored with only a system id (plo-user-…), so PLO7+ surfaced as that
+ * raw id in the UI/exports. Assigns codes to code-less outcomes in array
+ * order without disturbing existing valid codes (so MLO linkedPLOs that
+ * reference PLO1–PLO6 stay intact). Returns true if anything changed.
+ */
+function normalizeStep3PloCodes(step3: any): boolean {
+  if (!step3 || !Array.isArray(step3.outcomes)) return false;
+  const isValid = (c: any) => /^PLO\d+$/i.test(c || '');
+  let maxNum = step3.outcomes.reduce((mx: number, o: any) => {
+    const m = /^PLO(\d+)$/i.exec(o?.code || '');
+    return Math.max(mx, m ? Number(m[1]) : 0);
+  }, 0);
+  let changed = false;
+  for (const o of step3.outcomes) {
+    if (!isValid(o?.code)) {
+      maxNum += 1;
+      o.code = `PLO${maxNum}`;
+      o.outcomeNumber = maxNum;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 // Single-file in-memory upload reserved for the curriculum re-import flow.
 // 10 MB ceiling matches the typical "full curriculum" Word export size.
 const curriculumDocxUpload = multer({
@@ -450,6 +476,18 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
         success: false,
         error: 'You do not have access to this workflow',
       });
+    }
+
+    // Lazily backfill any missing PLO codes for this workflow on view, so
+    // SME-added PLOs stop showing as raw system ids. Persist best-effort —
+    // the response already carries the normalised codes either way.
+    if (normalizeStep3PloCodes((workflow as any).step3)) {
+      CurriculumWorkflow.updateOne(
+        { _id: (workflow as any)._id },
+        { $set: { 'step3.outcomes': (workflow as any).step3.outcomes } }
+      ).catch((e) =>
+        loggingService.warn('PLO code backfill persist failed', { error: e?.message })
+      );
     }
 
     res.json({
@@ -1020,9 +1058,19 @@ router.post('/:id/step3/plo', validateJWT, loadUser, async (req: Request, res: R
     const step3 = workflow.step3 as any;
     if (!Array.isArray(step3.outcomes)) step3.outcomes = [];
 
+    // Next PLO number = one past the highest existing PLO code (falls back to
+    // array length). Without a code the UI shows the raw system id (PLO7+
+    // appeared as "plo-user-…"), so every PLO must carry a "PLO{n}" code.
+    const highestPloNum = step3.outcomes.reduce((max: number, o: any) => {
+      const m = /^PLO(\d+)$/i.exec(o?.code || '');
+      return Math.max(max, m ? Number(m[1]) : 0);
+    }, 0);
+    const nextNum = Math.max(highestPloNum, step3.outcomes.length) + 1;
+
     const newPlo = {
       id: `plo-user-${crypto.randomBytes(6).toString('hex')}`,
-      outcomeNumber: step3.outcomes.length + 1,
+      code: `PLO${nextNum}`,
+      outcomeNumber: nextNum,
       statement: cleanStatement,
       verb: typeof verb === 'string' ? verb.trim() : '',
       bloomLevel: typeof bloomLevel === 'string' && bloomLevel ? bloomLevel : 'apply',
