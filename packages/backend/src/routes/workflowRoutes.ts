@@ -40,6 +40,7 @@ import { syllabusService } from '../services/syllabusService';
 import { syllabusExportService } from '../services/syllabusExportService';
 import { courseSpecificationExportService } from '../services/courseSpecificationExportService';
 import { curriculumImportService } from '../services/curriculumImportService';
+import { step10ImportService } from '../services/step10ImportService';
 import multer from 'multer';
 import { llmService } from '../services/llmService';
 import { addStepJob, getStepJobStatus, stepQueue, removeStepJob } from '../queues/stepQueue';
@@ -6364,6 +6365,193 @@ router.post(
     }
   }
 );
+
+/**
+ * POST /api/v3/workflow/:id/step10/import
+ * Accept an edited Step 10 (Lesson Plans) Word export and apply the editable
+ * fields back: per module (matched by code, then title), each lesson matched
+ * by lesson number — lesson title, duration and objectives are updated; extra
+ * lessons in the file are appended. Other rich lesson content (activities,
+ * materials, notes) is preserved, and nothing is deleted. step10 is
+ * snapshotted first so the import can be rolled back.
+ */
+router.post('/:id/step10/import', validateJWT, loadUser, (req: Request, res: Response) => {
+  curriculumDocxUpload.single('file')(req, res, async (err: unknown) => {
+    if (err) {
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      return res.status(400).json({ success: false, error: message });
+    }
+    try {
+      const { id } = req.params;
+      const fileBuf = (req as Request & { file?: Express.Multer.File }).file?.buffer;
+      if (!fileBuf) {
+        return res.status(400).json({ success: false, error: 'No DOCX file uploaded' });
+      }
+
+      const workflow = await CurriculumWorkflow.findById(id);
+      if (!workflow || !workflow.step10) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 10 not found' });
+      }
+
+      const parsed = await step10ImportService.parseDocx(fileBuf);
+      if (parsed.modules.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error:
+            'No lesson plans were recognised in that document. Make sure you uploaded a Step 10 (Lesson Plans) Word export.',
+        });
+      }
+
+      await snapshotStep(id, 10);
+
+      const norm = (s: string) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const livePlans: any[] = workflow.step10.moduleLessonPlans || [];
+      const liveByCode = new Map<string, any>();
+      const liveByTitle = new Map<string, any>();
+      const seenCodes = new Set<string>();
+      const dupeCodes = new Set<string>();
+      livePlans.forEach((m: any) => {
+        const code = m.moduleCode || m.code;
+        if (code) {
+          // Only the first module wins a duplicated code; the collision is
+          // reported below so the SME knows the other wasn't matched by code.
+          if (seenCodes.has(String(code))) dupeCodes.add(String(code));
+          else liveByCode.set(String(code), m);
+          seenCodes.add(String(code));
+        }
+        if (m.moduleTitle || m.title) liveByTitle.set(norm(m.moduleTitle || m.title), m);
+      });
+
+      const summary = {
+        modulesMatched: 0,
+        modulesUnmatchedInFile: 0,
+        lessonsUpdated: 0,
+        lessonsAdded: 0,
+        warnings: parsed.warnings,
+      };
+      if (dupeCodes.size > 0) {
+        summary.warnings.push(
+          `This workflow has more than one module sharing a code (${[...dupeCodes].join(', ')}); matches for those rely on the module title instead.`
+        );
+      }
+
+      for (const pmod of parsed.modules) {
+        const liveMod =
+          (pmod.moduleCode && liveByCode.get(pmod.moduleCode)) ||
+          liveByTitle.get(norm(pmod.moduleTitle));
+        if (!liveMod) {
+          summary.modulesUnmatchedInFile += 1;
+          summary.warnings.push(
+            `Module "${pmod.moduleCode || pmod.moduleTitle}" in the file did not match any module in this workflow — skipped.`
+          );
+          continue;
+        }
+        // A module heading with no recognised lessons would otherwise touch
+        // nothing but risks confusion — warn and skip it.
+        if (pmod.lessons.length === 0) {
+          summary.warnings.push(
+            `Module "${pmod.moduleCode || pmod.moduleTitle}" had no recognised lessons in the file — left unchanged.`
+          );
+          continue;
+        }
+
+        summary.modulesMatched += 1;
+        if (!Array.isArray(liveMod.lessons)) liveMod.lessons = [];
+        // Match lessons by title FIRST, then by number. Title is stable across
+        // a Word edit that deletes/reorders lessons (which shifts numbers), so
+        // matching by number alone could update the wrong lesson. Each live
+        // lesson is consumed at most once.
+        const liveByTitleL = new Map<string, any>();
+        const liveByNumber = new Map<number, any>();
+        liveMod.lessons.forEach((l: any) => {
+          if (l.lessonTitle) liveByTitleL.set(norm(l.lessonTitle), l);
+          liveByNumber.set(l.lessonNumber, l);
+        });
+        const consumed = new Set<any>();
+
+        for (const pl of pmod.lessons) {
+          const byTitle = pl.lessonTitle ? liveByTitleL.get(norm(pl.lessonTitle)) : undefined;
+          const byNumber = liveByNumber.get(pl.lessonNumber);
+          const titleMatchesNumber =
+            byNumber && pl.lessonTitle && norm(byNumber.lessonTitle) === norm(pl.lessonTitle);
+          let live: any;
+          if (titleMatchesNumber && !consumed.has(byNumber)) {
+            // Strongest signal: same position AND same title (the common case,
+            // e.g. only duration/objectives edited). No warning.
+            live = byNumber;
+          } else if (byTitle && !consumed.has(byTitle)) {
+            // Title is stable across a delete/reorder that shifts numbers.
+            live = byTitle;
+          } else if (byNumber && !consumed.has(byNumber)) {
+            live = byNumber;
+            if (pl.lessonTitle && norm(byNumber.lessonTitle) !== norm(pl.lessonTitle)) {
+              summary.warnings.push(
+                `Module ${liveMod.moduleCode || liveMod.code}, lesson ${pl.lessonNumber}: file title "${pl.lessonTitle}" differs from existing "${byNumber.lessonTitle}" — updated by position; please verify ordering.`
+              );
+            }
+          }
+          if (live) {
+            consumed.add(live);
+            if (pl.lessonTitle) live.lessonTitle = pl.lessonTitle;
+            if (pl.duration !== null && pl.duration > 0) live.duration = pl.duration;
+            if (pl.objectives.length > 0) live.objectives = pl.objectives;
+            summary.lessonsUpdated += 1;
+          } else {
+            liveMod.lessons.push({
+              lessonId: `lesson-user-${crypto.randomBytes(6).toString('hex')}`,
+              lessonNumber: pl.lessonNumber || liveMod.lessons.length + 1,
+              lessonTitle: pl.lessonTitle || 'New lesson',
+              duration: pl.duration && pl.duration > 0 ? pl.duration : 90,
+              objectives: pl.objectives,
+              activities: [],
+              instructorNotes: {},
+              independentStudy: {},
+              formativeChecks: [],
+              userAdded: true,
+            });
+            summary.lessonsAdded += 1;
+          }
+        }
+
+        // Renumber + recompute the module's totals.
+        liveMod.lessons.sort((a: any, b: any) => (a.lessonNumber || 0) - (b.lessonNumber || 0));
+        liveMod.lessons.forEach((l: any, i: number) => {
+          l.lessonNumber = i + 1;
+        });
+        liveMod.totalLessons = liveMod.lessons.length;
+        liveMod.totalContactHours = liveMod.lessons.reduce(
+          (s: number, l: any) => s + (l.duration || 0) / 60,
+          0
+        );
+      }
+
+      // Recompute the step-10 summary.
+      const allLessons = livePlans.flatMap((m: any) => m.lessons || []);
+      if (!workflow.step10.summary) (workflow.step10 as any).summary = {};
+      workflow.step10.summary.totalLessons = allLessons.length;
+      workflow.step10.summary.totalContactHours = livePlans.reduce(
+        (s: number, m: any) => s + (m.totalContactHours || 0),
+        0
+      );
+      workflow.step10.summary.averageLessonDuration = allLessons.length
+        ? Math.round(
+            allLessons.reduce((s: number, l: any) => s + (l.duration || 0), 0) / allLessons.length
+          )
+        : 0;
+
+      workflow.markModified('step10');
+      await workflow.save();
+
+      loggingService.info('Step 10 re-import applied', { workflowId: id, summary });
+      res.json({ success: true, data: summary });
+    } catch (error: any) {
+      loggingService.error('Step 10 import failed', { error: error?.message || error });
+      res
+        .status(500)
+        .json({ success: false, error: error?.message || 'Failed to import lesson plans' });
+    }
+  });
+});
 
 /**
  * POST /api/v3/workflow/:id/step10/module/:moduleId/regenerate
