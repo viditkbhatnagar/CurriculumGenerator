@@ -1875,15 +1875,22 @@ If the content is better as bullets, put it in bullets array and leave paragraph
               })
             );
 
-            // Linked MLOs and PLOs
-            if (lesson.linkedMLOs?.length || lesson.linkedPLOs?.length) {
+            // Linked MLOs, PLOs and KSCs
+            if (
+              lesson.linkedMLOs?.length ||
+              lesson.linkedPLOs?.length ||
+              lesson.linkedKSCs?.length
+            ) {
               const mloText = lesson.linkedMLOs?.length
                 ? `MLOs: ${lesson.linkedMLOs.join(', ')}`
                 : '';
               const ploText = lesson.linkedPLOs?.length
                 ? `PLOs: ${lesson.linkedPLOs.join(', ')}`
                 : '';
-              const alignmentText = [mloText, ploText].filter(Boolean).join(' | ');
+              const kscText = lesson.linkedKSCs?.length
+                ? `KSCs: ${lesson.linkedKSCs.join(', ')}`
+                : '';
+              const alignmentText = [mloText, ploText, kscText].filter(Boolean).join(' | ');
 
               contentChildren.push(
                 new Paragraph({
@@ -1918,6 +1925,49 @@ If the content is better as bullets, put it in bullets array and leave paragraph
               contentChildren.push(
                 ...this.createFormattedParagraphs(lesson.objectives, { isBullet: true })
               );
+            }
+
+            // Topic Coverage / Practical Skill Coverage — what to teach.
+            const tc = lesson.topicCoverage;
+            if (tc && (tc.exactTopic || tc.subtopics?.length || tc.practicalActivity)) {
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: 'Topic Coverage / Practical Skill Coverage:',
+                      bold: true,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                    }),
+                  ],
+                  spacing: { before: 100, after: 50, line: LINE_SPACING },
+                })
+              );
+              const labelled = (label: string, value: string) =>
+                new Paragraph({
+                  spacing: { after: 30, line: LINE_SPACING },
+                  children: [
+                    new TextRun({
+                      text: `${label} `,
+                      bold: true,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                    }),
+                    new TextRun({ text: value, size: FONT_SIZES.BODY, font: FONT_FAMILY }),
+                  ],
+                });
+              if (tc.exactTopic)
+                contentChildren.push(labelled('Exact Topic to Teach:', tc.exactTopic));
+              if (tc.subtopics?.length)
+                contentChildren.push(
+                  labelled('Specific Subtopics / Skill List:', tc.subtopics.join('; '))
+                );
+              if (tc.practicalActivity)
+                contentChildren.push(
+                  labelled('Practical / AI / Case Activity:', tc.practicalActivity)
+                );
+              if (tc.studentEvidence)
+                contentChildren.push(labelled('Student Evidence:', tc.studentEvidence));
             }
 
             // Activity Sequence
@@ -2173,6 +2223,77 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                   ...this.createFormattedParagraphs(suppReadings, { isBullet: true })
                 );
               }
+            }
+
+            // Independent Activity Block — per-lesson self-study (the format the
+            // SME asked for). Hours are split evenly from the module's
+            // independent hours so they sum to the module total; the qualitative
+            // columns come from the lesson generator.
+            const ia = lesson.independentActivity;
+            if (ia && (ia.independentTask || ia.sourceMaterialMapping || ia.studentEvidence)) {
+              const perLessonIndep =
+                independentHours !== undefined && lessonCount > 0
+                  ? Math.round((Number(independentHours) / lessonCount) * 10) / 10
+                  : undefined;
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: 'Independent Activity Block:',
+                      bold: true,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                    }),
+                  ],
+                  spacing: { before: 100, after: 50, line: LINE_SPACING },
+                }),
+                new Table({
+                  width: { size: 100, type: WidthType.PERCENTAGE },
+                  rows: [
+                    new TableRow({
+                      children: [
+                        this.createTableCell('Independent Hours', {
+                          bold: true,
+                          shading: 'e2e8f0',
+                          width: 12,
+                        }),
+                        this.createTableCell('Source-Material Mapping', {
+                          bold: true,
+                          shading: 'e2e8f0',
+                          width: 22,
+                        }),
+                        this.createTableCell('Independent Task', {
+                          bold: true,
+                          shading: 'e2e8f0',
+                          width: 26,
+                        }),
+                        this.createTableCell('AI / Platform Support and Human Validation', {
+                          bold: true,
+                          shading: 'e2e8f0',
+                          width: 24,
+                        }),
+                        this.createTableCell('Student Evidence', {
+                          bold: true,
+                          shading: 'e2e8f0',
+                          width: 16,
+                        }),
+                      ],
+                    }),
+                    new TableRow({
+                      children: [
+                        this.createTableCell(
+                          perLessonIndep !== undefined ? `${perLessonIndep}h` : '-'
+                        ),
+                        this.createTableCell(ia.sourceMaterialMapping || '-'),
+                        this.createTableCell(ia.independentTask || '-'),
+                        this.createTableCell(ia.aiPlatformSupport || '-'),
+                        this.createTableCell(ia.studentEvidence || '-'),
+                      ],
+                    }),
+                  ],
+                }),
+                new Paragraph({ children: [], spacing: { after: 100 } })
+              );
             }
 
             // Spacing between lessons

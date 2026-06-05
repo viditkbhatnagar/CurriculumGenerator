@@ -738,16 +738,30 @@ export class LessonPlanService {
       duration: block.duration,
       linkedMLOs: block.assignedMLOs.map((mlo) => mlo.id),
       linkedPLOs,
+      linkedKSCs: this.getLinkedKSCs(block.assignedMLOs),
       bloomLevel: block.bloomLevel,
       objectives,
       activities,
       materials,
       instructorNotes,
       independentStudy: this.generateIndependentStudy(block.assignedMLOs, context),
+      // Faculty-facing detail so a tutor taking only this module knows exactly
+      // what to teach and what independent work the student does.
+      topicCoverage: aiEnhancedContent.topicCoverage,
+      independentActivity: aiEnhancedContent.independentActivity,
       formativeChecks: [],
     };
 
     return lessonPlan;
+  }
+
+  /** Union of KSC/competency ids the lesson's MLOs link to. */
+  private getLinkedKSCs(mlos: MLO[]): string[] {
+    const set = new Set<string>();
+    for (const mlo of mlos) {
+      for (const ksc of mlo.competencyLinks || []) set.add(ksc);
+    }
+    return Array.from(set);
   }
 
   /**
@@ -770,6 +784,8 @@ export class LessonPlanService {
     adaptationOptions: string[];
     commonMisconceptions: string[];
     discussionPrompts: string[];
+    topicCoverage?: LessonPlan['topicCoverage'];
+    independentActivity?: LessonPlan['independentActivity'];
   }> {
     try {
       loggingService.info('      🧠 Calling OpenAI for AI-enhanced content', {
@@ -803,6 +819,13 @@ Generate detailed lesson content including:
 5. Adaptation options for different learner needs
 6. Common misconceptions students might have
 7. Discussion prompts to engage learners
+8. Topic coverage breakdown so a faculty member taking ONLY this module knows
+   exactly what to teach: the exact topic, the specific subtopics / skills to
+   cover, the practical / AI / case activity, and the student evidence produced.
+9. An independent activity block (self-study the student completes OUTSIDE the
+   contact session): how the independent hours map to source material, the
+   independent task, what AI/platform support is allowed and how the tutor
+   validates it, and the student evidence produced.
 
 APPLIED AI INTEGRATION (REQUIRED):
 At least ONE activity in the sequence MUST be an "applied AI" activity where students
@@ -840,7 +863,19 @@ Return your response as a JSON object with the following structure:
   "pacingSuggestions": "Pacing recommendations...",
   "adaptationOptions": ["option 1", "option 2", ...],
   "commonMisconceptions": ["misconception 1", "misconception 2", ...],
-  "discussionPrompts": ["prompt 1", "prompt 2", ...]
+  "discussionPrompts": ["prompt 1", "prompt 2", ...],
+  "topicCoverage": {
+    "exactTopic": "The single exact topic/skill this lesson teaches",
+    "subtopics": ["specific subtopic or skill 1", "subtopic 2", ...],
+    "practicalActivity": "The practical / AI / case activity done in this lesson",
+    "studentEvidence": "The tangible evidence the student produces (e.g. an annotated sheet)"
+  },
+  "independentActivity": {
+    "sourceMaterialMapping": "Which reading/source/material the independent work draws on",
+    "independentTask": "Exactly what the student does on their own outside class",
+    "aiPlatformSupport": "Which AI tools/platforms may help and how the tutor validates the output",
+    "studentEvidence": "The evidence the student submits from the independent work"
+  }
 }
 
 Ensure activities are appropriate for ${context.deliveryMode} delivery mode and align with the Bloom level "${block.bloomLevel}".`;
@@ -906,6 +941,8 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
         adaptationOptions: parsed.adaptationOptions,
         commonMisconceptions: parsed.commonMisconceptions,
         discussionPrompts: parsed.discussionPrompts,
+        topicCoverage: parsed.topicCoverage,
+        independentActivity: parsed.independentActivity,
       };
     } catch (error) {
       loggingService.error('❌ Failed to generate AI-enhanced content, using fallback', {

@@ -123,6 +123,7 @@ export interface LessonPlan {
   // Learning alignment
   linkedMLOs: string[];
   linkedPLOs: string[];
+  linkedKSCs?: string[];
   bloomLevel: string;
 
   // Objectives
@@ -156,6 +157,22 @@ export interface LessonPlan {
 
   // Integrated case study (if applicable)
   caseStudyActivity?: CaseStudyActivity;
+
+  // Faculty-facing topic breakdown (what to teach in this lesson)
+  topicCoverage?: {
+    exactTopic: string;
+    subtopics: string[];
+    practicalActivity: string;
+    studentEvidence: string;
+  };
+
+  // Per-lesson independent (self-study) activity block
+  independentActivity?: {
+    sourceMaterialMapping: string;
+    independentTask: string;
+    aiPlatformSupport: string;
+    studentEvidence: string;
+  };
 
   // Formative checks
   formativeChecks: FormativeCheck[];
