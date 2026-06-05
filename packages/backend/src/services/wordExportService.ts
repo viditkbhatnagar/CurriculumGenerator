@@ -1586,8 +1586,29 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   /**
    * Generate Step 10 (Lesson Plans) section
    */
-  private async generateStep10Section(step10: any, contentChildren: any[]): Promise<void> {
+  private async generateStep10Section(
+    step10: any,
+    contentChildren: any[],
+    step4?: any
+  ): Promise<void> {
     if (!step10) return;
+
+    // Index step4 modules by id and normalised title so each lesson-plan
+    // module can pull its independent activities / independent hours / MLOs.
+    const step4ById = new Map<string, any>();
+    const step4ByTitle = new Map<string, any>();
+    (step4?.modules || []).forEach((m: any) => {
+      if (m.id) step4ById.set(String(m.id), m);
+      if (m.title) step4ByTitle.set(String(m.title).toLowerCase().replace(/\s+/g, ' ').trim(), m);
+    });
+    const findStep4Module = (mp: any): any =>
+      (mp.moduleId && step4ById.get(String(mp.moduleId))) ||
+      step4ByTitle.get(
+        String(mp.moduleTitle || mp.title || '')
+          .toLowerCase()
+          .replace(/\s+/g, ' ')
+          .trim()
+      );
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
@@ -1608,6 +1629,10 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     const liveContactHours =
       Math.round(plans.reduce((s: number, p: any) => s + (p.totalContactHours || 0), 0) * 100) /
       100;
+    const liveIndependentHours = plans.reduce((s: number, p: any) => {
+      const m = findStep4Module(p);
+      return s + (m?.selfStudyHours ?? m?.independentHours ?? 0);
+    }, 0);
     const liveCaseStudies = allLessons.filter((l: any) => l.caseStudyActivity).length;
     const liveFormative = allLessons.reduce(
       (s: number, l: any) => s + (Array.isArray(l.formativeChecks) ? l.formativeChecks.length : 0),
@@ -1700,6 +1725,16 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             this.createTableCell(String(liveContactHours)),
           ],
         }),
+        ...(liveIndependentHours > 0
+          ? [
+              new TableRow({
+                children: [
+                  this.createTableCell('Total Independent Hours'),
+                  this.createTableCell(String(liveIndependentHours)),
+                ],
+              }),
+            ]
+          : []),
         new TableRow({
           children: [
             this.createTableCell('Average Lesson Duration (minutes)'),
@@ -1736,7 +1771,10 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       for (let modIdx = 0; modIdx < step10.moduleLessonPlans.length; modIdx++) {
         const modulePlan = step10.moduleLessonPlans[modIdx];
         const modCode = modulePlan.moduleCode || modulePlan.code || `M${modIdx + 1}`;
-        // Module header
+        const s4mod = findStep4Module(modulePlan);
+        const independentHours = s4mod?.selfStudyHours ?? s4mod?.independentHours;
+        const lessonCount = modulePlan.lessons?.length ?? modulePlan.totalLessons ?? 0;
+        // Module header — now also surfaces independent hours.
         contentChildren.push(
           this.createH3(
             `${modCode}: ${modulePlan.moduleTitle || modulePlan.title || 'Untitled Module'}`
@@ -1744,7 +1782,12 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           new Paragraph({
             children: [
               new TextRun({
-                text: `Total Contact Hours: ${modulePlan.totalContactHours || 0} | Total Lessons: ${modulePlan.lessons?.length ?? modulePlan.totalLessons ?? 0}`,
+                text:
+                  `Total Contact Hours: ${modulePlan.totalContactHours || 0}` +
+                  (independentHours !== undefined
+                    ? ` | Total Independent Hours: ${independentHours}`
+                    : '') +
+                  ` | Total Lessons: ${lessonCount}`,
                 size: FONT_SIZES.BODY,
                 font: FONT_FAMILY,
                 italics: true,
@@ -1754,6 +1797,53 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             spacing: { after: 150, line: LINE_SPACING },
           })
         );
+
+        // Module Alignment Map (MLO → Linked PLOs → Linked KSCs), from step4.
+        if (s4mod?.mlos?.length) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Module Alignment Map:',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { before: 60, after: 50, line: LINE_SPACING },
+            })
+          );
+          const alignRows = [
+            new TableRow({
+              children: [
+                this.createTableCell('MLO', { bold: true, shading: 'e2e8f0', width: 18 }),
+                this.createTableCell('Linked PLOs', { bold: true, shading: 'e2e8f0', width: 41 }),
+                this.createTableCell('Linked KSCs', { bold: true, shading: 'e2e8f0', width: 41 }),
+              ],
+            }),
+          ];
+          s4mod.mlos.forEach((mlo: any) => {
+            const plos = Array.isArray(mlo.linkedPLOs) ? mlo.linkedPLOs.join(', ') : '';
+            const kscs = Array.isArray(mlo.competencyLinks)
+              ? mlo.competencyLinks.join(', ')
+              : Array.isArray(mlo.linkedKSCs)
+                ? mlo.linkedKSCs.join(', ')
+                : '';
+            alignRows.push(
+              new TableRow({
+                children: [
+                  this.createTableCell(mlo.code || mlo.id || '-'),
+                  this.createTableCell(plos || '-'),
+                  this.createTableCell(kscs || '-'),
+                ],
+              })
+            );
+          });
+          contentChildren.push(
+            new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: alignRows }),
+            new Paragraph({ children: [], spacing: { after: 150 } })
+          );
+        }
 
         // Lessons for this module
         if (modulePlan.lessons?.length) {
@@ -2093,6 +2183,48 @@ If the content is better as bullets, put it in bullets array and leave paragraph
               })
             );
           }
+        }
+
+        // Independent Activities (module-level, from step4). The lesson loop
+        // above only covers contact sessions; the SME flagged that independent
+        // activities were missing from the export.
+        const indepActs: string[] = Array.isArray(s4mod?.independentActivities)
+          ? s4mod.independentActivities.filter((a: any) => typeof a === 'string' && a.trim())
+          : [];
+        if (indepActs.length) {
+          contentChildren.push(
+            this.createH3('Independent Activities'),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text:
+                    independentHours !== undefined
+                      ? `Total Independent Hours: ${independentHours}`
+                      : 'Self-directed learning to complete outside contact sessions:',
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                  italics: true,
+                  color: '4a5568',
+                }),
+              ],
+              spacing: { after: 80, line: LINE_SPACING },
+            }),
+            ...this.createFormattedParagraphs(indepActs, { isBullet: true }),
+            new Paragraph({ children: [], spacing: { after: 200 } })
+          );
+        }
+
+        // Contact Activities (module-level summary, from step4) — complements
+        // the per-lesson Activity Sequence tables above.
+        const contactActs: string[] = Array.isArray(s4mod?.contactActivities)
+          ? s4mod.contactActivities.filter((a: any) => typeof a === 'string' && a.trim())
+          : [];
+        if (contactActs.length) {
+          contentChildren.push(
+            this.createH3('Contact Activities (Module Summary)'),
+            ...this.createFormattedParagraphs(contactActs, { isBullet: true }),
+            new Paragraph({ children: [], spacing: { after: 200 } })
+          );
         }
 
         // PPT Deck References
@@ -3186,7 +3318,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       addSection(9, (out) => this.generateStep9Section(workflow.step9, out));
     }
     if (workflow.step10) {
-      addSection(10, (out) => this.generateStep10Section(workflow.step10, out));
+      addSection(10, (out) => this.generateStep10Section(workflow.step10, out, workflow.step4));
     }
     if (workflow.step11) {
       addSection(11, (out) => this.generateStep11Section(workflow.step11, out));
@@ -3420,7 +3552,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         await this.generateStep9Section(stepData, contentChildren);
         break;
       case 10:
-        await this.generateStep10Section(stepData, contentChildren);
+        await this.generateStep10Section(stepData, contentChildren, workflow.step4);
         break;
       case 11:
         await this.generateStep11Section(stepData, contentChildren);
