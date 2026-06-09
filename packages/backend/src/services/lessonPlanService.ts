@@ -323,7 +323,10 @@ export class LessonPlanService {
       });
 
       const lessonStartTime = Date.now();
-      const lesson = await this.generateLessonContent(block, module, context);
+      // Pass the lessons already generated for THIS module so the AI can
+      // make each lesson distinct (avoids activities/topics from one lesson
+      // being duplicated under another when they share an MLO).
+      const lesson = await this.generateLessonContent(block, module, context, lessons);
       const lessonDuration = Date.now() - lessonStartTime;
 
       lessons.push(lesson);
@@ -689,7 +692,8 @@ export class LessonPlanService {
   async generateLessonContent(
     block: LessonBlock,
     module: ModuleData,
-    context: WorkflowContext
+    context: WorkflowContext,
+    priorLessons: LessonPlan[] = []
   ): Promise<LessonPlan> {
     const lessonId = `${module.moduleCode}-L${block.lessonNumber}`;
 
@@ -697,7 +701,12 @@ export class LessonPlanService {
     const lessonTitle = this.generateLessonTitle(block, module);
 
     // Build comprehensive OpenAI prompt with context from all 9 steps
-    const aiEnhancedContent = await this.generateAIEnhancedContent(block, module, context);
+    const aiEnhancedContent = await this.generateAIEnhancedContent(
+      block,
+      module,
+      context,
+      priorLessons
+    );
 
     // Generate objectives from MLOs (Requirement 2.1)
     const objectives =
@@ -776,7 +785,8 @@ export class LessonPlanService {
   private async generateAIEnhancedContent(
     block: LessonBlock,
     module: ModuleData,
-    context: WorkflowContext
+    context: WorkflowContext,
+    priorLessons: LessonPlan[] = []
   ): Promise<{
     objectives: string[];
     activities: LessonActivity[];
@@ -799,6 +809,28 @@ export class LessonPlanService {
       // Build comprehensive context from all 9 steps
       const contextSummary = this.buildContextSummary(block, module, context);
 
+      // Cross-lesson awareness: tell the AI what earlier lessons in THIS module
+      // already cover so it makes this lesson distinct (prevents activities /
+      // topics from one lesson being repeated under another — the common
+      // failure when several lessons share the same MLO).
+      const priorContext =
+        priorLessons.length > 0
+          ? `\nALREADY COVERED BY EARLIER LESSONS IN THIS MODULE — do NOT repeat; this lesson MUST be distinct:\n${priorLessons
+              .map(
+                (l) =>
+                  `- Lesson ${l.lessonNumber} "${l.lessonTitle}": topic = "${
+                    l.topicCoverage?.exactTopic ?? l.lessonTitle
+                  }"; activities = ${(l.activities || [])
+                    .map((a) => (a as { title?: string }).title ?? '')
+                    .filter(Boolean)
+                    .slice(0, 4)
+                    .join('; ')}`
+              )
+              .join(
+                '\n'
+              )}\nWhen lessons share a learning outcome, split it into NON-OVERLAPPING subtopics — each lesson teaches a different facet with its own distinct practical activity. Never reuse a subtopic or activity listed above.\n`
+          : '';
+
       const prompt = `You are an expert curriculum designer creating a detailed lesson plan.
 
 CONTEXT FROM PREVIOUS STEPS:
@@ -810,7 +842,7 @@ LESSON DETAILS:
 - Bloom Level: ${block.bloomLevel}
 - Module: ${module.moduleCode} - ${module.title}
 - Assigned MLOs: ${block.assignedMLOs.map((mlo) => `"${mlo.statement}"`).join(', ')}
-
+${priorContext}
 TASK:
 Generate detailed lesson content including:
 1. Specific, measurable learning objectives (3-5 objectives)
