@@ -43,7 +43,7 @@ const DURATION_RE = /^Duration:\s*(\d+)\s*min/i;
 const CODE_TITLE_RE = /^([A-Za-z][A-Za-z0-9-]{0,30})\s*:\s+(.+)$/;
 // Section labels that appear inside a lesson and end the objectives list.
 const LESSON_SUBHEADER_RE =
-  /^(Duration:|MLOs:|PLOs:|Learning Objectives:|Activity Sequence:|Required Materials:|Instructor Notes:|Adaptation Options:|Case Study|Independent Study:|Formative)/i;
+  /^(Duration:|MLOs:|PLOs:|KSCs:|Learning Objectives:|Activity Sequence:|Required Materials:|Instructor Notes:|Adaptation Options:|Case Study|Independent Study:|Formative|Topic Coverage|Independent Activity Block:)/i;
 // Headings that sit above a totals-style line but are NOT modules.
 const NON_MODULE_HEADING_RE =
   /^(Lesson Plans|Module Lesson Plans|Validation Summary|Summary Statistics|Generated:|Total Program|\d+(\.\d+)*\s)/i;
