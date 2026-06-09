@@ -6654,7 +6654,7 @@ Begin output now.`;
           statement: mlo.statement,
           bloomLevel: mlo.bloomLevel,
           linkedPLOs: mlo.linkedPLOs || [],
-          competencyLinks: mlo.competencyLinks || [],
+          competencyLinks: mlo.competencyLinks || mlo.linkedKSCs || [],
         })),
         contactActivities: mod.contactActivities || [],
         independentActivities: mod.independentActivities || [],
@@ -6663,8 +6663,8 @@ Begin output now.`;
       // Step 5: Sources
       topicSources: step5?.topicSources || [],
 
-      // Step 6: Reading Lists
-      moduleReadingLists: step6?.moduleReadingLists || [],
+      // Step 6: Reading Lists (bridge the flat persisted shape → nested form)
+      moduleReadingLists: this.deriveModuleReadingLists(step6),
 
       // Step 7: Assessments
       formativeAssessments: step7?.formativeAssessments || [],
@@ -6679,6 +6679,39 @@ Begin output now.`;
     };
 
     return context;
+  }
+
+  /**
+   * Step 6 is persisted in a FLAT shape — `moduleReadings` keyed by module id,
+   * where each reading has `category` ('core'|'supplementary'), `linkedMLOs`
+   * and `estimatedReadingMinutes`. The lesson-plan consumer reads the nested
+   * `moduleReadingLists[].{coreReadings,supplementaryReadings}` shape with
+   * `mloIds`/`estimatedMinutes`. Without this bridge `context.moduleReadingLists`
+   * was always [] for generated workflows, so per-lesson independent-study
+   * minutes computed to 0 even when readings existed. Prefer an already-nested
+   * shape if present; otherwise derive it from the flat `moduleReadings` map.
+   */
+  private deriveModuleReadingLists(step6: any): any[] {
+    if (Array.isArray(step6?.moduleReadingLists) && step6.moduleReadingLists.length > 0) {
+      return step6.moduleReadingLists;
+    }
+    const byModule = step6?.moduleReadings;
+    if (!byModule || typeof byModule !== 'object') return [];
+    const norm = (r: any) => ({
+      sourceId: r.sourceId,
+      citation: r.citation,
+      mloIds: r.mloIds || r.linkedMLOs || [],
+      linkedMLOs: r.linkedMLOs || r.mloIds || [],
+      estimatedMinutes: r.estimatedMinutes ?? r.estimatedReadingMinutes ?? 30,
+      complexityLevel: r.complexityLevel || 'intermediate',
+    });
+    return Object.entries(byModule).map(([moduleId, readings]) => ({
+      moduleId,
+      coreReadings: ((readings as any[]) || []).filter((r) => r.category === 'core').map(norm),
+      supplementaryReadings: ((readings as any[]) || [])
+        .filter((r) => r.category === 'supplementary')
+        .map(norm),
+    }));
   }
 
   /**

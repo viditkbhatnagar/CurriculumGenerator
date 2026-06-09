@@ -759,7 +759,8 @@ export class LessonPlanService {
   private getLinkedKSCs(mlos: MLO[]): string[] {
     const set = new Set<string>();
     for (const mlo of mlos) {
-      for (const ksc of mlo.competencyLinks || []) set.add(ksc);
+      for (const ksc of mlo.competencyLinks || (mlo as { linkedKSCs?: string[] }).linkedKSCs || [])
+        set.add(ksc);
     }
     return Array.from(set);
   }
@@ -1419,13 +1420,16 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
     const caseFiles: string[] = [];
 
     // Filter case studies for this module
-    const moduleCaseStudies = context.caseStudies.filter((cs: any) =>
-      cs.moduleIds?.includes(moduleId)
+    const moduleCaseStudies = context.caseStudies.filter(
+      (cs: any) =>
+        cs.moduleIds?.includes(moduleId) ||
+        cs.linkedModules?.includes(moduleId) ||
+        cs.moduleId === moduleId
     );
 
     // Find case studies that align with this lesson's MLOs
     for (const caseStudy of moduleCaseStudies) {
-      const csMloIds = caseStudy.mloIds || [];
+      const csMloIds = caseStudy.mloIds || caseStudy.linkedMLOs || [];
       const hasMatchingMLO = csMloIds.some((id: string) => mloIds.includes(id));
 
       if (hasMatchingMLO) {
@@ -1444,7 +1448,8 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
       for (const reading of coreReadings) {
         // Check if reading is relevant to any of the lesson's MLOs
         const mloIds = mlos.map((m) => m.id);
-        const readingMloIds = reading.mloIds || [];
+        const readingMloIds =
+          reading.mloIds || (reading as { linkedMLOs?: string[] }).linkedMLOs || [];
         const isRelevant = readingMloIds.some((id: string) => mloIds.includes(id));
 
         if (isRelevant) {
@@ -1547,7 +1552,8 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
     for (const moduleReadings of context.moduleReadingLists) {
       // Add core readings aligned with this lesson's MLOs
       for (const reading of moduleReadings.coreReadings || []) {
-        const readingMloIds = reading.mloIds || [];
+        const readingMloIds =
+          reading.mloIds || (reading as { linkedMLOs?: string[] }).linkedMLOs || [];
         if (readingMloIds.some((id: string) => mloIds.includes(id))) {
           const estimatedMinutes = reading.estimatedMinutes || 30;
           coreReadings.push({
@@ -1562,7 +1568,8 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
 
       // Add supplementary readings aligned with this lesson's MLOs
       for (const reading of moduleReadings.supplementaryReadings || []) {
-        const readingMloIds = reading.mloIds || [];
+        const readingMloIds =
+          reading.mloIds || (reading as { linkedMLOs?: string[] }).linkedMLOs || [];
         if (readingMloIds.some((id: string) => mloIds.includes(id))) {
           const estimatedMinutes = reading.estimatedMinutes || 20;
           supplementaryReadings.push({
@@ -1609,7 +1616,15 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
    */
   integrateCaseStudies(lessons: LessonPlan[], caseStudies: any[], moduleId: string): LessonPlan[] {
     // Filter case studies for this module
-    const moduleCaseStudies = caseStudies.filter((cs) => cs.moduleIds?.includes(moduleId));
+    // Case studies from Step 8 are stored with `linkedModules` (LLM output),
+    // older data uses `moduleIds`/`moduleId` — accept all so the count and the
+    // per-lesson case activity aren't silently dropped.
+    const moduleCaseStudies = caseStudies.filter(
+      (cs) =>
+        cs.moduleIds?.includes(moduleId) ||
+        cs.linkedModules?.includes(moduleId) ||
+        cs.moduleId === moduleId
+    );
 
     if (moduleCaseStudies.length === 0) {
       return lessons;
@@ -1736,7 +1751,7 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
       if (usedCaseStudies.has(cs.id)) return false;
 
       // Check MLO alignment
-      const csMloIds = cs.mloIds || [];
+      const csMloIds = cs.mloIds || cs.linkedMLOs || [];
       const hasMLOMatch = lesson.linkedMLOs.some((mloId) => csMloIds.includes(mloId));
 
       return hasMLOMatch;
