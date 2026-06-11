@@ -121,6 +121,36 @@ function recomputeStep10Summary(step10: any): boolean {
 }
 
 /**
+ * Ensure every Step 7 formative/summative assessment carries a unique, stable
+ * `id`. Assessment ids are LLM-generated at creation (e.g. "form-<moduleId>-001")
+ * so they are sometimes missing or duplicated. The edit endpoints look an
+ * assessment up by `a.id === assessmentId`, and the frontend edit form PUTs to
+ * `/step7/formative/<assessment.id>` — a missing/duplicate id makes that lookup
+ * 404 ("Formative assessment not found"), which is why re-editing the package
+ * fails. Backfilling here (persisted on view) makes existing packages editable.
+ * Returns true if anything changed.
+ */
+function normalizeStep7AssessmentIds(step7: any): boolean {
+  if (!step7) return false;
+  let changed = false;
+  const ensureIds = (arr: any, prefix: string) => {
+    if (!Array.isArray(arr)) return;
+    const seen = new Set<string>();
+    arr.forEach((a: any, i: number) => {
+      if (!a || typeof a !== 'object') return;
+      if (!a.id || typeof a.id !== 'string' || seen.has(a.id)) {
+        a.id = `${prefix}-${i + 1}-${crypto.randomBytes(4).toString('hex')}`;
+        changed = true;
+      }
+      seen.add(a.id);
+    });
+  };
+  ensureIds(step7.formativeAssessments, 'form');
+  ensureIds(step7.summativeAssessments, 'summ');
+  return changed;
+}
+
+/**
  * A fully-shaped blank lesson. Every nested array/object the export, screen and
  * PPT step read is initialised, so a lesson created by import/Add-Lesson never
  * trips an undefined access (e.g. PPT gen reads instructorNotes.discussionPrompts
@@ -638,6 +668,22 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
       ).catch((e) =>
         loggingService.warn('Step10 summary recompute persist failed', { error: e?.message })
       );
+    }
+
+    // Backfill stable ids on Step 7 assessments so the edit endpoints can find
+    // them (a missing/duplicate id is what makes re-editing the package 404).
+    if (normalizeStep7AssessmentIds((workflow as any).step7)) {
+      const step7 = (workflow as any).step7;
+      const set: any = {};
+      if (Array.isArray(step7.formativeAssessments))
+        set['step7.formativeAssessments'] = step7.formativeAssessments;
+      if (Array.isArray(step7.summativeAssessments))
+        set['step7.summativeAssessments'] = step7.summativeAssessments;
+      if (Object.keys(set).length) {
+        CurriculumWorkflow.updateOne({ _id: (workflow as any)._id }, { $set: set }).catch((e) =>
+          loggingService.warn('Step7 assessment id backfill persist failed', { error: e?.message })
+        );
+      }
     }
 
     res.json({
@@ -3245,7 +3291,10 @@ router.put(
       if (maxMarks !== undefined) assessment.maxMarks = maxMarks;
       if (questions !== undefined) assessment.questions = questions;
 
-      // Mark as modified and save
+      // Mark as modified and save. step7 is a Mixed field — mark the nested
+      // array path too (matches the proven pattern in workflowService) so the
+      // edit reliably persists across repeated edits.
+      workflow.markModified('step7.formativeAssessments');
       workflow.markModified('step7');
       await workflow.save();
 
@@ -3305,7 +3354,10 @@ router.put(
       if (components !== undefined) assessment.components = components;
       if (markingModel !== undefined) assessment.markingModel = markingModel;
 
-      // Mark as modified and save
+      // Mark as modified and save. step7 is a Mixed field — mark the nested
+      // array path too (matches the proven pattern in workflowService) so the
+      // edit reliably persists across repeated edits.
+      workflow.markModified('step7.summativeAssessments');
       workflow.markModified('step7');
       await workflow.save();
 
