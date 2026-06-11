@@ -1647,7 +1647,7 @@ Return ONLY valid JSON.`;
       return simplified.charAt(0).toUpperCase() + simplified.slice(1);
     });
 
-    const reflectionPrompts = lesson.instructorNotes.discussionPrompts.slice(0, 2);
+    const reflectionPrompts = (lesson.instructorNotes?.discussionPrompts || []).slice(0, 2);
 
     return {
       slideNumber,
@@ -1673,22 +1673,24 @@ Return ONLY valid JSON.`;
    */
   private generateIndependentStudySlide(lesson: LessonPlan, slideNumber: number): PPTSlide {
     const content: string[] = [];
+    const coreReadings = lesson.independentStudy?.coreReadings || [];
+    const supplementaryReadings = lesson.independentStudy?.supplementaryReadings || [];
 
-    if (lesson.independentStudy.coreReadings.length > 0) {
+    if (coreReadings.length > 0) {
       content.push('Required Readings:');
-      lesson.independentStudy.coreReadings.forEach((reading) => {
+      coreReadings.forEach((reading) => {
         content.push(`• ${reading.citation} (${reading.estimatedMinutes} min)`);
       });
     }
 
-    if (lesson.independentStudy.supplementaryReadings.length > 0) {
+    if (supplementaryReadings.length > 0) {
       content.push('', 'Optional Readings:');
-      lesson.independentStudy.supplementaryReadings.forEach((reading) => {
+      supplementaryReadings.forEach((reading) => {
         content.push(`• ${reading.citation} (${reading.estimatedMinutes} min)`);
       });
     }
 
-    const totalTime = lesson.independentStudy.estimatedEffort;
+    const totalTime = lesson.independentStudy?.estimatedEffort || 0;
     const hours = Math.floor(totalTime / 60);
     const minutes = totalTime % 60;
     const timeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes} minutes`;
@@ -1724,18 +1726,18 @@ Return ONLY valid JSON.`;
     const citations: string[] = [];
 
     // Add citations from materials
-    lesson.materials.readingReferences.forEach((ref) => {
+    (lesson.materials?.readingReferences || []).forEach((ref) => {
       citations.push(ref.citation);
     });
 
     // Add citations from independent study
-    lesson.independentStudy.coreReadings.forEach((reading) => {
+    (lesson.independentStudy?.coreReadings || []).forEach((reading) => {
       if (!citations.includes(reading.citation)) {
         citations.push(reading.citation);
       }
     });
 
-    lesson.independentStudy.supplementaryReadings.forEach((reading) => {
+    (lesson.independentStudy?.supplementaryReadings || []).forEach((reading) => {
       if (!citations.includes(reading.citation)) {
         citations.push(reading.citation);
       }
@@ -1855,9 +1857,9 @@ Return ONLY valid JSON.`;
 
     // Check that all citations in the lesson match sources from context
     const allCitations = [
-      ...lesson.materials.readingReferences.map((r) => r.citation),
-      ...lesson.independentStudy.coreReadings.map((r) => r.citation),
-      ...lesson.independentStudy.supplementaryReadings.map((r) => r.citation),
+      ...(lesson.materials?.readingReferences || []).map((r) => r.citation),
+      ...(lesson.independentStudy?.coreReadings || []).map((r) => r.citation),
+      ...(lesson.independentStudy?.supplementaryReadings || []).map((r) => r.citation),
     ];
 
     // For now, return true if we have citations (full validation would require source matching)
@@ -2487,9 +2489,9 @@ Return ONLY valid JSON.`;
 
     // Get all citations from lesson materials
     const lessonCitations = [
-      ...lesson.materials.readingReferences.map((r) => r.citation),
-      ...lesson.independentStudy.coreReadings.map((r) => r.citation),
-      ...lesson.independentStudy.supplementaryReadings.map((r) => r.citation),
+      ...(lesson.materials?.readingReferences || []).map((r) => r.citation),
+      ...(lesson.independentStudy?.coreReadings || []).map((r) => r.citation),
+      ...(lesson.independentStudy?.supplementaryReadings || []).map((r) => r.citation),
     ];
 
     // Check if lesson citations appear in the references slide
