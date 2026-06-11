@@ -2,28 +2,57 @@
  * Step 10 (Lesson Plans) DOCX Re-upload — Parser
  *
  * Reads an edited copy of a Step 10 Word export (full or per-module) and
- * recovers the editable, cleanly-round-tripping fields per lesson:
- *   - lesson number + title   ("Lesson 3: …")
- *   - duration                ("Duration: 90 minutes | …")
- *   - learning objectives      (bullets under "Learning Objectives:")
+ * recovers the editable lesson content so an SME can correct lesson plans in
+ * Word and have the edits applied back. Per lesson it captures:
+ *   - number, title, duration, Bloom level, linked MLOs/PLOs/KSCs
+ *   - learning objectives
+ *   - topic coverage (exact topic, subtopics, practical activity, evidence)
+ *   - the activity sequence (table)
+ *   - required materials, instructor notes, adaptation options
+ *   - the independent activity block (table)
  *
- * The richer nested content (activity tables, materials, instructor notes,
- * case studies) is intentionally NOT parsed — it does not survive a Word
- * re-save reliably. The apply step matches lessons by number within each
- * module, updates these fields, appends any extra lessons, and preserves all
- * other lesson content. Modules are matched by code (the "M1: Title" heading,
- * anchored on the following "Total Contact Hours: … | Total Lessons: …" line).
+ * Robust to Word/LibreOffice re-saves that flatten tables into paragraphs.
+ * Modules are matched by a "{CODE}: {title}" heading or the following
+ * "Total Contact Hours: … | Total Lessons: …" line.
  */
 
 import * as mammoth from 'mammoth';
 import * as cheerio from 'cheerio';
 import { loggingService } from './loggingService';
 
+export interface ParsedActivity {
+  sequenceOrder: number;
+  title: string;
+  type: string;
+  duration: number;
+  description: string;
+}
+
 export interface ParsedLesson {
   lessonNumber: number;
   lessonTitle: string;
   duration: number | null;
+  bloomLevel?: string;
+  linkedMLOs?: string[];
+  linkedPLOs?: string[];
+  linkedKSCs?: string[];
   objectives: string[];
+  topicCoverage?: {
+    exactTopic?: string;
+    subtopics?: string[];
+    practicalActivity?: string;
+    studentEvidence?: string;
+  };
+  activities?: ParsedActivity[];
+  materials?: string[];
+  instructorNotes?: { pedagogicalGuidance?: string; adaptationOptions?: string[] };
+  independentActivity?: {
+    independentHours?: number;
+    sourceMaterialMapping?: string;
+    independentTask?: string;
+    aiPlatformSupport?: string;
+    studentEvidence?: string;
+  };
 }
 
 export interface ParsedStep10Module {
@@ -79,13 +108,14 @@ class Step10ImportService {
     const modules: ParsedStep10Module[] = [];
     let currentModule: ParsedStep10Module | null = null;
     let currentLesson: ParsedLesson | null = null;
-    let collectingObjectives = false;
+    // Which free-text/bullet block we are currently inside a lesson.
+    let section: 'objectives' | 'materials' | 'notes' | 'adaptation' | null = null;
     const seenLessonNumbers = new Set<number>();
 
     const finishLesson = () => {
       if (currentModule && currentLesson) currentModule.lessons.push(currentLesson);
       currentLesson = null;
-      collectingObjectives = false;
+      section = null;
     };
     const finishModule = () => {
       finishLesson();
@@ -148,53 +178,170 @@ class Step10ImportService {
           duration: null,
           objectives: [],
         };
+        section = null;
         continue;
       }
 
       if (!currentLesson) continue;
+      const L = currentLesson;
 
-      // Duration line.
-      const durMatch = text.match(DURATION_RE);
-      if (durMatch) {
-        currentLesson.duration = Number(durMatch[1]);
-        continue;
-      }
-
-      // Objectives block.
-      if (/^Learning Objectives:/i.test(text)) {
-        collectingObjectives = true;
-        continue;
-      }
-      if (collectingObjectives) {
-        // A new sub-header / lesson / module — or flattened activity-table
-        // debris (a re-save turns the table into pipe/column-style paragraphs)
-        // — ends the objectives list.
-        if (
-          LESSON_SUBHEADER_RE.test(text) ||
-          LESSON_RE.test(text) ||
-          tag === 'table' ||
-          /[|\t]/.test(text) ||
-          /^\d+\s+\S+.*\b(min|minutes)\b/i.test(text)
+      // Tables FIRST — route by header to activities or the independent block.
+      // (Handled before the text checks because the independent table's text
+      // starts with "Independent Study Hours…", which the sub-header check
+      // below would otherwise swallow.)
+      if (tag === 'table') {
+        const rows = $(children[idx]).find('tr').toArray();
+        const header = $(rows[0])
+          .find('td,th')
+          .toArray()
+          .map((c) => $(c).text().replace(/\s+/g, ' ').trim().toLowerCase());
+        const cellsFor = (r: any) =>
+          $(r)
+            .find('td,th')
+            .toArray()
+            .map((c) => $(c).text().replace(/\s+/g, ' ').trim());
+        if (header.some((h) => h.includes('activity')) && header.some((h) => h.includes('type'))) {
+          const col = {
+            seq: header.findIndex((h) => h === '#' || h.includes('seq')),
+            title: header.findIndex((h) => h.includes('activity')),
+            type: header.findIndex((h) => h.includes('type')),
+            dur: header.findIndex((h) => h.includes('duration')),
+            desc: header.findIndex((h) => h.includes('description')),
+          };
+          const acts: ParsedActivity[] = [];
+          rows.slice(1).forEach((r, i) => {
+            const c = cellsFor(r);
+            const title = col.title >= 0 ? c[col.title] : '';
+            if (!title || title === '-') return;
+            acts.push({
+              sequenceOrder: col.seq >= 0 ? Number(c[col.seq]) || i + 1 : i + 1,
+              title,
+              type: (col.type >= 0 ? c[col.type] : '') || 'mini_lecture',
+              duration: col.dur >= 0 ? Number((c[col.dur] || '').replace(/[^\d.]/g, '')) || 0 : 0,
+              description: col.desc >= 0 ? c[col.desc] : '',
+            });
+          });
+          if (acts.length) L.activities = acts;
+        } else if (
+          header.some((h) => h.includes('independent') || h.includes('source-material')) &&
+          header.some((h) => h.includes('task') || h.includes('evidence'))
         ) {
-          collectingObjectives = false;
-          // fall through so this paragraph is still processed below
-        } else {
-          // Bullet items: mammoth may emit <ul><li> or "• …" paragraphs.
-          if (tag === 'ul' || tag === 'ol') {
-            $(children[idx])
-              .find('li')
-              .each((_, li) => {
-                const t = $(li).text().replace(/\s+/g, ' ').trim();
-                if (t) currentLesson!.objectives.push(t.replace(/^[•‣◦-]\s*/, ''));
-              });
-          } else {
-            currentLesson.objectives.push(text.replace(/^[•‣◦-]\s*/, '').trim());
-          }
-          continue;
+          const dataRow = rows.length > 1 ? cellsFor(rows[1]) : [];
+          const at = (pred: (h: string) => boolean) => {
+            const i = header.findIndex(pred);
+            return i >= 0 ? (dataRow[i] || '').trim() : '';
+          };
+          const hoursStr = at((h) => h.includes('hour'));
+          L.independentActivity = {
+            independentHours: hoursStr
+              ? Number(hoursStr.replace(/[^\d.]/g, '')) || undefined
+              : undefined,
+            sourceMaterialMapping: at((h) => h.includes('source')),
+            independentTask: at((h) => h.includes('task')),
+            aiPlatformSupport: at(
+              (h) => h.includes('ai') || h.includes('platform') || h.includes('validation')
+            ),
+            studentEvidence: at((h) => h.includes('evidence')),
+          };
         }
+        section = null;
+        continue;
       }
-      // Any other content (activities, materials, notes) is ignored — those
-      // fields are preserved from the existing lesson on apply.
+
+      // Duration + Bloom (often one line: "Duration: 90 minutes | Bloom Level: understand").
+      const durMatch = text.match(DURATION_RE);
+      if (durMatch) L.duration = Number(durMatch[1]);
+      const bloomMatch = text.match(
+        /Bloom\s*Level:\s*(remember|understand|apply|analy[sz]e|evaluate|create)/i
+      );
+      if (bloomMatch) L.bloomLevel = bloomMatch[1].toLowerCase().replace('analyze', 'analyse');
+      // MLO/PLO/KSC links — may be on their own line or glued to the Bloom line.
+      const grabLinks = (label: RegExp) => {
+        const m = text.match(label);
+        return m
+          ? m[1]
+              .split(/[,;]+/)
+              .map((s) => s.trim())
+              .filter((s) => s && s !== '-')
+          : undefined;
+      };
+      if (/MLOs?:/i.test(text)) L.linkedMLOs = grabLinks(/MLOs?:\s*([^|]+?)(?:\s*\||$)/i);
+      if (/PLOs?:/i.test(text)) L.linkedPLOs = grabLinks(/PLOs?:\s*([^|]+?)(?:\s*\||$)/i);
+      if (/KSCs?:/i.test(text)) L.linkedKSCs = grabLinks(/KSCs?:\s*([^|]+?)(?:\s*\||$)/i);
+      if (durMatch || bloomMatch) {
+        section = null;
+        continue;
+      }
+
+      // Topic coverage — labelled single-value paragraphs.
+      const tcExact = text.match(/^Exact Topic to Teach:\s*(.+)$/i);
+      const tcSub = text.match(/^Specific Subtopics(?:\s*\/\s*Skill List)?:\s*(.+)$/i);
+      const tcPrac = text.match(/^Practical(?:\s*\/\s*AI\s*\/\s*Case)?\s*Activity:\s*(.+)$/i);
+      const tcEvid = text.match(/^Student Evidence:\s*(.+)$/i);
+      if (tcExact || tcSub || tcPrac || tcEvid) {
+        L.topicCoverage = L.topicCoverage || {};
+        if (tcExact) L.topicCoverage.exactTopic = tcExact[1].trim();
+        if (tcSub)
+          L.topicCoverage.subtopics = tcSub[1]
+            .split(/[;]+/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+        if (tcPrac) L.topicCoverage.practicalActivity = tcPrac[1].trim();
+        if (tcEvid) L.topicCoverage.studentEvidence = tcEvid[1].trim();
+        section = null;
+        continue;
+      }
+
+      // Block sub-headers.
+      if (/^Learning Objectives:/i.test(text)) {
+        section = 'objectives';
+        continue;
+      }
+      if (/^Required Materials:/i.test(text)) {
+        section = 'materials';
+        L.materials = L.materials || [];
+        continue;
+      }
+      if (/^Adaptation Options:/i.test(text)) {
+        section = 'adaptation';
+        L.instructorNotes = L.instructorNotes || {};
+        L.instructorNotes.adaptationOptions = L.instructorNotes.adaptationOptions || [];
+        continue;
+      }
+      if (/^Instructor Notes:/i.test(text)) {
+        section = 'notes';
+        L.instructorNotes = L.instructorNotes || {};
+        continue;
+      }
+      // Topic-Coverage / Activity-Sequence / Independent headers reset section;
+      // their content is a table (handled below) or labelled lines (above).
+      if (/^(Topic Coverage|Activity Sequence|Contact Activity Sequence|Independent)/i.test(text)) {
+        section = null;
+        continue;
+      }
+
+      // Bullet / paragraph content for the active free-text section.
+      const pushLines = (target: string[]) => {
+        if (tag === 'ul' || tag === 'ol') {
+          $(children[idx])
+            .find('li')
+            .each((_, li) => {
+              const t = $(li).text().replace(/\s+/g, ' ').trim();
+              if (t) target.push(t.replace(/^[•‣◦-]\s*/, ''));
+            });
+        } else {
+          target.push(text.replace(/^[•‣◦-]\s*/, '').trim());
+        }
+      };
+      if (section === 'objectives') pushLines(L.objectives);
+      else if (section === 'materials' && L.materials) pushLines(L.materials);
+      else if (section === 'adaptation' && L.instructorNotes?.adaptationOptions)
+        pushLines(L.instructorNotes.adaptationOptions);
+      else if (section === 'notes' && L.instructorNotes) {
+        L.instructorNotes.pedagogicalGuidance = [L.instructorNotes.pedagogicalGuidance, text]
+          .filter(Boolean)
+          .join('\n\n');
+      }
     }
     finishModule();
 

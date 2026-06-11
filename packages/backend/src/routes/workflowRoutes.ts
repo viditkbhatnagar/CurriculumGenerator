@@ -120,6 +120,102 @@ function recomputeStep10Summary(step10: any): boolean {
   return true;
 }
 
+/**
+ * A fully-shaped blank lesson. Every nested array/object the export, screen and
+ * PPT step read is initialised, so a lesson created by import/Add-Lesson never
+ * trips an undefined access (e.g. PPT gen reads instructorNotes.discussionPrompts
+ * and independentStudy.coreReadings without guards).
+ */
+function makeBlankLesson(lessonNumber: number, lessonTitle: string, duration: number): any {
+  return {
+    lessonId: `lesson-user-${crypto.randomBytes(6).toString('hex')}`,
+    lessonNumber,
+    lessonTitle,
+    duration,
+    linkedMLOs: [],
+    linkedPLOs: [],
+    linkedKSCs: [],
+    bloomLevel: 'apply',
+    objectives: [],
+    activities: [],
+    materials: { pptDeckRef: '', caseFiles: [], readingReferences: [] },
+    instructorNotes: {
+      pedagogicalGuidance: '',
+      pacingSuggestions: '',
+      adaptationOptions: [],
+      commonMisconceptions: [],
+      discussionPrompts: [],
+    },
+    independentStudy: { coreReadings: [], supplementaryReadings: [], estimatedEffort: 0 },
+    formativeChecks: [],
+    userAdded: true,
+  };
+}
+
+/**
+ * Apply the editable fields parsed from an uploaded Step 10 lesson onto the
+ * live lesson. Updates only fields actually present in the file; the activity
+ * sequence is rebuilt from the file but preserves each activity's non-rendered
+ * sub-fields (teaching method, resources, instructor/student actions) by
+ * matching on title then sequence order, so editing/reordering the visible
+ * columns doesn't wipe or mis-attach them.
+ */
+function applyParsedLessonFields(live: any, pl: any, modCode?: string): void {
+  if (pl.lessonTitle) live.lessonTitle = pl.lessonTitle;
+  if (pl.duration !== null && pl.duration > 0) live.duration = pl.duration;
+  if (Array.isArray(pl.objectives) && pl.objectives.length > 0) live.objectives = pl.objectives;
+  if (pl.bloomLevel) live.bloomLevel = pl.bloomLevel;
+  if (pl.linkedMLOs?.length) live.linkedMLOs = pl.linkedMLOs;
+  if (pl.linkedPLOs?.length) live.linkedPLOs = pl.linkedPLOs;
+  if (pl.linkedKSCs?.length) live.linkedKSCs = pl.linkedKSCs;
+  if (pl.topicCoverage) live.topicCoverage = { ...(live.topicCoverage || {}), ...pl.topicCoverage };
+  if (pl.independentActivity) {
+    live.independentActivity = { ...(live.independentActivity || {}), ...pl.independentActivity };
+  }
+  if (pl.instructorNotes) {
+    live.instructorNotes = live.instructorNotes || {};
+    if (pl.instructorNotes.pedagogicalGuidance) {
+      live.instructorNotes.pedagogicalGuidance = pl.instructorNotes.pedagogicalGuidance;
+    }
+    if (pl.instructorNotes.adaptationOptions?.length) {
+      live.instructorNotes.adaptationOptions = pl.instructorNotes.adaptationOptions;
+    }
+  }
+  if (Array.isArray(pl.activities) && pl.activities.length > 0) {
+    const existing: any[] = Array.isArray(live.activities) ? live.activities : [];
+    const norm = (s: string) => (s || '').trim().toLowerCase();
+    const consumed = new Set<any>();
+    // Match each parsed activity to a live one by title first (survives reorder),
+    // then by sequence order, so its non-rendered sub-fields follow the edited row.
+    const matchExisting = (pa: any): any => {
+      const t = norm(pa.title);
+      const byTitle = t ? existing.find((a) => !consumed.has(a) && norm(a.title) === t) : null;
+      if (byTitle) return byTitle;
+      const bySeq = existing.find((a) => !consumed.has(a) && a.sequenceOrder === pa.sequenceOrder);
+      return bySeq || null;
+    };
+    live.activities = pl.activities.map((pa: any, i: number) => {
+      const matched = matchExisting(pa);
+      if (matched) consumed.add(matched);
+      const ex = matched || {};
+      return {
+        ...ex,
+        activityId: ex.activityId || `${modCode || 'M'}-L${live.lessonNumber}-A${i + 1}`,
+        sequenceOrder: pa.sequenceOrder || i + 1,
+        title: pa.title,
+        type: pa.type || ex.type || 'mini_lecture',
+        duration: pa.duration || ex.duration || 0,
+        description: pa.description || ex.description || '',
+        involvesAI: pa.type === 'ai_activity' || ex.involvesAI === true,
+        teachingMethod: ex.teachingMethod || '',
+        resources: ex.resources || [],
+        instructorActions: ex.instructorActions || [],
+        studentActions: ex.studentActions || [],
+      };
+    });
+  }
+}
+
 // Single-file in-memory upload reserved for the curriculum re-import flow.
 // 10 MB ceiling matches the typical "full curriculum" Word export size.
 const curriculumDocxUpload = multer({
@@ -6315,25 +6411,19 @@ router.post(
       if (!Array.isArray(module.lessons)) module.lessons = [];
 
       const dur = Number(duration);
-      const newLesson: any = {
-        lessonId: `lesson-user-${crypto.randomBytes(6).toString('hex')}`,
-        lessonNumber: module.lessons.length + 1,
-        lessonTitle: (typeof lessonTitle === 'string' && lessonTitle.trim()) || 'New lesson',
-        duration: Number.isFinite(dur) && dur > 0 ? dur : 90,
-        objectives: Array.isArray(objectives)
+      const newLesson: any = makeBlankLesson(
+        module.lessons.length + 1,
+        (typeof lessonTitle === 'string' && lessonTitle.trim()) || 'New lesson',
+        Number.isFinite(dur) && dur > 0 ? dur : 90
+      );
+      newLesson.objectives = Array.isArray(objectives)
+        ? objectives
+        : typeof objectives === 'string' && objectives.trim()
           ? objectives
-          : typeof objectives === 'string' && objectives.trim()
-            ? objectives
-                .split('\n')
-                .map((s) => s.trim())
-                .filter(Boolean)
-            : [],
-        activities: [],
-        instructorNotes: {},
-        independentStudy: {},
-        formativeChecks: [],
-        userAdded: true,
-      };
+              .split('\n')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
 
       module.lessons.push(newLesson);
       module.totalLessons = module.lessons.length;
@@ -6513,23 +6603,16 @@ router.post('/:id/step10/import', validateJWT, loadUser, (req: Request, res: Res
           }
           if (live) {
             consumed.add(live);
-            if (pl.lessonTitle) live.lessonTitle = pl.lessonTitle;
-            if (pl.duration !== null && pl.duration > 0) live.duration = pl.duration;
-            if (pl.objectives.length > 0) live.objectives = pl.objectives;
+            applyParsedLessonFields(live, pl, liveMod.moduleCode || liveMod.code);
             summary.lessonsUpdated += 1;
           } else {
-            liveMod.lessons.push({
-              lessonId: `lesson-user-${crypto.randomBytes(6).toString('hex')}`,
-              lessonNumber: pl.lessonNumber || liveMod.lessons.length + 1,
-              lessonTitle: pl.lessonTitle || 'New lesson',
-              duration: pl.duration && pl.duration > 0 ? pl.duration : 90,
-              objectives: pl.objectives,
-              activities: [],
-              instructorNotes: {},
-              independentStudy: {},
-              formativeChecks: [],
-              userAdded: true,
-            });
+            const newLesson: any = makeBlankLesson(
+              pl.lessonNumber || liveMod.lessons.length + 1,
+              pl.lessonTitle || 'New lesson',
+              pl.duration && pl.duration > 0 ? pl.duration : 90
+            );
+            applyParsedLessonFields(newLesson, pl, liveMod.moduleCode || liveMod.code);
+            liveMod.lessons.push(newLesson);
             summary.lessonsAdded += 1;
           }
         }

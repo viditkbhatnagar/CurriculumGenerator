@@ -2334,9 +2334,10 @@ function Step10ReuploadButton({
           <div className="bg-white rounded-xl border border-teal-200 w-full max-w-lg p-6 space-y-4">
             <h3 className="text-lg font-semibold text-teal-800">Apply edited lesson plans?</h3>
             <p className="text-sm text-teal-700">
-              <span className="font-medium">{pendingFile.name}</span> will update lesson titles,
-              durations and objectives (matched by module code and lesson number), and add any new
-              lessons. Other lesson content is kept, and nothing is deleted.
+              <span className="font-medium">{pendingFile.name}</span> will update each lesson&apos;s
+              title, duration, Bloom level, objectives, topic coverage, activities, instructor notes
+              and independent-activity block (matched by module code and lesson number), and add any
+              new lessons. Nothing is deleted.
             </p>
             <p className="text-xs text-teal-600 bg-teal-50 border border-teal-200 rounded p-3">
               The current Step 10 is saved to <strong>Version history</strong> first, so this can be
