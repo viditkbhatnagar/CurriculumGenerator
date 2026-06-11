@@ -35,6 +35,54 @@ import {
   PracticalSampleTask,
 } from '../types/assessmentGenerator';
 
+/**
+ * Reconcile an MCQ's correct-answer fields so the ticked answer always matches
+ * the rationale. The model is asked to put the correct option's full TEXT in
+ * `correctAnswer`; this derives a consistent 0-based `correctOptionIndex` and
+ * canonicalises `correctAnswer` to the exact option text. It also repairs the
+ * legacy shape where `correctAnswer` was a numeric index, and tolerates a bare
+ * letter ("B" / "Option C"). When no option can be confidently matched it
+ * leaves the question untouched (never guesses).
+ */
+export function normalizeMcqAnswer(q: any): void {
+  if (!q || !Array.isArray(q.options) || q.options.length === 0) return;
+  const opts = q.options.map((o: any) => String(o));
+  const norm = (s: any) => String(s).trim().toLowerCase().replace(/\s+/g, ' ');
+  let idx = -1;
+
+  // 1) explicit 0-based index field (sample MCQs)
+  if (
+    Number.isInteger(q.correctOptionIndex) &&
+    q.correctOptionIndex >= 0 &&
+    q.correctOptionIndex < opts.length
+  ) {
+    idx = q.correctOptionIndex;
+  }
+  const ca = q.correctAnswer;
+  // 2) legacy: correctAnswer stored as a 0-based numeric index
+  if (idx < 0 && typeof ca === 'number' && Number.isInteger(ca) && ca >= 0 && ca < opts.length) {
+    idx = ca;
+  }
+  // 3) correctAnswer as text → match it back to an option
+  if (idx < 0 && typeof ca === 'string' && ca.trim()) {
+    idx = opts.findIndex((o: string) => norm(o) === norm(ca));
+    if (idx < 0) {
+      const m = ca.trim().match(/^(?:option\s+)?([a-z])[).:]?\s*$/i); // "B", "B)", "Option C"
+      if (m) {
+        const li = m[1].toUpperCase().charCodeAt(0) - 65;
+        if (li >= 0 && li < opts.length) idx = li;
+      }
+    }
+    if (idx < 0) {
+      idx = opts.findIndex((o: string) => norm(o).includes(norm(ca)) || norm(ca).includes(norm(o)));
+    }
+  }
+
+  if (idx < 0 || idx >= opts.length) return; // undeterminable — leave as-is
+  q.correctOptionIndex = idx;
+  q.correctAnswer = opts[idx];
+}
+
 export class AssessmentGeneratorService {
   private readonly MODULE_TIMEOUT = 240000; // 4 minutes per module formative (increased for full questions)
   private readonly SUMMATIVE_TIMEOUT = 240000; // 4 minutes for summative
@@ -325,11 +373,11 @@ Return ONLY valid JSON with COMPLETE QUESTIONS:
           "questionText": "What is the primary purpose of [concept] in [context]?",
           "questionType": "mcq",
           "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
-          "correctAnswer": 1,
+          "correctAnswer": "Option B text",
           "points": 1,
           "bloomLevel": "Remember",
           "difficulty": "Easy",
-          "rationale": "Explanation of why this is correct and why others are wrong"
+          "rationale": "Correct answer: 'Option B text'. Explanation of why this option is right and why each other option is wrong."
         },
         {
           "questionNumber": 2,
@@ -356,8 +404,9 @@ CRITICAL REQUIREMENTS:
 6. Ensure questions align to specific MLOs listed
 7. Make questions practical and relevant to ${request.programFoundation?.targetLearner?.industrySector || 'professional'} contexts
 8. All question text must be complete and ready to use - NO placeholders like "[insert]" or "[fill in]"
-9. Rationales should explain WHY the correct answer is right
-10. Difficulty should progress from Easy → Medium → Hard within the assessment`;
+9. For MCQs, set "correctAnswer" to the FULL TEXT of the correct option, copied EXACTLY from the "options" array (never a number, letter, or paraphrase), and begin the "rationale" by quoting that same option — so the marked answer always matches the explanation
+10. Rationales should explain WHY the correct answer is right and why each other option is wrong
+11. Difficulty should progress from Easy → Medium → Hard within the assessment`;
 
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
@@ -366,7 +415,14 @@ CRITICAL REQUIREMENTS:
       });
 
       const parsed = this.parseJSON(response, `formative-${module.id}`);
-      return parsed.formativeAssessments || [];
+      const formativeAssessments = parsed.formativeAssessments || [];
+      // Reconcile MCQ correct-answer with its rationale (text ↔ index).
+      for (const fa of formativeAssessments) {
+        for (const q of fa?.questions || []) {
+          if (q?.questionType === 'mcq') normalizeMcqAnswer(q);
+        }
+      }
+      return formativeAssessments;
     } catch (error) {
       loggingService.error(`Error generating formative for module ${module.id}`, {
         error: error instanceof Error ? error.message : String(error),
@@ -680,12 +736,14 @@ Return JSON:
     {
       "stem": "Question text here",
       "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctOptionIndex": 1,
-      "rationale": "Explanation of correct answer",
+      "correctAnswer": "Option B",
+      "rationale": "Correct answer: 'Option B'. Explanation of why it is right and the others are wrong.",
       "alignedPLOs": ["PLO1", "PLO2"]
     }
   ]
-}`,
+}
+
+For each question set "correctAnswer" to the FULL TEXT of the correct option, copied EXACTLY from "options" (never a number or letter), and begin "rationale" by quoting that same option so the marked answer always matches the explanation.`,
       },
       sjt: {
         system: `You are an SJT (Situational Judgment Test) design expert creating workplace scenario questions.`,
@@ -768,7 +826,12 @@ Return JSON:
       });
 
       const parsed = this.parseJSON(response, `samples-${type}`);
-      return parsed.samples || [];
+      const samples = parsed.samples || [];
+      // Reconcile MCQ correct-answer with its rationale (text ↔ index).
+      if (type === 'mcq') {
+        for (const s of samples) normalizeMcqAnswer(s);
+      }
+      return samples;
     } catch (error) {
       loggingService.error(`Error generating ${type} samples`, {
         error: error instanceof Error ? error.message : String(error),

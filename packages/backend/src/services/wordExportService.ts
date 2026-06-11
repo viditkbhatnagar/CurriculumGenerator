@@ -1301,7 +1301,12 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             if (q.questionType === 'mcq' && q.options?.length) {
               q.options.forEach((option: string, optIdx: number) => {
                 const letter = String.fromCharCode(65 + optIdx);
-                const isCorrect = q.correctOptionIndex === optIdx || q.correctAnswer === optIdx;
+                // Tick by index (correctOptionIndex / legacy numeric correctAnswer)
+                // OR by text (canonical correctAnswer = the option's full text).
+                const isCorrect =
+                  q.correctOptionIndex === optIdx ||
+                  q.correctAnswer === optIdx ||
+                  (typeof q.correctAnswer === 'string' && q.correctAnswer === option);
                 contentChildren.push(
                   new Paragraph({
                     children: [
@@ -2868,7 +2873,12 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         if (q.type === 'mcq' && q.options?.length) {
           const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F'];
           for (let j = 0; j < q.options.length; j++) {
-            const isCorrect = q.options[j] === q.correctAnswer;
+            // Tick by text (canonical correctAnswer) OR index (correctOptionIndex
+            // / legacy numeric correctAnswer).
+            const isCorrect =
+              q.options[j] === q.correctAnswer ||
+              q.correctOptionIndex === j ||
+              q.correctAnswer === j;
             contentChildren.push(
               new Paragraph({
                 children: [
