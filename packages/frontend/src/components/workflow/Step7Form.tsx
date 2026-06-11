@@ -457,6 +457,9 @@ interface AssessmentUserPreferences {
   useRealWorldScenarios: boolean;
   alignToWorkplacePerformance: boolean;
   integratedRealWorldSummative: boolean;
+  // Optional market/region to localise examples, brands, currency and spelling
+  // (e.g. "India", "Indian fashion retail"). Empty = region-neutral.
+  targetMarket?: string;
 }
 
 const CERTIFICATION_STYLES = ['SHRM', 'PMI', 'ASCM', 'SCOR', 'CIPS', 'AHLEI', 'CMA', 'None'];
@@ -536,6 +539,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
     useRealWorldScenarios: true,
     alignToWorkplacePerformance: true,
     integratedRealWorldSummative: true,
+    targetMarket: '',
   });
 
   // Check for completion when data appears (only if not already generating)
@@ -1007,6 +1011,24 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
 
           {activeTab === 'basic' ? (
             <div className="space-y-6">
+              {/* Target market for examples (optional) */}
+              <div>
+                <h4 className="text-teal-800 font-medium mb-1">Target Market for Examples</h4>
+                <p className="text-sm text-teal-600 mb-2">
+                  Optional. Localises examples, brand names, currency and spelling (e.g.{' '}
+                  <span className="font-medium">India</span> or{' '}
+                  <span className="font-medium">Indian fashion retail</span>). Leave blank to keep
+                  it region-neutral.
+                </p>
+                <input
+                  type="text"
+                  value={formData.targetMarket || ''}
+                  onChange={(e) => setFormData({ ...formData, targetMarket: e.target.value })}
+                  placeholder="e.g. India / Indian fashion retail"
+                  className="w-full px-3 py-2 border border-teal-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
               {/* Assessment Structure */}
               <div>
                 <h4 className="text-teal-800 font-medium mb-3">Assessment Structure</h4>

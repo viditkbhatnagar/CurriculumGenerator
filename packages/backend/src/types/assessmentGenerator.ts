@@ -95,6 +95,12 @@ export interface AssessmentUserPreferences {
   alignToWorkplacePerformance: boolean;
   integratedRealWorldSummative: boolean;
   generateSampleQuestions: boolean; // Always true
+  /**
+   * Optional market/region to localise examples, brands, currency, regulatory
+   * references and English spelling to (e.g. "India", "Indian fashion retail").
+   * When empty the generator stays region-neutral.
+   */
+  targetMarket?: string;
 }
 
 // ============================================================================

@@ -93,6 +93,28 @@ export class AssessmentGeneratorService {
   private readonly MAX_TOKENS_SAMPLES = 16000;
 
   /**
+   * Spelling/locale directive for system prompts. When a target market is set
+   * (e.g. "India", "Indian fashion retail") the model localises spelling;
+   * otherwise the previous default (UK English) is preserved.
+   */
+  private spellingDirective(request: AssessmentGenerationRequest): string {
+    const market = request.userPreferences?.targetMarket?.trim();
+    if (!market) return 'Use UK English spelling throughout.';
+    return `Localise this assessment to the ${market} context: use the English spelling, examples, brand/organisation names, currency and regulatory references appropriate to ${market}. Do NOT use UK-specific brands, currency (£/GBP) or regulators unless ${market} explicitly is the UK.`;
+  }
+
+  /**
+   * Market-context block injected into user prompts so generated examples,
+   * scenarios and case material reflect the intended market. Empty when no
+   * target market is set.
+   */
+  private marketContextBlock(request: AssessmentGenerationRequest): string {
+    const market = request.userPreferences?.targetMarket?.trim();
+    if (!market) return '';
+    return `\n=== TARGET MARKET ===\nLocalise all examples, scenarios, brand/organisation names, currency and regulatory references to: ${market}.\n`;
+  }
+
+  /**
    * Generate complete assessment package with chunked strategy
    */
   async generateAssessments(
@@ -305,10 +327,10 @@ You design assessments that are:
 - Varied in format to maintain engagement
 - Realistic and relevant to professional contexts
 
-Use UK English spelling throughout.`;
+${this.spellingDirective(request)}`;
 
     const userPrompt = `Generate ${formativePerModule} formative assessment(s) for this module.
-
+${this.marketContextBlock(request)}
 === PROGRAMME CONTEXT ===
 Programme: ${request.programFoundation?.programTitle || 'Professional Development Programme'}
 Level: ${request.programFoundation?.academicLevel || 'Certificate'}
@@ -468,13 +490,13 @@ You design assessments that:
 - Are fair, valid, and reliable
 - Meet professional/certification body standards where applicable
 
-Use UK English spelling throughout.`;
+${this.spellingDirective(request)}`;
 
     const modules = request.modules || [];
     const plos = request.courseFramework.programLearningOutcomes || [];
 
     const userPrompt = `Generate a comprehensive summative assessment for this programme.
-
+${this.marketContextBlock(request)}
 === PROGRAMME CONTEXT ===
 Programme: ${request.programFoundation?.programTitle || 'Professional Development Programme'}
 Level: ${request.programFoundation?.academicLevel || 'Certificate'}
@@ -820,10 +842,14 @@ Return JSON:
     }
 
     try {
-      const response = await openaiService.generateContent(prompts.user, prompts.system, {
-        maxTokens: this.MAX_TOKENS_SAMPLES,
-        timeout: this.SAMPLE_BATCH_TIMEOUT,
-      });
+      const response = await openaiService.generateContent(
+        prompts.user + this.marketContextBlock(request),
+        prompts.system,
+        {
+          maxTokens: this.MAX_TOKENS_SAMPLES,
+          timeout: this.SAMPLE_BATCH_TIMEOUT,
+        }
+      );
 
       const parsed = this.parseJSON(response, `samples-${type}`);
       const samples = parsed.samples || [];

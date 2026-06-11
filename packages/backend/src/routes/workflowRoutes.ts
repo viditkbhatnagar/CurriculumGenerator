@@ -2994,6 +2994,8 @@ router.post('/:id/step7', validateJWT, loadUser, async (req: Request, res: Respo
       alignToWorkplacePerformance: req.body.alignToWorkplacePerformance !== false,
       integratedRealWorldSummative: req.body.integratedRealWorldSummative !== false,
       generateSampleQuestions: true,
+      targetMarket:
+        typeof req.body.targetMarket === 'string' ? req.body.targetMarket.trim() : undefined,
     };
 
     // Validation stays synchronous
