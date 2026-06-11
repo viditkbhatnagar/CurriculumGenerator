@@ -41,6 +41,11 @@ const MODULE_TOTALS_RE = /Total\s+Contact\s+Hours:.*Total\s+Lessons:/i;
 const LESSON_RE = /^Lesson\s+(\d+)\s*:\s*(.+)$/i;
 const DURATION_RE = /^Duration:\s*(\d+)\s*min/i;
 const CODE_TITLE_RE = /^([A-Za-z][A-Za-z0-9-]{0,30})\s*:\s+(.+)$/;
+// A module-code heading, e.g. "MOD101: Title", "M1: Title", "CAFHN-406-1701: Title".
+// Lets us recognise a module even when an edit changed/removed the totals line.
+// Requires an uppercase, digit-bearing code so lesson sub-headers (Duration:,
+// Learning Objectives:, Topic Coverage…) are never mistaken for modules.
+const MODULE_CODE_HEADING_RE = /^([A-Z][A-Z0-9]*-?[A-Z0-9]*\d[A-Z0-9-]*)\s*:\s+(.+)$/;
 // Section labels that appear inside a lesson and end the objectives list.
 const LESSON_SUBHEADER_RE =
   /^(Duration:|MLOs:|PLOs:|KSCs:|Learning Objectives:|Activity Sequence:|Required Materials:|Instructor Notes:|Adaptation Options:|Case Study|Independent Study:|Formative|Topic Coverage|Independent Activity Block:)/i;
@@ -93,17 +98,20 @@ class Step10ImportService {
       const text = textOf(idx);
       if (!text) continue;
 
-      // Module heading — the line whose next non-empty sibling is the
-      // "Total Contact Hours: … | Total Lessons: …" summary. Skip known
-      // non-module headings that could sit above a totals line.
-      if (
+      // Module heading. Recognised two ways so an edited file still works:
+      //   1. a "{CODE}: {title}" line where CODE is a real module code, OR
+      //   2. any non-lesson line whose next non-empty sibling is the
+      //      "Total Contact Hours: … | Total Lessons: …" summary.
+      const codeHeading = text.match(MODULE_CODE_HEADING_RE);
+      const isModuleHeading =
         !LESSON_RE.test(text) &&
         !MODULE_TOTALS_RE.test(text) &&
         !NON_MODULE_HEADING_RE.test(text) &&
-        nextIsModuleTotals(idx)
-      ) {
+        !LESSON_SUBHEADER_RE.test(text) &&
+        (!!codeHeading || nextIsModuleTotals(idx));
+      if (isModuleHeading) {
         finishModule();
-        const m = text.match(CODE_TITLE_RE);
+        const m = codeHeading || text.match(CODE_TITLE_RE);
         currentModule = {
           moduleCode: m ? m[1].trim() : '',
           moduleTitle: m ? m[2].trim() : text.trim(),
@@ -113,10 +121,18 @@ class Step10ImportService {
         continue;
       }
 
+      // Lesson heading. If a lesson appears before any module heading was
+      // found (e.g. the module heading/totals line was edited away), open an
+      // implicit module so the lessons are still captured — a per-module file
+      // is about one module, and the apply step matches it by title/code.
+      const lessonMatch = text.match(LESSON_RE);
+      if (lessonMatch && !currentModule) {
+        currentModule = { moduleCode: '', moduleTitle: '', lessons: [] };
+        seenLessonNumbers.clear();
+      }
+
       if (!currentModule) continue;
 
-      // Lesson heading.
-      const lessonMatch = text.match(LESSON_RE);
       if (lessonMatch) {
         finishLesson();
         const num = Number(lessonMatch[1]);
@@ -182,19 +198,39 @@ class Step10ImportService {
     }
     finishModule();
 
-    if (modules.length === 0) {
-      warnings.push(
-        'No modules/lessons were recognised. Make sure you uploaded a Step 10 (Lesson Plans) Word export.'
-      );
+    // Drop any module that ended up with no lessons (e.g. a stray heading).
+    const withLessons = modules.filter((m) => m.lessons.length > 0);
+
+    if (withLessons.length === 0) {
+      // Diagnostic: tell the user what the document actually contained so a
+      // re-formatted/edited file is easier to fix.
+      const allText = children.map((_, i) => textOf(i)).join(' ');
+      const lessonLineCount = (allText.match(/Lesson\s+\d+\s*:/gi) || []).length;
+      const hasTotals = MODULE_TOTALS_RE.test(allText);
+      const codeHeadings = children
+        .map((_, i) => textOf(i))
+        .filter((t) => MODULE_CODE_HEADING_RE.test(t)).length;
+      let detail =
+        'No lesson plans were recognised in that document. Make sure you uploaded a Step 10 (Lesson Plans) Word export';
+      if (lessonLineCount > 0) {
+        detail += ` — the file has ${lessonLineCount} "Lesson N:" line(s) but they were not grouped under a recognisable module heading. Keep a module heading line like "MOD101: <title>" and a "Total Contact Hours: … | Total Lessons: …" line above the lessons`;
+      } else if (codeHeadings > 0 || hasTotals) {
+        detail +=
+          ' — a module heading was found but no lessons. Each lesson must start with a "Lesson N: <title>" heading';
+      } else {
+        detail += ' (the document had no "Lesson N:" headings at all)';
+      }
+      detail += '.';
+      warnings.push(detail);
     }
 
     loggingService.info('Step 10 DOCX parsed', {
-      modules: modules.length,
-      totalLessons: modules.reduce((s, m) => s + m.lessons.length, 0),
+      modules: withLessons.length,
+      totalLessons: withLessons.reduce((s, m) => s + m.lessons.length, 0),
       warnings: warnings.length,
     });
 
-    return { modules, warnings };
+    return { modules: withLessons, warnings };
   }
 }
 

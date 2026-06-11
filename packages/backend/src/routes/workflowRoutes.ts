@@ -6400,8 +6400,26 @@ router.post('/:id/step10/import', validateJWT, loadUser, (req: Request, res: Res
       if (parsed.modules.length === 0) {
         return res.status(400).json({
           success: false,
+          // Surface the parser's diagnostic (what it actually saw) so an
+          // edited/re-formatted file is easier to fix.
           error:
+            parsed.warnings[0] ||
             'No lesson plans were recognised in that document. Make sure you uploaded a Step 10 (Lesson Plans) Word export.',
+        });
+      }
+
+      // A per-module export is named like "…Step10-MOD101.docx". If the file's
+      // module heading was edited away (parser produced a code-less module),
+      // use the code from the filename so it can still be matched.
+      const uploadName = (req as Request & { file?: Express.Multer.File }).file?.originalname || '';
+      const nameCode = (uploadName.match(
+        /Step10-([A-Za-z0-9]+?)(?:-[0-9]{4}-[0-9]{2}-[0-9]{2})?\.docx$/i
+      ) ||
+        uploadName.match(/\b(MOD\d+|M\d+)\b/i) ||
+        [])[1];
+      if (nameCode) {
+        parsed.modules.forEach((m) => {
+          if (!m.moduleCode) m.moduleCode = nameCode;
         });
       }
 
