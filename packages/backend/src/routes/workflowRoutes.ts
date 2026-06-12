@@ -6633,6 +6633,10 @@ router.post('/:id/step10/import', validateJWT, loadUser, (req: Request, res: Res
           liveByNumber.set(l.lessonNumber, l);
         });
         const consumed = new Set<any>();
+        // Collapse "matched by position, title differs" notes into ONE summary
+        // per module — a restructured module can otherwise emit 30+ near-identical
+        // warnings that bury the dialog's action button.
+        const positional: Array<{ num: number; fileTitle: string; existingTitle: string }> = [];
 
         for (const pl of pmod.lessons) {
           const byTitle = pl.lessonTitle ? liveByTitleL.get(norm(pl.lessonTitle)) : undefined;
@@ -6650,9 +6654,11 @@ router.post('/:id/step10/import', validateJWT, loadUser, (req: Request, res: Res
           } else if (byNumber && !consumed.has(byNumber)) {
             live = byNumber;
             if (pl.lessonTitle && norm(byNumber.lessonTitle) !== norm(pl.lessonTitle)) {
-              summary.warnings.push(
-                `Module ${liveMod.moduleCode || liveMod.code}, lesson ${pl.lessonNumber}: file title "${pl.lessonTitle}" differs from existing "${byNumber.lessonTitle}" — updated by position; please verify ordering.`
-              );
+              positional.push({
+                num: pl.lessonNumber,
+                fileTitle: pl.lessonTitle,
+                existingTitle: byNumber.lessonTitle,
+              });
             }
           }
           if (live) {
@@ -6669,6 +6675,20 @@ router.post('/:id/step10/import', validateJWT, loadUser, (req: Request, res: Res
             liveMod.lessons.push(newLesson);
             summary.lessonsAdded += 1;
           }
+        }
+
+        // One summary note per module instead of one per lesson.
+        if (positional.length > 0) {
+          const eg = positional[0];
+          summary.warnings.push(
+            `Module ${liveMod.moduleCode || liveMod.code}: ${positional.length} lesson${
+              positional.length > 1 ? 's were' : ' was'
+            } updated by position because the title${
+              positional.length > 1 ? 's differ' : ' differs'
+            } from the stored version — please check the order. e.g. lesson ${eg.num}: "${
+              eg.fileTitle
+            }" replaced "${eg.existingTitle}".`
+          );
         }
 
         // Renumber + recompute the module's totals.

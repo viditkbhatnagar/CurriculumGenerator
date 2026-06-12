@@ -2331,24 +2331,28 @@ function Step10ReuploadButton({
 
       {pendingFile && !busy && !result && (
         <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-teal-200 w-full max-w-lg p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-teal-800">Apply edited lesson plans?</h3>
-            <p className="text-sm text-teal-700">
-              <span className="font-medium">{pendingFile.name}</span> will update each lesson&apos;s
-              title, duration, Bloom level, objectives, topic coverage, activities, instructor notes
-              and independent-activity block (matched by module code and lesson number), and add any
-              new lessons. Nothing is deleted.
-            </p>
-            <p className="text-xs text-teal-600 bg-teal-50 border border-teal-200 rounded p-3">
-              The current Step 10 is saved to <strong>Version history</strong> first, so this can be
-              undone from the clock icon at the top of the step.
-            </p>
-            {error && (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
-                {error}
+          <div className="bg-white rounded-xl border border-teal-200 w-full max-w-lg max-h-[85vh] flex flex-col">
+            <h3 className="text-lg font-semibold text-teal-800 px-6 pt-6 pb-3">
+              Apply edited lesson plans?
+            </h3>
+            <div className="px-6 space-y-4 overflow-y-auto">
+              <p className="text-sm text-teal-700">
+                <span className="font-medium">{pendingFile.name}</span> will update each
+                lesson&apos;s title, duration, Bloom level, objectives, topic coverage, activities,
+                instructor notes and independent-activity block (matched by module code and lesson
+                number), and add any new lessons. Nothing is deleted.
               </p>
-            )}
-            <div className="flex justify-end gap-3 pt-2">
+              <p className="text-xs text-teal-600 bg-teal-50 border border-teal-200 rounded p-3">
+                The current Step 10 is saved to <strong>Version history</strong> first, so this can
+                be undone from the clock icon at the top of the step.
+              </p>
+              {error && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
+                  {error}
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 mt-2 border-t border-teal-100">
               <button
                 onClick={() => {
                   setPendingFile(null);
@@ -2380,31 +2384,35 @@ function Step10ReuploadButton({
 
       {result && (
         <div className="fixed inset-0 bg-teal-900/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-teal-200 w-full max-w-lg p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-teal-800">Lesson plans updated</h3>
-            <ul className="text-sm text-teal-700 space-y-1">
-              <li>
-                <strong>Modules matched</strong>: {result.modulesMatched}
-                {result.modulesUnmatchedInFile > 0
-                  ? ` (${result.modulesUnmatchedInFile} in the file did not match)`
-                  : ''}
-              </li>
-              <li>
-                <strong>Lessons</strong>: {result.lessonsUpdated} updated, {result.lessonsAdded}{' '}
-                added
-              </li>
-            </ul>
-            {result.warnings && result.warnings.length > 0 && (
-              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
-                <p className="font-medium mb-1">Notes:</p>
-                <ul className="list-disc ml-4 space-y-0.5">
-                  {result.warnings.map((w, i) => (
-                    <li key={i}>{w}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <div className="flex justify-end">
+          <div className="bg-white rounded-xl border border-teal-200 w-full max-w-lg max-h-[85vh] flex flex-col">
+            <h3 className="text-lg font-semibold text-teal-800 px-6 pt-6 pb-3">
+              Lesson plans updated
+            </h3>
+            <div className="px-6 space-y-4 overflow-y-auto">
+              <ul className="text-sm text-teal-700 space-y-1">
+                <li>
+                  <strong>Modules matched</strong>: {result.modulesMatched}
+                  {result.modulesUnmatchedInFile > 0
+                    ? ` (${result.modulesUnmatchedInFile} in the file did not match)`
+                    : ''}
+                </li>
+                <li>
+                  <strong>Lessons</strong>: {result.lessonsUpdated} updated, {result.lessonsAdded}{' '}
+                  added
+                </li>
+              </ul>
+              {result.warnings && result.warnings.length > 0 && (
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
+                  <p className="font-medium mb-1">Notes:</p>
+                  <ul className="list-disc ml-4 space-y-0.5 max-h-56 overflow-y-auto pr-1">
+                    {result.warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end px-6 py-4 mt-2 border-t border-teal-100">
               <button
                 onClick={() => setResult(null)}
                 className="px-5 py-2 bg-teal-500 hover:bg-teal-400 text-white rounded-lg font-medium"
