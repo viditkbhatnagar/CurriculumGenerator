@@ -16,6 +16,7 @@ import {
 import { useGeneration } from '@/contexts/GenerationContext';
 import StepDownloadButton from './StepDownloadButton';
 import { isStepDone } from '@/lib/stepGating';
+import { orderByStep4 } from '@/lib/moduleOrder';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -694,34 +695,36 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                 Select Module to View Assignment Packs
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {workflow.step12?.moduleAssignmentPacks?.map((module, index) => (
-                  <button
-                    key={`select-${index}-${module.moduleId}`}
-                    onClick={() => {
-                      setSelectedModule(module.moduleId);
-                      setActiveVariant('in_person');
-                    }}
-                    className={`p-4 rounded-lg border text-left transition-all ${
-                      selectedModule === module.moduleId
-                        ? 'bg-blue-500/20 border-blue-500 text-blue-500'
-                        : 'bg-white border-teal-200 text-teal-700 hover:border-slate-600'
-                    }`}
-                  >
-                    <div className="font-medium mb-1">{module.moduleCode}</div>
-                    <div className="text-sm opacity-80 mb-2">{module.moduleTitle}</div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded">
-                        In-Person
-                      </span>
-                      <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-600 rounded">
-                        Self-Study
-                      </span>
-                      <span className="px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">
-                        Hybrid
-                      </span>
-                    </div>
-                  </button>
-                ))}
+                {orderByStep4(workflow.step12?.moduleAssignmentPacks, workflow.step4?.modules).map(
+                  (module, index) => (
+                    <button
+                      key={`select-${index}-${module.moduleId}`}
+                      onClick={() => {
+                        setSelectedModule(module.moduleId);
+                        setActiveVariant('in_person');
+                      }}
+                      className={`p-4 rounded-lg border text-left transition-all ${
+                        selectedModule === module.moduleId
+                          ? 'bg-blue-500/20 border-blue-500 text-blue-500'
+                          : 'bg-white border-teal-200 text-teal-700 hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="font-medium mb-1">{module.moduleCode}</div>
+                      <div className="text-sm opacity-80 mb-2">{module.moduleTitle}</div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded">
+                          In-Person
+                        </span>
+                        <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-600 rounded">
+                          Self-Study
+                        </span>
+                        <span className="px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded">
+                          Hybrid
+                        </span>
+                      </div>
+                    </button>
+                  )
+                )}
               </div>
             </div>
           )}

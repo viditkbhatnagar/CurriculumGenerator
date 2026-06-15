@@ -1589,6 +1589,35 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   }
 
   /**
+   * Order module-keyed entries (lesson plans / assignment packs) by their
+   * position in Step 4. These arrays are stored in GENERATION order, so a module
+   * generated later (e.g. a re-generated MOD103) would otherwise render after
+   * MOD108. Matches by moduleId first, then module code; unmatched entries keep
+   * their relative order at the end. Returns a new array (does not mutate input).
+   */
+  private orderModulesByStep4(items: any[], step4?: any): any[] {
+    if (!Array.isArray(items) || items.length < 2 || !step4?.modules?.length) {
+      return Array.isArray(items) ? items : [];
+    }
+    const orderOf = new Map<string, number>();
+    step4.modules.forEach((m: any, i: number) => {
+      if (m?.id) orderOf.set(`id:${m.id}`, i);
+      const c = m?.code || m?.moduleCode;
+      if (c) orderOf.set(`code:${c}`, i);
+    });
+    const rank = (p: any): number => {
+      const byId = p?.moduleId != null ? orderOf.get(`id:${p.moduleId}`) : undefined;
+      if (byId !== undefined) return byId;
+      const byCode = p?.moduleCode != null ? orderOf.get(`code:${p.moduleCode}`) : undefined;
+      return byCode !== undefined ? byCode : Number.MAX_SAFE_INTEGER;
+    };
+    return items
+      .map((p, i) => ({ p, r: rank(p), i }))
+      .sort((a, b) => a.r - b.r || a.i - b.i)
+      .map((x) => x.p);
+  }
+
+  /**
    * Generate Step 10 (Lesson Plans) section
    */
   private async generateStep10Section(
@@ -1625,7 +1654,10 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     // written once at generation time and goes stale after modules are
     // regenerated — that caused the screen/doc lesson-count mismatch and made
     // per-module files repeat whole-programme totals.
-    const plans: any[] = Array.isArray(step10.moduleLessonPlans) ? step10.moduleLessonPlans : [];
+    const plans: any[] = this.orderModulesByStep4(
+      Array.isArray(step10.moduleLessonPlans) ? step10.moduleLessonPlans : [],
+      step4
+    );
     const allLessons: any[] = plans.flatMap((p: any) =>
       Array.isArray(p.lessons) ? p.lessons : []
     );
@@ -1769,12 +1801,12 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       );
     }
 
-    // Module Lesson Plans
-    if (step10.moduleLessonPlans?.length) {
+    // Module Lesson Plans — rendered in Step 4 module order (see `plans` above).
+    if (plans.length) {
       contentChildren.push(this.createH2('10.3 Module Lesson Plans'));
 
-      for (let modIdx = 0; modIdx < step10.moduleLessonPlans.length; modIdx++) {
-        const modulePlan = step10.moduleLessonPlans[modIdx];
+      for (let modIdx = 0; modIdx < plans.length; modIdx++) {
+        const modulePlan = plans[modIdx];
         const modCode = modulePlan.moduleCode || modulePlan.code || `M${modIdx + 1}`;
         const s4mod = findStep4Module(modulePlan);
         const independentHours = s4mod?.selfStudyHours ?? s4mod?.independentHours;
@@ -2421,7 +2453,11 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   /**
    * Generate Step 12 (Assignment Packs) section
    */
-  private async generateStep12Section(step12: any, contentChildren: any[]): Promise<void> {
+  private async generateStep12Section(
+    step12: any,
+    contentChildren: any[],
+    step4?: any
+  ): Promise<void> {
     if (!step12) return;
 
     contentChildren.push(
@@ -2508,11 +2544,12 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       );
     }
 
-    // Module assignment packs
+    // Module assignment packs — rendered in Step 4 module order.
     if (step12.moduleAssignmentPacks?.length) {
       contentChildren.push(this.createH2('12.3 Module Assignment Packs'));
 
-      for (const modulePack of step12.moduleAssignmentPacks) {
+      const orderedPacks = this.orderModulesByStep4(step12.moduleAssignmentPacks, step4);
+      for (const modulePack of orderedPacks) {
         contentChildren.push(
           this.createH3(`${modulePack.moduleCode || ''} — ${modulePack.moduleTitle || ''}`)
         );
@@ -3455,7 +3492,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       addSection(11, (out) => this.generateStep11Section(workflow.step11, out));
     }
     if (workflow.step12) {
-      addSection(12, (out) => this.generateStep12Section(workflow.step12, out));
+      addSection(12, (out) => this.generateStep12Section(workflow.step12, out, workflow.step4));
     }
     if (workflow.step13) {
       addSection(13, (out) => this.generateStep13Section(workflow.step13, out));
@@ -3689,7 +3726,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         await this.generateStep11Section(stepData, contentChildren);
         break;
       case 12:
-        await this.generateStep12Section(stepData, contentChildren);
+        await this.generateStep12Section(stepData, contentChildren, workflow.step4);
         break;
       case 13:
         await this.generateStep13Section(stepData, contentChildren);

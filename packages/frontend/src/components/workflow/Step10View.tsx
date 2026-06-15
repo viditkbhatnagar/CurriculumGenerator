@@ -6,6 +6,7 @@ import { useStep10Status } from '@/hooks/useStep10Status';
 import { api } from '@/lib/api';
 import { CurriculumWorkflow, LessonPlan } from '@/types/workflow';
 import { isStepDone } from '@/lib/stepGating';
+import { orderByStep4 } from '@/lib/moduleOrder';
 import { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
 import { toast } from '@/stores/toastStore';
@@ -878,6 +879,15 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
 
   const currentLesson = currentModule?.lessons?.find((l) => l.lessonId === selectedLesson);
 
+  // Lesson plans are stored in generation order, so a module generated later
+  // (e.g. a re-generated MOD103) would otherwise list after MOD108. Present the
+  // "Select Module to View" picker in Step 4 module order. Display-only —
+  // selection/downloads key off moduleId, so ordering can't misroute them.
+  const orderedLessonPlans = orderByStep4(
+    workflow.step10?.moduleLessonPlans,
+    workflow.step4?.modules
+  );
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {!hasStep10Data && !isCurrentlyGenerating ? (
@@ -1536,7 +1546,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
             <div className="bg-teal-50/50 rounded-lg p-4 border border-teal-200">
               <h4 className="text-teal-800 font-medium mb-3">Select Module to View</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {workflow.step10?.moduleLessonPlans?.map((module) => (
+                {orderedLessonPlans.map((module) => (
                   <button
                     key={module.moduleId}
                     onClick={() => handleViewDetails(module.moduleId)}

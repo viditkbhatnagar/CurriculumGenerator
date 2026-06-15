@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep11, useApproveStep11, useStep11Status } from '@/hooks/useWorkflow';
 import { CurriculumWorkflow } from '@/types/workflow';
 import { isStepDone } from '@/lib/stepGating';
+import { orderByStep4 } from '@/lib/moduleOrder';
 import { useGeneration } from '@/contexts/GenerationContext';
 import { api } from '@/lib/api';
 import StepDownloadButton from './StepDownloadButton';
@@ -1016,25 +1017,29 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
           <div className="bg-teal-50/50 rounded-lg p-4 border border-teal-200">
             <h4 className="text-teal-800 font-medium mb-3">Select Module to View PPTs</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {workflow.step11?.modulePPTDecks?.map((module, index) => (
-                <button
-                  key={`step11-module-${index}-${module.moduleId}`}
-                  onClick={() => setSelectedModule(module.moduleId)}
-                  className={`p-4 rounded-lg border text-left transition-all ${
-                    selectedModule === module.moduleId
-                      ? 'bg-orange-500/20 border-orange-500 text-orange-400'
-                      : 'bg-white border-teal-200 text-teal-700 hover:border-slate-600'
-                  }`}
-                >
-                  <div className="font-medium mb-1">{module.moduleCode}</div>
-                  <div className="text-sm opacity-80 mb-2">{module.moduleTitle}</div>
-                  <div className="flex items-center gap-3 text-xs">
-                    <span>{module.pptDecks.length} PPT decks</span>
-                    <span>•</span>
-                    <span>{module.pptDecks.reduce((sum, d) => sum + d.slideCount, 0)} slides</span>
-                  </div>
-                </button>
-              ))}
+              {orderByStep4(workflow.step11?.modulePPTDecks, workflow.step4?.modules).map(
+                (module, index) => (
+                  <button
+                    key={`step11-module-${index}-${module.moduleId}`}
+                    onClick={() => setSelectedModule(module.moduleId)}
+                    className={`p-4 rounded-lg border text-left transition-all ${
+                      selectedModule === module.moduleId
+                        ? 'bg-orange-500/20 border-orange-500 text-orange-400'
+                        : 'bg-white border-teal-200 text-teal-700 hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="font-medium mb-1">{module.moduleCode}</div>
+                    <div className="text-sm opacity-80 mb-2">{module.moduleTitle}</div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span>{module.pptDecks.length} PPT decks</span>
+                      <span>•</span>
+                      <span>
+                        {module.pptDecks.reduce((sum, d) => sum + d.slideCount, 0)} slides
+                      </span>
+                    </div>
+                  </button>
+                )
+              )}
             </div>
           </div>
 
