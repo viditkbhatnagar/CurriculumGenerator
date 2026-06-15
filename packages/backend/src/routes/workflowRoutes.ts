@@ -6601,13 +6601,50 @@ router.post('/:id/step10/import', validateJWT, loadUser, (req: Request, res: Res
       }
 
       for (const pmod of parsed.modules) {
-        const liveMod =
+        let liveMod =
           (pmod.moduleCode && liveByCode.get(pmod.moduleCode)) ||
-          liveByTitle.get(norm(pmod.moduleTitle));
+          liveByTitle.get(norm(pmod.moduleTitle)) ||
+          (nameCode ? liveByCode.get(String(nameCode)) : undefined);
+
+        // Tolerant fallback for a per-module re-upload whose heading code/title
+        // is stale — e.g. the file was downloaded (or cached) before the module
+        // was renamed/renumbered, so its "MODxxx" no longer matches. Recover it
+        // by lesson-title overlap, but only when ONE workflow module is a clear
+        // winner, so we never silently apply edits to the wrong module.
+        if (!liveMod && parsed.modules.length === 1 && (pmod.lessons || []).length > 0) {
+          const fileTitles = new Set(
+            pmod.lessons.map((l: any) => norm(l.lessonTitle)).filter(Boolean)
+          );
+          let best: any = null;
+          let bestScore = 0;
+          let secondScore = 0;
+          for (const cand of livePlans) {
+            const candLessons = Array.isArray(cand.lessons) ? cand.lessons : [];
+            if (candLessons.length === 0 || fileTitles.size === 0) continue;
+            const overlap = candLessons.filter((l: any) =>
+              fileTitles.has(norm(l.lessonTitle))
+            ).length;
+            const score = overlap / Math.max(candLessons.length, fileTitles.size);
+            if (score > bestScore) {
+              secondScore = bestScore;
+              bestScore = score;
+              best = cand;
+            } else if (score > secondScore) {
+              secondScore = score;
+            }
+          }
+          if (best && bestScore >= 0.5 && bestScore > secondScore + 0.2) {
+            liveMod = best;
+            summary.warnings.push(
+              `The file's module code "${pmod.moduleCode || pmod.moduleTitle || 'unknown'}" no longer matches a module here, but its lessons match "${best.moduleCode || best.code} — ${best.moduleTitle || best.title}", so the edits were applied there.`
+            );
+          }
+        }
+
         if (!liveMod) {
           summary.modulesUnmatchedInFile += 1;
           summary.warnings.push(
-            `Module "${pmod.moduleCode || pmod.moduleTitle}" in the file did not match any module in this workflow — skipped.`
+            `Module "${pmod.moduleCode || pmod.moduleTitle}" in the file did not match any module in this workflow — it may have been renamed or renumbered since the file was downloaded. Please re-download this module and edit the fresh copy.`
           );
           continue;
         }
