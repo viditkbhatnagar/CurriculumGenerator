@@ -1074,8 +1074,13 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                     (m) =>
                       m.moduleId === module.id || (!!module.code && m.moduleCode === module.code)
                   ) ?? -1;
-                // Module is complete if we have its data OR polling says it's done
-                const isComplete = !!modulePlan || index < completedModules;
+                // A module is complete only when a lesson plan actually exists
+                // for it (matched by its own id or code). The old positional
+                // "index < completedModules" check falsely marked a missing
+                // middle module (e.g. an un-generated MOD103) as complete, which
+                // hid that it needs generating and pointed its download/view at a
+                // neighbouring module's plan.
+                const isComplete = !!modulePlan;
                 const isThisModuleGenerating =
                   generatingModuleId === module.id ||
                   step10Status?.jobs?.details?.some(

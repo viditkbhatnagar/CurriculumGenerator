@@ -151,6 +151,39 @@ function normalizeStep7AssessmentIds(step7: any): boolean {
 }
 
 /**
+ * Ensure every Step 4 module has a UNIQUE id. A bad import/edit can leave two
+ * modules sharing an id (seen in the wild: MOD102 and MOD103 both "mod2"),
+ * which collapses them everywhere keyed by module id — Step 10 generates a plan
+ * for only one of them, and the per-module download/view for the duplicate
+ * resolves to the WRONG module's lesson plans (e.g. downloading MOD103 returns
+ * MOD102's content). Keeps the first occurrence's id and reassigns a fresh,
+ * unique id to any later duplicate (or missing) id, derived from the module
+ * code so it stays human-traceable. Returns true if anything changed.
+ */
+function dedupeStep4ModuleIds(step4: any): boolean {
+  if (!step4 || !Array.isArray(step4.modules)) return false;
+  const seen = new Set<string>();
+  let changed = false;
+  for (const m of step4.modules) {
+    if (!m || typeof m !== 'object') continue;
+    const id = m.id ? String(m.id) : '';
+    if (!id || seen.has(id)) {
+      const base = String(m.code || m.moduleCode || 'mod')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '');
+      let next = `${base}-${crypto.randomBytes(3).toString('hex')}`;
+      while (seen.has(next)) next = `${base}-${crypto.randomBytes(3).toString('hex')}`;
+      m.id = next;
+      seen.add(next);
+      changed = true;
+    } else {
+      seen.add(id);
+    }
+  }
+  return changed;
+}
+
+/**
  * A fully-shaped blank lesson. Every nested array/object the export, screen and
  * PPT step read is initialised, so a lesson created by import/Add-Lesson never
  * trips an undefined access (e.g. PPT gen reads instructorNotes.discussionPrompts
@@ -667,6 +700,18 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
         { $set: { 'step10.summary': (workflow as any).step10.summary } }
       ).catch((e) =>
         loggingService.warn('Step10 summary recompute persist failed', { error: e?.message })
+      );
+    }
+
+    // Give every Step 4 module a unique id. Duplicate ids (e.g. two modules
+    // sharing "mod2") make the per-module download/view resolve to the wrong
+    // module's lesson plans and hide that a module was never generated.
+    if (dedupeStep4ModuleIds((workflow as any).step4)) {
+      CurriculumWorkflow.updateOne(
+        { _id: (workflow as any)._id },
+        { $set: { 'step4.modules': (workflow as any).step4.modules } }
+      ).catch((e) =>
+        loggingService.warn('Step4 module id dedupe persist failed', { error: e?.message })
       );
     }
 
