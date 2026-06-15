@@ -1463,6 +1463,26 @@ IMPORTANT:
       };
     });
 
+    // Guard against duplicate module ids. The model sometimes returns the same
+    // "id" for two modules (seen in the wild: MOD102 and MOD103 both "mod2"),
+    // which collapses them everywhere keyed by module id — Step 10 then
+    // generates a lesson plan for only one of them and the per-module
+    // download/view for the duplicate resolves to the wrong module. Keep the
+    // first occurrence's id and give any later duplicate (or empty) id a unique,
+    // code-derived one.
+    const seenModuleIds = new Set<string>();
+    modules.forEach((m: any, i: number) => {
+      let id = String(m.id || '');
+      if (!id || seenModuleIds.has(id)) {
+        const base = `mod-${String(m.code || `m${i + 1}`).toLowerCase()}`;
+        id = base;
+        let n = 2;
+        while (seenModuleIds.has(id)) id = `${base}-${n++}`;
+        m.id = id;
+      }
+      seenModuleIds.add(id);
+    });
+
     // Calculate hours totals
     const totalModuleHours = modules.reduce((sum: number, m: any) => sum + (m.totalHours || 0), 0);
     const totalModuleContactHours = modules.reduce(
