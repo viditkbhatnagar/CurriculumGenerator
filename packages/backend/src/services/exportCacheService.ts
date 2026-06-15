@@ -26,7 +26,8 @@ import { loggingService } from './loggingService';
 
 // Bump this when the export renderer (wordExportService / SCORM builder)
 // changes output in a way that should invalidate every cached export.
-const EXPORT_FORMAT_VERSION = 'v1';
+// v2: modules now render in Step 4 order (was generation order).
+const EXPORT_FORMAT_VERSION = 'v2';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {
