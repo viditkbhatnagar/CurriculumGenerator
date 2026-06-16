@@ -244,6 +244,56 @@ function applyParsedLessonFields(live: any, pl: any, modCode?: string): void {
       live.instructorNotes.adaptationOptions = pl.instructorNotes.adaptationOptions;
     }
   }
+  // Required Materials. The export renders three line shapes — "PPT Deck: …",
+  // "Case Files: a, b" and "Reading: <citation> (N min)" — so parse each back to
+  // the right field. readingReferences are rebuilt from the file (the SME's
+  // edited list); pptDeckRef/caseFiles are only replaced when their line is
+  // present, otherwise the existing values are preserved.
+  if (Array.isArray(pl.materials) && pl.materials.length > 0) {
+    const existing = live.materials && typeof live.materials === 'object' ? live.materials : {};
+    const readingReferences: any[] = [];
+    let pptDeckRef: string = existing.pptDeckRef || '';
+    const newCaseFiles: string[] = [];
+    let sawCaseLine = false;
+    for (const raw of pl.materials) {
+      const line = String(raw).trim();
+      if (!line) continue;
+      if (/^PPT Deck:/i.test(line)) {
+        pptDeckRef = line.replace(/^PPT Deck:\s*/i, '').trim();
+      } else if (/^Case Files?:/i.test(line)) {
+        sawCaseLine = true;
+        line
+          .replace(/^Case Files?:\s*/i, '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .forEach((c) => newCaseFiles.push(c));
+      } else {
+        const minMatch = line.match(/\((\d+)\s*min\)\s*$/i);
+        const citation = line
+          .replace(/^Reading:\s*/i, '')
+          .replace(/\s*\(\d+\s*min\)\s*$/i, '')
+          .trim();
+        if (citation) {
+          readingReferences.push({
+            sourceId: '',
+            citation,
+            estimatedMinutes: minMatch ? Number(minMatch[1]) : 0,
+          });
+        }
+      }
+    }
+    live.materials = {
+      ...existing,
+      readingReferences,
+      pptDeckRef,
+      caseFiles: sawCaseLine
+        ? Array.from(new Set(newCaseFiles))
+        : Array.isArray(existing.caseFiles)
+          ? existing.caseFiles
+          : [],
+    };
+  }
   if (Array.isArray(pl.activities) && pl.activities.length > 0) {
     const existing: any[] = Array.isArray(live.activities) ? live.activities : [];
     const norm = (s: string) => (s || '').trim().toLowerCase();
