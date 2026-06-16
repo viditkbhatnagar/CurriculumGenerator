@@ -1835,6 +1835,30 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           })
         );
 
+        // Module description — carried from Step 4 (modulePlan.moduleDescription
+        // is populated at generation; fall back to the live step4 module).
+        const moduleDescription = modulePlan.moduleDescription || s4mod?.description;
+        if (moduleDescription) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Module Description: ',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+                new TextRun({
+                  text: String(moduleDescription),
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { after: 150, line: LINE_SPACING },
+            })
+          );
+        }
+
         // Module Alignment Map (MLO → Linked PLOs → Linked KSCs), from step4.
         if (s4mod?.mlos?.length) {
           contentChildren.push(

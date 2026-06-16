@@ -379,6 +379,10 @@ export class LessonPlanService {
       moduleId: module.id,
       moduleCode: module.moduleCode,
       moduleTitle: module.title,
+      // Carry the Step 4 module description through to Step 10 so it survives
+      // export and re-upload (step4 stores `description` at runtime even though
+      // the typed ModuleData interface omits it).
+      moduleDescription: (module as { description?: string }).description || '',
       totalContactHours: module.contactHours,
       totalLessons: finalLessons.length,
       lessons: finalLessons,
@@ -753,11 +757,22 @@ export class LessonPlanService {
       activities,
       materials,
       instructorNotes,
-      independentStudy: this.generateIndependentStudy(block.assignedMLOs, context),
+      independentStudy: this.generateIndependentStudy(
+        block.assignedMLOs,
+        context,
+        block.lessonNumber
+      ),
       // Faculty-facing detail so a tutor taking only this module knows exactly
-      // what to teach and what independent work the student does.
-      topicCoverage: aiEnhancedContent.topicCoverage,
-      independentActivity: aiEnhancedContent.independentActivity,
+      // what to teach and what independent work the student does. When the AI
+      // call falls back (or omits a field), synthesise per-lesson defaults so
+      // Topic Coverage / Independent Activity — and their Student Evidence — are
+      // always shown lesson-wise rather than blank.
+      topicCoverage: this.ensureTopicCoverage(aiEnhancedContent.topicCoverage, block, lessonTitle),
+      independentActivity: this.ensureIndependentActivity(
+        aiEnhancedContent.independentActivity,
+        block,
+        lessonTitle
+      ),
       formativeChecks: [],
     };
 
@@ -772,6 +787,46 @@ export class LessonPlanService {
         set.add(ksc);
     }
     return Array.from(set);
+  }
+
+  /**
+   * Guarantee a populated Topic Coverage block (with per-lesson Student
+   * Evidence) even when the AI call falls back or omits fields. The AI value is
+   * used as-is when present; missing fields get lesson-specific defaults so the
+   * export never shows a blank Student Evidence row.
+   */
+  private ensureTopicCoverage(
+    ai: LessonPlan['topicCoverage'] | undefined,
+    _block: LessonBlock,
+    lessonTitle: string
+  ): LessonPlan['topicCoverage'] {
+    const tc: any = ai || {};
+    const topic = tc.exactTopic || lessonTitle;
+    return {
+      exactTopic: topic,
+      subtopics: Array.isArray(tc.subtopics) ? tc.subtopics : [],
+      practicalActivity:
+        tc.practicalActivity || `Apply the concepts from "${topic}" in the lesson's activities.`,
+      studentEvidence:
+        tc.studentEvidence ||
+        `Completed activity worksheets and brief notes evidencing understanding of "${topic}".`,
+    };
+  }
+
+  /** As ensureTopicCoverage, for the per-lesson Independent Activity block. */
+  private ensureIndependentActivity(
+    ai: LessonPlan['independentActivity'] | undefined,
+    _block: LessonBlock,
+    lessonTitle: string
+  ): LessonPlan['independentActivity'] {
+    const ia: any = ai || {};
+    return {
+      sourceMaterialMapping: ia.sourceMaterialMapping || '',
+      independentTask: ia.independentTask || `Independent study task reinforcing "${lessonTitle}".`,
+      aiPlatformSupport: ia.aiPlatformSupport || '',
+      studentEvidence:
+        ia.studentEvidence || `Submitted output from the independent task for "${lessonTitle}".`,
+    };
   }
 
   /**
@@ -1469,11 +1524,18 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
       }
     }
 
-    return caseFiles;
+    // De-duplicate: a case study linked to several of the lesson's MLOs (or
+    // listed under multiple module ids) would otherwise repeat its id, e.g.
+    // "case-mod1-1, case-mod1-2, case-mod1-1".
+    return Array.from(new Set(caseFiles));
   }
 
   private getReadingReferences(mlos: MLO[], context: WorkflowContext): ReadingReference[] {
     const references: ReadingReference[] = [];
+    // A reading linked to several of the lesson's MLOs (or repeated across
+    // module reading lists) must only appear once. Dedupe by sourceId, falling
+    // back to the citation text when no sourceId is present.
+    const seen = new Set<string>();
 
     for (const moduleReadings of context.moduleReadingLists) {
       const coreReadings = moduleReadings.coreReadings || [];
@@ -1484,7 +1546,9 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
           reading.mloIds || (reading as { linkedMLOs?: string[] }).linkedMLOs || [];
         const isRelevant = readingMloIds.some((id: string) => mloIds.includes(id));
 
-        if (isRelevant) {
+        const key = reading.sourceId || reading.citation;
+        if (isRelevant && key && !seen.has(key)) {
+          seen.add(key);
           references.push({
             sourceId: reading.sourceId,
             citation: reading.citation,
@@ -1572,11 +1636,16 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
    */
   private generateIndependentStudy(
     mlos: MLO[],
-    context: WorkflowContext
+    context: WorkflowContext,
+    lessonNumber = 1
   ): LessonPlan['independentStudy'] {
     const coreReadings: ReadingAssignment[] = [];
     const supplementaryReadings: ReadingAssignment[] = [];
-    let totalEffort = 0;
+    // Each reading must appear once per category — a reading linked to several
+    // of the lesson's MLOs (or repeated across reading lists) was otherwise
+    // duplicated, inflating the "Independent Study (X minutes)" total.
+    const seenCore = new Set<string>();
+    const seenSupp = new Set<string>();
 
     const mloIds = mlos.map((m) => m.id);
 
@@ -1586,15 +1655,15 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
       for (const reading of moduleReadings.coreReadings || []) {
         const readingMloIds =
           reading.mloIds || (reading as { linkedMLOs?: string[] }).linkedMLOs || [];
-        if (readingMloIds.some((id: string) => mloIds.includes(id))) {
-          const estimatedMinutes = reading.estimatedMinutes || 30;
+        const key = reading.sourceId || reading.citation;
+        if (readingMloIds.some((id: string) => mloIds.includes(id)) && key && !seenCore.has(key)) {
+          seenCore.add(key);
           coreReadings.push({
             sourceId: reading.sourceId,
             citation: reading.citation,
-            estimatedMinutes,
+            estimatedMinutes: reading.estimatedMinutes || 30,
             complexityLevel: reading.complexityLevel || 'intermediate',
           });
-          totalEffort += estimatedMinutes;
         }
       }
 
@@ -1602,25 +1671,30 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
       for (const reading of moduleReadings.supplementaryReadings || []) {
         const readingMloIds =
           reading.mloIds || (reading as { linkedMLOs?: string[] }).linkedMLOs || [];
-        if (readingMloIds.some((id: string) => mloIds.includes(id))) {
-          const estimatedMinutes = reading.estimatedMinutes || 20;
+        const key = reading.sourceId || reading.citation;
+        if (readingMloIds.some((id: string) => mloIds.includes(id)) && key && !seenSupp.has(key)) {
+          seenSupp.add(key);
           supplementaryReadings.push({
             sourceId: reading.sourceId,
             citation: reading.citation,
-            estimatedMinutes,
+            estimatedMinutes: reading.estimatedMinutes || 20,
             complexityLevel: reading.complexityLevel || 'intermediate',
           });
-          // Note: Supplementary readings are optional, so we don't add to totalEffort
         }
       }
     }
 
-    // Limit to reasonable number of readings per lesson
-    const limitedCoreReadings = coreReadings.slice(0, 3);
-    const limitedSupplementaryReadings = supplementaryReadings.slice(0, 3);
+    // Vary the readings per lesson so lessons that share MLOs don't all render
+    // the identical Independent Study block. Rotate the relevant set by the
+    // lesson position; with <=3 relevant readings every lesson necessarily shows
+    // the same few (there simply aren't more to spread).
+    const rotate = <T>(arr: T[], by: number): T[] =>
+      arr.length ? [...arr.slice(by % arr.length), ...arr.slice(0, by % arr.length)] : arr;
+    const offset = Math.max(0, lessonNumber - 1);
+    const limitedCoreReadings = rotate(coreReadings, offset).slice(0, 3);
+    const limitedSupplementaryReadings = rotate(supplementaryReadings, offset).slice(0, 3);
 
-    // Recalculate total effort based on limited core readings
-    totalEffort = limitedCoreReadings.reduce((sum, r) => sum + r.estimatedMinutes, 0);
+    const totalEffort = limitedCoreReadings.reduce((sum, r) => sum + r.estimatedMinutes, 0);
 
     return {
       coreReadings: limitedCoreReadings,

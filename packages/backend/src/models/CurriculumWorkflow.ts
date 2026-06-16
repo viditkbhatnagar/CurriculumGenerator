@@ -192,6 +192,7 @@ export interface ModuleLessonPlan {
   moduleId: string;
   moduleCode: string;
   moduleTitle: string;
+  moduleDescription?: string;
   totalContactHours: number;
   totalLessons: number;
 
