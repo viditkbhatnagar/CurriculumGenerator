@@ -127,6 +127,20 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
     }
   };
 
+  // Re-run the exam generation. Re-uses the generate flow (the backend snapshots
+  // the current exam to Version history first, then re-queues), so an exam that
+  // was generated before recent fixes can be refreshed.
+  const handleRegenerate = async () => {
+    if (isCurrentlyGenerating) return;
+    const ok = window.confirm(
+      'Regenerate the summative exam? This replaces the current exam with a freshly generated one. ' +
+        'The current version is saved to Version history (the clock icon at the top) and can be restored. ' +
+        'If it was approved, you will need to approve the new version.'
+    );
+    if (!ok) return;
+    await handleGenerate();
+  };
+
   const toggleSection = (key: string) => {
     setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -391,6 +405,27 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
                 </button>
               </>
             )}
+          </div>
+
+          {/* Regenerate — re-run the exam (e.g. to pick up corrections). Shown
+              whether or not it's approved. */}
+          <div className="flex justify-center">
+            <button
+              onClick={handleRegenerate}
+              disabled={isCurrentlyGenerating}
+              className="px-5 py-2 bg-white border border-amber-400 text-amber-700 hover:bg-amber-50 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Regenerate the summative exam from the latest curriculum"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              Regenerate Exam
+            </button>
           </div>
 
           {/* Exam Overview */}
