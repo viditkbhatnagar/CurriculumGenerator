@@ -557,7 +557,8 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
                                   key={j}
                                   className={`text-sm px-2 py-1 rounded ${opt === q.correctAnswer ? 'bg-emerald-100 text-emerald-700 font-medium' : 'text-teal-600'}`}
                                 >
-                                  {String.fromCharCode(65 + j)}. {opt}
+                                  {String.fromCharCode(65 + j)}.{' '}
+                                  {String(opt).replace(/^\s*\(?[A-Za-z]\)?[.)]\s*/, '')}
                                 </p>
                               ))}
                             </div>

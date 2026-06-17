@@ -2934,6 +2934,10 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         if (q.type === 'mcq' && q.options?.length) {
           const optionLabels = ['A', 'B', 'C', 'D', 'E', 'F'];
           for (let j = 0; j < q.options.length; j++) {
+            // Options are often stored already prefixed ("A) text", "A. text",
+            // "(A) text"); strip that so we don't render a doubled label
+            // ("A. A) text").
+            const optionText = String(q.options[j] ?? '').replace(/^\s*\(?[A-Za-z]\)?[.)]\s*/, '');
             // Tick by text (canonical correctAnswer) OR index (correctOptionIndex
             // / legacy numeric correctAnswer).
             const isCorrect =
@@ -2944,7 +2948,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
               new Paragraph({
                 children: [
                   new TextRun({
-                    text: `   ${optionLabels[j] || String(j + 1)}. ${q.options[j]}${isCorrect ? ' ✓' : ''}`,
+                    text: `   ${optionLabels[j] || String(j + 1)}. ${optionText}${isCorrect ? ' ✓' : ''}`,
                     font: FONT_FAMILY,
                     size: FONT_SIZES.BODY,
                     bold: isCorrect,

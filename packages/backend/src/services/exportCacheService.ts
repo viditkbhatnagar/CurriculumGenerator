@@ -28,7 +28,9 @@ import { loggingService } from './loggingService';
 // changes output in a way that should invalidate every cached export.
 // v2: modules now render in Step 4 order (was generation order).
 // v3: Step 10 export now renders the module description.
-const EXPORT_FORMAT_VERSION = 'v3';
+// v4: Step 13 fixes — section breakdown recomputed, MCQ option labels de-doubled,
+//     rationales sanitised, marking scheme rebuilt from questions.
+const EXPORT_FORMAT_VERSION = 'v4';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {
