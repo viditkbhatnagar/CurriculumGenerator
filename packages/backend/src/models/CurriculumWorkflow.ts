@@ -289,6 +289,10 @@ export interface ModulePPTDecks {
   moduleTitle: string;
   totalLessons: number;
   pptDecks: PPTDeck[];
+  // When set, the decks' full slide content is archived in S3 at this key and
+  // only lightweight slide stubs are kept inline (keeps the workflow document
+  // under MongoDB's 16MB limit). See services/pptDeckStore.ts.
+  slidesS3Key?: string;
 }
 
 export interface Step11PPTGeneration {
