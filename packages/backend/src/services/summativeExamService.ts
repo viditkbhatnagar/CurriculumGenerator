@@ -38,6 +38,7 @@ interface ExamContext {
   }>;
   assessmentStrategy: any;
   caseStudies: any[];
+  targetMarket: string;
 }
 
 export class SummativeExamService {
@@ -45,7 +46,6 @@ export class SummativeExamService {
   private readonly MAX_TOKENS_SECTION_A = 16000;
   private readonly MAX_TOKENS_SECTION_B = 12000;
   private readonly MAX_TOKENS_SECTION_C = 10000;
-  private readonly MAX_TOKENS_MARKING = 16000;
   private readonly INTER_CALL_DELAY = 1500;
 
   /**
@@ -141,23 +141,78 @@ export class SummativeExamService {
 
     await this.delay(this.INTER_CALL_DELAY);
 
-    // Phase 4: Generate Marking Scheme
+    // Phase 4: Build the marking scheme deterministically from the questions so
+    // every model answer matches its own question (no separate, drift-prone call).
     report(70);
-    loggingService.info('Phase 4: Generating marking scheme');
-    const markingScheme = await this.generateMarkingScheme(sectionA, sectionB, sectionC, context);
-
-    await this.delay(this.INTER_CALL_DELAY);
+    loggingService.info('Phase 4: Building marking scheme from generated questions');
+    const markingScheme = this.generateMarkingScheme(sectionA, sectionB, sectionC);
 
     // Phase 5: Generate Integrity and Accessibility
     report(85);
     loggingService.info('Phase 5: Generating integrity and accessibility sections');
     const { integrityAndSecurity, accessibilityProvisions } = await this.generateMetadata(context);
 
+    // Strip leaked reasoning artifacts ("Wait:", "Hmm,", "As an AI…") from the
+    // learner/marker-facing text so they never appear in the exam or rationale.
+    sectionA.forEach((q) => {
+      if (q.rationale) q.rationale = this.cleanText(q.rationale);
+      if (typeof q.correctAnswer === 'string') q.correctAnswer = this.cleanText(q.correctAnswer);
+    });
+    sectionB?.forEach((s) =>
+      s.questions.forEach((q) => {
+        if (q.modelAnswer) q.modelAnswer = this.cleanText(q.modelAnswer);
+      })
+    );
+    sectionC?.forEach((t) => {
+      if (t.modelAnswer) t.modelAnswer = this.cleanText(t.modelAnswer);
+    });
+
     // Calculate totals
     const sectionAMarks = sectionA.reduce((sum, q) => sum + q.marks, 0);
     const sectionBMarks = sectionB ? sectionB.reduce((sum, s) => sum + s.totalMarks, 0) : 0;
     const sectionCMarks = sectionC ? sectionC.reduce((sum, t) => sum + t.marks, 0) : 0;
     const totalMarks = sectionAMarks + sectionBMarks + sectionCMarks;
+
+    // Rebuild the section breakdown from the ACTUAL generated sections so the
+    // overview's marks and counts always match the questions in the file. The
+    // model-written breakdown drifted — e.g. a 100-mark breakdown under a
+    // 240-mark total, "Section B: 2 questions" when 4 scenarios were generated,
+    // or "Section C: 2 tasks" when 3 exist.
+    const aiBreakdown: any[] = Array.isArray((overview as any).sectionBreakdown)
+      ? (overview as any).sectionBreakdown
+      : [];
+    const timeFor = (letter: string): string =>
+      aiBreakdown.find(
+        (b) => /Section\s*([A-C])/i.exec(b?.section || '')?.[1]?.toUpperCase() === letter
+      )?.timeAllocation || '';
+    const uniq = (ids: string[]): string[] => Array.from(new Set(ids.filter(Boolean)));
+    const sectionBreakdown: any[] = [
+      {
+        section: 'Section A: Knowledge & Application Checks',
+        marks: sectionAMarks,
+        questionCount: sectionA.length,
+        timeAllocation: timeFor('A'),
+        plosAssessed: uniq(sectionA.flatMap((q) => q.linkedPLOs || [])),
+      },
+    ];
+    if (includeSectionB && sectionB && sectionB.length) {
+      sectionBreakdown.push({
+        section: 'Section B: Scenario-Based Analysis',
+        marks: sectionBMarks,
+        questionCount: sectionB.length, // scenarios
+        timeAllocation: timeFor('B'),
+        plosAssessed: uniq(sectionB.flatMap((s) => s.questions.flatMap((q) => q.linkedPLOs || []))),
+      });
+    }
+    if (sectionC && sectionC.length) {
+      sectionBreakdown.push({
+        section: 'Section C: Applied Tasks',
+        marks: sectionCMarks,
+        questionCount: sectionC.length, // tasks
+        timeAllocation: timeFor('C'),
+        plosAssessed: uniq(sectionC.flatMap((t) => t.linkedPLOs || [])),
+      });
+    }
 
     // Validate PLO coverage
     const coveredPLOs = new Set<string>();
@@ -172,7 +227,8 @@ export class SummativeExamService {
       overview: {
         ...overview,
         totalMarks,
-      },
+        sectionBreakdown,
+      } as any,
       sectionA,
       sectionB,
       sectionBIncluded: includeSectionB,
@@ -244,7 +300,26 @@ export class SummativeExamService {
       })),
       assessmentStrategy: workflow.step7?.userPreferences || {},
       caseStudies: workflow.step8?.caseStudies || [],
+      // Reuse the target market the SME already set for Step 7 assessments so the
+      // exam localises (currency, law, brands, spelling) without re-asking.
+      targetMarket: (workflow.step7?.userPreferences as any)?.targetMarket || '',
     };
+  }
+
+  /**
+   * Locale/market style directive for the prompts. Defaults to the previous UK
+   * convention when no target market is set; otherwise localises examples,
+   * currency, brand names, legal/regulatory references and spelling.
+   */
+  private localeStyle(context: ExamContext): string {
+    const m = context.targetMarket?.trim();
+    if (!m) return 'UK academic conventions.';
+    return (
+      `Localise everything to the ${m} context: examples, organisation/brand names, currency and ` +
+      `legal/regulatory references must suit ${m} — use INR and ${m} consumer-protection / ` +
+      `data-protection law (e.g. Consumer Protection Act, DPDP Act) rather than UK £, GDPR or the ` +
+      `Consumer Rights Act unless ${m} is the UK. Use ${m} English spelling.`
+    );
   }
 
   private async generateOverviewAndSectionA(
@@ -264,7 +339,7 @@ export class SummativeExamService {
 DO NOT invent new learning outcomes. DO NOT change assessment weightings. DO NOT introduce new topics.
 Prioritise APPLICATION and ANALYSIS over recall. Questions must be realistic and job-relevant.
 
-Style: Formal, professional, regulator-ready. Student-facing exam language. UK academic conventions. No emojis.
+Style: Formal, professional, regulator-ready. Student-facing exam language. No emojis. ${this.localeStyle(context)}
 Return ONLY valid JSON.`;
 
     const prompt = `Generate the EXAM OVERVIEW and SECTION A for this program's final summative exam.
@@ -339,7 +414,7 @@ Return ONLY valid JSON.`;
 
 Questions must be scenario-based using realistic workplace contexts. Avoid trivial recall. Assess APPLICATION and ANALYSIS.
 
-Style: Formal, professional. UK academic conventions. No emojis.
+Style: Formal, professional. No emojis. ${this.localeStyle(context)}
 Return ONLY valid JSON.`;
 
     const caseStudySummaries = context.caseStudies
@@ -402,7 +477,7 @@ Return ONLY valid JSON.`;
 
 Tasks must require practical application of knowledge. Align to stated Bloom levels.
 
-Style: Formal, professional. UK academic conventions. No emojis.
+Style: Formal, professional. No emojis. ${this.localeStyle(context)}
 Return ONLY valid JSON.`;
 
     const prompt = `Generate Section C (Applied Tasks) for the summative exam.
@@ -443,118 +518,85 @@ Return ONLY valid JSON.`;
     return parsed.sectionC || [];
   }
 
-  private async generateMarkingScheme(
+  /**
+   * Build the marking scheme directly from the generated questions so each model
+   * answer always belongs to its own question. Previously a separate LLM call
+   * worked from an 80-char, first-15-only summary, which drifted (e.g. a marking
+   * answer about "faulty goods" attached to a question about a normal return) and
+   * left later questions with no scheme at all. Each model answer is now derived
+   * from the question's own correctAnswer/rationale (Section A) or modelAnswer
+   * (Sections B/C); only the generic performance thresholds are templated.
+   */
+  private generateMarkingScheme(
     sectionA: SectionAQuestion[],
     sectionB: SectionBScenario[] | undefined,
-    sectionC: SectionCTask[] | undefined,
-    context: ExamContext
-  ): Promise<ExamMarkingScheme> {
-    const systemPrompt = `You are an academic assessment production engine. Generate a comprehensive marking scheme with model answers and performance thresholds (Fail/Pass/Merit/Distinction) for each section of the exam.
-
-Style: Formal, professional. UK academic conventions.
-Return ONLY valid JSON.`;
-
-    // Limit summaries to prevent token overflow — only include first 15 Section A questions
-    const sectionASlice = sectionA.slice(0, 15);
-    const sectionASummary = sectionASlice
-      .map((q) => `${q.questionId}: ${q.questionText.substring(0, 80)} (${q.marks}m, ${q.type})`)
-      .join('\n');
-    if (sectionA.length > 15) {
-      loggingService.info('Marking scheme: truncated Section A summary', {
-        total: sectionA.length,
-        included: 15,
-      });
-    }
-
-    const sectionBSummary = sectionB
-      ? sectionB
-          .map(
-            (s) =>
-              `${s.scenarioId}: ${s.scenarioText.substring(0, 80)} (${s.totalMarks}m, ${s.questions.length}q)`
-          )
-          .join('\n')
-      : 'N/A';
-
-    const sectionCSummary = sectionC
-      ? sectionC
-          .map((t) => `${t.taskId}: ${t.taskDescription.substring(0, 80)} (${t.marks}m)`)
-          .join('\n')
-      : 'N/A';
-
-    const prompt = `Generate the MARKING SCHEME for this exam.
-
-**SECTION A QUESTIONS:**
-${sectionASummary}
-
-**SECTION B SCENARIOS:**
-${sectionBSummary}
-
-**SECTION C TASKS:**
-${sectionCSummary}
-
-**OUTPUT (JSON):**
-{
-  "sectionA": [
-    {
-      "questionId": "A1",
-      "modelAnswer": "Full model answer",
-      "markAllocation": "How marks are awarded",
-      "performanceThresholds": {
-        "fail": "Below expected standard descriptor",
-        "pass": "Meets minimum standard descriptor",
-        "merit": "Above expected standard descriptor",
-        "distinction": "Exceptional performance descriptor"
-      }
-    }
-  ],
-  ${
-    sectionB
-      ? `"sectionB": [
-    {
-      "scenarioId": "B1",
-      "markAllocation": "Overall mark distribution",
-      "modelAnswers": [
-        { "questionId": "B1a", "modelAnswer": "Full model answer", "marks": number }
-      ],
-      "performanceThresholds": {
-        "fail": "...", "pass": "...", "merit": "...", "distinction": "..."
-      }
-    }
-  ],`
-      : ''
-  }
-  "sectionC": [
-    {
-      "taskId": "C1",
-      "modelAnswer": "Expected approach and key elements",
-      "markAllocation": "How marks are distributed",
-      "performanceThresholds": {
-        "fail": "...", "pass": "...", "merit": "...", "distinction": "..."
-      }
-    }
-  ]
-}
-
-Return ONLY valid JSON.`;
-
-    const response = await openaiService.generateContent(prompt, systemPrompt, {
-      responseFormat: 'json_object',
-      maxTokens: this.MAX_TOKENS_MARKING,
-      timeout: this.SECTION_TIMEOUT,
+    sectionC: SectionCTask[] | undefined
+  ): ExamMarkingScheme {
+    const thresholds = (kind: string) => ({
+      fail: `Below the minimum standard for ${kind}: key points missing or incorrect.`,
+      pass: `Meets the minimum standard for ${kind}: the essential points are covered adequately.`,
+      merit: `Above the expected standard for ${kind}: accurate, well-applied and clearly reasoned.`,
+      distinction: `Exceptional ${kind}: comprehensive, precise and insightful throughout.`,
     });
 
-    const parsed = this.safeParseJSON(response, 'MarkingScheme');
-    return {
-      sectionA: parsed.sectionA || [],
-      sectionB: parsed.sectionB,
-      sectionC: parsed.sectionC || [],
-    };
+    const sectionAScheme = sectionA.map((q) => ({
+      questionId: q.questionId,
+      modelAnswer:
+        q.type === 'mcq'
+          ? `Correct answer: ${this.cleanText(String(q.correctAnswer ?? ''))}.` +
+            (q.rationale ? ` ${this.cleanText(q.rationale)}` : '')
+          : this.cleanText(String(q.correctAnswer ?? q.rationale ?? '')),
+      markAllocation:
+        `${q.marks} mark${q.marks === 1 ? '' : 's'} — ` +
+        (q.type === 'mcq'
+          ? 'awarded in full for the correct option, zero otherwise.'
+          : 'awarded for coverage of the key points in the model answer.'),
+      performanceThresholds: thresholds('this question'),
+    }));
+
+    const sectionBScheme = sectionB
+      ? sectionB.map((s) => ({
+          scenarioId: s.scenarioId,
+          markAllocation: `${s.totalMarks} marks across ${s.questions.length} question${s.questions.length === 1 ? '' : 's'}.`,
+          modelAnswers: s.questions.map((q) => ({
+            questionId: q.questionId,
+            modelAnswer: this.cleanText(q.modelAnswer || ''),
+            marks: q.marks,
+          })),
+          performanceThresholds: thresholds('scenario analysis'),
+        }))
+      : undefined;
+
+    const sectionCScheme = (sectionC || []).map((t) => ({
+      taskId: t.taskId,
+      modelAnswer: this.cleanText(t.modelAnswer || ''),
+      markAllocation: `${t.marks} marks — awarded against the stated assessment criteria.`,
+      performanceThresholds: thresholds('applied task'),
+    }));
+
+    return { sectionA: sectionAScheme, sectionB: sectionBScheme, sectionC: sectionCScheme };
+  }
+
+  /**
+   * Strip leaked chain-of-thought / meta artifacts that sometimes survive in
+   * model answers and rationales — e.g. a stray "Wait:" interjection, "Hmm,",
+   * "Actually,", "Let me reconsider —", or "As an AI …".
+   */
+  private cleanText(s: string): string {
+    if (!s) return '';
+    let t = String(s).trim();
+    t = t.replace(
+      /(^|\s)(wait|hmm+|actually|hold on|on second thought|let me (?:re)?(?:think|consider|reconsider)[^.,:;—-]*)\s*[:,—-]+\s*/gi,
+      '$1'
+    );
+    t = t.replace(/(^|\s)as an ai[^.]*\.\s*/gi, '$1');
+    return t.replace(/\s{2,}/g, ' ').trim();
   }
 
   private async generateMetadata(
     context: ExamContext
   ): Promise<{ integrityAndSecurity: string; accessibilityProvisions: string }> {
-    const systemPrompt = `You are an academic assessment production engine. Generate exam integrity/security rules and accessibility provisions. UK academic conventions, formal tone. Return ONLY valid JSON.`;
+    const systemPrompt = `You are an academic assessment production engine. Generate exam integrity/security rules and accessibility provisions. Formal tone. ${this.localeStyle(context)} Return ONLY valid JSON.`;
 
     const prompt = `Generate integrity and accessibility sections for the summative exam.
 
