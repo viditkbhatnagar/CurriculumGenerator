@@ -3681,6 +3681,14 @@ CRITICAL VALIDATION:
       pptDecks,
     };
 
+    // Archive the full slide content to S3 and keep only lightweight stubs in the
+    // workflow document. The whole curriculum is one MongoDB document (16MB cap);
+    // a large programme's decks would otherwise overflow it and every save would
+    // fail, looping generation forever. Downloads regenerate from Step 10, so the
+    // inline content is not needed for output.
+    const { offloadModuleDecks } = await import('./pptDeckStore');
+    const storedModuleDeck = await offloadModuleDecks(workflowId, modulePPTDeck);
+
     // Re-fetch workflow to check for race conditions (another process may have added this module)
     const freshWorkflow = await CurriculumWorkflow.findById(workflowId);
     if (!freshWorkflow) {
@@ -3722,8 +3730,8 @@ CRITICAL VALIDATION:
       };
     }
 
-    // Add the new module PPT deck
-    freshWorkflow.step11.modulePPTDecks.push(modulePPTDeck);
+    // Add the new module PPT deck (slide content archived to S3; stubs inline)
+    freshWorkflow.step11.modulePPTDecks.push(storedModuleDeck);
 
     // Clear generation progress — module is done
     freshWorkflow.step11.generationProgress = undefined;
@@ -3773,6 +3781,14 @@ CRITICAL VALIDATION:
     if (freshWorkflow.step11.lastError) {
       freshWorkflow.step11.lastError = undefined;
     }
+
+    // Archive EVERY module's slide content to S3 (idempotent — already-archived
+    // modules are skipped), not just the new one. An existing oversized document
+    // (e.g. a programme whose earlier modules pushed it near 16MB) is thereby
+    // healed in this same save, so generation stops failing/looping.
+    freshWorkflow.step11.modulePPTDecks = await Promise.all(
+      freshWorkflow.step11.modulePPTDecks.map((m: any) => offloadModuleDecks(workflowId, m))
+    );
 
     // Save workflow
     freshWorkflow.markModified('step11');
