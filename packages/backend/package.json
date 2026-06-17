@@ -19,6 +19,7 @@
     "migrate:down": "migrate-mongo down -f migrate-mongo-config.js",
     "migrate:create": "migrate-mongo create -f migrate-mongo-config.js",
     "migrate:status": "migrate-mongo status -f migrate-mongo-config.js",
+    "migrate:offload-ppt": "tsx src/scripts/offloadStep11Decks.ts",
     "db:seed": "tsx src/db/seed.ts",
     "db:verify": "tsx src/db/verify.ts",
     "mongodb:init": "tsx src/db/initMongoDB.ts",
