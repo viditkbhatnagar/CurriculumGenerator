@@ -209,7 +209,7 @@ if (step12Queue) {
     });
   });
 
-  step12Queue.on('failed', (job: Job<Step12JobData>, error: Error) => {
+  step12Queue.on('failed', async (job: Job<Step12JobData>, error: Error) => {
     loggingService.error('Step 12 job failed', {
       jobId: job.id,
       workflowId: job.data.workflowId,
@@ -218,6 +218,34 @@ if (step12Queue) {
       attempts: job.attemptsMade,
       maxAttempts: job.opts.attempts,
     });
+
+    // Only act once the job has exhausted its retries — otherwise an intermediate
+    // failure would prematurely surface an error / clear progress mid-retry.
+    const maxAttempts = job.opts.attempts || 1;
+    if (job.attemptsMade < maxAttempts) return;
+
+    // Persist the failure and clear the stale "generating" progress so the frontend
+    // can detect the dead job and offer a retry, instead of polling generationProgress
+    // forever (which is exactly what left an imported workflow stuck at "0%").
+    try {
+      const workflow = await CurriculumWorkflow.findById(job.data.workflowId);
+      if (workflow?.step12) {
+        const s12 = workflow.step12 as any;
+        s12.lastError = {
+          message: error.message,
+          moduleIndex: job.data.moduleIndex,
+          timestamp: new Date(),
+        };
+        s12.generationProgress = undefined;
+        workflow.markModified('step12');
+        await workflow.save();
+      }
+    } catch (persistError) {
+      loggingService.error('Failed to persist Step 12 lastError', {
+        workflowId: job.data.workflowId,
+        error: persistError instanceof Error ? persistError.message : String(persistError),
+      });
+    }
   });
 
   step12Queue.on('stalled', (job: Job<Step12JobData>) => {
