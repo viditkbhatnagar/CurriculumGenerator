@@ -611,17 +611,56 @@ Return ONLY valid JSON.`;
 
 Return ONLY valid JSON.`;
 
-    const response = await openaiService.generateContent(prompt, systemPrompt, {
-      responseFormat: 'json_object',
-      maxTokens: 4000,
-      timeout: this.SECTION_TIMEOUT,
-    });
+    // Integrity/accessibility is the least critical section, yet a failure here
+    // must never discard a fully generated exam. Give GPT-5 ample room (its
+    // reasoning tokens count toward the completion budget — 4000 was too low and
+    // left zero for output), and fall back to sensible boilerplate on any error.
+    try {
+      const response = await openaiService.generateContent(prompt, systemPrompt, {
+        responseFormat: 'json_object',
+        maxTokens: 12000,
+        timeout: this.SECTION_TIMEOUT,
+      });
+      const parsed = this.safeParseJSON(response, 'Metadata');
+      return {
+        integrityAndSecurity: parsed.integrityAndSecurity || this.defaultIntegrityText(),
+        accessibilityProvisions: parsed.accessibilityProvisions || this.defaultAccessibilityText(),
+      };
+    } catch (error) {
+      loggingService.warn(
+        'Metadata generation failed — using default integrity/accessibility text',
+        {
+          error: error instanceof Error ? error.message : String(error),
+        }
+      );
+      return {
+        integrityAndSecurity: this.defaultIntegrityText(),
+        accessibilityProvisions: this.defaultAccessibilityText(),
+      };
+    }
+  }
 
-    const parsed = this.safeParseJSON(response, 'Metadata');
-    return {
-      integrityAndSecurity: parsed.integrityAndSecurity || '',
-      accessibilityProvisions: parsed.accessibilityProvisions || '',
-    };
+  private defaultIntegrityText(): string {
+    return (
+      'Academic integrity: all work submitted must be the learner’s own. Plagiarism, ' +
+      'collusion, impersonation and the use of unauthorised materials or tools are treated as ' +
+      'academic misconduct and may result in a fail grade and further disciplinary action. ' +
+      'Learner identity is verified at the start of the assessment (photo ID and enrolment ' +
+      'details). For online delivery, question and scenario order is randomised between learners ' +
+      'and sittings to reduce sharing of answers; submissions are checked for similarity. Any ' +
+      'suspected breach is recorded and reviewed before a final mark is confirmed.'
+    );
+  }
+
+  private defaultAccessibilityText(): string {
+    return (
+      'Reasonable adjustments are available without lowering the assessment standard. These ' +
+      'include additional time (typically 25%), rest breaks, alternative formats (large print, ' +
+      'screen-reader-compatible files), use of assistive technology, and a separate or quieter ' +
+      'room where required. Learners should request adjustments in advance so arrangements can be ' +
+      'confirmed before the assessment. The marking criteria and learning outcomes assessed remain ' +
+      'the same for all learners.'
+    );
   }
 
   private delay(ms: number): Promise<void> {
