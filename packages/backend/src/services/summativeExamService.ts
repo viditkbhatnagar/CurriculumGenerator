@@ -121,6 +121,11 @@ export class SummativeExamService {
     loggingService.info('Phase 1: Generating overview and Section A');
     const { overview, sectionA } = await this.generateOverviewAndSectionA(context, includeSectionB);
 
+    // Resolve each MCQ's correct answer to the actual option (the model often
+    // returns just a letter, e.g. "A", which can't be ticked or shown as a
+    // proper answer). Must run before the marking scheme is built from these.
+    sectionA.forEach((q) => this.normalizeSectionAMcq(q));
+
     await this.delay(this.INTER_CALL_DELAY);
 
     // Phase 2: Generate Section B (conditional)
@@ -591,6 +596,44 @@ Return ONLY valid JSON.`;
     );
     t = t.replace(/(^|\s)as an ai[^.]*\.\s*/gi, '$1');
     return t.replace(/\s{2,}/g, ' ').trim();
+  }
+
+  /**
+   * Resolve an MCQ's correct answer to the actual option. The model frequently
+   * returns just a letter ("A"), a labelled option ("A) ...") or the full text;
+   * normalise all of these to a 0-based `correctOptionIndex` (so the export/UI
+   * tick the right option) and a clean `correctAnswer` (the option's text without
+   * its "A)" label, so the marking scheme reads sensibly). Left untouched when no
+   * option can be confidently matched.
+   */
+  private normalizeSectionAMcq(q: any): void {
+    if (q?.type !== 'mcq' || !Array.isArray(q.options) || q.options.length === 0) return;
+    const opts = q.options.map((o: any) => String(o));
+    const stripLabel = (s: string) =>
+      String(s)
+        .replace(/^\s*\(?[A-Za-z]\)?[.)]\s*/, '')
+        .trim();
+    const norm = (s: string) => stripLabel(s).toLowerCase().replace(/\s+/g, ' ');
+    let idx = -1;
+    const ca = q.correctAnswer;
+
+    if (typeof ca === 'number' && Number.isInteger(ca) && ca >= 0 && ca < opts.length) {
+      idx = ca;
+    } else if (typeof ca === 'string' && ca.trim()) {
+      const t = ca.trim();
+      const letter = t.match(/^(?:option\s+)?\(?([A-Za-z])\)?[.)]?$/i); // "A", "A)", "(A)", "Option A"
+      if (letter) {
+        const li = letter[1].toUpperCase().charCodeAt(0) - 65;
+        if (li >= 0 && li < opts.length) idx = li;
+      }
+      if (idx < 0) idx = opts.findIndex((o) => norm(o) === norm(t));
+      if (idx < 0)
+        idx = opts.findIndex((o) => norm(o).includes(norm(t)) || norm(t).includes(norm(o)));
+    }
+
+    if (idx < 0 || idx >= opts.length) return; // undeterminable — leave as-is
+    q.correctOptionIndex = idx;
+    q.correctAnswer = stripLabel(opts[idx]);
   }
 
   private async generateMetadata(
