@@ -5218,6 +5218,20 @@ router.post('/:id/step13', validateJWT, loadUser, async (req: Request, res: Resp
       });
     }
 
+    // Optional target market set on the Step 13 screen — persist it so the exam
+    // generator localises (currency, law, brands, spelling). Stored under the
+    // Step 7 assessment preferences (the exam already reads it from there), so
+    // localising the exam no longer requires re-running Step 7.
+    const examTargetMarket =
+      typeof req.body?.targetMarket === 'string' ? req.body.targetMarket.trim() : '';
+    if (examTargetMarket) {
+      const step7: any = existingWorkflow.step7 || (existingWorkflow.step7 = {} as any);
+      step7.userPreferences = step7.userPreferences || {};
+      step7.userPreferences.targetMarket = examTargetMarket;
+      existingWorkflow.markModified('step7');
+      await existingWorkflow.save();
+    }
+
     // Try background queue (generic stepQueue)
     try {
       const { addStepJob, removeStepJob, stepQueue } = await import('../queues/stepQueue');

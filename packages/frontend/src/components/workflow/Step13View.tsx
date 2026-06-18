@@ -41,6 +41,12 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
   );
   const queueStatus = stepStatusData?.status || null;
   const [error, setError] = useState<string | null>(null);
+  // Market the exam localises to (currency, law, brands, spelling). Prefilled
+  // from the Step 7 preference if set; can be entered here so localising the
+  // exam doesn't require re-running Step 7.
+  const [targetMarket, setTargetMarket] = useState<string>(
+    (workflow.step7 as any)?.userPreferences?.targetMarket || ''
+  );
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     sectionA: true,
   });
@@ -91,7 +97,7 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
     startGeneration(workflow._id, 13, 900);
 
     try {
-      await submitStep13.mutateAsync(workflow._id);
+      await submitStep13.mutateAsync({ id: workflow._id, targetMarket: targetMarket.trim() });
       // Start polling AFTER POST succeeds (old job is now removed, new job is queued)
       startStatusPolling();
       // Also refresh workflow data periodically to detect step13 data arrival
@@ -140,6 +146,27 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
     if (!ok) return;
     await handleGenerate();
   };
+
+  const marketInput = (
+    <div className="bg-teal-50/50 rounded-lg p-4 border border-teal-200">
+      <label className="block text-sm font-medium text-teal-800 mb-1">
+        Target market for examples (optional)
+      </label>
+      <p className="text-xs text-teal-600 mb-2">
+        Localises currency, legal references, brands and spelling — e.g.{' '}
+        <span className="font-medium">Indian fashion retail</span>. Applies when you
+        generate/regenerate. Leave blank to keep it UK/neutral.
+      </p>
+      <input
+        type="text"
+        value={targetMarket}
+        onChange={(e) => setTargetMarket(e.target.value)}
+        placeholder="e.g. Indian fashion retail"
+        disabled={isCurrentlyGenerating}
+        className="w-full px-3 py-2 border border-teal-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+      />
+    </div>
+  );
 
   const toggleSection = (key: string) => {
     setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -279,6 +306,8 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
             </div>
           )}
 
+          {marketInput}
+
           <button
             onClick={handleGenerate}
             disabled={isCurrentlyGenerating || !isStep12Approved}
@@ -407,8 +436,9 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
             )}
           </div>
 
-          {/* Regenerate — re-run the exam (e.g. to pick up corrections). Shown
-              whether or not it's approved. */}
+          {/* Regenerate — re-run the exam (e.g. to pick up corrections or to
+              localise to a market). Shown whether or not it's approved. */}
+          {marketInput}
           <div className="flex justify-center">
             <button
               onClick={handleRegenerate}

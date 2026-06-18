@@ -679,13 +679,17 @@ export function useSubmitStep13() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (input: string | { id: string; targetMarket?: string }) => {
+      const id = typeof input === 'string' ? input : input.id;
+      const targetMarket = typeof input === 'string' ? undefined : input.targetMarket;
       const response: WorkflowResponse = await fetchAPI(`${WORKFLOW_BASE}/${id}/step13`, {
         method: 'POST',
+        body: JSON.stringify({ targetMarket }),
       });
       return response;
     },
-    onSuccess: (_, id) => {
+    onSuccess: (_, input) => {
+      const id = typeof input === 'string' ? input : input.id;
       queryClient.invalidateQueries({ queryKey: ['workflow', id] });
     },
   });
