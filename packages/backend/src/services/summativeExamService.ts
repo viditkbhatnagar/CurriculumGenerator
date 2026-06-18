@@ -183,13 +183,31 @@ export class SummativeExamService {
     // model-written breakdown drifted — e.g. a 100-mark breakdown under a
     // 240-mark total, "Section B: 2 questions" when 4 scenarios were generated,
     // or "Section C: 2 tasks" when 3 exist.
-    const aiBreakdown: any[] = Array.isArray((overview as any).sectionBreakdown)
-      ? (overview as any).sectionBreakdown
-      : [];
+    // Distribute the fixed exam duration across the sections in proportion to
+    // their marks, so every section has a time allocation that sums to the
+    // stated total. (The Phase-1 model breakdown only timed Section A — B and C
+    // came back blank — because Sections B/C don't exist yet when the overview
+    // is generated.)
+    const EXAM_MINUTES = 180; // 3 hours
+    const timeSections: Array<{ key: string; marks: number }> = [
+      { key: 'A', marks: sectionAMarks },
+    ];
+    if (includeSectionB && sectionB && sectionB.length)
+      timeSections.push({ key: 'B', marks: sectionBMarks });
+    if (sectionC && sectionC.length) timeSections.push({ key: 'C', marks: sectionCMarks });
+    const totalForTime = timeSections.reduce((n, s) => n + s.marks, 0) || 1;
+    const timeMins: Record<string, number> = {};
+    let allocatedMins = 0;
+    timeSections.forEach((s, i) => {
+      const mins =
+        i === timeSections.length - 1
+          ? Math.max(5, EXAM_MINUTES - allocatedMins)
+          : Math.max(5, Math.round(((s.marks / totalForTime) * EXAM_MINUTES) / 5) * 5);
+      timeMins[s.key] = mins;
+      allocatedMins += mins;
+    });
     const timeFor = (letter: string): string =>
-      aiBreakdown.find(
-        (b) => /Section\s*([A-C])/i.exec(b?.section || '')?.[1]?.toUpperCase() === letter
-      )?.timeAllocation || '';
+      timeMins[letter] ? `${timeMins[letter]} minutes` : '';
     const uniq = (ids: string[]): string[] => Array.from(new Set(ids.filter(Boolean)));
     const sectionBreakdown: any[] = [
       {
@@ -232,6 +250,7 @@ export class SummativeExamService {
       overview: {
         ...overview,
         totalMarks,
+        totalDuration: '3 hours',
         sectionBreakdown,
       } as any,
       sectionA,
