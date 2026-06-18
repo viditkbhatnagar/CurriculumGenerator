@@ -1527,6 +1527,41 @@ CurriculumWorkflowSchema.pre('save', function (next) {
   next();
 });
 
+// Keep Step 11 PowerPoint slide content out of the document. The entire
+// curriculum is a single MongoDB document (16MB cap); a large programme's decks
+// (thousands of slides of bullets and speaker notes) would overflow it, so every
+// save failed and generation looped. Whichever code path saves the workflow —
+// the module-by-module generator, the full generator, a progress write or a
+// future caller — any module still holding full slide content inline is archived
+// to S3 here, leaving only lightweight stubs in the document. The .pptx download
+// regenerates from Step 10, so the inline content is never needed for output.
+// See services/pptDeckStore.ts. Runs only when heavy content is actually present
+// (a cheap scan otherwise), and never blocks a save: if S3 is unavailable the
+// decks are kept inline so data is preserved.
+CurriculumWorkflowSchema.pre('save', async function () {
+  try {
+    const mods: any[] = (this as any).step11?.modulePPTDecks;
+    if (!Array.isArray(mods) || mods.length === 0) return;
+    const needsOffload = mods.some(
+      (m) =>
+        !m?.slidesS3Key &&
+        (m?.pptDecks || []).some((d: any) =>
+          (d?.slides || []).some(
+            (s: any) => s && (s.content !== undefined || s.speakerNotes !== undefined)
+          )
+        )
+    );
+    if (!needsOffload) return;
+    const { offloadModuleDecks } = await import('../services/pptDeckStore');
+    (this as any).step11.modulePPTDecks = await Promise.all(
+      mods.map((m) => offloadModuleDecks(String((this as any)._id), m))
+    );
+    this.markModified('step11');
+  } catch {
+    // Archiver must never block a save — pptDeckStore keeps decks inline on error.
+  }
+});
+
 // Advance to next step. `approvedStep` is the step the caller just
 // approved — passed so re-approving an earlier step (the user navigated
 // back via the sidebar) doesn't shove the global pointer forward.
