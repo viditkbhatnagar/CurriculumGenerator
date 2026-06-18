@@ -4016,11 +4016,23 @@ CRITICAL VALIDATION:
     const { assignmentPackService } = await import('./assignmentPackService');
     const context = this.buildStep12Context(workflow);
 
+    // step4.modules[] uses `code`; some legacy/intermediate shapes use `moduleCode`.
+    // Imported curricula (moduleId="mod-imported-…") often carry neither, which made
+    // assignmentPackService's "moduleCode required" guard throw on every attempt and
+    // brick Step 12 permanently. Derive a stable code from the module's sequence so
+    // generation can proceed (assignmentId becomes e.g. "M01-in_person").
+    const resolvedModuleCode =
+      moduleToProcess.moduleCode ||
+      (moduleToProcess as any).code ||
+      `M${String(
+        (moduleToProcess as any).sequence ||
+          moduleToProcess.sequenceOrder ||
+          expectedModuleIndex + 1
+      ).padStart(2, '0')}`;
+
     const moduleContext = {
       moduleId: moduleToProcess.id,
-      // step4.modules[] uses `code`; some legacy/intermediate shapes use `moduleCode`.
-      // Fall back across both so assignmentId never resolves to "undefined-<variant>".
-      moduleCode: moduleToProcess.moduleCode || moduleToProcess.code,
+      moduleCode: resolvedModuleCode,
       moduleTitle: moduleToProcess.title,
       mlos: (moduleToProcess.mlos || []).map((mlo: any) => ({
         id: mlo.id,
@@ -4053,7 +4065,7 @@ CRITICAL VALIDATION:
         }
         progressWf.step12.generationProgress = {
           moduleIndex: expectedModuleIndex,
-          moduleCode: moduleToProcess.moduleCode || moduleToProcess.code,
+          moduleCode: resolvedModuleCode,
           moduleTitle: moduleToProcess.title,
           completedVariants: 0,
           totalVariants: 3,
@@ -4078,7 +4090,7 @@ CRITICAL VALIDATION:
           if (pw?.step12) {
             pw.step12.generationProgress = {
               moduleIndex: expectedModuleIndex,
-              moduleCode: moduleToProcess.moduleCode || moduleToProcess.code,
+              moduleCode: resolvedModuleCode,
               moduleTitle: moduleToProcess.title,
               completedVariants,
               totalVariants: 3,
