@@ -7287,6 +7287,21 @@ Return ONLY valid JSON:
       };
     }
 
+    // Step 13 - Summative Exam free-text metadata. Only the editable prose
+    // sections are included (Integrity & Security, Accessibility Provisions) —
+    // the questions/marking scheme are large and have their own regenerate flow.
+    // Without this the AI never saw Step 13 and silently couldn't edit it.
+    if ((workflow as any).step13) {
+      const s13 = (workflow as any).step13;
+      fullWorkflowData.step13 = {
+        examTitle: s13.overview?.examTitle,
+        totalMarks: s13.overview?.totalMarks,
+        totalDuration: s13.overview?.totalDuration,
+        integrityAndSecurity: s13.integrityAndSecurity || '',
+        accessibilityProvisions: s13.accessibilityProvisions || '',
+      };
+    }
+
     // =====================================================
     // BUILD FLEXIBLE SYSTEM PROMPT - AI HAS FULL CONTEXT
     // =====================================================
@@ -7475,6 +7490,16 @@ Example (update by lessonId — most reliable):
 Example (regenerate all lesson plans for one module — use the regenerate action):
 { "step": 10, "path": "moduleLessonPlans", "action": "regenerate", "match": { "moduleId": "mod3" } }
 The "regenerate" action triggers fresh AI generation that incorporates the latest module title/description. Use this when the user wants context-wide updates (e.g. "remove UK from all modules" or "regenerate for Indian context") rather than editing individual lesson fields.
+
+STEP 13 - Summative Exam (editable free-text metadata):
+- "integrityAndSecurity" = the full Integrity & Security section text (academic integrity, identity verification, invigilation, randomisation) — a single long string.
+- "accessibilityProvisions" = the full Accessibility Provisions section text (reasonable adjustments, extra time, alternative formats) — a single long string.
+These are scalar string fields, so edit them with the "set" action (NOT array update).
+Example (rewrite the Accessibility Provisions for Indian context):
+{ "step": 13, "path": "accessibilityProvisions", "action": "set", "value": "Accessibility and reasonable adjustments\\n\\n1. Commitment to accessibility ..." }
+Example (replace the Integrity & Security text):
+{ "step": 13, "path": "integrityAndSecurity", "action": "set", "value": "Academic integrity and professional conduct ..." }
+When the user asks to edit, fix, or fill in section "13.6"/"13.7" or "Integrity & Security"/"Accessibility Provisions", they mean these Step 13 fields — return the full revised text as the "value".
 
 CRITICAL RULES:
 1. ALWAYS use "statement" for KSC items (step 2), PLOs (step 3), and MLOs (step 4) - NOT "title" or "item" or "outcome"
