@@ -13,6 +13,7 @@
 import Bull, { Queue, Job } from 'bull';
 import { loggingService } from '../services/loggingService';
 import { workflowService } from '../services/workflowService';
+import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import config from '../config';
 
 // Job data interface - generic for all steps
@@ -162,7 +163,7 @@ if (stepQueue) {
     });
   });
 
-  stepQueue.on('failed', (job: Job<StepJobData>, error: Error) => {
+  stepQueue.on('failed', async (job: Job<StepJobData>, error: Error) => {
     loggingService.error('Step job failed', {
       jobId: String(job.id),
       stepNumber: job.data.stepNumber,
@@ -171,6 +172,35 @@ if (stepQueue) {
       attempts: job.attemptsMade,
       maxAttempts: job.opts.attempts,
     });
+
+    // Only act once retries are exhausted, otherwise an intermediate failure
+    // would prematurely reset progress mid-retry.
+    const maxAttempts = job.opts.attempts || 1;
+    if (job.attemptsMade < maxAttempts) return;
+
+    // A terminally-failed job (e.g. an LLM error, or the worker being restarted
+    // mid-run) otherwise leaves stepProgress stuck on "in_progress" forever, so
+    // the long-running steps (10-13) hang the UI on "Generating…". Reset it to
+    // "pending" so the step is re-triggerable instead of dead-locked.
+    try {
+      const { stepNumber, workflowId } = job.data;
+      const workflow = await CurriculumWorkflow.findById(workflowId);
+      const sp = workflow?.stepProgress?.find((p: any) => p.step === stepNumber);
+      if (sp && sp.status === 'in_progress') {
+        sp.status = 'pending';
+        workflow!.markModified('stepProgress');
+        await workflow!.save();
+        loggingService.info('Reset stuck step progress after terminal failure', {
+          stepNumber,
+          workflowId,
+        });
+      }
+    } catch (persistError) {
+      loggingService.error('Failed to reset step progress after failure', {
+        workflowId: job.data.workflowId,
+        error: persistError instanceof Error ? persistError.message : String(persistError),
+      });
+    }
   });
 
   stepQueue.on('stalled', (job: Job<StepJobData>) => {
