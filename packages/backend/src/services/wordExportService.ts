@@ -3273,6 +3273,13 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       if (formatted.paragraphs.length > 0) {
         contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
       }
+      // formatTextIntelligently may return the content as bullets instead of
+      // paragraphs; without this the whole section rendered blank in the export.
+      if (formatted.bullets.length > 0) {
+        contentChildren.push(
+          ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
+        );
+      }
     }
 
     // Accessibility
@@ -3285,6 +3292,13 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       );
       if (formatted.paragraphs.length > 0) {
         contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+      }
+      // formatTextIntelligently may return the content as bullets instead of
+      // paragraphs; without this the whole section rendered blank in the export.
+      if (formatted.bullets.length > 0) {
+        contentChildren.push(
+          ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
+        );
       }
     }
 

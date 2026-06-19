@@ -30,7 +30,10 @@ import { loggingService } from './loggingService';
 // v3: Step 10 export now renders the module description.
 // v4: Step 13 fixes — section breakdown recomputed, MCQ option labels de-doubled,
 //     rationales sanitised, marking scheme rebuilt from questions.
-const EXPORT_FORMAT_VERSION = 'v4';
+// v5: Step 13 Integrity & Security / Accessibility Provisions now render their
+//     bullet-formatted content (previously dropped when the formatter chose bullets,
+//     leaving those sections blank in the export).
+const EXPORT_FORMAT_VERSION = 'v5';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {
