@@ -49,6 +49,9 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
   );
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     sectionA: true,
+    // Expand Integrity & Accessibility by default — collapsed-by-default made these
+    // populated sections look empty until the user happened to click the toggle.
+    integrity: true,
   });
   const [expandedQuestions, setExpandedQuestions] = useState<Record<string, boolean>>({});
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
