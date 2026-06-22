@@ -5358,13 +5358,15 @@ router.get('/:id/step14', validateJWT, loadUser, async (req: Request, res: Respo
  */
 router.put('/:id/step14', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
-    const inputs = req.body;
-    if (!inputs?.instructor?.name || !inputs?.instructor?.email || !inputs?.semester) {
-      return res.status(400).json({
-        success: false,
-        error: 'instructor.name, instructor.email and semester are required',
-      });
-    }
+    const inputs = req.body || {};
+    // Instructor and semester specifics are often filled in later (the form even
+    // pre-fills "To be added"). Default the missing pieces instead of hard-failing
+    // with a 400 — the syllabus only renders them as text, so generation should
+    // never be blocked just because a semester or instructor name isn't set yet.
+    inputs.instructor = inputs.instructor || {};
+    inputs.instructor.name = String(inputs.instructor.name || '').trim() || 'To be added';
+    inputs.instructor.email = String(inputs.instructor.email || '').trim() || 'To be added';
+    inputs.semester = String(inputs.semester || '').trim() || 'To be scheduled';
     const workflow = await syllabusService.saveInputs(req.params.id, inputs);
     res.json({
       success: true,
