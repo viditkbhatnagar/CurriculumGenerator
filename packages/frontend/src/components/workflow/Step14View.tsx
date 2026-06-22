@@ -89,10 +89,8 @@ export default function Step14View({ workflow, onComplete, onRefresh }: Props) {
   };
 
   const handleSave = async () => {
-    if (!inputs.instructor.name || !inputs.instructor.email || !inputs.semester) {
-      setError('Instructor name, instructor email, and semester are required');
-      return;
-    }
+    // Instructor/semester specifics can be filled in later — the backend defaults
+    // anything left blank (e.g. semester -> "To be scheduled"), so don't block here.
     setError(null);
     setSavingInputs(true);
     try {
