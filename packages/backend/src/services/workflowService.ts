@@ -7287,10 +7287,12 @@ Return ONLY valid JSON:
       };
     }
 
-    // Step 13 - Summative Exam free-text metadata. Only the editable prose
-    // sections are included (Integrity & Security, Accessibility Provisions) —
-    // the questions/marking scheme are large and have their own regenerate flow.
-    // Without this the AI never saw Step 13 and silently couldn't edit it.
+    // Step 13 - Summative Exam. Includes the editable prose metadata AND the
+    // actual exam questions so the chat editor can fix/localise individual
+    // questions (e.g. "remove UK references / use Indian context"). Without the
+    // questions in context the AI silently couldn't touch them and edits "did
+    // nothing". Marking-scheme model answers are omitted to keep the payload
+    // manageable — they are rebuilt from the questions on regeneration.
     if ((workflow as any).step13) {
       const s13 = (workflow as any).step13;
       fullWorkflowData.step13 = {
@@ -7299,6 +7301,36 @@ Return ONLY valid JSON:
         totalDuration: s13.overview?.totalDuration,
         integrityAndSecurity: s13.integrityAndSecurity || '',
         accessibilityProvisions: s13.accessibilityProvisions || '',
+        sectionA: (s13.sectionA || []).map((q: any) => ({
+          questionId: q.questionId,
+          type: q.type,
+          questionText: q.questionText,
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+          correctOptionIndex: q.correctOptionIndex,
+          marks: q.marks,
+          rationale: q.rationale,
+          linkedPLOs: q.linkedPLOs,
+        })),
+        sectionB: (s13.sectionB || []).map((b: any) => ({
+          scenarioId: b.scenarioId,
+          scenarioText: b.scenarioText,
+          workplaceContext: b.workplaceContext,
+          totalMarks: b.totalMarks,
+          questions: (b.questions || []).map((q: any) => ({
+            questionId: q.questionId,
+            questionText: q.questionText,
+            marks: q.marks,
+            modelAnswer: q.modelAnswer,
+          })),
+        })),
+        sectionC: (s13.sectionC || []).map((t: any) => ({
+          taskId: t.taskId,
+          taskDescription: t.taskDescription,
+          instructions: t.instructions,
+          marks: t.marks,
+          modelAnswer: t.modelAnswer,
+        })),
       };
     }
 
@@ -7500,6 +7532,14 @@ Example (rewrite the Accessibility Provisions for Indian context):
 Example (replace the Integrity & Security text):
 { "step": 13, "path": "integrityAndSecurity", "action": "set", "value": "Academic integrity and professional conduct ..." }
 When the user asks to edit, fix, or fill in section "13.6"/"13.7" or "Integrity & Security"/"Accessibility Provisions", they mean these Step 13 fields — return the full revised text as the "value".
+
+STEP 13 - Summative Exam QUESTIONS (editable arrays):
+- "sectionA" = MCQs. Each: questionId (e.g. "A1"), questionText, options (array of "A) …".."D) …"), correctAnswer, correctOptionIndex, marks, linkedPLOs.
+  Edit with: { "step": 13, "path": "sectionA", "action": "update", "match": { "questionId": "A1" }, "changes": { "questionText": "…", "options": ["A) …","B) …","C) …","D) …"], "correctAnswer": "…" } }
+  Keep 4 options in the SAME order and keep the SAME option correct (do not change which one is right). When localising, set correctAnswer to the new text of that same correct option.
+- "sectionB" = scenarios, each with nested "questions". Edit with: { "step": 13, "path": "sectionB", "action": "update", "match": { "scenarioId": "B1" }, "changes": { "scenarioText": "…", "questions": [ …full updated questions array… ] } }
+- "sectionC" = applied tasks. Edit with: { "step": 13, "path": "sectionC", "action": "update", "match": { "taskId": "C1" }, "changes": { "taskDescription": "…", "modelAnswer": "…" } }
+IMPORTANT: For a context-wide request like "remove all UK references and use Indian context in the exam questions", emit ONE update per affected question (one for each sectionA questionId, each sectionB scenarioId, each sectionC taskId that contains a UK reference) — do not return a single vague update. Change only locale-specific details (£ → ₹ with realistic Indian prices, UK places/law → Indian); keep marks, ids, option order and the correct answer unchanged.
 
 CRITICAL RULES:
 1. ALWAYS use "statement" for KSC items (step 2), PLOs (step 3), and MLOs (step 4) - NOT "title" or "item" or "outcome"
