@@ -55,6 +55,10 @@ if (redisUrl && redisUrl.length > 0) {
         lockDuration: 600000, // 10 min — long-running LLM calls need extended locks
         stalledInterval: 600000,
         lockRenewTime: 300000,
+        // After one stall (e.g. the API process was restarted mid-generation),
+        // move the job to `failed` so the failed-handler resets the stuck step
+        // progress instead of the job looping active<->stalled forever.
+        maxStalledCount: 1,
       },
     });
 
