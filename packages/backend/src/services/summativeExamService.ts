@@ -14,6 +14,7 @@
 import { openaiService } from './openaiService';
 import { loggingService } from './loggingService';
 import {
+  CurriculumWorkflow,
   ICurriculumWorkflow,
   Step13SummativeExam,
   SectionAQuestion,
@@ -116,35 +117,87 @@ export class SummativeExamService {
       totalModules: context.modules.length,
     });
 
+    // Resilience: each expensive LLM phase is checkpointed to step13Draft so an
+    // interrupted run (OOM kill, Render restart, lost Bull lock) doesn't lose the
+    // 6-13 minutes of work — a retry resumes from the last completed phase instead
+    // of regenerating everything. The deterministic marking scheme / assembly are
+    // always recomputed cheaply. step13Draft is cleared once the final exam saves.
+    const wfId: any = (workflow as any)._id;
+    const rawDraft: any = (workflow as any).step13Draft || {};
+    // Only resume a recent checkpoint — a long-abandoned draft may predate edits
+    // to the underlying curriculum, so fall back to a clean generation.
+    const MAX_DRAFT_AGE_MS = 6 * 60 * 60 * 1000; // 6 hours
+    const draftFresh =
+      rawDraft.savedAt && Date.now() - new Date(rawDraft.savedAt).getTime() < MAX_DRAFT_AGE_MS;
+    const draft: any = draftFresh ? rawDraft : {};
+    if (rawDraft.savedAt && !draftFresh) {
+      loggingService.info('Step 13 checkpoint too old — regenerating from scratch');
+    }
+    const checkpoint = async (patch: Record<string, any>): Promise<void> => {
+      try {
+        Object.assign(draft, patch);
+        const set: Record<string, any> = Object.fromEntries(
+          Object.entries(patch).map(([k, v]) => [`step13Draft.${k}`, v])
+        );
+        set['step13Draft.savedAt'] = new Date();
+        await CurriculumWorkflow.updateOne({ _id: wfId }, { $set: set });
+      } catch (e) {
+        loggingService.warn('Step 13 checkpoint save failed (continuing)', {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    };
+
     // Phase 1: Generate Overview + Section A
     report(10);
-    loggingService.info('Phase 1: Generating overview and Section A');
-    const { overview, sectionA } = await this.generateOverviewAndSectionA(context, includeSectionB);
-
-    // Resolve each MCQ's correct answer to the actual option (the model often
-    // returns just a letter, e.g. "A", which can't be ticked or shown as a
-    // proper answer). Must run before the marking scheme is built from these.
-    sectionA.forEach((q) => this.normalizeSectionAMcq(q));
-
-    await this.delay(this.INTER_CALL_DELAY);
+    let overview: ExamOverview;
+    let sectionA: SectionAQuestion[];
+    if (draft.overview && Array.isArray(draft.sectionA) && draft.sectionA.length) {
+      loggingService.info('Phase 1: resuming overview and Section A from checkpoint');
+      overview = draft.overview;
+      sectionA = draft.sectionA;
+    } else {
+      loggingService.info('Phase 1: Generating overview and Section A');
+      const phase1 = await this.generateOverviewAndSectionA(context, includeSectionB);
+      overview = phase1.overview;
+      sectionA = phase1.sectionA;
+      // Resolve each MCQ's correct answer to the actual option (the model often
+      // returns just a letter, e.g. "A", which can't be ticked or shown as a
+      // proper answer). Must run before the marking scheme is built from these.
+      sectionA.forEach((q) => this.normalizeSectionAMcq(q));
+      await checkpoint({ overview, sectionA });
+      await this.delay(this.INTER_CALL_DELAY);
+    }
 
     // Phase 2: Generate Section B (conditional)
     report(30);
     let sectionB: SectionBScenario[] | undefined;
     if (includeSectionB) {
-      loggingService.info('Phase 2: Generating Section B (scenario analysis)');
-      sectionB = await this.generateSectionB(context);
-      await this.delay(this.INTER_CALL_DELAY);
+      if (Array.isArray(draft.sectionB)) {
+        loggingService.info('Phase 2: resuming Section B from checkpoint');
+        sectionB = draft.sectionB;
+      } else {
+        loggingService.info('Phase 2: Generating Section B (scenario analysis)');
+        sectionB = await this.generateSectionB(context);
+        await checkpoint({ sectionB });
+        await this.delay(this.INTER_CALL_DELAY);
+      }
     } else {
       loggingService.info('Phase 2: Skipping Section B (self-study mode)');
     }
 
     // Phase 3: Generate Section C
     report(50);
-    loggingService.info('Phase 3: Generating Section C (applied tasks)');
-    const sectionC = await this.generateSectionC(context);
-
-    await this.delay(this.INTER_CALL_DELAY);
+    let sectionC: SectionCTask[];
+    if (Array.isArray(draft.sectionC) && draft.sectionC.length) {
+      loggingService.info('Phase 3: resuming Section C from checkpoint');
+      sectionC = draft.sectionC;
+    } else {
+      loggingService.info('Phase 3: Generating Section C (applied tasks)');
+      sectionC = await this.generateSectionC(context);
+      await checkpoint({ sectionC });
+      await this.delay(this.INTER_CALL_DELAY);
+    }
 
     // Phase 4: Build the marking scheme deterministically from the questions so
     // every model answer matches its own question (no separate, drift-prone call).
@@ -154,8 +207,22 @@ export class SummativeExamService {
 
     // Phase 5: Generate Integrity and Accessibility
     report(85);
-    loggingService.info('Phase 5: Generating integrity and accessibility sections');
-    const { integrityAndSecurity, accessibilityProvisions } = await this.generateMetadata(context);
+    let integrityAndSecurity: string;
+    let accessibilityProvisions: string;
+    if (
+      draft.metadata &&
+      (draft.metadata.integrityAndSecurity || draft.metadata.accessibilityProvisions)
+    ) {
+      loggingService.info('Phase 5: resuming integrity/accessibility from checkpoint');
+      integrityAndSecurity = draft.metadata.integrityAndSecurity;
+      accessibilityProvisions = draft.metadata.accessibilityProvisions;
+    } else {
+      loggingService.info('Phase 5: Generating integrity and accessibility sections');
+      const meta = await this.generateMetadata(context);
+      integrityAndSecurity = meta.integrityAndSecurity;
+      accessibilityProvisions = meta.accessibilityProvisions;
+      await checkpoint({ metadata: { integrityAndSecurity, accessibilityProvisions } });
+    }
 
     // Strip leaked reasoning artifacts ("Wait:", "Hmm,", "As an AI…") from the
     // learner/marker-facing text so they never appear in the exam or rationale.

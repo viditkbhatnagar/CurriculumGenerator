@@ -1223,6 +1223,9 @@ export interface ICurriculumWorkflow extends Document {
   // Step 13: Summative Exam Package
   step13?: Step13SummativeExam;
 
+  // Step 13 generation checkpoint (per-phase resume buffer; cleared on completion)
+  step13Draft?: any;
+
   // Step 14: Course Syllabus (instructor info + schedule + auto-aggregated content)
   step14?: Step14Syllabus;
 
@@ -1424,6 +1427,14 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
 
     // Step 13: Summative Exam Package
     step13: {
+      type: Schema.Types.Mixed,
+      default: undefined,
+    },
+
+    // Step 13 generation checkpoint — holds each completed phase while the exam
+    // is being generated so an interrupted run (restart/OOM) can resume instead
+    // of losing all work. Cleared once the final step13 is saved.
+    step13Draft: {
       type: Schema.Types.Mixed,
       default: undefined,
     },

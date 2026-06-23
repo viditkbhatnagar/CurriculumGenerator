@@ -4243,6 +4243,10 @@ CRITICAL VALIDATION:
     workflow.step13 = examResult;
     workflow.currentStep = 13;
     workflow.status = 'step13_complete';
+    // The exam is complete — drop the generation checkpoint so it can't shadow a
+    // future regeneration.
+    (workflow as any).step13Draft = undefined;
+    workflow.markModified('step13Draft');
 
     const step13Progress = workflow.stepProgress.find((p) => p.step === 13);
     if (step13Progress) {
@@ -4252,6 +4256,9 @@ CRITICAL VALIDATION:
     }
 
     await workflow.save();
+    // Belt-and-braces: ensure the checkpoint is gone even if the Mixed-field
+    // undefined didn't unset cleanly.
+    await CurriculumWorkflow.updateOne({ _id: workflowId }, { $unset: { step13Draft: '' } });
 
     loggingService.info('Step 13 processed', {
       workflowId,
