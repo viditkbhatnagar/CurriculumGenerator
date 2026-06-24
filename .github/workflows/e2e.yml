@@ -50,6 +50,16 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('e2e/package-lock.json') }}
 
+      # GitHub's ubuntu-latest runner ships a Microsoft/azure-cli apt source that
+      # intermittently 403s ("no longer signed"). apt-get update fails on any one
+      # bad source, which makes `playwright install[-deps]` abort with exit 100 —
+      # even though Chromium's OS libraries come from the standard Ubuntu repos.
+      # Drop the unrelated Microsoft sources so apt works.
+      - name: Drop flaky Microsoft apt sources
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/*azure* \
+                     /etc/apt/sources.list.d/microsoft-prod.list 2>/dev/null || true
+
       - name: Install Playwright Chromium (with deps)
         if: steps.pw-cache.outputs.cache-hit != 'true'
         working-directory: e2e
