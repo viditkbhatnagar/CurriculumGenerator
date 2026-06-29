@@ -82,6 +82,19 @@ const LESSON_SUBHEADER_RE =
 const NON_MODULE_HEADING_RE =
   /^(Lesson Plans|Module Lesson Plans|Validation Summary|Summary Statistics|Generated:|Total Program|\d+(\.\d+)*\s)/i;
 
+// ---------------------------------------------------------------------------
+// "Narrative" lesson-plan format (e.g. an externally-authored / AI-drafted doc
+// rather than our structured Step 10 Word export). Modules are introduced with
+// "Starting MOD101: <title>.", each lesson with "Here's Lesson N, mapped to …",
+// and the title/duration sit on a "Lesson Title: <title> Duration: N minutes …"
+// line, followed by a bullet list of objectives. Used only as a fallback when
+// the structured parser recognises nothing.
+const NARRATIVE_MODULE_RE = /^Starting\s+([A-Za-z]{1,8}\s?\d[A-Za-z0-9-]*)\s*[:.\-–]\s*(.+)$/i;
+const NARRATIVE_LESSON_RE = /^Here.?s\s+Lesson\s+(\d+)\b/i;
+const NARRATIVE_TITLE_RE = /Lesson\s+Title:\s*(.+?)(?:\s+Duration:|\s+Learning\s+Objectives|$)/i;
+const NARRATIVE_DURATION_RE = /Duration:\s*(\d+)\s*min/i;
+const NARRATIVE_MLO_RE = /mapped to\s+([A-Z0-9][A-Z0-9-]*)/i;
+
 class Step10ImportService {
   async parseDocx(buffer: Buffer): Promise<ParsedStep10> {
     const html = (await mammoth.convertToHtml({ buffer })).value;
@@ -349,6 +362,18 @@ class Step10ImportService {
     const withLessons = modules.filter((m) => m.lessons.length > 0);
 
     if (withLessons.length === 0) {
+      // The structured export wasn't recognised — try the "narrative" format
+      // (externally-authored / AI-drafted lesson plans) before giving up.
+      const narrative = this.parseNarrative($, children);
+      if (narrative.modules.length > 0) {
+        const totalLessons = narrative.modules.reduce((s, m) => s + m.lessons.length, 0);
+        loggingService.info('Step 10 DOCX parsed (narrative format)', {
+          modules: narrative.modules.length,
+          totalLessons,
+        });
+        return narrative;
+      }
+
       // Diagnostic: tell the user what the document actually contained so a
       // re-formatted/edited file is easier to fix.
       const allText = children.map((_, i) => textOf(i)).join(' ');
@@ -378,6 +403,97 @@ class Step10ImportService {
     });
 
     return { modules: withLessons, warnings };
+  }
+
+  /**
+   * Fallback parser for the "narrative" lesson-plan format (an externally
+   * authored / AI-drafted document) that our structured parser doesn't
+   * recognise: modules introduced with "Starting MOD101: <title>.", lessons
+   * with "Here's Lesson N, mapped to …", and a "Lesson Title: <title>
+   * Duration: N minutes … Learning Objectives:" line followed by a bullet list.
+   * Extracts the editable fields (title, duration, objectives, linked MLO,
+   * pedagogical guidance) so the apply step can match and update lessons.
+   */
+  private parseNarrative($: cheerio.CheerioAPI, children: any[]): ParsedStep10 {
+    const modules: ParsedStep10Module[] = [];
+    let mod: ParsedStep10Module | null = null;
+    let lesson: ParsedLesson | null = null;
+    const txt = (c: any): string => $(c).text().replace(/\s+/g, ' ').trim();
+    const tagOf = (c: any): string => (c as any)?.tagName?.toLowerCase?.() || '';
+
+    const finishLesson = () => {
+      if (mod && lesson && lesson.lessonTitle) mod.lessons.push(lesson);
+      lesson = null;
+    };
+    const finishModule = () => {
+      finishLesson();
+      if (mod) modules.push(mod);
+      mod = null;
+    };
+
+    for (const c of children) {
+      const t = txt(c);
+      if (!t) continue;
+
+      const modM = t.match(NARRATIVE_MODULE_RE);
+      if (modM) {
+        finishModule();
+        mod = {
+          moduleCode: modM[1].replace(/\s+/g, '').trim(),
+          moduleTitle: modM[2].trim().replace(/\.\s*$/, ''),
+          lessons: [],
+        };
+        continue;
+      }
+
+      const lesM = t.match(NARRATIVE_LESSON_RE);
+      if (lesM) {
+        finishLesson();
+        if (!mod) mod = { moduleCode: '', moduleTitle: '', lessons: [] };
+        const mlo = (t.match(NARRATIVE_MLO_RE) || [])[1];
+        lesson = {
+          lessonNumber: Number(lesM[1]),
+          lessonTitle: '',
+          duration: null,
+          objectives: [],
+          linkedMLOs: mlo ? [mlo] : undefined,
+        };
+        continue;
+      }
+
+      if (!lesson) continue;
+
+      if (!lesson.lessonTitle) {
+        const titleM = t.match(NARRATIVE_TITLE_RE);
+        if (titleM) {
+          lesson.lessonTitle = titleM[1].trim();
+          const durM = t.match(NARRATIVE_DURATION_RE);
+          if (durM) lesson.duration = Number(durM[1]);
+          continue;
+        }
+      }
+
+      // First bullet list after the title = learning objectives.
+      if (tagOf(c) === 'ul' && lesson.lessonTitle && lesson.objectives.length === 0) {
+        lesson.objectives = $(c)
+          .find('li')
+          .toArray()
+          .map((li: any) => $(li).text().replace(/\s+/g, ' ').trim())
+          .filter(Boolean);
+        continue;
+      }
+
+      const pgM = t.match(/^Pedagogical Guidance:\s*(.+)$/i);
+      if (pgM) {
+        lesson.instructorNotes = {
+          ...(lesson.instructorNotes || {}),
+          pedagogicalGuidance: pgM[1].trim(),
+        };
+        continue;
+      }
+    }
+    finishModule();
+    return { modules: modules.filter((m) => m.lessons.length > 0), warnings: [] };
   }
 }
 
