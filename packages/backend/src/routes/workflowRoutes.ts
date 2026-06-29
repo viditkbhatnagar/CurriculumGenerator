@@ -240,6 +240,9 @@ function applyParsedLessonFields(live: any, pl: any, modCode?: string): void {
     if (pl.instructorNotes.pedagogicalGuidance) {
       live.instructorNotes.pedagogicalGuidance = pl.instructorNotes.pedagogicalGuidance;
     }
+    if (pl.instructorNotes.pacingSuggestions) {
+      live.instructorNotes.pacingSuggestions = pl.instructorNotes.pacingSuggestions;
+    }
     if (pl.instructorNotes.adaptationOptions?.length) {
       live.instructorNotes.adaptationOptions = pl.instructorNotes.adaptationOptions;
     }

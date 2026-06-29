@@ -45,7 +45,11 @@ export interface ParsedLesson {
   };
   activities?: ParsedActivity[];
   materials?: string[];
-  instructorNotes?: { pedagogicalGuidance?: string; adaptationOptions?: string[] };
+  instructorNotes?: {
+    pedagogicalGuidance?: string;
+    pacingSuggestions?: string;
+    adaptationOptions?: string[];
+  };
   independentActivity?: {
     independentHours?: number;
     sourceMaterialMapping?: string;
@@ -488,6 +492,15 @@ class Step10ImportService {
         lesson.instructorNotes = {
           ...(lesson.instructorNotes || {}),
           pedagogicalGuidance: pgM[1].trim(),
+        };
+        continue;
+      }
+
+      const pacM = t.match(/^Pacing suggestions?:\s*(.+)$/i);
+      if (pacM) {
+        lesson.instructorNotes = {
+          ...(lesson.instructorNotes || {}),
+          pacingSuggestions: pacM[1].trim(),
         };
         continue;
       }
