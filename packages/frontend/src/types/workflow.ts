@@ -2179,6 +2179,12 @@ export const CREDIT_SYSTEMS: {
   hoursPerCredit: number;
   defaultContactPercent: number;
   description: string;
+  // Smallest valid credit value for this framework. Frameworks scale very
+  // differently (1 US credit = 45h, 1 UK credit = 10h), so a single flat
+  // minimum is wrong — a standalone US course is normally 1–4 credits, which a
+  // UK-sized "min 10" would block. Tuned so each minimum is ~one realistic
+  // standalone course while clearing the ~20h direct-hours floor.
+  minCredits: number;
 }[] = [
   {
     value: 'uk',
@@ -2186,6 +2192,7 @@ export const CREDIT_SYSTEMS: {
     hoursPerCredit: 10,
     defaultContactPercent: 30, // 30% default per workflow
     description: '1 UK credit = 10 hours total workload',
+    minCredits: 2,
   },
   {
     value: 'ects',
@@ -2193,6 +2200,7 @@ export const CREDIT_SYSTEMS: {
     hoursPerCredit: 25,
     defaultContactPercent: 30, // 30% default per workflow
     description: '1 ECTS = 25 hours total workload',
+    minCredits: 1,
   },
   {
     value: 'us_semester',
@@ -2200,6 +2208,7 @@ export const CREDIT_SYSTEMS: {
     hoursPerCredit: 45,
     defaultContactPercent: 33, // 33% DEFINED ratio (not default)
     description: '1 US credit = 15 contact + 30 independent = 45 total hours',
+    minCredits: 1,
   },
   {
     value: 'non_credit',
@@ -2207,6 +2216,7 @@ export const CREDIT_SYSTEMS: {
     hoursPerCredit: 1,
     defaultContactPercent: 30,
     description: 'Direct hours entry (20-500 hours)',
+    minCredits: 20,
   },
 ];
 

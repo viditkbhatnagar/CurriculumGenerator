@@ -566,7 +566,11 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, credits: parseInt(e.target.value) || 60 }))
                   }
-                  min={10}
+                  // Framework-aware floor: a standalone US course is ~1–4 credits,
+                  // so a flat "min 10" (UK-sized) wrongly blocked it.
+                  min={
+                    CREDIT_SYSTEMS.find((s) => s.value === formData.creditSystem)?.minCredits ?? 1
+                  }
                   max={360}
                   className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
                 />
