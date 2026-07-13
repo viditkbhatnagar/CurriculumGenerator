@@ -36,11 +36,7 @@ You will be invoked **per chapter/section**, not on the whole book at once. A ru
 
 ## CORE MISSION
 
-Decompose the book into the connected intelligence branches below, **scoped to `MAPPED_MLO_IDS` and `DEPTH`**:
-
-1. Book Identity 2. Source Map 3. Meaning Map 4. Knowledge Assets
-2. Learning Assets 6. Application Assets 7. Content Assets
-3. Critical Analysis 9. Agent Routing 10. Governance & Quality
+Decompose the book into the ten connected intelligence branches — **Book Identity, Source Map, Meaning Map, Knowledge Assets, Learning Assets, Application Assets, Content Assets, Critical Analysis, Agent Routing, and Governance & Quality** — **scoped to `MAPPED_MLO_IDS` and `DEPTH`**.
 
 Preserve the distinction between: what the author **states**, the **evidence** given, what can be **inferred**, what the system **derives as an application**, and what it **generates as new content**. Never present an inference, adaptation, or generated application as something the author said.
 
