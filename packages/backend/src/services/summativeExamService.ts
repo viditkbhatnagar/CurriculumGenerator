@@ -13,6 +13,7 @@
 
 import { openaiService } from './openaiService';
 import { loggingService } from './loggingService';
+import { buildBookGroundingBlock } from './bookGroundingService';
 import {
   CurriculumWorkflow,
   ICurriculumWorkflow,
@@ -40,6 +41,8 @@ interface ExamContext {
   assessmentStrategy: any;
   caseStudies: any[];
   targetMarket: string;
+  // Grounding block from this workflow's ingested textbooks (Step 5.5); '' when none.
+  bookGrounding?: string;
 }
 
 export class SummativeExamService {
@@ -108,6 +111,14 @@ export class SummativeExamService {
     const context = this.buildExamContext(workflow);
     const includeSectionB = this.shouldIncludeSectionB(context.deliveryMode);
     const report = (pct: number) => onProgress?.(pct);
+
+    // Ground the exam in this workflow's ingested textbooks (Step 5.5), scoped to
+    // its PLOs. Empty string when no book has been ingested, so behaviour is
+    // unchanged for workflows without Book Intelligence.
+    context.bookGrounding = await buildBookGroundingBlock(
+      String((workflow as any)._id),
+      context.plos.map((p) => p.id)
+    );
 
     loggingService.info('Starting summative exam generation', {
       programTitle: context.programTitle,
@@ -487,11 +498,15 @@ Generate 15-25 Section A questions that collectively cover ALL PLOs. Use scenari
 
 Return ONLY valid JSON.`;
 
-    const response = await openaiService.generateContent(prompt, systemPrompt, {
-      responseFormat: 'json_object',
-      maxTokens: this.MAX_TOKENS_SECTION_A,
-      timeout: this.SECTION_TIMEOUT,
-    });
+    const response = await openaiService.generateContent(
+      prompt + (context.bookGrounding || ''),
+      systemPrompt,
+      {
+        responseFormat: 'json_object',
+        maxTokens: this.MAX_TOKENS_SECTION_A,
+        timeout: this.SECTION_TIMEOUT,
+      }
+    );
 
     const parsed = this.safeParseJSON(response, 'Overview+SectionA');
     return {
@@ -553,11 +568,15 @@ Generate 2-4 scenarios with 2-3 questions each. Scenarios should be distinct and
 
 Return ONLY valid JSON.`;
 
-    const response = await openaiService.generateContent(prompt, systemPrompt, {
-      responseFormat: 'json_object',
-      maxTokens: this.MAX_TOKENS_SECTION_B,
-      timeout: this.SECTION_TIMEOUT,
-    });
+    const response = await openaiService.generateContent(
+      prompt + (context.bookGrounding || ''),
+      systemPrompt,
+      {
+        responseFormat: 'json_object',
+        maxTokens: this.MAX_TOKENS_SECTION_B,
+        timeout: this.SECTION_TIMEOUT,
+      }
+    );
 
     const parsed = this.safeParseJSON(response, 'SectionB');
     return parsed.sectionB || [];
@@ -599,11 +618,15 @@ Generate 1-3 applied tasks that assess higher-order PLOs (evaluate, create).
 
 Return ONLY valid JSON.`;
 
-    const response = await openaiService.generateContent(prompt, systemPrompt, {
-      responseFormat: 'json_object',
-      maxTokens: this.MAX_TOKENS_SECTION_C,
-      timeout: this.SECTION_TIMEOUT,
-    });
+    const response = await openaiService.generateContent(
+      prompt + (context.bookGrounding || ''),
+      systemPrompt,
+      {
+        responseFormat: 'json_object',
+        maxTokens: this.MAX_TOKENS_SECTION_C,
+        timeout: this.SECTION_TIMEOUT,
+      }
+    );
 
     const parsed = this.safeParseJSON(response, 'SectionC');
     return parsed.sectionC || [];
