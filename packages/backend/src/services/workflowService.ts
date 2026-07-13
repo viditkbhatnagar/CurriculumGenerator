@@ -16,6 +16,7 @@ import { openaiService } from './openaiService';
 import { loggingService } from './loggingService';
 import { RAGEngine } from './ragEngine';
 import { KnowledgeBaseService } from './knowledgeBaseService';
+import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
 
 // Initialize RAG Engine and Knowledge Base Service for context retrieval
 const ragEngine = new RAGEngine();
@@ -121,9 +122,13 @@ async function retrieveKBContext(
     maxResults?: number;
     minSimilarity?: number;
     domains?: string[];
+    // When set, prepend this workflow's ingested-textbook nodes (highest
+    // priority, cited). mloIds narrows the nodes to those serving the outcomes.
+    workflowId?: string;
+    mloIds?: string[];
   } = {}
 ): Promise<KBContext[]> {
-  const { maxResults = 15, minSimilarity = 0.65, domains } = options;
+  const { maxResults = 15, minSimilarity = 0.65, domains, workflowId, mloIds } = options;
   const allResults: KBContext[] = [];
 
   try {
@@ -153,9 +158,22 @@ async function retrieveKBContext(
       .sort((a, b) => b.relevance - a.relevance)
       .slice(0, maxResults);
 
+    // Prepend this workflow's own ingested-textbook nodes (highest priority).
+    if (workflowId) {
+      const bookCtx = await getWorkflowBookGrounding(workflowId, mloIds, Math.min(8, maxResults));
+      if (bookCtx.length) return [...bookCtx, ...uniqueResults];
+    }
     return uniqueResults;
   } catch (error) {
     loggingService.warn('KB context retrieval failed, proceeding without KB context', { error });
+    // Book grounding is independent of KB search — still return it if present.
+    if (workflowId) {
+      try {
+        return await getWorkflowBookGrounding(workflowId, mloIds, Math.min(8, maxResults));
+      } catch {
+        /* fall through */
+      }
+    }
     return [];
   }
 }
