@@ -7312,12 +7312,12 @@ Return ONLY valid JSON:
       };
     }
 
-    // Step 13 - Summative Exam. Includes the editable prose metadata AND the
-    // actual exam questions so the chat editor can fix/localise individual
-    // questions (e.g. "remove UK references / use Indian context"). Without the
-    // questions in context the AI silently couldn't touch them and edits "did
-    // nothing". Marking-scheme model answers are omitted to keep the payload
-    // manageable — they are rebuilt from the questions on regeneration.
+    // Step 13 - Summative Exam. A LIGHTWEIGHT question index so the chat editor
+    // can LOCATE a question to edit — deliberately without the heavy per-question
+    // rationale / model answers (that ~40k-char payload rode along on EVERY
+    // canvas-edit call, inflating a mature workflow's context by ~10k tokens and
+    // pushing the LLM call past the UI's wait window). The apply-edit handler
+    // shallow-merges changes, so omitted fields stay intact in the DB.
     if ((workflow as any).step13) {
       const s13 = (workflow as any).step13;
       fullWorkflowData.step13 = {
@@ -7328,33 +7328,20 @@ Return ONLY valid JSON:
         accessibilityProvisions: s13.accessibilityProvisions || '',
         sectionA: (s13.sectionA || []).map((q: any) => ({
           questionId: q.questionId,
-          type: q.type,
           questionText: q.questionText,
           options: q.options,
-          correctAnswer: q.correctAnswer,
-          correctOptionIndex: q.correctOptionIndex,
-          marks: q.marks,
-          rationale: q.rationale,
-          linkedPLOs: q.linkedPLOs,
         })),
         sectionB: (s13.sectionB || []).map((b: any) => ({
           scenarioId: b.scenarioId,
-          scenarioText: b.scenarioText,
-          workplaceContext: b.workplaceContext,
-          totalMarks: b.totalMarks,
+          scenarioText: String(b.scenarioText || '').slice(0, 300),
           questions: (b.questions || []).map((q: any) => ({
             questionId: q.questionId,
             questionText: q.questionText,
-            marks: q.marks,
-            modelAnswer: q.modelAnswer,
           })),
         })),
         sectionC: (s13.sectionC || []).map((t: any) => ({
           taskId: t.taskId,
-          taskDescription: t.taskDescription,
-          instructions: t.instructions,
-          marks: t.marks,
-          modelAnswer: t.modelAnswer,
+          taskDescription: String(t.taskDescription || '').slice(0, 300),
         })),
       };
     }

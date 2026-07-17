@@ -60,6 +60,10 @@ test.describe('Curriculum AI Assistant', () => {
 
   test('edit prompt → Apply Changes → PLO1 updated in DB', async ({ page }) => {
     test.skip(!canRun, 'No workflow with step 3 PLOs available, or chatbot tests opted out');
+    // A canvas-edit against a mature workflow is a large-context LLM call that
+    // legitimately runs 60-150s; give the whole flow (AI call + apply + DB poll)
+    // room beyond the global 120s cap so a slow-but-working edit isn't a failure.
+    test.setTimeout(300_000);
 
     const newStatement =
       'Apply data-driven analytics frameworks to inform retail and customer-journey decisions across the program.';
@@ -82,7 +86,7 @@ test.describe('Curriculum AI Assistant', () => {
     // Wait for either the Apply button (success path) or any visible AI text.
     // The AI call typically lands in 15–30s.
     const applyBtn = page.getByRole('button', { name: /Apply Changes|✓ Apply/ }).first();
-    await expect(applyBtn).toBeVisible({ timeout: 90_000 });
+    await expect(applyBtn).toBeVisible({ timeout: 180_000 });
 
     await applyBtn.click();
 
