@@ -19,6 +19,8 @@ interface Config {
     embeddingModel: string;
     chatModel: string;
     reasoningEffort?: 'low' | 'medium' | 'high';
+    /** OpenAI-compatible gateway base URL (e.g. OpenRouter); undefined = OpenAI direct. */
+    baseURL?: string;
   };
   auth0: {
     domain: string;
@@ -85,6 +87,16 @@ const config: Config = {
     chatModel: process.env.OPENAI_CHAT_MODEL || 'gpt-4o',
     reasoningEffort:
       (process.env.OPENAI_REASONING_EFFORT as 'low' | 'medium' | 'high') || undefined,
+    // Optional OpenAI-compatible gateway. Set OPENAI_BASE_URL to
+    // https://openrouter.ai/api/v1 (with an sk-or-… key) to route the same
+    // OpenAI models through OpenRouter; leave unset for OpenAI direct.
+    // Model ids are prefixed with "openai/" automatically when routing via
+    // OpenRouter, so OPENAI_CHAT_MODEL/OPENAI_EMBEDDING_MODEL stay unchanged.
+    baseURL:
+      process.env.OPENAI_BASE_URL ||
+      ((process.env.OPENAI_API_KEY || '').startsWith('sk-or-')
+        ? 'https://openrouter.ai/api/v1'
+        : undefined),
   },
   auth0: {
     domain: process.env.AUTH0_DOMAIN || '',

@@ -45,15 +45,31 @@ export class OpenAIService {
       });
     } else {
       console.log(
-        `[OpenAI] Initialized with model: ${config.openai.chatModel}, key: ${apiKey.substring(0, 10)}...`
+        `[OpenAI] Initialized with model: ${config.openai.chatModel}, key: ${apiKey.substring(0, 10)}...` +
+          (config.openai.baseURL ? ` via ${config.openai.baseURL}` : '')
       );
     }
 
     this.client = new OpenAI({
       apiKey: apiKey || 'missing-key',
+      // Optional OpenAI-compatible gateway (e.g. OpenRouter). Undefined keeps
+      // the SDK's default OpenAI endpoint.
+      ...(config.openai.baseURL ? { baseURL: config.openai.baseURL } : {}),
       timeout: 3600000, // 60 minutes for GPT-5 with 128k token output
       maxRetries: 0, // We handle retries manually for better control
     });
+  }
+
+  /**
+   * Resolve a model id for the active endpoint. OpenRouter namespaces models by
+   * provider ("openai/gpt-4o"), so prefix bare OpenAI ids when routing through
+   * it — this keeps OPENAI_CHAT_MODEL/OPENAI_EMBEDDING_MODEL unchanged and we
+   * stay on OpenAI models only. No-op for OpenAI direct or already-prefixed ids.
+   */
+  private resolveModel(model: string): string {
+    const viaOpenRouter = (config.openai.baseURL || '').includes('openrouter.ai');
+    if (!viaOpenRouter || !model || model.includes('/')) return model;
+    return `openai/${model}`;
   }
 
   /**
@@ -62,7 +78,7 @@ export class OpenAIService {
   async verifyConnection(): Promise<boolean> {
     try {
       const response = await this.client.chat.completions.create({
-        model: config.openai.chatModel,
+        model: this.resolveModel(config.openai.chatModel),
         messages: [{ role: 'user', content: 'Hello' }],
         max_completion_tokens: 5,
       });
@@ -91,7 +107,7 @@ export class OpenAIService {
     return this.retryWithExponentialBackoff(async () => {
       try {
         const response = await this.client.embeddings.create({
-          model: config.openai.embeddingModel,
+          model: this.resolveModel(config.openai.embeddingModel),
           input: text,
           dimensions: 1536, // Using 1536 dimensions for compatibility
         });
@@ -158,7 +174,7 @@ export class OpenAIService {
       const batchResults = await this.retryWithExponentialBackoff(async () => {
         try {
           const response = await this.client.embeddings.create({
-            model: config.openai.embeddingModel,
+            model: this.resolveModel(config.openai.embeddingModel),
             input: batch,
             dimensions: 1536,
           });
@@ -245,7 +261,7 @@ export class OpenAIService {
 
       try {
         const requestBody: any = {
-          model,
+          model: this.resolveModel(model),
           messages: [
             ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
             { role: 'user' as const, content: prompt },
@@ -368,7 +384,7 @@ export class OpenAIService {
 
       try {
         const requestBody: any = {
-          model,
+          model: this.resolveModel(model),
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: prompt },
@@ -467,7 +483,7 @@ export class OpenAIService {
 
       try {
         const requestBody: any = {
-          model,
+          model: this.resolveModel(model),
           messages: [
             ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
             { role: 'user' as const, content: prompt },
