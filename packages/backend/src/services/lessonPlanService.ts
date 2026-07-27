@@ -61,6 +61,13 @@ export interface ModuleData {
   independentActivities?: string[];
 }
 
+/** Longest lesson title we will synthesise before trimming on a word boundary. */
+const TITLE_MAX_LENGTH = 100;
+
+/** Words a trimmed title should never end on — they leave a dangling phrase. */
+const DANGLING_WORD =
+  /\s+(?:a|an|the|and|or|of|for|with|to|on|in|at|by|from|into|across|using|through|that|which|their|its|this|these)$/i;
+
 /**
  * Lesson block calculated from contact hours
  */
@@ -279,12 +286,14 @@ export class LessonPlanService {
    */
   async generateModuleLessonPlans(
     module: ModuleData,
-    context: WorkflowContext
+    context: WorkflowContext,
+    options: { plannedLessonCount?: number } = {}
   ): Promise<ModuleLessonPlan> {
     loggingService.info('📝 Generating lesson plans for module', {
       moduleCode: module.moduleCode,
       contactHours: module.contactHours,
       mloCount: module.mlos.length,
+      plannedLessonCount: options.plannedLessonCount,
     });
 
     // Step 1: Calculate lesson blocks based on contact hours
@@ -292,7 +301,11 @@ export class LessonPlanService {
       moduleCode: module.moduleCode,
       contactHours: module.contactHours,
     });
-    const lessonBlocks = this.calculateLessonBlocks(module.contactHours, module.mlos);
+    const lessonBlocks = this.calculateLessonBlocks(
+      module.contactHours,
+      module.mlos,
+      options.plannedLessonCount
+    );
     loggingService.info('  ✓ Lesson blocks calculated', {
       moduleCode: module.moduleCode,
       blockCount: lessonBlocks.length,
@@ -402,32 +415,51 @@ export class LessonPlanService {
    * - 1.4: Sum of all lesson durations must equal total contact hours
    * - 1.5: Each lesson aligned with 1-2 MLOs
    *
+   * When `plannedLessonCount` is supplied it wins outright: the module already
+   * has an agreed lesson structure (imported from an SME document, or an
+   * existing plan being regenerated), and deriving a fresh count from contact
+   * hours would ask the generator for more lessons than there is material for.
+   * Asking for the surplus is what produces filler lessons — the same topic
+   * re-emitted as "…: Practical Evidence Build", "…: Peer Review Workshop" and
+   * so on, purely to fill the quota. Lessons stretch to absorb the hours
+   * instead, so the module's contact hours still balance.
+   *
    * @param contactHours - Total contact hours for the module
    * @param mlos - Module Learning Outcomes to distribute
+   * @param plannedLessonCount - Agreed number of lessons, when the module has one
    * @returns Array of LessonBlock with durations and assigned MLOs
    */
-  calculateLessonBlocks(contactHours: number, mlos: MLO[]): LessonBlock[] {
+  calculateLessonBlocks(
+    contactHours: number,
+    mlos: MLO[],
+    plannedLessonCount?: number
+  ): LessonBlock[] {
     const totalMinutes = contactHours * 60;
 
     // Minimum and maximum lesson durations in minutes
     const MIN_DURATION = 60;
     const MAX_DURATION = 180;
 
-    // Calculate optimal number of lessons
-    // Prefer 90-120 minute lessons as a good balance
-    const preferredDuration = 90;
-    let numLessons = Math.max(1, Math.round(totalMinutes / preferredDuration));
+    let numLessons: number;
+    let maxDuration = MAX_DURATION;
 
-    // Adjust if average duration would be out of bounds
-    let avgDuration = totalMinutes / numLessons;
+    if (plannedLessonCount && plannedLessonCount > 0) {
+      numLessons = plannedLessonCount;
+      // Honour the agreed lesson count even where that makes lessons longer
+      // than a normal block — a fixed plan's sessions are what they are.
+      maxDuration = Math.max(MAX_DURATION, Math.ceil(totalMinutes / numLessons));
+    } else {
+      // Prefer 90-120 minute lessons as a good balance
+      const preferredDuration = 90;
+      numLessons = Math.max(1, Math.round(totalMinutes / preferredDuration));
 
-    if (avgDuration > MAX_DURATION) {
-      numLessons = Math.ceil(totalMinutes / MAX_DURATION);
-      avgDuration = totalMinutes / numLessons;
-    } else if (avgDuration < MIN_DURATION) {
-      numLessons = Math.floor(totalMinutes / MIN_DURATION);
-      if (numLessons === 0) numLessons = 1;
-      avgDuration = totalMinutes / numLessons;
+      // Adjust if average duration would be out of bounds
+      const avgDuration = totalMinutes / numLessons;
+      if (avgDuration > MAX_DURATION) {
+        numLessons = Math.ceil(totalMinutes / MAX_DURATION);
+      } else if (avgDuration < MIN_DURATION) {
+        numLessons = Math.max(1, Math.floor(totalMinutes / MIN_DURATION));
+      }
     }
 
     // Distribute minutes across lessons
@@ -435,7 +467,7 @@ export class LessonPlanService {
       totalMinutes,
       numLessons,
       MIN_DURATION,
-      MAX_DURATION
+      maxDuration
     );
 
     // Distribute MLOs across lessons (1-2 per lesson)
@@ -701,14 +733,21 @@ export class LessonPlanService {
   ): Promise<LessonPlan> {
     const lessonId = `${module.moduleCode}-L${block.lessonNumber}`;
 
-    // Generate lesson title from MLOs
-    const lessonTitle = this.generateLessonTitle(block, module);
-
     // Build comprehensive OpenAI prompt with context from all 9 steps
     const aiEnhancedContent = await this.generateAIEnhancedContent(
       block,
       module,
       context,
+      priorLessons
+    );
+
+    // Title the lesson from what it actually teaches. The MLO-derived title is
+    // only a fallback: lessons in a module share MLOs, so deriving the title
+    // from the MLO alone gives every one of them the same string.
+    const lessonTitle = this.generateLessonTitle(
+      block,
+      module,
+      aiEnhancedContent.topicCoverage?.exactTopic,
       priorLessons
     );
 
@@ -1170,23 +1209,77 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
   }
 
   /**
-   * Generate a lesson title from the assigned MLOs
+   * Title a lesson from the topic it actually covers, falling back to its MLOs.
+   *
+   * Every lesson in a module is assigned 1-2 of that module's MLOs, so an
+   * MLO-derived title repeats for every lesson sharing an MLO — a module with
+   * three MLOs and seventeen lessons ends up with three distinct titles. The
+   * per-lesson topic the generator produces is unique, so prefer it, and never
+   * hand back a title this module has already used.
+   *
+   * @param block - Lesson block with duration and MLOs
+   * @param module - Module data
+   * @param aiTopic - The lesson's own generated topic, when available
+   * @param priorLessons - Lessons already generated for this module
    */
-  private generateLessonTitle(block: LessonBlock, module: ModuleData): string {
+  private generateLessonTitle(
+    block: LessonBlock,
+    module: ModuleData,
+    aiTopic?: string,
+    priorLessons: LessonPlan[] = []
+  ): string {
+    const used = new Set(priorLessons.map((l) => l.lessonTitle));
+    const candidates = [
+      this.titleFromTopic(aiTopic),
+      this.titleFromMLO(block, module),
+      `${this.titleFromMLO(block, module)} (${block.lessonNumber})`,
+    ].filter((t): t is string => Boolean(t));
+
+    return candidates.find((t) => !used.has(t)) ?? candidates[candidates.length - 1];
+  }
+
+  /** Condense a generated topic sentence into a readable lesson title. */
+  private titleFromTopic(topic?: string): string | null {
+    const cleaned = (topic || '').trim().replace(/[.\s]+$/, '');
+    if (cleaned.length < 8) return null;
+    const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+    if (cleaned.length <= TITLE_MAX_LENGTH) return capitalise(cleaned);
+
+    const head = cleaned.slice(0, TITLE_MAX_LENGTH);
+    const atWord = head.slice(0, head.lastIndexOf(' '));
+    const boundary = Math.max(
+      head.lastIndexOf(', '),
+      head.lastIndexOf('; '),
+      head.lastIndexOf(': ')
+    );
+    // Break on a clause only when it costs little, or a list gets cut mid-item.
+    const atClause = boundary > 0 ? head.slice(0, boundary) : '';
+    let trimmed = atClause.length >= atWord.length * 0.8 ? atClause : atWord;
+
+    // Never leave an unclosed bracket behind.
+    const opened = (trimmed.match(/\(/g) || []).length;
+    const closed = (trimmed.match(/\)/g) || []).length;
+    if (opened > closed) trimmed = trimmed.slice(0, trimmed.lastIndexOf('('));
+
+    let previous: string;
+    do {
+      previous = trimmed;
+      trimmed = trimmed.replace(/[,;:\s]+$/, '').replace(DANGLING_WORD, '');
+    } while (trimmed !== previous);
+    return capitalise(trimmed);
+  }
+
+  /** Legacy fallback: strip the Bloom verb off the first MLO statement. */
+  private titleFromMLO(block: LessonBlock, module: ModuleData): string {
     if (block.assignedMLOs.length === 0) {
       return `${module.title} - Lesson ${block.lessonNumber}`;
     }
 
-    // Extract key concepts from MLO statements
-    const firstMLO = block.assignedMLOs[0];
-    const statement = firstMLO.statement;
-
-    // Try to extract the main topic from the MLO statement
+    const statement = block.assignedMLOs[0].statement;
     const verbPatterns =
       /^(understand|explain|analyse|analyze|apply|evaluate|create|demonstrate|identify|describe|compare|assess)/i;
     const cleanedStatement = statement.replace(verbPatterns, '').trim();
 
-    // Capitalize first letter and truncate if too long
     const title = cleanedStatement.charAt(0).toUpperCase() + cleanedStatement.slice(1);
     return title.length > 60 ? title.substring(0, 57) + '...' : title;
   }

@@ -3333,9 +3333,20 @@ CRITICAL VALIDATION:
       contactHours: module.contactHours,
     });
 
+    // If this module already has an agreed lesson plan, regenerate it at the
+    // same size. Re-deriving the count from contact hours would ask for more
+    // lessons than the module has material for, and the surplus comes back as
+    // filler variants of topics the plan already covers.
+    const existingPlan = (workflow.step10?.moduleLessonPlans || []).find(
+      (p: any) => p.moduleId === module.id
+    );
+    const plannedLessonCount = existingPlan?.lessons?.length || undefined;
+
     // Generate lesson plans for this module (PPTs are generated automatically per lesson)
     const startTime = Date.now();
-    const modulePlan = await lessonPlanService.generateModuleLessonPlans(module, context);
+    const modulePlan = await lessonPlanService.generateModuleLessonPlans(module, context, {
+      plannedLessonCount,
+    });
     const duration = Date.now() - startTime;
 
     loggingService.info('Lesson plans and PPTs generated for module', {
