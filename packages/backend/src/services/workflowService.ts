@@ -1697,12 +1697,19 @@ IMPORTANT:
     ].join('\n');
 
     // === RETRIEVE KNOWLEDGE BASE CONTEXT ===
+    // Every query names this programme. Subject-free queries such as
+    // "vocational education module learning outcomes" match any curriculum
+    // material in the base equally well, so whichever framework happens to be
+    // indexed gets pulled in and the model builds modules around it — a general
+    // business degree came back with process-mapping and data-governance
+    // modules sourced from an operations-management framework.
+    const subject = step1.targetLearner?.industrySector || step1.programTitle;
     const kbQueries = [
       `${step1.programTitle} course structure modules`,
-      `${step1.academicLevel} curriculum design module structure`,
-      `${step1.targetLearner?.industrySector || 'professional'} training programme modules`,
-      `vocational education module learning outcomes`,
-      `progressive complexity curriculum design`,
+      `${step1.programTitle} ${step1.academicLevel} curriculum design module structure`,
+      `${subject} training programme modules`,
+      `${step1.programTitle} module learning outcomes`,
+      `${subject} progressive complexity curriculum design`,
     ];
 
     const kbContexts = await retrieveKBContext(kbQueries, {

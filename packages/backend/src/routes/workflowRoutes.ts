@@ -469,6 +469,16 @@ function propagateModuleTitleChange(
   }
 }
 
+/**
+ * Keep step2.attitudeItems — the legacy mirror of competencyItems — identical to
+ * the array it mirrors. The two share ids, so once they diverge the KSC lookup
+ * can serve pre-edit wording back under an edited item's id.
+ */
+function syncStep2CompetencyMirror(step2: any): void {
+  if (!step2 || !Array.isArray(step2.competencyItems) || step2.competencyItems.length === 0) return;
+  step2.attitudeItems = step2.competencyItems;
+}
+
 const BLOOM_ORDER = ['remember', 'understand', 'apply', 'analyze', 'evaluate', 'create'];
 
 /**
@@ -1267,6 +1277,10 @@ router.put('/:id/step2/ksa/:ksaId', validateJWT, loadUser, async (req: Request, 
     if (!found) {
       return res.status(404).json({ success: false, error: 'KSC item not found' });
     }
+
+    // Converge the mirror on the canonical array, so an item that had already
+    // drifted is repaired rather than only the edited field being matched up.
+    syncStep2CompetencyMirror(workflow.step2);
 
     // Mark the step2 field as modified so Mongoose saves the changes
     workflow.markModified('step2');
@@ -8050,6 +8064,17 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
         totalUpdates,
       });
     }
+
+    // An AI edit can add, change or remove outcomes and competencies just as the
+    // per-item endpoints do, so the same derived state has to be rebuilt here —
+    // otherwise the coverage report describes a PLO set that no longer exists
+    // and the legacy competency mirror drifts out of sync again.
+    syncStep2CompetencyMirror(workflow.step2);
+    if (workflow.step3?.outcomes?.length) {
+      refreshStep3Coverage(workflow.step3, workflow.step2);
+      workflow.markModified('step3');
+    }
+    workflow.markModified('step2');
 
     await workflow.save();
 
