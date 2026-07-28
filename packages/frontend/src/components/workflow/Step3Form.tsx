@@ -17,6 +17,7 @@ import {
 } from '@/types/workflow';
 import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
+import StaleStepNotice from './StaleStepNotice';
 import BloomVerbPicker from './BloomVerbPicker';
 
 interface Props {
@@ -1031,6 +1032,15 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
       ) : (
         // Display Generated PLOs
         <div className="space-y-6">
+          <StaleStepNotice
+            generatedAt={(workflow.step3 as any)?.validatedAt}
+            upstream={[
+              { label: 'Step 1', changedAt: (workflow.step1 as any)?.validatedAt },
+              { label: 'Step 2', changedAt: (workflow.step2 as any)?.validatedAt },
+            ]}
+            action="Regenerate the outcomes"
+          />
+
           {/* Coverage Report */}
           <div className="bg-white border border-teal-200 rounded-xl p-5 border border-teal-200">
             <h4 className="text-lg font-semibold text-teal-800 mb-4">Coverage Report</h4>

@@ -18,6 +18,7 @@ import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
 import BloomVerbPicker from './BloomVerbPicker';
 import StepVersionHistory from './StepVersionHistory';
+import StaleStepNotice from './StaleStepNotice';
 import { downloadFile } from '@/lib/download';
 
 interface Props {
@@ -1703,6 +1704,18 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
+      {hasStep4Data && (
+        <StaleStepNotice
+          generatedAt={(workflow.step4 as any)?.validatedAt}
+          upstream={[
+            { label: 'Step 1', changedAt: (workflow.step1 as any)?.validatedAt },
+            { label: 'Step 2', changedAt: (workflow.step2 as any)?.validatedAt },
+            { label: 'Step 3', changedAt: (workflow.step3 as any)?.validatedAt },
+          ]}
+          action="Regenerate the course framework"
+        />
+      )}
+
       {isCurrentlyGenerating && !hasStep4Data && (
         <div className="mb-6 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
