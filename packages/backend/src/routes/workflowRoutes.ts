@@ -486,12 +486,28 @@ async function regenerateStep10Modules(
   const wf = await CurriculumWorkflow.findById(workflowId);
   if (!wf || !wf.step10?.moduleLessonPlans) return 0;
 
+  // Remember how many lessons each module was curated to hold before dropping
+  // it. Without this the regeneration has nothing to size itself against and
+  // falls back to deriving a count from contact hours, which asks for more
+  // lessons than the module has material for and pads the difference with
+  // filler. See lessonPlanService.calculateLessonBlocks.
+  const plannedLessonCounts: Record<string, number> = {
+    ...(wf.step10.plannedLessonCounts || {}),
+  };
+  for (const mp of wf.step10.moduleLessonPlans as any[]) {
+    if (uniqueIds.includes(mp.moduleId) && mp.lessons?.length) {
+      plannedLessonCounts[mp.moduleId] = mp.lessons.length;
+    }
+  }
+
   const before = wf.step10.moduleLessonPlans.length;
   wf.step10.moduleLessonPlans = wf.step10.moduleLessonPlans.filter(
     (mp: any) => !uniqueIds.includes(mp.moduleId)
   );
   const removed = before - wf.step10.moduleLessonPlans.length;
   if (removed === 0) return 0;
+
+  wf.step10.plannedLessonCounts = plannedLessonCounts;
 
   // Refresh summary so the UI reflects the in-progress state
   const allLessons = wf.step10.moduleLessonPlans.flatMap((m: any) => m.lessons || []);

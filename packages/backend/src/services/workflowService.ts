@@ -3333,14 +3333,21 @@ CRITICAL VALIDATION:
       contactHours: module.contactHours,
     });
 
-    // If this module already has an agreed lesson plan, regenerate it at the
-    // same size. Re-deriving the count from contact hours would ask for more
-    // lessons than the module has material for, and the surplus comes back as
-    // filler variants of topics the plan already covers.
+    // If this module has an agreed lesson plan, regenerate it at the same size.
+    // Re-deriving the count from contact hours would ask for more lessons than
+    // the module has material for, and the surplus comes back as filler
+    // variants of topics the plan already covers.
+    //
+    // A per-module regenerate deletes the plan before queueing the job, so the
+    // count it was curated to is read back from the record left behind by
+    // regenerateStep10Modules.
     const existingPlan = (workflow.step10?.moduleLessonPlans || []).find(
       (p: any) => p.moduleId === module.id
     );
-    const plannedLessonCount = existingPlan?.lessons?.length || undefined;
+    const plannedLessonCount =
+      existingPlan?.lessons?.length ||
+      (workflow.step10 as any)?.plannedLessonCounts?.[module.id] ||
+      undefined;
 
     // Generate lesson plans for this module (PPTs are generated automatically per lesson)
     const startTime = Date.now();

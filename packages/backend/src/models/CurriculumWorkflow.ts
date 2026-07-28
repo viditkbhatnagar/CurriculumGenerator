@@ -206,6 +206,12 @@ export interface Step10LessonPlans {
   // Module lesson plans
   moduleLessonPlans: ModuleLessonPlan[];
 
+  // How many lessons each module was curated to hold, keyed by moduleId. A
+  // regenerate deletes the module's plan before the job runs, so this is what
+  // the generator sizes itself against instead of deriving a count from
+  // contact hours (which pads the difference with filler lessons).
+  plannedLessonCounts?: Record<string, number>;
+
   // Validation results
   validation: {
     allModulesHaveLessonPlans: boolean;
