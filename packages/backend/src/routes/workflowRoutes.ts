@@ -469,6 +469,75 @@ function propagateModuleTitleChange(
   }
 }
 
+const BLOOM_ORDER = ['remember', 'understand', 'apply', 'analyze', 'evaluate', 'create'];
+
+/**
+ * Bloom levels arrive in both spellings — outcomes carry "analyze" while
+ * generated coverage reports have used "analyse" — so fold onto one key before
+ * counting, or the two never meet and a level reads as zero.
+ */
+function normaliseBloomLevel(level?: string): string | null {
+  const key = String(level || '')
+    .trim()
+    .toLowerCase()
+    .replace('analyse', 'analyze');
+  return BLOOM_ORDER.includes(key) ? key : null;
+}
+
+/**
+ * Recompute step3's Bloom distribution and coverage figures from the outcomes
+ * actually on file. The generated report is a snapshot; adding, editing or
+ * deleting a PLO leaves it describing a set that no longer exists.
+ *
+ * Mutates the given step3 in place. Caller marks step3 modified and saves.
+ */
+function refreshStep3Coverage(step3: any, step2: any): void {
+  const outcomes: any[] = Array.isArray(step3?.outcomes) ? step3.outcomes : [];
+
+  const bloomDistribution: Record<string, number> = {};
+  for (const level of BLOOM_ORDER) bloomDistribution[level] = 0;
+  for (const plo of outcomes) {
+    const level = normaliseBloomLevel(plo?.bloomLevel);
+    if (level) bloomDistribution[level] += 1;
+  }
+
+  const linkedKSCIds = new Set<string>();
+  for (const plo of outcomes) {
+    for (const ksc of plo?.linkedKSCs || plo?.competencyLinks || []) linkedKSCIds.add(ksc);
+  }
+
+  const competencyItems = step2?.competencyItems?.length
+    ? step2.competencyItems
+    : step2?.attitudeItems || [];
+  const totalKSCItems =
+    (step2?.knowledgeItems?.length || 0) +
+    (step2?.skillItems?.length || 0) +
+    competencyItems.length;
+
+  const counts = Object.values(bloomDistribution);
+  step3.bloomDistribution = bloomDistribution;
+  step3.coverageReport = {
+    ...(step3.coverageReport || {}),
+    competenciesCovered: linkedKSCIds.size,
+    totalEssentialCompetencies: totalKSCItems,
+    coveragePercent: totalKSCItems ? Math.round((linkedKSCIds.size / totalKSCItems) * 100) : 0,
+    bloomDistribution,
+    validation: {
+      hasLowerLevel: ['remember', 'understand', 'apply'].some((l) => bloomDistribution[l] > 0),
+      hasHigherLevel: ['analyze', 'evaluate', 'create'].some((l) => bloomDistribution[l] > 0),
+      noSingleLevelOver50: outcomes.length === 0 || Math.max(0, ...counts) <= outcomes.length / 2,
+      allUnique:
+        new Set(
+          outcomes.map((o) =>
+            String(o?.statement || '')
+              .trim()
+              .toLowerCase()
+          )
+        ).size === outcomes.length,
+    },
+  };
+}
+
 /**
  * Remove existing lesson plan entries for the given moduleIds and queue a Step 10 job
  * so the worker (or sync fallback) regenerates them with the latest module data.
@@ -1173,18 +1242,24 @@ router.put('/:id/step2/ksa/:ksaId', validateJWT, loadUser, async (req: Request, 
       }
     }
 
-    // Check competency/attitude items
+    // Check competency items, then the legacy attitudeItems mirror. Both arrays
+    // use the same ids (C1, C2, …), and readers that consult the mirror would
+    // otherwise serve the pre-edit wording back — the edit would look like it
+    // never took. Apply the change to every array the id appears in.
     if (!found) {
-      const competencyItems =
-        (workflow.step2 as any).competencyItems || workflow.step2.attitudeItems || [];
-      for (const item of competencyItems) {
-        if ((item as any).id === ksaId) {
+      const competencyArrays = [
+        (workflow.step2 as any).competencyItems,
+        workflow.step2.attitudeItems,
+      ].filter(Array.isArray);
+
+      for (const items of competencyArrays) {
+        for (const item of items) {
+          if ((item as any).id !== ksaId) continue;
           if (statement !== undefined) (item as any).statement = statement;
           if (description !== undefined) (item as any).description = description;
           if (importance !== undefined) (item as any).importance = importance;
           found = true;
-          updatedItem = item;
-          break;
+          updatedItem = updatedItem || item;
         }
       }
     }
@@ -1392,6 +1467,7 @@ router.post('/:id/step3/plo', validateJWT, loadUser, async (req: Request, res: R
     };
 
     step3.outcomes.push(newPlo);
+    refreshStep3Coverage(step3, workflow.step2);
     workflow.markModified('step3');
     await workflow.save();
 
@@ -1440,6 +1516,8 @@ router.put('/:id/step3/plo/:ploId', validateJWT, loadUser, async (req: Request, 
     if (bloomLevel !== undefined) plo.bloomLevel = bloomLevel;
     if (assessmentAlignment !== undefined) plo.assessmentAlignment = assessmentAlignment;
     if (jobTaskMapping !== undefined) plo.jobTaskMapping = jobTaskMapping;
+
+    refreshStep3Coverage(workflow.step3, workflow.step2);
 
     // Mark the step3 field as modified so Mongoose saves the changes
     workflow.markModified('step3');

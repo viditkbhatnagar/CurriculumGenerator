@@ -253,22 +253,19 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       });
     }
 
-    if (step2.competencyItems) {
-      step2.competencyItems.forEach((item: any) => {
-        if (item.id) {
-          kscMap.set(item.id, item.statement || item.description || item.title || '');
-        }
-      });
-    }
+    // attitudeItems is a legacy mirror of competencyItems written for backward
+    // compatibility. The two share ids (C1, C2, …), so reading both would let a
+    // mirror that has drifted overwrite the competencies actually on file and
+    // silently reinstate pre-edit wording. Take the canonical array only.
+    const competencyItems = step2.competencyItems?.length
+      ? step2.competencyItems
+      : step2.attitudeItems || [];
 
-    // Also check for attitudeItems as fallback
-    if (step2.attitudeItems) {
-      step2.attitudeItems.forEach((item: any) => {
-        if (item.id) {
-          kscMap.set(item.id, item.statement || item.description || item.title || '');
-        }
-      });
-    }
+    competencyItems.forEach((item: any) => {
+      if (item.id) {
+        kscMap.set(item.id, item.statement || item.description || item.title || '');
+      }
+    });
 
     return kscMap;
   }
@@ -574,9 +571,11 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       this.createH1('3. Program Learning Outcomes (PLOs)')
     );
 
-    step3.outcomes.forEach((plo: any) => {
+    step3.outcomes.forEach((plo: any, index: number) => {
       contentChildren.push(
-        this.createH3(`${plo.id || 'PLO'}: ${plo.statement || ''}`),
+        // Manually added outcomes carry a generated id (plo-user-…); their
+        // display code is the readable label, so prefer it.
+        this.createH3(`${plo.code || plo.id || `PLO${index + 1}`}: ${plo.statement || ''}`),
         new Paragraph({
           children: [
             new TextRun({

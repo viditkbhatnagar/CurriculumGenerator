@@ -50,6 +50,19 @@ const BLOOM_DESCRIPTIONS: Record<BloomLevel, string> = {
 const LOWER_LEVELS: BloomLevel[] = ['remember', 'understand', 'apply'];
 const HIGHER_LEVELS: BloomLevel[] = ['analyze', 'evaluate', 'create'];
 
+/**
+ * Bloom levels reach us in both spellings — outcomes carry "analyze" while
+ * generated reports have used "analyse" — so a level has to be folded onto the
+ * canonical key before it can be counted or looked up.
+ */
+function normaliseBloomLevel(level?: string): BloomLevel | null {
+  const key = String(level || '')
+    .trim()
+    .toLowerCase()
+    .replace(/analyse/, 'analyze');
+  return (BLOOM_LEVELS as string[]).includes(key) ? (key as BloomLevel) : null;
+}
+
 // Outcome emphasis options per workflow v2.2
 const EMPHASIS_OPTIONS: { value: OutcomeEmphasis; label: string; description: string }[] = [
   { value: 'technical', label: 'Technical/Applied', description: 'Focus on skills and procedures' },
@@ -628,10 +641,37 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
   const hasStep3Data = workflow.step3 && workflow.step3.outcomes?.length > 0;
   const isApproved = !!workflow.step3?.approvedAt;
 
-  // Calculate coverage stats
+  // Coverage stats are derived from the PLOs on screen, not from the report
+  // stored at generation time — that snapshot is not rewritten when an outcome
+  // is added, edited or deleted, so it drifts out of step with what is shown.
   const coverageReport = (workflow.step3 as any)?.coverageReport;
-  const bloomDistribution =
-    workflow.step3?.bloomDistribution || coverageReport?.bloomDistribution || {};
+  const outcomes = workflow.step3?.outcomes || [];
+
+  const bloomDistribution = outcomes.reduce<Record<string, number>>((counts, plo) => {
+    const level = normaliseBloomLevel(plo.bloomLevel);
+    if (level) counts[level] = (counts[level] || 0) + 1;
+    return counts;
+  }, {});
+
+  const linkedKSCIds = new Set(outcomes.flatMap((plo: PLO) => plo.linkedKSCs || []));
+  const totalKSCItems =
+    ((workflow.step2 as any)?.knowledgeItems?.length || 0) +
+    ((workflow.step2 as any)?.skillItems?.length || 0) +
+    (((workflow.step2 as any)?.competencyItems || (workflow.step2 as any)?.attitudeItems || [])
+      .length || 0);
+  const kscCoveragePercent = totalKSCItems
+    ? Math.round((linkedKSCIds.size / totalKSCItems) * 100)
+    : coverageReport?.coveragePercent || 0;
+
+  const bloomValidation = {
+    hasLowerLevel: LOWER_LEVELS.some((level) => (bloomDistribution[level] || 0) > 0),
+    hasHigherLevel: HIGHER_LEVELS.some((level) => (bloomDistribution[level] || 0) > 0),
+    noSingleLevelOver50:
+      outcomes.length === 0 ||
+      Math.max(0, ...Object.values(bloomDistribution)) <= outcomes.length / 2,
+    allUnique:
+      new Set(outcomes.map((plo) => plo.statement?.trim().toLowerCase())).size === outcomes.length,
+  };
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -1004,20 +1044,11 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                 <p className="text-xs text-teal-500">Total PLOs</p>
               </div>
               <div className="text-center">
-                <p className="text-3xl font-bold text-cyan-400">
-                  {coverageReport?.coveragePercent || 0}%
-                </p>
+                <p className="text-3xl font-bold text-cyan-400">{kscCoveragePercent}%</p>
                 <p className="text-xs text-teal-500">KSC Coverage</p>
               </div>
               <div className="text-center">
-                <p className="text-3xl font-bold text-emerald-400">
-                  {coverageReport?.competenciesCovered ||
-                    workflow.step3?.outcomes?.reduce(
-                      (sum: number, plo: PLO) => sum + (plo.linkedKSCs?.length || 0),
-                      0
-                    ) ||
-                    0}
-                </p>
+                <p className="text-3xl font-bold text-emerald-400">{linkedKSCIds.size}</p>
                 <p className="text-xs text-teal-500">Competencies Linked</p>
               </div>
               <div className="text-center">
@@ -1053,40 +1084,31 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
               </div>
             </div>
 
-            {/* Validation Checks */}
-            {coverageReport?.validation && (
+            {/* Validation Checks — derived from the PLOs above, for the same
+                reason the stats are: a stored report goes stale on edit. */}
+            {outcomes.length > 0 && (
               <div className="mt-4 pt-4 border-t border-teal-200">
                 <p className="text-sm text-teal-600 mb-2">Validation</p>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <span
-                    className={
-                      coverageReport.validation.hasLowerLevel ? 'text-emerald-400' : 'text-red-400'
-                    }
+                    className={bloomValidation.hasLowerLevel ? 'text-emerald-400' : 'text-red-400'}
                   >
-                    {coverageReport.validation.hasLowerLevel ? '✓' : '✗'} Has lower level
+                    {bloomValidation.hasLowerLevel ? '✓' : '✗'} Has lower level
+                  </span>
+                  <span
+                    className={bloomValidation.hasHigherLevel ? 'text-emerald-400' : 'text-red-400'}
+                  >
+                    {bloomValidation.hasHigherLevel ? '✓' : '✗'} Has higher level
                   </span>
                   <span
                     className={
-                      coverageReport.validation.hasHigherLevel ? 'text-emerald-400' : 'text-red-400'
+                      bloomValidation.noSingleLevelOver50 ? 'text-emerald-400' : 'text-amber-400'
                     }
                   >
-                    {coverageReport.validation.hasHigherLevel ? '✓' : '✗'} Has higher level
+                    {bloomValidation.noSingleLevelOver50 ? '✓' : '⚠'} No level &gt;50%
                   </span>
-                  <span
-                    className={
-                      coverageReport.validation.noSingleLevelOver50
-                        ? 'text-emerald-400'
-                        : 'text-amber-400'
-                    }
-                  >
-                    {coverageReport.validation.noSingleLevelOver50 ? '✓' : '⚠'} No level &gt;50%
-                  </span>
-                  <span
-                    className={
-                      coverageReport.validation.allUnique ? 'text-emerald-400' : 'text-red-400'
-                    }
-                  >
-                    {coverageReport.validation.allUnique ? '✓' : '✗'} All unique
+                  <span className={bloomValidation.allUnique ? 'text-emerald-400' : 'text-red-400'}>
+                    {bloomValidation.allUnique ? '✓' : '✗'} All unique
                   </span>
                 </div>
               </div>
