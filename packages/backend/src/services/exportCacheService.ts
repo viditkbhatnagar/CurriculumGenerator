@@ -33,7 +33,10 @@ import { loggingService } from './loggingService';
 // v5: Step 13 Integrity & Security / Accessibility Provisions now render their
 //     bullet-formatted content (previously dropped when the formatter chose bullets,
 //     leaving those sections blank in the export).
-const EXPORT_FORMAT_VERSION = 'v5';
+// v6: Step 3 PLO headings use the display code (PLO7) rather than the internal id
+//     (plo-user-…), and the Step 2 KSC lookup no longer lets the legacy
+//     attitudeItems mirror overwrite edited competencies.
+const EXPORT_FORMAT_VERSION = 'v6';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {
