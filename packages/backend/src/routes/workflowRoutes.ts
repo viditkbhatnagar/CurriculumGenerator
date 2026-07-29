@@ -473,6 +473,9 @@ function propagateModuleTitleChange(
   }
 }
 
+/** The curriculum workflow has 14 steps end to end. */
+const WORKFLOW_TOTAL_STEPS = 14;
+
 /**
  * Keep step2.attitudeItems — the legacy mirror of competencyItems — identical to
  * the array it mirrors. The two share ids, so once they diverge the KSC lookup
@@ -910,8 +913,10 @@ router.get('/:id/progress', async (req: Request, res: Response) => {
         currentStep: workflow.currentStep,
         status: workflow.status,
         completedSteps,
-        totalSteps: 9,
-        progressPercent: Math.round((completedSteps / 9) * 100),
+        // The workflow has 14 steps and the UI says so ("Step n of 14"); this
+        // reported 9, which put the progress bar a third ahead of reality.
+        totalSteps: WORKFLOW_TOTAL_STEPS,
+        progressPercent: Math.round((completedSteps / WORKFLOW_TOTAL_STEPS) * 100),
         stepProgress: workflow.stepProgress,
         estimatedTimeRemaining: calculateRemainingTime(workflow.currentStep),
       },
@@ -7169,9 +7174,8 @@ function calculateRemainingTime(currentStep: number): string {
     14: 1,
   };
 
-  const TOTAL_STEPS = 14;
   let remaining = 0;
-  for (let i = currentStep; i <= TOTAL_STEPS; i++) {
+  for (let i = currentStep; i <= WORKFLOW_TOTAL_STEPS; i++) {
     remaining += stepTimes[i] || 0;
   }
 
