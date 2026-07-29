@@ -436,9 +436,12 @@ export default function WorkflowDetailPage() {
               </button>
               <div>
                 <h1 className="text-xl font-bold text-teal-800">{workflow.projectName}</h1>
-                <p className="text-teal-600 text-sm">
-                  Step {workflow.currentStep} of 14 •{' '}
-                  {progress?.estimatedTimeRemaining || '~2.5 hours'} remaining
+                <p
+                  className="text-teal-600 text-sm"
+                  title="A typical-effort estimate for the steps still to do. It is not a countdown — it stays the same while you work on a step and drops when you move to the next one."
+                >
+                  Step {workflow.currentStep} of 14 • est.{' '}
+                  {progress?.estimatedTimeRemaining || '~2.5 hours'} of work left
                 </p>
               </div>
             </div>

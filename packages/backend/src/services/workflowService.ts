@@ -202,6 +202,31 @@ ${formattedContexts}
 `;
 }
 
+/** Bloom's levels in taxonomy order, in the spelling the app keys on. */
+export const BLOOM_LEVEL_ORDER = [
+  'remember',
+  'understand',
+  'apply',
+  'analyze',
+  'evaluate',
+  'create',
+] as const;
+
+/**
+ * Fold a Bloom level onto the canonical spelling.
+ *
+ * Generated content comes back in either spelling — "analyse" or "analyze" —
+ * and the two never meet: a distribution keyed on one is invisible to a lookup
+ * using the other. Returns null for anything that is not a Bloom level.
+ */
+export function normaliseBloomLevel(level?: string): string | null {
+  const key = String(level || '')
+    .trim()
+    .toLowerCase()
+    .replace('analyse', 'analyze');
+  return (BLOOM_LEVEL_ORDER as readonly string[]).includes(key) ? key : null;
+}
+
 // ============================================================================
 // WORKFLOW SERVICE CLASS
 // ============================================================================
@@ -1103,10 +1128,25 @@ IMPORTANT:
     // Generate PLOs using AI
     const ploContent = await this.generateStep3Content(workflow.step1, workflow.step2, input);
 
-    // Calculate bloom distribution
-    const bloomDistribution: Record<string, number> = {};
-    for (const plo of ploContent.outcomes || []) {
-      bloomDistribution[plo.bloomLevel] = (bloomDistribution[plo.bloomLevel] || 0) + 1;
+    // The model answers in whichever spelling the prompt led it to, so an
+    // outcome can come back as "analyse" while the rest of the app keys on
+    // "analyze". Left alone that outcome counts towards a level nothing else
+    // looks up: the dashboard's Analyze column reads zero and every downstream
+    // consumer (Step 4 alignment, exports, the LMS) sees an unknown level.
+    // Fold onto the canonical spelling before anything is stored.
+    const outcomes = (ploContent.outcomes || []).map((plo: any) => {
+      const level = normaliseBloomLevel(plo.bloomLevel);
+      return level && level !== plo.bloomLevel ? { ...plo, bloomLevel: level } : plo;
+    });
+
+    // Every level is present as a key, so a level with no outcomes reads as 0
+    // rather than being absent.
+    const bloomDistribution: Record<string, number> = Object.fromEntries(
+      BLOOM_LEVEL_ORDER.map((level) => [level, 0])
+    );
+    for (const plo of outcomes) {
+      const level = normaliseBloomLevel(plo.bloomLevel);
+      if (level) bloomDistribution[level] += 1;
     }
 
     // Store step data
@@ -1123,8 +1163,8 @@ IMPORTANT:
       stakeholderPriorities: input.stakeholderPriorities,
       exclusions: input.exclusions,
       // Generated content
-      outcomes: ploContent.outcomes || [],
-      coverageReport: ploContent.coverageReport,
+      outcomes,
+      coverageReport: { ...(ploContent.coverageReport || {}), bloomDistribution },
       bloomDistribution,
       // Legacy compatibility
       configuration: {

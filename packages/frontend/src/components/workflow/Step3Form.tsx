@@ -458,7 +458,14 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
 
   // Form state
   const [formData, setFormData] = useState<Step3FormData>({
-    bloomLevels: ['apply', 'analyze'],
+    // The generator is told "BLOOM'S TAXONOMY LEVELS TO USE: <these>" verbatim,
+    // so whatever is selected here is the whole range it can write to. Defaulting
+    // to apply+analyze alone produced programme outcomes that never reached
+    // evaluate or create — which reads as the engine ignoring the higher levels
+    // when in fact it was never asked for them. Credit-bearing qualifications are
+    // expected to span the upper half of the taxonomy, so start there and let the
+    // author narrow it.
+    bloomLevels: ['apply', 'analyze', 'evaluate', 'create'],
     targetCount: 6,
     outcomeEmphasis: 'mixed',
     priorityCompetencies: [],

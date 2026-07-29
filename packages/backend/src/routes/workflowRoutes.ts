@@ -19,7 +19,11 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import JSZip from 'jszip';
 import { validateJWT, loadUser } from '../middleware/auth';
-import { workflowService } from '../services/workflowService';
+import {
+  workflowService,
+  normaliseBloomLevel,
+  BLOOM_LEVEL_ORDER,
+} from '../services/workflowService';
 import { loggingService } from '../services/loggingService';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import Folder from '../models/Folder';
@@ -479,21 +483,6 @@ function syncStep2CompetencyMirror(step2: any): void {
   step2.attitudeItems = step2.competencyItems;
 }
 
-const BLOOM_ORDER = ['remember', 'understand', 'apply', 'analyze', 'evaluate', 'create'];
-
-/**
- * Bloom levels arrive in both spellings — outcomes carry "analyze" while
- * generated coverage reports have used "analyse" — so fold onto one key before
- * counting, or the two never meet and a level reads as zero.
- */
-function normaliseBloomLevel(level?: string): string | null {
-  const key = String(level || '')
-    .trim()
-    .toLowerCase()
-    .replace('analyse', 'analyze');
-  return BLOOM_ORDER.includes(key) ? key : null;
-}
-
 /**
  * Recompute step3's Bloom distribution and coverage figures from the outcomes
  * actually on file. The generated report is a snapshot; adding, editing or
@@ -505,7 +494,7 @@ function refreshStep3Coverage(step3: any, step2: any): void {
   const outcomes: any[] = Array.isArray(step3?.outcomes) ? step3.outcomes : [];
 
   const bloomDistribution: Record<string, number> = {};
-  for (const level of BLOOM_ORDER) bloomDistribution[level] = 0;
+  for (const level of BLOOM_LEVEL_ORDER) bloomDistribution[level] = 0;
   for (const plo of outcomes) {
     const level = normaliseBloomLevel(plo?.bloomLevel);
     if (level) bloomDistribution[level] += 1;
@@ -7151,6 +7140,17 @@ function calculateCreditEquivalencies(creditFramework: any) {
   };
 }
 
+/**
+ * Typical authoring effort left across the remaining steps.
+ *
+ * This is an estimate of work, not a countdown — it is keyed to the step you are
+ * on, so it holds steady while you work within a step and only drops when you
+ * move to the next one. The UI labels it accordingly.
+ *
+ * It previously stopped at step 9 while the header read "of 14", so it silently
+ * omitted lesson plans, decks, assignment packs and the exam — the longest part
+ * of the workflow — and reported ~1.8 hours for a programme with far more left.
+ */
 function calculateRemainingTime(currentStep: number): string {
   const stepTimes: Record<number, number> = {
     1: 20,
@@ -7162,10 +7162,16 @@ function calculateRemainingTime(currentStep: number): string {
     7: 20,
     8: 15,
     9: 5,
+    10: 15,
+    11: 15,
+    12: 20,
+    13: 10,
+    14: 1,
   };
 
+  const TOTAL_STEPS = 14;
   let remaining = 0;
-  for (let i = currentStep; i <= 9; i++) {
+  for (let i = currentStep; i <= TOTAL_STEPS; i++) {
     remaining += stepTimes[i] || 0;
   }
 
