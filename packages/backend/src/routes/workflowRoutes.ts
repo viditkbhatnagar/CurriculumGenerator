@@ -1596,8 +1596,6 @@ router.post('/:id/step3/approve', validateJWT, loadUser, async (req: Request, re
  */
 router.post('/:id/step4', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
-    // Snapshot the current version so this regeneration can be undone.
-    await snapshotStep(req.params.id, 4);
     const { id } = req.params;
     const userId = (req as any).user?.id || (req as any).user?.userId;
 
@@ -1611,6 +1609,10 @@ router.post('/:id/step4', validateJWT, loadUser, async (req: Request, res: Respo
         });
       }
 
+      // Snapshot only once a regeneration is actually going ahead. Snapshotting
+      // before the in-progress check meant a second click during a run added
+      // another identical entry to Version history.
+      await snapshotStep(id, 4);
       await removeStepJob(4, id);
       const job = await addStepJob(4, id, userId);
       if (!job) {
@@ -1624,6 +1626,9 @@ router.post('/:id/step4', validateJWT, loadUser, async (req: Request, res: Respo
       });
     }
 
+    // No queue available — generate in-process, snapshotting first so this is
+    // still undoable.
+    await snapshotStep(id, 4);
     const workflow = await workflowService.processStep4(id);
 
     res.json({
