@@ -3,7 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep1, useApproveStep1 } from '@/hooks/useWorkflow';
 import { useStepStatus } from '@/hooks/useStepStatus';
-import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import {
+  useGeneration,
+  GenerationProgressBar,
+  formatStepEstimate,
+} from '@/contexts/GenerationContext';
 import {
   CurriculumWorkflow,
   Step1FormData,
@@ -392,7 +396,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                 Generating Program Foundation...
               </h3>
               <p className="text-sm text-teal-600">
-                This may take 30 seconds. You can navigate away and come back.
+                {`This may take ${formatStepEstimate(1)}.`} You can navigate away and come back.
               </p>
             </div>
           </div>

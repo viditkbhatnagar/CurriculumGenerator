@@ -3,7 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep2, useApproveStep2 } from '@/hooks/useWorkflow';
 import { useStepStatus } from '@/hooks/useStepStatus';
-import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import {
+  useGeneration,
+  GenerationProgressBar,
+  formatStepEstimate,
+} from '@/contexts/GenerationContext';
 import { api } from '@/lib/api';
 import { CurriculumWorkflow, KSCItem, BenchmarkProgram, KSCImportance } from '@/types/workflow';
 import StepDownloadButton from './StepDownloadButton';
@@ -603,7 +607,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             <div>
               <h3 className="text-lg font-semibold text-teal-800">Generating KSC Framework...</h3>
               <p className="text-sm text-teal-600">
-                This may take a minute. You can navigate away and come back.
+                {`This may take ${formatStepEstimate(2)}.`} You can navigate away and come back.
               </p>
             </div>
           </div>

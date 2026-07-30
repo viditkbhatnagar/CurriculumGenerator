@@ -11,7 +11,11 @@ import {
   SourceAccessStatus,
   SourceType,
 } from '@/types/workflow';
-import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import {
+  useGeneration,
+  GenerationProgressBar,
+  formatStepEstimate,
+} from '@/contexts/GenerationContext';
 import { useStepStatus } from '@/hooks/useStepStatus';
 import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
@@ -1525,7 +1529,7 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
                 Generating Topic-Level Sources...
               </h3>
               <p className="text-sm text-teal-600">
-                This may take 2 minutes. You can navigate away and come back.
+                {`This may take ${formatStepEstimate(5)}.`} You can navigate away and come back.
               </p>
             </div>
           </div>

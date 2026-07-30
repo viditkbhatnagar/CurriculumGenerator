@@ -4,7 +4,11 @@ import { useState, useEffect } from 'react';
 import { useSubmitStep9, useApproveStep9 } from '@/hooks/useWorkflow';
 import { api } from '@/lib/api';
 import { CurriculumWorkflow, GlossaryTerm, ModuleTermList, TermPriority } from '@/types/workflow';
-import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import {
+  useGeneration,
+  GenerationProgressBar,
+  formatStepEstimate,
+} from '@/contexts/GenerationContext';
 import { useStepStatus } from '@/hooks/useStepStatus';
 import { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
@@ -845,7 +849,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
             <div>
               <h3 className="text-lg font-semibold text-teal-800">Generating Glossary...</h3>
               <p className="text-sm text-teal-600">
-                This may take 45 seconds. You can navigate away and come back.
+                {`This may take ${formatStepEstimate(9)}.`} You can navigate away and come back.
               </p>
             </div>
           </div>

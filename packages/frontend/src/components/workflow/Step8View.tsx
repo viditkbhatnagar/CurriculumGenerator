@@ -10,7 +10,11 @@ import {
   CaseType,
   CaseDifficulty,
 } from '@/types/workflow';
-import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import {
+  useGeneration,
+  GenerationProgressBar,
+  formatStepEstimate,
+} from '@/contexts/GenerationContext';
 import { useStepStatus } from '@/hooks/useStepStatus';
 import { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
@@ -971,7 +975,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
             <div>
               <h3 className="text-lg font-semibold text-teal-800">Generating Case Studies...</h3>
               <p className="text-sm text-teal-600">
-                This may take 2-3 minutes. You can navigate away and come back.
+                {`This may take ${formatStepEstimate(8)}.`} You can navigate away and come back.
               </p>
             </div>
           </div>

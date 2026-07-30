@@ -3,7 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useSubmitStep3, useApproveStep3 } from '@/hooks/useWorkflow';
 import { useStepStatus } from '@/hooks/useStepStatus';
-import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import {
+  useGeneration,
+  GenerationProgressBar,
+  formatStepEstimate,
+} from '@/contexts/GenerationContext';
 import { api } from '@/lib/api';
 import {
   CurriculumWorkflow,
@@ -690,7 +694,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
             <div>
               <h3 className="text-lg font-semibold text-teal-800">Generating PLOs...</h3>
               <p className="text-sm text-teal-600">
-                This may take 45 seconds. You can navigate away and come back.
+                {`This may take ${formatStepEstimate(3)}.`} You can navigate away and come back.
               </p>
             </div>
           </div>

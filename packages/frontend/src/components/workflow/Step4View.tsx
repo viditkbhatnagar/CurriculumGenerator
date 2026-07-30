@@ -4,7 +4,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep4, useApproveStep4 } from '@/hooks/useWorkflow';
 import { api } from '@/lib/api';
 import { useStepStatus } from '@/hooks/useStepStatus';
-import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import {
+  useGeneration,
+  GenerationProgressBar,
+  formatStepEstimate,
+} from '@/contexts/GenerationContext';
 import {
   CurriculumWorkflow,
   Module,
@@ -1725,7 +1729,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                 Generating Course Framework...
               </h3>
               <p className="text-sm text-teal-600">
-                This may take 90 seconds. You can navigate away and come back.
+                {`This may take ${formatStepEstimate(4)}.`} You can navigate away and come back.
               </p>
             </div>
           </div>

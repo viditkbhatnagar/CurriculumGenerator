@@ -37,21 +37,42 @@ interface GenerationContextType {
   getProgress: (workflowId: string, step: number) => number;
 }
 
-// Estimated durations per step (in seconds)
+/**
+ * Estimated generation time per step, in seconds.
+ *
+ * These are median observed durations from production, not guesses. The previous
+ * values were 3-5x optimistic — Step 4 was set to 90s against a real median of
+ * 285s, so the bar hit its 95% cap after ~107s and sat there for four more
+ * minutes while the copy still promised 90 seconds. That reads as a hung job.
+ *
+ * To re-measure: for each step take completedAt - startedAt from
+ * stepProgress across workflows, discard spans over 30 minutes (those are the
+ * author leaving the step rather than the model working), and take the median.
+ */
 export const STEP_ESTIMATED_DURATIONS: Record<number, number> = {
-  1: 30, // Program Foundation - quick AI generation
-  2: 60, // KSC Framework - moderate
-  3: 45, // PLOs - moderate
-  4: 90, // Course Framework & MLOs - complex
-  5: 120, // Topic-Level Sources - needs research
-  6: 60, // Reading Lists - moderate
-  7: 120, // Assessments - complex MCQ generation
-  8: 180, // Case Studies - very complex
-  9: 45, // Glossary - moderate
-  12: 240, // Assignment Packs - 3 variants per module
-  13: 120, // Summative Exam - single generation
-  14: 30, // Syllabus - lightweight aggregation + LLM polish
+  1: 180, // Program Foundation
+  2: 420, // KSC Framework
+  3: 240, // PLOs
+  4: 300, // Course Framework & MLOs — one large structured call
+  5: 360, // Topic-Level Sources — needs research
+  6: 450, // Reading Lists
+  7: 1800, // Assessments — streams, many questions
+  8: 360, // Case Studies
+  9: 210, // Glossary
+  10: 240, // Lesson Plans — per module, chains across modules
+  11: 120, // PPT Decks — per module
+  12: 1200, // Assignment Packs — 3 variants per module
+  13: 480, // Summative Exam
+  14: 30, // Syllabus — lightweight aggregation + LLM polish
 };
+
+/** Human-readable form of a step's estimate, for the "this may take …" copy. */
+export function formatStepEstimate(step: number): string {
+  const seconds = STEP_ESTIMATED_DURATIONS[step] || 60;
+  if (seconds < 90) return `about ${seconds} seconds`;
+  const minutes = Math.round(seconds / 60);
+  return `around ${minutes} minute${minutes === 1 ? '' : 's'}`;
+}
 
 const GenerationContext = createContext<GenerationContextType | null>(null);
 
@@ -191,10 +212,15 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
       if (state.status === 'completed') return 100;
 
       const elapsed = (Date.now() - state.startTime) / 1000;
-      // Use logarithmic progress that approaches but never reaches 100%
-      // This gives a better UX than linear progress for uncertain durations
-      const progress = Math.min(95, (elapsed / state.estimatedDuration) * 80);
-      return Math.floor(progress);
+      const fraction = elapsed / state.estimatedDuration;
+
+      // Up to the estimate, advance steadily to 80%. Past it, keep creeping
+      // towards 99% instead of clamping — a bar that stops moving is read as a
+      // job that has died, and generation regularly runs beyond the estimate.
+      if (fraction <= 1) return Math.floor(fraction * 80);
+      const overrun = elapsed - state.estimatedDuration;
+      const creep = 19 * (1 - Math.exp(-overrun / state.estimatedDuration));
+      return Math.min(99, Math.floor(80 + creep));
     },
     [generations]
   );
@@ -302,11 +328,19 @@ export function GenerationProgressBar({
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
       </div>
 
-      {/* Time info */}
+      {/* Time info. Past the estimate, say so rather than showing "~0s
+          remaining" indefinitely — the run is still going, and pretending it is
+          about to finish is what makes it look stuck. */}
       {showTimeEstimate && (
         <div className="flex justify-between text-xs text-slate-400">
           <span>Elapsed: {formatTime(elapsed)}</span>
-          <span>~{formatTime(Math.max(0, estimated - elapsed))} remaining</span>
+          {elapsed < estimated ? (
+            <span>~{formatTime(estimated - elapsed)} remaining</span>
+          ) : (
+            <span className="text-amber-400">
+              Longer than the usual {formatTime(estimated)} — still running
+            </span>
+          )}
         </div>
       )}
     </div>
