@@ -1394,7 +1394,7 @@ Return ONLY valid JSON:
       "code": "PLO1",
       "outcomeNumber": 1,
       "statement": "Clearly written PLO statement (≤25 words)",
-      "bloomLevel": "apply|analyse|evaluate|create|understand|remember",
+      "bloomLevel": "apply|analyze|evaluate|create|understand|remember",
       "verb": "The Bloom's verb used (e.g., 'Analyse')",
       "linkedKSCs": ["K1", "S2", "C1"],
       "jobTaskMapping": ["Specific task from Step 1 this PLO addresses"],
@@ -1509,7 +1509,10 @@ IMPORTANT:
           id: mlo.id,
           code: mlo.id,
           statement: mlo.statement,
-          bloomLevel: mlo.bloomLevel,
+          // The prompts ask for UK English throughout, so the model returns
+          // "analyse" — correct for the statement text, wrong for a key the
+          // system matches on. Fold it before storing.
+          bloomLevel: normaliseBloomLevel(mlo.bloomLevel) || mlo.bloomLevel,
           verb: mlo.verb || mlo.statement?.split(' ')[0] || '',
           linkedPLOs: mlo.linkedPLOs || [],
           competencyLinks: mlo.competencyLinks || mlo.linkedKSCs || [],
@@ -1857,7 +1860,9 @@ Create exactly ${suggestedModules} MODULES with the following structure:
    Each MLO must include:
    - id: Unique identifier (e.g., "M1-LO1", "M1-LO2")
    - statement: [Bloom's Verb] + [Specific Task] + [Real-World Context] (max 30 words)
-   - bloomLevel: understand | apply | analyse | evaluate | create
+   - bloomLevel: understand | apply | analyze | evaluate | create
+     (use exactly these spellings — this is a fixed key the system matches on,
+      not prose, so "analyze" here even though the statements use UK English)
    - verb: The action verb used
    - linkedPLOs: Array of PLO IDs this MLO supports
    - linkedKSCs: Array of K/S/C IDs from Step 2
