@@ -1749,6 +1749,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
             workflowId={workflow._id}
             saved={(workflow.step4 as any)?.moduleBlueprint}
             savedSource={(workflow.step4 as any)?.blueprintSource}
+            creditFramework={(workflow.step1 as any)?.creditFramework}
             onSaved={onRefresh}
             disabled={isCurrentlyGenerating}
           />

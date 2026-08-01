@@ -26,7 +26,7 @@ import {
 } from '../services/workflowService';
 import { parseBlueprintWorkbook, applyProgrammeHours } from '../services/moduleBlueprintService';
 import { loggingService } from '../services/loggingService';
-import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
+import { CurriculumWorkflow, ICurriculumWorkflow } from '../models/CurriculumWorkflow';
 import Folder from '../models/Folder';
 import { snapshotStep, loadSnapshot } from '../services/stepVersionService';
 import { docxBufferToPdf } from '../services/pdfService';
@@ -489,6 +489,111 @@ function propagateModuleTitleChange(
 
 /** The curriculum workflow has 14 steps end to end. */
 const WORKFLOW_TOTAL_STEPS = 14;
+
+/** Fallback when nothing on file says how many hours a credit is worth. */
+const DEFAULT_HOURS_PER_CREDIT = 25;
+
+interface BlueprintModuleInput {
+  credits: number | null;
+  contactHours: number | null;
+  independentHours: number | null;
+  totalHours: number | null;
+  isElective: boolean;
+  group: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Bring Step 1's credit framework into line with an uploaded structure, and
+ * give every module its share of the hours.
+ *
+ * An approved structure is the authority on how big the programme is. When it
+ * disagrees with Step 1 — a 180-credit degree recorded as 136 — leaving the two
+ * apart gives every module the wrong hours and fails the hours-integrity check,
+ * and asking the author to go and retype the totals is work the numbers already
+ * determine.
+ *
+ * Hours per credit is taken from `override` if the author set one, otherwise
+ * from hours the spreadsheet itself carried, otherwise from the ratio Step 1
+ * already implies (3400h over 136 credits is 25), otherwise a standard 25.
+ * Only the credit count and hours change; the credit system is left alone.
+ *
+ * A student takes every core module and one elective track, so the programme
+ * total counts the largest single track rather than all of them.
+ *
+ * Returns null when there is nothing to reconcile.
+ */
+function reconcileProgrammeHours(
+  workflow: ICurriculumWorkflow,
+  modules: BlueprintModuleInput[],
+  override?: number
+): {
+  modules: BlueprintModuleInput[];
+  creditFramework: Record<string, unknown>;
+  before: { credits: number; totalHours: number };
+  after: { credits: number; totalHours: number; hoursPerCredit: number };
+} | null {
+  const framework = ((workflow.step1 as any)?.creditFramework || {}) as Record<string, number>;
+
+  const creditsOf = (list: BlueprintModuleInput[]) =>
+    list.reduce((sum, m) => sum + (m.credits || 0), 0);
+  const core = modules.filter((m) => !m.isElective);
+  const electives = modules.filter((m) => m.isElective);
+  const byTrack = new Map<string, BlueprintModuleInput[]>();
+  for (const m of electives) byTrack.set(m.group, [...(byTrack.get(m.group) || []), m]);
+  const largestTrack = [...byTrack.values()].reduce(
+    (max, list) => Math.max(max, creditsOf(list)),
+    0
+  );
+  const studentCredits = creditsOf(core) + largestTrack;
+  if (!studentCredits) return null;
+
+  const sheetHours = modules.reduce((sum, m) => sum + (m.totalHours || 0), 0);
+  const sheetCredits = creditsOf(modules);
+  const hoursPerCredit =
+    override && override > 0
+      ? override
+      : sheetHours && sheetCredits
+        ? sheetHours / sheetCredits
+        : framework.totalHours && framework.credits
+          ? framework.totalHours / framework.credits
+          : DEFAULT_HOURS_PER_CREDIT;
+
+  const totalHours = Math.round(studentCredits * hoursPerCredit);
+  const contactPercent = framework.contactHoursPercent ?? 30;
+  const contactHours = Math.round(totalHours * (contactPercent / 100));
+
+  const before = { credits: framework.credits || 0, totalHours: framework.totalHours || 0 };
+  const nothingChanged =
+    before.credits === studentCredits && before.totalHours === totalHours && !override;
+  if (nothingChanged) return null;
+
+  const withHours = modules.map((m) => {
+    if (!m.credits) return m;
+    const moduleTotal = Math.round(m.credits * hoursPerCredit);
+    const moduleContact = Math.round(moduleTotal * (contactPercent / 100));
+    return {
+      ...m,
+      totalHours: moduleTotal,
+      contactHours: moduleContact,
+      independentHours: moduleTotal - moduleContact,
+    };
+  });
+
+  return {
+    modules: withHours,
+    creditFramework: {
+      ...framework,
+      credits: studentCredits,
+      totalHours,
+      contactHours,
+      independentHours: totalHours - contactHours,
+      contactHoursPercent: contactPercent,
+    },
+    before,
+    after: { credits: studentCredits, totalHours, hoursPerCredit },
+  };
+}
 
 /**
  * Keep step2.attitudeItems — the legacy mirror of competencyItems — identical to
@@ -1676,9 +1781,10 @@ router.post('/:id/step4/blueprint/parse', validateJWT, loadUser, (req: Request, 
  */
 router.put('/:id/step4/blueprint', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
-    const { modules, filename } = req.body as {
+    const { modules, filename, hoursPerCredit } = req.body as {
       modules?: Array<Record<string, unknown>>;
       filename?: string;
+      hoursPerCredit?: number;
     };
     if (!Array.isArray(modules) || modules.length === 0) {
       return res.status(400).json({ success: false, error: 'Provide at least one module' });
@@ -1710,26 +1816,47 @@ router.put('/:id/step4/blueprint', validateJWT, loadUser, async (req: Request, r
       return res.status(400).json({ success: false, error: `${untitled} module(s) have no title` });
     }
 
+    // The uploaded structure is the approved one, so Step 1 is brought into line
+    // with it rather than the author being asked to go and retype the totals.
+    // Snapshot Step 1 first so the change shows in Version history and can be
+    // rolled back if the structure turns out to be the thing that is wrong.
+    const reconciliation = reconcileProgrammeHours(workflow, cleaned, hoursPerCredit);
+    if (reconciliation) await snapshotStep(req.params.id, 1);
+
     (workflow as any).step4 = {
       ...((workflow as any).step4 || {}),
-      moduleBlueprint: cleaned,
+      moduleBlueprint: reconciliation ? reconciliation.modules : cleaned,
       blueprintSource: {
         filename: filename || 'entered by hand',
         uploadedAt: new Date(),
-        totalCredits: cleaned.reduce((sum, m) => sum + (m.credits || 0), 0),
+        totalCredits: reconciliation
+          ? reconciliation.after.credits
+          : cleaned.reduce((sum, m) => sum + (m.credits || 0), 0),
       },
     };
+    if (reconciliation) {
+      (workflow.step1 as any).creditFramework = reconciliation.creditFramework;
+      workflow.markModified('step1');
+    }
     workflow.markModified('step4');
     await workflow.save();
 
     loggingService.info('Module blueprint saved', {
       workflowId: req.params.id,
       modules: cleaned.length,
+      reconciled: !!reconciliation,
     });
     res.json({
       success: true,
-      data: { moduleBlueprint: cleaned },
-      message: `Structure saved — Step 4 will generate ${cleaned.length} modules.`,
+      data: {
+        moduleBlueprint: reconciliation ? reconciliation.modules : cleaned,
+        reconciliation: reconciliation
+          ? { before: reconciliation.before, after: reconciliation.after }
+          : null,
+      },
+      message: reconciliation
+        ? `Structure saved — Step 4 will generate ${cleaned.length} modules. Step 1 updated to ${reconciliation.after.credits} credits / ${reconciliation.after.totalHours} hours to match.`
+        : `Structure saved — Step 4 will generate ${cleaned.length} modules.`,
     });
   } catch (error) {
     loggingService.error('Error saving module blueprint', { error });

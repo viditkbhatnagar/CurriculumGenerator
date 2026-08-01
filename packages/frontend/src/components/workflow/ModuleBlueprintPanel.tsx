@@ -40,6 +40,8 @@ interface Props {
   /** Structure already saved on the workflow, if any. */
   saved?: BlueprintModule[];
   savedSource?: { filename?: string; totalCredits?: number };
+  /** Step 1's current figures, so the panel can show what saving will change. */
+  creditFramework?: { credits?: number; totalHours?: number };
   onSaved: () => void;
   disabled?: boolean;
 }
@@ -48,6 +50,7 @@ export default function ModuleBlueprintPanel({
   workflowId,
   saved,
   savedSource,
+  creditFramework,
   onSaved,
   disabled,
 }: Props) {
@@ -56,6 +59,7 @@ export default function ModuleBlueprintPanel({
   const [busy, setBusy] = useState<'parsing' | 'saving' | 'clearing' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [hoursPerCredit, setHoursPerCredit] = useState<string>('');
 
   const hasSaved = !!saved?.length;
 
@@ -69,7 +73,15 @@ export default function ModuleBlueprintPanel({
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       if (!res.data?.success) throw new Error(res.data?.error || 'Could not read that file');
-      setParsed(res.data.data);
+      const data: ParsedBlueprint = res.data.data;
+      setParsed(data);
+      // Seed the ratio Step 1 already implies, so the figure on screen is the
+      // one that will be used unless the author changes it.
+      const implied =
+        creditFramework?.totalHours && creditFramework?.credits
+          ? creditFramework.totalHours / creditFramework.credits
+          : 25;
+      setHoursPerCredit(String(Math.round(implied * 10) / 10));
     } catch (err: any) {
       setError(err?.response?.data?.error || err?.message || 'Could not read that file');
     } finally {
@@ -83,9 +95,11 @@ export default function ModuleBlueprintPanel({
     setError(null);
     setBusy('saving');
     try {
+      const ratio = Number.parseFloat(hoursPerCredit);
       const res = await api.put(`/api/v3/workflow/${workflowId}/step4/blueprint`, {
         modules: parsed.modules,
         filename: parsed.filename,
+        hoursPerCredit: Number.isFinite(ratio) && ratio > 0 ? ratio : undefined,
       });
       if (!res.data?.success) throw new Error(res.data?.error || 'Save failed');
       setParsed(null);
@@ -121,6 +135,23 @@ export default function ModuleBlueprintPanel({
 
   const preview = parsed?.modules ?? saved ?? [];
   const showRows = expanded ? preview : preview.slice(0, 8);
+
+  const ratio = Number.parseFloat(hoursPerCredit);
+  const ratioIsUsable = Number.isFinite(ratio) && ratio > 0;
+  /** The credit size most modules share, so the worked example is representative. */
+  const commonCredits = (() => {
+    const counts = new Map<number, number>();
+    for (const m of preview) if (m.credits) counts.set(m.credits, (counts.get(m.credits) || 0) + 1);
+    let best = 0;
+    let bestCount = 0;
+    for (const [credits, count] of counts) {
+      if (count > bestCount) {
+        best = credits;
+        bestCount = count;
+      }
+    }
+    return best || 1;
+  })();
 
   return (
     <div className="mb-6 rounded-xl border border-teal-200 bg-white p-5">
@@ -197,11 +228,52 @@ export default function ModuleBlueprintPanel({
             </span>
           </div>
 
+          {/* Hours come from credits, so the author sets the rate rather than
+              editing every module. Saving writes the resulting totals back to
+              Step 1, so the two can never disagree. */}
+          <div className="rounded-lg border border-teal-200 bg-teal-50/60 px-3 py-2.5">
+            <label className="flex flex-wrap items-center gap-2 text-sm text-teal-800">
+              <span>Hours per credit</span>
+              <input
+                type="number"
+                min={1}
+                step={0.5}
+                value={hoursPerCredit}
+                onChange={(e) => setHoursPerCredit(e.target.value)}
+                className="w-20 rounded border border-teal-300 px-2 py-1 text-sm"
+              />
+              {ratioIsUsable && (
+                <span className="text-teal-600">
+                  → a {commonCredits}-credit module is{' '}
+                  <strong className="text-teal-900">
+                    {Math.round(commonCredits * ratio)} hours
+                  </strong>
+                  ; programme total{' '}
+                  <strong className="text-teal-900">
+                    {Math.round(parsed.totalCredits * ratio)} hours
+                  </strong>
+                </span>
+              )}
+            </label>
+            {ratioIsUsable && (
+              <p className="mt-1.5 text-xs text-teal-600">
+                Saving updates Step 1 from {creditFramework?.credits ?? '—'} credits /{' '}
+                {creditFramework?.totalHours ?? '—'} hours to <strong>{parsed.totalCredits}</strong>{' '}
+                / <strong>{Math.round(parsed.totalCredits * ratio)}</strong>. The previous values
+                stay in Version history.
+              </p>
+            )}
+          </div>
+
           {parsed.warnings.length > 0 && (
             <ul className="space-y-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              {parsed.warnings.map((w) => (
-                <li key={w}>• {w}</li>
-              ))}
+              {parsed.warnings
+                // The credit mismatch is resolved by saving, so it is no longer
+                // something the author has to go and act on.
+                .filter((w) => !/Update Step 1/i.test(w))
+                .map((w) => (
+                  <li key={w}>• {w}</li>
+                ))}
             </ul>
           )}
         </div>
