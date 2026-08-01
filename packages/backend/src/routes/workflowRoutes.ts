@@ -24,6 +24,7 @@ import {
   normaliseBloomLevel,
   BLOOM_LEVEL_ORDER,
 } from '../services/workflowService';
+import { parseBlueprintWorkbook, applyProgrammeHours } from '../services/moduleBlueprintService';
 import { loggingService } from '../services/loggingService';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import Folder from '../models/Folder';
@@ -335,6 +336,19 @@ function applyParsedLessonFields(live: any, pl: any, modCode?: string): void {
     });
   }
 }
+
+// Programme-structure spreadsheet a faculty member uploads before Step 4.
+const blueprintUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (/\.(xlsx|xlsm)$/i.test(file.originalname) || /spreadsheetml|excel/i.test(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Upload the programme structure as an Excel file (.xlsx).'));
+    }
+  },
+});
 
 // Single-file in-memory upload reserved for the curriculum re-import flow.
 // 10 MB ceiling matches the typical "full curriculum" Word export size.
@@ -1594,6 +1608,161 @@ router.post('/:id/step3/approve', validateJWT, loadUser, async (req: Request, re
  * POST /api/v3/workflow/:id/step4
  * Submit Step 4: Generate Course Framework
  */
+/**
+ * POST /api/v3/workflow/:id/step4/blueprint/parse
+ * Read an uploaded programme-structure spreadsheet and return the modules for
+ * review. Nothing is saved — the author confirms or corrects first.
+ */
+router.post('/:id/step4/blueprint/parse', validateJWT, loadUser, (req: Request, res: Response) => {
+  blueprintUpload.single('file')(req, res, async (err: unknown) => {
+    if (err) {
+      return res
+        .status(400)
+        .json({ success: false, error: err instanceof Error ? err.message : 'Upload failed' });
+    }
+    try {
+      const buffer = (req as Request & { file?: Express.Multer.File }).file?.buffer;
+      const filename =
+        (req as Request & { file?: Express.Multer.File }).file?.originalname || 'structure.xlsx';
+      if (!buffer) {
+        return res.status(400).json({ success: false, error: 'No spreadsheet uploaded' });
+      }
+
+      const workflow = await CurriculumWorkflow.findById(req.params.id);
+      if (!workflow) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+
+      const parsed = await parseBlueprintWorkbook(buffer);
+      if (parsed.modules.length === 0) {
+        return res.status(400).json({ success: false, error: parsed.warnings[0], data: parsed });
+      }
+
+      const credit = (workflow.step1 as any)?.creditFramework || {};
+      const modules = applyProgrammeHours(parsed.modules, {
+        totalHours: credit.totalHours,
+        credits: credit.credits,
+        contactHoursPercent: credit.contactHoursPercent,
+      });
+
+      // Surface a mismatch against Step 1 rather than quietly rescaling: the
+      // author needs to decide which figure is right.
+      const warnings = [...parsed.warnings];
+      if (credit.credits && parsed.totalCredits && credit.credits !== parsed.totalCredits) {
+        warnings.push(
+          `This structure totals ${parsed.totalCredits} credits but Step 1 records ${credit.credits}. Update Step 1 if the structure is correct.`
+        );
+      }
+
+      res.json({
+        success: true,
+        data: { ...parsed, modules, warnings, filename },
+        message: `Found ${parsed.totalModules} modules across ${parsed.groups.length} sections.`,
+      });
+    } catch (error) {
+      loggingService.error('Error parsing module blueprint', { error });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Could not read that spreadsheet',
+      });
+    }
+  });
+});
+
+/**
+ * PUT /api/v3/workflow/:id/step4/blueprint
+ * Save the confirmed programme structure. Step 4 generation then fills in
+ * teaching content for exactly these modules.
+ */
+router.put('/:id/step4/blueprint', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { modules, filename } = req.body as {
+      modules?: Array<Record<string, unknown>>;
+      filename?: string;
+    };
+    if (!Array.isArray(modules) || modules.length === 0) {
+      return res.status(400).json({ success: false, error: 'Provide at least one module' });
+    }
+
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    if (!workflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+
+    const cleaned = modules.map((m, index) => ({
+      sequenceOrder: index + 1,
+      code: String(m.code || `M${String(index + 1).padStart(2, '0')}`).trim(),
+      title: String(m.title || '').trim(),
+      credits: m.credits === null || m.credits === undefined ? null : Number(m.credits),
+      contactHours:
+        m.contactHours === null || m.contactHours === undefined ? null : Number(m.contactHours),
+      independentHours:
+        m.independentHours === null || m.independentHours === undefined
+          ? null
+          : Number(m.independentHours),
+      totalHours: m.totalHours === null || m.totalHours === undefined ? null : Number(m.totalHours),
+      group: String(m.group || '').trim(),
+      isElective: !!m.isElective,
+    }));
+
+    const untitled = cleaned.filter((m) => !m.title).length;
+    if (untitled) {
+      return res.status(400).json({ success: false, error: `${untitled} module(s) have no title` });
+    }
+
+    (workflow as any).step4 = {
+      ...((workflow as any).step4 || {}),
+      moduleBlueprint: cleaned,
+      blueprintSource: {
+        filename: filename || 'entered by hand',
+        uploadedAt: new Date(),
+        totalCredits: cleaned.reduce((sum, m) => sum + (m.credits || 0), 0),
+      },
+    };
+    workflow.markModified('step4');
+    await workflow.save();
+
+    loggingService.info('Module blueprint saved', {
+      workflowId: req.params.id,
+      modules: cleaned.length,
+    });
+    res.json({
+      success: true,
+      data: { moduleBlueprint: cleaned },
+      message: `Structure saved — Step 4 will generate ${cleaned.length} modules.`,
+    });
+  } catch (error) {
+    loggingService.error('Error saving module blueprint', { error });
+    res.status(500).json({ success: false, error: 'Failed to save the structure' });
+  }
+});
+
+/**
+ * DELETE /api/v3/workflow/:id/step4/blueprint
+ * Drop the structure so Step 4 proposes its own module list again.
+ */
+router.delete(
+  '/:id/step4/blueprint',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const workflow = await CurriculumWorkflow.findById(req.params.id);
+      if (!workflow || !(workflow as any).step4) {
+        return res.status(404).json({ success: false, error: 'Workflow or Step 4 not found' });
+      }
+      delete (workflow as any).step4.moduleBlueprint;
+      delete (workflow as any).step4.blueprintSource;
+      workflow.markModified('step4');
+      await workflow.save();
+      res.json({ success: true, message: 'Structure removed' });
+    } catch (error) {
+      loggingService.error('Error clearing module blueprint', { error });
+      res.status(500).json({ success: false, error: 'Failed to remove the structure' });
+    }
+  }
+);
+
 router.post('/:id/step4', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

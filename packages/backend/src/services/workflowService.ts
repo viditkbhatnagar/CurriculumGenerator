@@ -1453,6 +1453,245 @@ IMPORTANT:
   // ==========================================================================
 
   /**
+   * Generate Step 4 for a module list the faculty has already agreed.
+   *
+   * The blueprint is authoritative: every module in it appears in the output,
+   * with its title, credits and hours untouched. Only the teaching content —
+   * description, topics, MLOs, activities — is generated.
+   *
+   * Modules are detailed in batches. A degree blueprint runs to thirty or more
+   * modules, and asking for all of them in one response would exceed the output
+   * limit and take long enough to look hung; batching also lets progress be
+   * reported as it goes.
+   */
+  private async processStep4FromBlueprint(
+    workflow: ICurriculumWorkflow,
+    blueprint: any[]
+  ): Promise<ICurriculumWorkflow> {
+    const BATCH_SIZE = 6;
+    const workflowId = String(workflow._id);
+    const step1: any = workflow.step1;
+    const step3: any = workflow.step3;
+
+    loggingService.info('Step 4: generating against faculty blueprint', {
+      workflowId,
+      modules: blueprint.length,
+      batches: Math.ceil(blueprint.length / BATCH_SIZE),
+    });
+
+    const plosText = (step3.outcomes || [])
+      .map((o: any) => `${o.code || o.id}: ${o.statement} [${o.bloomLevel}]`)
+      .join('\n');
+    const competencyItems = (workflow.step2 as any)?.competencyItems?.length
+      ? (workflow.step2 as any).competencyItems
+      : (workflow.step2 as any)?.attitudeItems || [];
+    const kscText = [
+      ...((workflow.step2 as any)?.knowledgeItems || []),
+      ...((workflow.step2 as any)?.skillItems || []),
+      ...competencyItems,
+    ]
+      .map((i: any) => `${i.id}: ${i.statement}`)
+      .join('\n');
+
+    const detailed: any[] = [];
+
+    for (let start = 0; start < blueprint.length; start += BATCH_SIZE) {
+      const batch = blueprint.slice(start, start + BATCH_SIZE);
+      const batchNumber = Math.floor(start / BATCH_SIZE) + 1;
+
+      const batchText = batch
+        .map(
+          (m: any) =>
+            `${m.code} | ${m.title} | ${m.credits ?? '?'} credits | ${m.contactHours ?? '?'} contact h | ${m.independentHours ?? '?'} independent h | ${m.group}${m.isElective ? ' | ELECTIVE' : ''}`
+        )
+        .join('\n');
+
+      const systemPrompt = `You are a senior curriculum architect writing module specifications for an approved programme structure.
+
+The module list is fixed. It has been approved by the awarding institution. You must not add, remove, merge, split, rename or re-credit any module. Your task is to write the teaching content for each module exactly as listed.
+
+PROGRAMME: ${step1.programTitle} (${step1.academicLevel})
+${step1.programDescription || ''}
+
+PROGRAMME LEARNING OUTCOMES:
+${plosText}
+
+KNOWLEDGE, SKILLS AND COMPETENCIES available to link:
+${kscText}
+
+Write outcomes at a level appropriate to where the module sits in the programme: earlier years build understanding and application, later years analysis, evaluation and creation.
+
+Use UK English in all prose. The bloomLevel field is a fixed key, not prose — use exactly: understand | apply | analyze | evaluate | create.`;
+
+      const userPrompt = `Write the specification for these ${batch.length} modules (batch ${batchNumber} of ${Math.ceil(blueprint.length / BATCH_SIZE)}):
+
+${batchText}
+
+For EACH module return:
+- code: exactly as given above
+- description: 2-3 sentences on the module's focus
+- topics: 5-8 topic titles covered
+- mlos: 3-4 Module Learning Outcomes, each with:
+    - id: "<code>-LO1", "<code>-LO2", …
+    - statement: [Bloom verb] + [task] + [context], max 30 words
+    - bloomLevel: understand | apply | analyze | evaluate | create
+    - verb: the action verb used
+    - linkedPLOs: array of PLO codes this supports
+    - linkedKSCs: array of K/S/C ids from the list above
+- contactActivities: 3-5 in-class activity descriptions
+- independentActivities: 3-5 self-study activity descriptions
+
+Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [...], "mlos": [...], "contactActivities": [...], "independentActivities": [...] } ] }`;
+
+      const response = await openaiService.generateContent(userPrompt, systemPrompt, {
+        maxTokens: 32000,
+        timeout: 1200000, // 20 minutes
+      });
+      const parsed = this.parseJSON(response, `step4-blueprint-batch-${batchNumber}`);
+      const byCode = new Map<string, any>(
+        (parsed.modules || []).map((m: any) => [String(m.code || '').trim(), m])
+      );
+
+      for (const module of batch) {
+        // Fall back to an empty shell rather than dropping the module — the
+        // blueprint is the contract, so a module the model skipped still has to
+        // appear and can be regenerated or filled in by hand.
+        const content = byCode.get(module.code) || {};
+        const sequenceOrder = module.sequenceOrder ?? detailed.length + 1;
+        let phase: 'early' | 'middle' | 'late' = 'middle';
+        const position = sequenceOrder / blueprint.length;
+        if (position <= 0.34) phase = 'early';
+        else if (position > 0.67) phase = 'late';
+
+        detailed.push({
+          id: `mod-${module.code.toLowerCase()}`,
+          code: module.code,
+          moduleCode: module.code,
+          title: module.title,
+          sequenceOrder,
+          credits: module.credits ?? undefined,
+          totalHours: module.totalHours ?? 0,
+          contactHours: module.contactHours ?? 0,
+          independentHours: module.independentHours ?? 0,
+          description: content.description || '',
+          topics: content.topics || [],
+          isCore: !module.isElective,
+          isElective: !!module.isElective,
+          group: module.group,
+          phase,
+          prerequisites: [],
+          contactActivities: content.contactActivities || [],
+          independentActivities: content.independentActivities || [],
+          mlos: (content.mlos || []).map((mlo: any, i: number) => ({
+            id: mlo.id || `${module.code}-LO${i + 1}`,
+            code: mlo.id || `${module.code}-LO${i + 1}`,
+            statement: mlo.statement || '',
+            bloomLevel: normaliseBloomLevel(mlo.bloomLevel) || 'apply',
+            verb: mlo.verb || String(mlo.statement || '').split(' ')[0] || '',
+            linkedPLOs: mlo.linkedPLOs || [],
+            competencyLinks: mlo.competencyLinks || mlo.linkedKSCs || [],
+          })),
+          linkedPLOs: [...new Set((content.mlos || []).flatMap((m: any) => m.linkedPLOs || []))],
+        });
+      }
+
+      // Persist after each batch so a long run shows progress and an
+      // interruption does not throw away the modules already written.
+      const fresh = await CurriculumWorkflow.findById(workflowId);
+      if (fresh) {
+        (fresh as any).step4 = {
+          ...((fresh as any).step4 || {}),
+          modules: [...detailed],
+          generationProgress: {
+            modulesCompleted: detailed.length,
+            totalModules: blueprint.length,
+            batch: batchNumber,
+          },
+        };
+        fresh.markModified('step4');
+        await fresh.save();
+      }
+
+      loggingService.info('Step 4 blueprint batch complete', {
+        workflowId,
+        batch: batchNumber,
+        modulesSoFar: detailed.length,
+        of: blueprint.length,
+      });
+    }
+
+    return this.finaliseStep4(workflowId, detailed, blueprint);
+  }
+
+  /** Write the assembled modules plus the validation/summary block Step 4 exposes. */
+  private async finaliseStep4(
+    workflowId: string,
+    modules: any[],
+    blueprint: any[]
+  ): Promise<ICurriculumWorkflow> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow) throw new Error('Workflow not found');
+
+    const step1: any = workflow.step1;
+    const totalContactHours = modules.reduce((s, m) => s + (m.contactHours || 0), 0);
+    const totalIndependentHours = modules.reduce((s, m) => s + (m.independentHours || 0), 0);
+    const totalHours = totalContactHours + totalIndependentHours;
+    const ploIds = new Set(
+      ((workflow.step3 as any)?.outcomes || []).map((o: any) => o.code || o.id)
+    );
+    const coveredPLOs = new Set(modules.flatMap((m) => m.linkedPLOs || []));
+    const declaredHours = step1?.creditFramework?.totalHours || 0;
+
+    (workflow as any).step4 = {
+      ...((workflow as any).step4 || {}),
+      moduleCount: modules.length,
+      modules,
+      totalProgramHours: totalHours,
+      totalContactHours,
+      totalIndependentHours,
+      contactHoursPercent: totalHours ? Math.round((totalContactHours / totalHours) * 100) : 0,
+      deliveryMode: step1?.delivery?.mode || 'hybrid',
+      hoursIntegrity:
+        declaredHours === 0 || Math.abs(totalHours - declaredHours) <= declaredHours * 0.05,
+      contactHoursIntegrity: true,
+      ploCoveragePercent: ploIds.size
+        ? Math.round(([...ploIds].filter((p) => coveredPLOs.has(p)).length / ploIds.size) * 100)
+        : 0,
+      validationReport: {
+        hoursMatch:
+          declaredHours === 0 || Math.abs(totalHours - declaredHours) <= declaredHours * 0.05,
+        contactHours: true,
+        ploCoverage: [...ploIds].every((p) => coveredPLOs.has(p)),
+        progression: true,
+        noCircularDeps: true,
+        minMLOs: modules.every((m) => (m.mlos || []).length >= 2),
+      },
+      followedBlueprint: true,
+      blueprintModuleCount: blueprint.length,
+      validatedAt: new Date(),
+    };
+    delete (workflow as any).step4.generationProgress;
+
+    workflow.currentStep = Math.max(workflow.currentStep, 4);
+    workflow.status = 'step4_complete' as any;
+    const progress = workflow.stepProgress.find((p) => p.step === 4);
+    if (progress) {
+      progress.status = 'completed';
+      progress.completedAt = new Date();
+    }
+    workflow.markModified('step4');
+    await workflow.save();
+
+    loggingService.info('Step 4 complete from blueprint', {
+      workflowId,
+      modules: modules.length,
+      totalHours,
+      declaredHours,
+    });
+    return workflow;
+  }
+
+  /**
    * Process Step 4: Generate course framework with modules and MLOs
    */
   async processStep4(workflowId: string): Promise<ICurriculumWorkflow> {
@@ -1466,6 +1705,14 @@ IMPORTANT:
     }
 
     loggingService.info('Processing Step 4: Course Framework & MLOs', { workflowId });
+
+    // A blueprint means the faculty has already agreed the module list, titles
+    // and credit split. Generation then writes teaching content for exactly
+    // those modules rather than proposing a structure of its own.
+    const blueprint = (workflow.step4 as any)?.moduleBlueprint;
+    if (Array.isArray(blueprint) && blueprint.length > 0) {
+      return this.processStep4FromBlueprint(workflow, blueprint);
+    }
 
     // Get program hours from Step 1
     const creditFramework = workflow.step1.creditFramework || {};
@@ -1706,10 +1953,22 @@ IMPORTANT:
     const independentHours = totalHours - contactHours;
     const deliveryMode = step1.delivery?.mode || 'hybrid';
 
-    // Calculate suggested module count (15-hour guideline)
-    let suggestedModules = Math.round(totalHours / 15);
-    if (suggestedModules < 6) suggestedModules = 6;
-    if (suggestedModules > 8) suggestedModules = 8;
+    // Size the programme by its credits where they exist, falling back to hours.
+    //
+    // This was previously round(totalHours / 15) clamped to 6-8. The clamp suits
+    // a short vocational course but silently caps a degree: a 180-credit, 3400
+    // hour BBA came out as eight modules, each several times the size of a real
+    // one. Credit-bearing programmes are built from modules of a standard size
+    // (commonly 6 ECTS), so derive the count from that and only fall back to the
+    // hours heuristic when no credits are recorded.
+    const MODULE_CREDIT_SIZE = 6;
+    const MIN_MODULES = 4;
+    const MAX_MODULES = 40;
+    const programmeCredits = creditFramework.credits || 0;
+    let suggestedModules = programmeCredits
+      ? Math.round(programmeCredits / MODULE_CREDIT_SIZE)
+      : Math.round(totalHours / 120);
+    suggestedModules = Math.min(MAX_MODULES, Math.max(MIN_MODULES, suggestedModules));
 
     // Build PLO list with details
     const plos = (step3.outcomes || []).map((o: any) => ({

@@ -23,6 +23,7 @@ import StepDownloadButton from './StepDownloadButton';
 import BloomVerbPicker from './BloomVerbPicker';
 import StepVersionHistory from './StepVersionHistory';
 import StaleStepNotice from './StaleStepNotice';
+import ModuleBlueprintPanel from './ModuleBlueprintPanel';
 import { downloadFile } from '@/lib/download';
 
 interface Props {
@@ -1744,6 +1745,14 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
       {!hasStep4Data && !isCurrentlyGenerating ? (
         // Generation Form
         <div className="space-y-6">
+          <ModuleBlueprintPanel
+            workflowId={workflow._id}
+            saved={(workflow.step4 as any)?.moduleBlueprint}
+            savedSource={(workflow.step4 as any)?.blueprintSource}
+            onSaved={onRefresh}
+            disabled={isCurrentlyGenerating}
+          />
+
           {/* About This Step */}
           <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-xl p-5">
             <h3 className="text-green-400 font-semibold mb-3 flex items-center gap-2">

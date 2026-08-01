@@ -849,6 +849,24 @@ export interface ICurriculumWorkflow extends Document {
 
   // Step 4: Course Framework & Module Learning Outcomes
   step4?: {
+    /**
+     * The programme structure the faculty defined up front, usually uploaded as
+     * a spreadsheet. When present, generation fills in teaching content for
+     * exactly these modules instead of inventing its own module list — a
+     * 180-ECTS degree is 30 modules, not the 6-8 the free-form path produces.
+     */
+    moduleBlueprint?: Array<{
+      sequenceOrder: number;
+      code: string;
+      title: string;
+      credits: number | null;
+      contactHours: number | null;
+      independentHours: number | null;
+      totalHours: number | null;
+      group: string;
+      isElective: boolean;
+    }>;
+    blueprintSource?: { filename: string; uploadedAt: Date; totalCredits: number };
     modules: Array<{
       id: string;
       moduleCode: string;
