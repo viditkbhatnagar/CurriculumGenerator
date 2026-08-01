@@ -1832,6 +1832,11 @@ router.put('/:id/step4/blueprint', validateJWT, loadUser, async (req: Request, r
         totalCredits: reconciliation
           ? reconciliation.after.credits
           : cleaned.reduce((sum, m) => sum + (m.credits || 0), 0),
+        // Kept so removing the structure can put Step 1 back rather than
+        // stranding it on figures derived from something no longer there.
+        previousCreditFramework: reconciliation
+          ? (workflow.step1 as any)?.creditFramework
+          : undefined,
       },
     };
     if (reconciliation) {
@@ -1878,11 +1883,28 @@ router.delete(
       if (!workflow || !(workflow as any).step4) {
         return res.status(404).json({ success: false, error: 'Workflow or Step 4 not found' });
       }
+      // Saving the structure rewrote Step 1 to match it; removing the structure
+      // puts those figures back, so Step 1 never describes something that is
+      // no longer there.
+      const previous = (workflow as any).step4.blueprintSource?.previousCreditFramework;
+      let restored = false;
+      if (previous && workflow.step1) {
+        await snapshotStep(req.params.id, 1);
+        (workflow.step1 as any).creditFramework = previous;
+        workflow.markModified('step1');
+        restored = true;
+      }
+
       delete (workflow as any).step4.moduleBlueprint;
       delete (workflow as any).step4.blueprintSource;
       workflow.markModified('step4');
       await workflow.save();
-      res.json({ success: true, message: 'Structure removed' });
+      res.json({
+        success: true,
+        message: restored
+          ? `Structure removed — Step 1 restored to ${previous.credits} credits / ${previous.totalHours} hours.`
+          : 'Structure removed',
+      });
     } catch (error) {
       loggingService.error('Error clearing module blueprint', { error });
       res.status(500).json({ success: false, error: 'Failed to remove the structure' });

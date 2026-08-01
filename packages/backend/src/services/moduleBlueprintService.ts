@@ -44,7 +44,8 @@ export interface ParsedBlueprint {
 
 const HEADER_WORDS =
   /^(no\.?|#|s\.?\s*no\.?|sr\.?\s*no\.?|module|modules|subject|course|title|ects|credits?|hours?|contact|independent)$/i;
-const TOTAL_ROW = /^\s*total\b/i;
+// "Total", but also "Grand Total", "Sub-total", "Semester Total", "Year Total".
+const TOTAL_ROW = /^\s*(grand|sub|semester|year|term|overall)?[\s-]*totals?\b/i;
 const ELECTIVE_HINT = /(special|elective|option|track|choose|pathway|concentration)/i;
 
 /** Largest credit value a single module can plausibly carry. */
@@ -56,11 +57,29 @@ const MAX_MODULE_CREDITS = 60;
  * columns, so the same text is returned for every cell in the range and would
  * otherwise be read as a module title sitting in the module column.
  */
+// Deliberately excludes a bare "elective" or "optional": those begin real module
+// titles far more often than they begin a heading ("Elective 1", "Elective A:
+// Digital Marketing", "Optional Work Placement" are all common in UK/EU
+// structures), and treating them as headings deletes the module and mis-files
+// everything beneath it. Elective *sections* are recognised by the longer forms
+// below, or by the row carrying no credits and no row number — see isHeadingRow.
 const HEADING_TEXT =
-  /^(year\s*\d|level\s*\d|semester\s*\d|term\s*\d|stage\s*\d|specialis|specializ|common\s+modules|core\s+modules|elective|students\s+choose|choose\s+one|optional)/i;
+  /^(year\s*\d|level\s*\d|semester\s*\d|term\s*\d|stage\s*\d|specialis|specializ|common\s+modules|core\s+modules|elective\s+(modules|group|block|pool|options)|students\s+choose|choose\s+(one|any|\d))/i;
 
 const isHeadingText = (value: string): boolean =>
   HEADING_TEXT.test(value) || /\b(ects|eqf)\b.*\b(year|level)\b/i.test(value);
+
+/**
+ * Decide heading-vs-module from the row's shape as well as its wording.
+ *
+ * A heading carries no credit figure and no row number; a module carries at
+ * least one of them. Judging on the title alone throws away modules whose names
+ * happen to start like a section.
+ */
+const isHeadingRow = (title: string, hasCredits: boolean, hasRowNumber: boolean): boolean => {
+  if (hasCredits || hasRowNumber) return false;
+  return isHeadingText(title) || ELECTIVE_HINT.test(title);
+};
 
 const text = (value: ExcelJS.CellValue): string => {
   if (value === null || value === undefined) return '';
@@ -136,9 +155,9 @@ function findBands(sheet: ExcelJS.Worksheet): Band[] {
     }
   });
 
-  // No header row anywhere — fall back to the first column that carries text.
-  if (bands.length === 0)
-    bands.push({ titleCol: 1, creditsCol: 2, contactCol: null, independentCol: null, labelCol: 0 });
+  // No "Module" header on this sheet means it is not a module table — a cover
+  // sheet, notes, a mapping tab. Guessing columns A/B there turns prose into
+  // phantom modules with phantom credits, which then rewrite Step 1.
   return bands.sort((a, b) => a.titleCol - b.titleCol);
 }
 
@@ -214,7 +233,7 @@ export async function parseBlueprintWorkbook(buffer: Buffer): Promise<ParsedBlue
     for (const band of bands) {
       sheet.eachRow((row, rowNumber) => {
         const title = clean(row.getCell(band.titleCol).value);
-        if (!looksLikeModuleTitle(title) || isHeadingText(title)) return;
+        if (!looksLikeModuleTitle(title)) return;
 
         // A heading merged across the table repeats its text in every column of
         // the range, so the "credits" cell reads back as the heading itself.
@@ -228,10 +247,13 @@ export async function parseBlueprintWorkbook(buffer: Buffer): Promise<ParsedBlue
           ? num(row.getCell(band.independentCol).value)
           : null;
 
+        const label = band.labelCol > 0 ? clean(row.getCell(band.labelCol).value) : '';
+        const hasRowNumber = /^\d+$/.test(label);
+        if (isHeadingRow(title, credits !== null, hasRowNumber)) return;
+
         // Require either a credit figure or a row number beside the title, so
         // prose paragraphs on the sheet are not mistaken for modules.
-        const label = band.labelCol > 0 ? clean(row.getCell(band.labelCol).value) : '';
-        if (credits === null && !/^\d+$/.test(label)) return;
+        if (credits === null && !hasRowNumber) return;
 
         const group = headingFor(headings, band, rowNumber);
         modules.push({
@@ -265,14 +287,25 @@ export async function parseBlueprintWorkbook(buffer: Buffer): Promise<ParsedBlue
     };
   }
 
-  // Drop rows repeated across bands (merged cells can surface the same title twice).
+  // Drop rows repeated across bands (merged cells can surface the same title
+  // twice). A programme may legitimately repeat a title in the same section, so
+  // count what is dropped and say so rather than losing it silently.
   const deduped: BlueprintModule[] = [];
   const seen = new Set<string>();
+  const dropped: string[] = [];
   for (const module of modules) {
     const key = `${module.group}::${module.title.toLowerCase()}`;
-    if (seen.has(key)) continue;
+    if (seen.has(key)) {
+      dropped.push(module.title);
+      continue;
+    }
     seen.add(key);
     deduped.push(module);
+  }
+  if (dropped.length) {
+    warnings.push(
+      `${dropped.length} duplicate row(s) removed (${[...new Set(dropped)].slice(0, 3).join('; ')}${dropped.length > 3 ? '; …' : ''}). Add them back below if the programme really repeats them.`
+    );
   }
 
   // Put the modules in the order a student meets them. Reading order follows
@@ -318,7 +351,7 @@ export async function parseBlueprintWorkbook(buffer: Buffer): Promise<ParsedBlue
   const missingCredits = deduped.filter((m) => m.credits === null).length;
   if (missingCredits) {
     warnings.push(
-      `${missingCredits} module(s) have no credit value — their hours will be split evenly from the programme total.`
+      `${missingCredits} module(s) have no credit value and will be generated with no hours. Add a credit figure to the sheet, or set their hours below, before generating.`
     );
   }
   if (electiveGroups.length > 1) {
@@ -352,9 +385,13 @@ export function applyProgrammeHours(
   modules: BlueprintModule[],
   programme: { totalHours?: number; credits?: number; contactHoursPercent?: number }
 ): BlueprintModule[] {
-  const totalCredits = modules.reduce((sum, m) => sum + (m.credits || 0), 0);
+  // Rate per credit, taken from what Step 1 already records. It must be the same
+  // basis the save path uses, or the preview quotes hours the author never gets:
+  // dividing the programme's hours by the credits of *every* module counts all
+  // five elective tracks a student will never take, which on the BBA sheet gave
+  // 3400/276 = 12.3 h per credit in the preview against 3400/136 = 25 on save.
   const hoursPerCredit =
-    programme.totalHours && totalCredits ? programme.totalHours / totalCredits : null;
+    programme.totalHours && programme.credits ? programme.totalHours / programme.credits : null;
   const contactShare = (programme.contactHoursPercent ?? 30) / 100;
 
   return modules.map((module) => {

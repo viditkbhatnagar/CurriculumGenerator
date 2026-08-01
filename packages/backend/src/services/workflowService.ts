@@ -1602,6 +1602,10 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
         (fresh as any).step4 = {
           ...((fresh as any).step4 || {}),
           modules: [...detailed],
+          // Marks the list as partial. Without it a run that dies part-way
+          // leaves a truncated Step 4 that looks finished, and the UI renders
+          // the modules written so far as though generation had completed.
+          generationInProgress: true,
           generationProgress: {
             modulesCompleted: detailed.length,
             totalModules: blueprint.length,
@@ -1642,35 +1646,80 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     const coveredPLOs = new Set(modules.flatMap((m) => m.linkedPLOs || []));
     const declaredHours = step1?.creditFramework?.totalHours || 0;
 
+    // Compare like with like. Step 1's hours describe what one student studies —
+    // every core module plus a single elective track — while `modules` holds
+    // every track on offer. Checking the all-tracks sum against Step 1 fails by
+    // the size of the tracks not taken: on a five-specialisation BBA that is
+    // 6256h against a declared 4086h, blocking approval on a correct programme.
+    const electiveHoursByGroup = new Map<string, number>();
+    let coreHours = 0;
+    for (const module of modules) {
+      const hours = (module.contactHours || 0) + (module.independentHours || 0);
+      if (module.isElective) {
+        electiveHoursByGroup.set(
+          module.group,
+          (electiveHoursByGroup.get(module.group) || 0) + hours
+        );
+      } else {
+        coreHours += hours;
+      }
+    }
+    const largestTrackHours = electiveHoursByGroup.size
+      ? Math.max(...electiveHoursByGroup.values())
+      : 0;
+    const studentHours = coreHours + largestTrackHours;
+    const hoursMatch =
+      declaredHours === 0 || Math.abs(studentHours - declaredHours) <= declaredHours * 0.05;
+
+    // A module the model skipped is persisted as a shell so the blueprint stays
+    // whole; say which ones rather than letting them pass as finished work.
+    const emptyModules = modules
+      .filter((m) => !(m.mlos || []).length)
+      .map((m) => m.code || m.title);
+
     (workflow as any).step4 = {
       ...((workflow as any).step4 || {}),
       moduleCount: modules.length,
       modules,
       totalProgramHours: totalHours,
+      // What one student actually studies, which is what Step 1 records.
+      studentProgramHours: studentHours,
       totalContactHours,
       totalIndependentHours,
       contactHoursPercent: totalHours ? Math.round((totalContactHours / totalHours) * 100) : 0,
       deliveryMode: step1?.delivery?.mode || 'hybrid',
-      hoursIntegrity:
-        declaredHours === 0 || Math.abs(totalHours - declaredHours) <= declaredHours * 0.05,
+      hoursIntegrity: hoursMatch,
       contactHoursIntegrity: true,
       ploCoveragePercent: ploIds.size
         ? Math.round(([...ploIds].filter((p) => coveredPLOs.has(p)).length / ploIds.size) * 100)
         : 0,
+      // Key names must match what Step4View renders, or the indicators read as
+      // failures no matter what the numbers say.
       validationReport: {
-        hoursMatch:
-          declaredHours === 0 || Math.abs(totalHours - declaredHours) <= declaredHours * 0.05,
-        contactHours: true,
-        ploCoverage: [...ploIds].every((p) => coveredPLOs.has(p)),
-        progression: true,
+        hoursMatch,
+        contactHoursMatch: true,
+        allPLOsCovered: [...ploIds].every((p) => coveredPLOs.has(p)),
+        progressionValid: true,
         noCircularDeps: true,
-        minMLOs: modules.every((m) => (m.mlos || []).length >= 2),
+        minMLOsPerModule: modules.every((m) => (m.mlos || []).length >= 2),
       },
       followedBlueprint: true,
       blueprintModuleCount: blueprint.length,
+      incompleteModules: emptyModules,
+      // A fresh generation is not the version anyone approved.
+      approvedAt: undefined,
+      approvedBy: undefined,
       validatedAt: new Date(),
     };
     delete (workflow as any).step4.generationProgress;
+    delete (workflow as any).step4.generationInProgress;
+
+    if (emptyModules.length) {
+      loggingService.warn('Step 4 blueprint modules generated without outcomes', {
+        workflowId,
+        modules: emptyModules,
+      });
+    }
 
     workflow.currentStep = Math.max(workflow.currentStep, 4);
     workflow.status = 'step4_complete' as any;
