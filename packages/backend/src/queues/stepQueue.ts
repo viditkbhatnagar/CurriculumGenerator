@@ -131,6 +131,15 @@ if (stepQueue) {
 
       await job.progress(100);
 
+      // Clear any failure recorded by an earlier attempt, so a stale error is
+      // not left sitting above content that has since generated successfully.
+      const stepKey = `step${stepNumber}`;
+      if ((updatedWorkflow as any)[stepKey]?.lastError) {
+        delete (updatedWorkflow as any)[stepKey].lastError;
+        updatedWorkflow.markModified(stepKey);
+        await updatedWorkflow.save();
+      }
+
       loggingService.info('Step job completed', {
         jobId: String(job.id),
         stepNumber,
@@ -193,8 +202,25 @@ if (stepQueue) {
       if (sp && sp.status === 'in_progress') {
         sp.status = 'pending';
         workflow!.markModified('stepProgress');
-        await workflow!.save();
-        loggingService.info('Reset stuck step progress after terminal failure', {
+      }
+
+      // Record the failure on the step itself. Without this a failed
+      // regeneration is indistinguishable from nothing having happened: the
+      // previous content is still on screen, no error is shown anywhere, and the
+      // author is left pressing the button again.
+      const stepKey = `step${stepNumber}`;
+      if (workflow && (workflow as any)[stepKey]) {
+        (workflow as any)[stepKey].lastError = {
+          message: error.message,
+          failedAt: new Date(),
+          attempts: job.attemptsMade,
+        };
+        workflow.markModified(stepKey);
+      }
+
+      if (workflow) {
+        await workflow.save();
+        loggingService.info('Recorded terminal step failure on the workflow', {
           stepNumber,
           workflowId,
         });

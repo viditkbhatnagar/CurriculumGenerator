@@ -202,6 +202,36 @@ ${formattedContexts}
 `;
 }
 
+/**
+ * How many modules a programme should be built from.
+ *
+ * Previously `round(totalHours / 15)` clamped to 6-8. That clamp suits a short
+ * vocational course but caps a degree: a 180-credit BBA came out as eight
+ * modules, each several times the size of a real one. Credit-bearing programmes
+ * are built from modules of a standard size, so derive the count from credits
+ * and fall back to hours only when no credits are recorded.
+ */
+export function suggestedModuleCount(step1: any): number {
+  const framework = step1?.creditFramework || {};
+  const MODULE_CREDIT_SIZE = 6;
+  const MIN_MODULES = 4;
+  const MAX_MODULES = 40;
+  const credits = framework.credits || 0;
+  const hours = framework.totalHours || 120;
+  const derived = credits ? Math.round(credits / MODULE_CREDIT_SIZE) : Math.round(hours / 120);
+  return Math.min(MAX_MODULES, Math.max(MIN_MODULES, derived));
+}
+
+/**
+ * Most modules one response can carry in full detail.
+ *
+ * Eight modules with topics, activities and MLOs came to roughly 27k tokens.
+ * Beyond that the response either truncates — leaving unparseable JSON, which
+ * fails the job with nothing to show the author — or takes long enough to stall.
+ * Larger programmes are outlined first and then detailed in batches.
+ */
+const SINGLE_CALL_MODULE_LIMIT = 8;
+
 /** Bloom's levels in taxonomy order, in the spelling the app keys on. */
 export const BLOOM_LEVEL_ORDER = [
   'remember',
@@ -1453,6 +1483,84 @@ IMPORTANT:
   // ==========================================================================
 
   /**
+   * Propose the module list for a programme with no uploaded structure.
+   *
+   * Names and credits only — no outcomes, topics or activities. That keeps the
+   * response small enough to come back whole for thirty-plus modules, and the
+   * detail is then written batch by batch. Hours are computed here from the
+   * programme's own credit framework rather than asked for, so they add up.
+   */
+  private async generateStep4Outline(
+    workflow: ICurriculumWorkflow,
+    moduleTarget: number
+  ): Promise<any[]> {
+    const step1: any = workflow.step1;
+    const framework = step1?.creditFramework || {};
+    const totalHours = framework.totalHours || 120;
+    const programmeCredits = framework.credits || 0;
+    const contactPercent = framework.contactHoursPercent ?? 30;
+    const creditPerModule = programmeCredits
+      ? Math.round((programmeCredits / moduleTarget) * 10) / 10
+      : null;
+
+    const plosText = ((workflow.step3 as any)?.outcomes || [])
+      .map((o: any) => `${o.code || o.id}: ${o.statement} [${o.bloomLevel}]`)
+      .join('\n');
+
+    const systemPrompt = `You are a senior curriculum architect outlining the module structure of a programme.
+
+Return the module list only — titles and sequence. Do not write learning outcomes, topics or activities; those are commissioned separately.
+
+PROGRAMME: ${step1?.programTitle} (${step1?.academicLevel})
+${step1?.programDescription || ''}
+${programmeCredits ? `Credits: ${programmeCredits}` : ''} | Total hours: ${totalHours}
+
+PROGRAMME LEARNING OUTCOMES the modules must collectively deliver:
+${plosText}
+
+Sequence the modules so earlier ones build foundations and later ones move into analysis, evaluation and independent work, finishing with a capstone or project module. Use UK English.`;
+
+    const userPrompt = `Propose exactly ${moduleTarget} modules${creditPerModule ? ` of about ${creditPerModule} credits each` : ''}.
+
+Return JSON only:
+{ "modules": [ { "code": "M01", "title": "…", "credits": ${creditPerModule ?? 6}, "group": "Year 1" } ] }
+
+- code: sequential, M01 upwards
+- title: the module name, no numbering
+- group: the stage or year it belongs to, for progression
+Return all ${moduleTarget} modules.`;
+
+    const response = await openaiService.generateContent(userPrompt, systemPrompt, {
+      maxTokens: 16000,
+      timeout: 600000, // 10 minutes
+    });
+    const parsed = this.parseJSON(response, 'step4-outline');
+    const proposed: any[] = Array.isArray(parsed?.modules) ? parsed.modules : [];
+
+    return proposed.map((m: any, index: number) => {
+      const credits = Number(m.credits) || creditPerModule || null;
+      // Derive hours from the programme's own rate so the modules reconcile with
+      // Step 1 instead of relying on the model's arithmetic.
+      const moduleTotal =
+        credits && programmeCredits
+          ? Math.round(credits * (totalHours / programmeCredits))
+          : Math.round(totalHours / moduleTarget);
+      const moduleContact = Math.round(moduleTotal * (contactPercent / 100));
+      return {
+        sequenceOrder: index + 1,
+        code: String(m.code || `M${String(index + 1).padStart(2, '0')}`).trim(),
+        title: String(m.title || '').trim() || `Module ${index + 1}`,
+        credits,
+        contactHours: moduleContact,
+        independentHours: moduleTotal - moduleContact,
+        totalHours: moduleTotal,
+        group: String(m.group || '').trim(),
+        isElective: false,
+      };
+    });
+  }
+
+  /**
    * Generate Step 4 for a module list the faculty has already agreed.
    *
    * The blueprint is authoritative: every module in it appears in the output,
@@ -1763,6 +1871,23 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       return this.processStep4FromBlueprint(workflow, blueprint);
     }
 
+    // Beyond a handful of modules, asking for the whole framework in one
+    // response truncates it and the job dies with nothing to show. Outline the
+    // modules first — a small, reliable call — then detail them in batches
+    // through the same path an uploaded structure uses.
+    const moduleTarget = suggestedModuleCount(workflow.step1);
+    if (moduleTarget > SINGLE_CALL_MODULE_LIMIT) {
+      loggingService.info('Step 4: outlining before detailing in batches', {
+        workflowId,
+        moduleTarget,
+      });
+      const outline = await this.generateStep4Outline(workflow, moduleTarget);
+      if (outline.length > 0) return this.processStep4FromBlueprint(workflow, outline);
+      loggingService.warn('Step 4 outline came back empty — falling back to a single call', {
+        workflowId,
+      });
+    }
+
     // Get program hours from Step 1
     const creditFramework = workflow.step1.creditFramework || {};
     const totalProgramHours = creditFramework.totalHours || 120;
@@ -2002,22 +2127,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     const independentHours = totalHours - contactHours;
     const deliveryMode = step1.delivery?.mode || 'hybrid';
 
-    // Size the programme by its credits where they exist, falling back to hours.
-    //
-    // This was previously round(totalHours / 15) clamped to 6-8. The clamp suits
-    // a short vocational course but silently caps a degree: a 180-credit, 3400
-    // hour BBA came out as eight modules, each several times the size of a real
-    // one. Credit-bearing programmes are built from modules of a standard size
-    // (commonly 6 ECTS), so derive the count from that and only fall back to the
-    // hours heuristic when no credits are recorded.
-    const MODULE_CREDIT_SIZE = 6;
-    const MIN_MODULES = 4;
-    const MAX_MODULES = 40;
-    const programmeCredits = creditFramework.credits || 0;
-    let suggestedModules = programmeCredits
-      ? Math.round(programmeCredits / MODULE_CREDIT_SIZE)
-      : Math.round(totalHours / 120);
-    suggestedModules = Math.min(MAX_MODULES, Math.max(MIN_MODULES, suggestedModules));
+    const suggestedModules = suggestedModuleCount(step1);
 
     // Build PLO list with details
     const plos = (step3.outcomes || []).map((o: any) => ({
