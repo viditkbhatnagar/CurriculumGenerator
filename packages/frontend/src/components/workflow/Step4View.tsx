@@ -22,7 +22,7 @@ import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
 import BloomVerbPicker from './BloomVerbPicker';
 import StepVersionHistory from './StepVersionHistory';
-import StaleStepNotice from './StaleStepNotice';
+import StaleStepNotice, { explainStepFailure } from './StaleStepNotice';
 import ModuleBlueprintPanel from './ModuleBlueprintPanel';
 import { downloadFile } from '@/lib/download';
 
@@ -1715,14 +1715,16 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
         <div className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4" role="alert">
           <p className="font-semibold text-red-800">The last regeneration did not finish</p>
           <p className="mt-1 text-sm text-red-700">
-            What you see below is still the previous version. You can try again — nothing has been
-            lost.
+            {explainStepFailure((workflow.step4 as any).lastError.message)}
           </p>
           <p className="mt-2 text-xs text-red-600">
-            {(workflow.step4 as any).lastError.message}
+            Nothing has been lost — what you see below is the previous version.
             {(workflow.step4 as any).lastError.failedAt
-              ? ` — ${new Date((workflow.step4 as any).lastError.failedAt).toLocaleString()}`
+              ? ` Failed ${new Date((workflow.step4 as any).lastError.failedAt).toLocaleString()}.`
               : ''}
+          </p>
+          <p className="mt-1 text-xs text-red-500">
+            Technical detail: {(workflow.step4 as any).lastError.message}
           </p>
         </div>
       )}

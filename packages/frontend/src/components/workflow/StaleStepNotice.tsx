@@ -95,3 +95,31 @@ export default function StaleStepNotice({ generatedAt, upstream, action }: Stale
     </div>
   );
 }
+
+/**
+ * Turn a raw generation error into something a curriculum author can act on.
+ *
+ * These surface verbatim from the AI provider — "402 Insufficient credits",
+ * "429 rate limit" — and read as though the curriculum is at fault when the
+ * problem is an account or a transient service issue.
+ */
+export function explainStepFailure(message?: string): string {
+  const raw = String(message || '').toLowerCase();
+
+  if (/402|insufficient credit|insufficient_quota|exceeded your current quota|billing/.test(raw)) {
+    return 'The AI service has run out of credit, so nothing could be generated. This is an account billing issue, not a problem with your curriculum — it needs topping up before any step will generate.';
+  }
+  if (/429|rate limit|too many requests/.test(raw)) {
+    return 'The AI service was rate-limited. Wait a few minutes and try again.';
+  }
+  if (/timeout|timed out|etimedout|stalled/.test(raw)) {
+    return 'Generation took longer than allowed and was stopped. Trying again usually works — larger programmes are generated in batches, so progress is kept.';
+  }
+  if (/json|parse|unexpected token/.test(raw)) {
+    return 'The AI returned a response that could not be read. Trying again usually works.';
+  }
+  if (/api key|401|unauthorized|authentication/.test(raw)) {
+    return 'The AI service rejected the credentials. This needs a configuration fix, not a retry.';
+  }
+  return 'Something went wrong while generating. Trying again usually works; if it keeps failing, send this message on.';
+}
