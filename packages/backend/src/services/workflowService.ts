@@ -1569,6 +1569,11 @@ Return all ${moduleTarget} modules.`;
     const response = await openaiService.generateContent(userPrompt, systemPrompt, {
       maxTokens: 16000,
       timeout: 600000, // 10 minutes
+      // Naming and sequencing modules against a set of outcomes does not need
+      // deep reasoning, and this call sits in front of every batch — so it is
+      // pure waiting before any content appears. The batches that write the
+      // actual outcomes keep the default effort.
+      reasoningEffort: 'low',
     });
     const parsed = this.parseJSON(response, 'step4-outline');
     const proposed: any[] = Array.isArray(parsed?.modules) ? parsed.modules : [];
