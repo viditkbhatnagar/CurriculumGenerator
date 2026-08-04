@@ -867,6 +867,8 @@ export interface ICurriculumWorkflow extends Document {
       isElective: boolean;
     }>;
     blueprintSource?: { filename: string; uploadedAt: Date; totalCredits: number };
+    /** Author-set target for how many modules to propose. */
+    requestedModuleCount?: number;
     modules: Array<{
       id: string;
       moduleCode: string;

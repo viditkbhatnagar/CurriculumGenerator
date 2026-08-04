@@ -211,7 +211,12 @@ ${formattedContexts}
  * are built from modules of a standard size, so derive the count from credits
  * and fall back to hours only when no credits are recorded.
  */
-export function suggestedModuleCount(step1: any): number {
+export function suggestedModuleCount(step1: any, requested?: number): number {
+  // An author-set target wins: they are exploring what the generator proposes at
+  // a given size, and the credit-derived number is only a default.
+  if (Number.isInteger(requested) && (requested as number) >= 4 && (requested as number) <= 40) {
+    return requested as number;
+  }
   const framework = step1?.creditFramework || {};
   const MODULE_CREDIT_SIZE = 6;
   const MIN_MODULES = 4;
@@ -780,7 +785,13 @@ IMPORTANT:
       return this.parseJSON(response, 'step1');
     } catch (error) {
       loggingService.error('Error generating Step 1 content', { error });
-      return {};
+      // Rethrow rather than returning an empty result. The caller writes what
+      // it gets straight onto the workflow, so an empty structure here silently
+      // replaced the author's approved content and still reported success — a
+      // failed Step 3 regeneration wiped six programme learning outcomes and
+      // left a completed progress bar over an empty coverage report. Failing
+      // loudly leaves the existing content alone and records the error.
+      throw error instanceof Error ? error : new Error(String(error));
     }
   }
 
@@ -1115,7 +1126,13 @@ IMPORTANT:
       return parsed;
     } catch (error) {
       loggingService.error('Error generating Step 2 content', { error });
-      return { knowledgeItems: [], skillItems: [], competencyItems: [], attitudeItems: [] };
+      // Rethrow rather than returning an empty result. The caller writes what
+      // it gets straight onto the workflow, so an empty structure here silently
+      // replaced the author's approved content and still reported success — a
+      // failed Step 3 regeneration wiped six programme learning outcomes and
+      // left a completed progress bar over an empty coverage report. Failing
+      // loudly leaves the existing content alone and records the error.
+      throw error instanceof Error ? error : new Error(String(error));
     }
   }
 
@@ -1157,6 +1174,19 @@ IMPORTANT:
 
     // Generate PLOs using AI
     const ploContent = await this.generateStep3Content(workflow.step1, workflow.step2, input);
+
+    // Never trade approved outcomes for nothing. Even with the generator now
+    // throwing on failure, a response that parses to an empty list would still
+    // overwrite the author's work and mark the step complete, leaving a
+    // "0 PLOs / 0% coverage" report where six outcomes used to be.
+    if (!(ploContent.outcomes || []).length) {
+      const existing = (workflow.step3 as any)?.outcomes?.length || 0;
+      throw new Error(
+        existing > 0
+          ? `Generation returned no outcomes, so the ${existing} existing outcome(s) have been kept. Try again.`
+          : 'Generation returned no outcomes. Try again.'
+      );
+    }
 
     // The model answers in whichever spelling the prompt led it to, so an
     // outcome can come back as "analyse" while the rest of the app keys on
@@ -1472,7 +1502,13 @@ IMPORTANT:
       return this.parseJSON(response, 'step3');
     } catch (error) {
       loggingService.error('Error generating Step 3 content', { error });
-      return { outcomes: [] };
+      // Rethrow rather than returning an empty result. The caller writes what
+      // it gets straight onto the workflow, so an empty structure here silently
+      // replaced the author's approved content and still reported success — a
+      // failed Step 3 regeneration wiped six programme learning outcomes and
+      // left a completed progress bar over an empty coverage report. Failing
+      // loudly leaves the existing content alone and records the error.
+      throw error instanceof Error ? error : new Error(String(error));
     }
   }
 
@@ -1875,7 +1911,10 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     // response truncates it and the job dies with nothing to show. Outline the
     // modules first — a small, reliable call — then detail them in batches
     // through the same path an uploaded structure uses.
-    const moduleTarget = suggestedModuleCount(workflow.step1);
+    const moduleTarget = suggestedModuleCount(
+      workflow.step1,
+      (workflow.step4 as any)?.requestedModuleCount
+    );
     if (moduleTarget > SINGLE_CALL_MODULE_LIMIT) {
       loggingService.info('Step 4: outlining before detailing in batches', {
         workflowId,
@@ -1899,7 +1938,8 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     const frameworkContent = await this.generateStep4Content(
       workflow.step1,
       workflow.step2,
-      workflow.step3
+      workflow.step3,
+      (workflow.step4 as any)?.requestedModuleCount
     );
 
     // Process modules to add phase and validate
@@ -2119,7 +2159,12 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     return true;
   }
 
-  private async generateStep4Content(step1: any, step2: any, step3: any): Promise<any> {
+  private async generateStep4Content(
+    step1: any,
+    step2: any,
+    step3: any,
+    requestedModuleCount?: number
+  ): Promise<any> {
     const creditFramework = step1.creditFramework || {};
     const totalHours = creditFramework.totalHours || 120;
     const contactPercent = creditFramework.contactHoursPercent || 30;
@@ -2127,7 +2172,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     const independentHours = totalHours - contactHours;
     const deliveryMode = step1.delivery?.mode || 'hybrid';
 
-    const suggestedModules = suggestedModuleCount(step1);
+    const suggestedModules = suggestedModuleCount(step1, requestedModuleCount);
 
     // Build PLO list with details
     const plos = (step3.outcomes || []).map((o: any) => ({
@@ -6399,7 +6444,13 @@ CRITICAL REQUIREMENTS:
       };
     } catch (error) {
       loggingService.error('Error generating Step 7 content', { error });
-      return { questionBank: [], finalExamPool: [], clozeQuestions: [] };
+      // Rethrow rather than returning an empty result. The caller writes what
+      // it gets straight onto the workflow, so an empty structure here silently
+      // replaced the author's approved content and still reported success — a
+      // failed Step 3 regeneration wiped six programme learning outcomes and
+      // left a completed progress bar over an empty coverage report. Failing
+      // loudly leaves the existing content alone and records the error.
+      throw error instanceof Error ? error : new Error(String(error));
     }
   END OF LEGACY CODE */
 

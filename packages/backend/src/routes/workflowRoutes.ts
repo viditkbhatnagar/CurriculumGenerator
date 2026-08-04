@@ -1714,6 +1714,46 @@ router.post('/:id/step3/approve', validateJWT, loadUser, async (req: Request, re
  * Submit Step 4: Generate Course Framework
  */
 /**
+ * PUT /api/v3/workflow/:id/step4/module-count
+ * Set how many modules Step 4 should propose on the next generation.
+ */
+router.put(
+  '/:id/step4/module-count',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const count = Number((req.body as { moduleCount?: unknown }).moduleCount);
+      if (!Number.isInteger(count) || count < 4 || count > 40) {
+        return res.status(400).json({ success: false, error: 'Choose between 4 and 40 modules' });
+      }
+
+      const workflow = await CurriculumWorkflow.findById(req.params.id);
+      if (!workflow) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+
+      (workflow as any).step4 = {
+        ...((workflow as any).step4 || {}),
+        requestedModuleCount: count,
+      };
+      workflow.markModified('step4');
+      await workflow.save();
+
+      loggingService.info('Step 4 module count set', { workflowId: req.params.id, count });
+      res.json({
+        success: true,
+        data: { requestedModuleCount: count },
+        message: `Step 4 will propose ${count} modules on the next generation.`,
+      });
+    } catch (error) {
+      loggingService.error('Error setting Step 4 module count', { error });
+      res.status(500).json({ success: false, error: 'Failed to save the module count' });
+    }
+  }
+);
+
+/**
  * POST /api/v3/workflow/:id/step4/blueprint/parse
  * Read an uploaded programme-structure spreadsheet and return the modules for
  * review. Nothing is saved — the author confirms or corrects first.

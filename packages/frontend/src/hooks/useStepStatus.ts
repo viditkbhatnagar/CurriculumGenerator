@@ -94,13 +94,22 @@ export function useStepStatus(
           const prevStatus = previousStatusRef.current;
           previousStatusRef.current = newStatus.status;
 
-          // Notify on completion (only once)
-          if (
-            newStatus.status === 'completed' &&
-            prevStatus &&
-            prevStatus !== 'completed' &&
-            !hasNotifiedCompleteRef.current
-          ) {
+          // Notify on completion, once per polling run.
+          //
+          // This used to also require a previous status, which meant it never
+          // fired when the very first poll already read "completed" — the case
+          // when a page is reloaded while a job is running, or when the job
+          // finishes between the request being sent and the first poll landing.
+          // The caller never learned it was done, so the spinner sat on
+          // "Generating…" indefinitely over stale content while the queue badge
+          // beside it said Completed. One author watched that for 39 minutes
+          // after the work had actually finished.
+          //
+          // Firing without a prior status means a mount on an already-complete
+          // step notifies once; the handlers (clear the generating flag, refetch)
+          // are idempotent, and a refetch on mount is the behaviour we want
+          // anyway — it guarantees the screen matches the server.
+          if (newStatus.status === 'completed' && !hasNotifiedCompleteRef.current) {
             hasNotifiedCompleteRef.current = true;
             onCompleteRef.current?.();
           }

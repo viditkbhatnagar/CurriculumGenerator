@@ -24,6 +24,7 @@ import BloomVerbPicker from './BloomVerbPicker';
 import StepVersionHistory from './StepVersionHistory';
 import StaleStepNotice, { explainStepFailure } from './StaleStepNotice';
 import ModuleBlueprintPanel from './ModuleBlueprintPanel';
+import ModuleCountControl from './ModuleCountControl';
 import { downloadFile } from '@/lib/download';
 
 interface Props {
@@ -2040,6 +2041,30 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
               <p className="text-red-400">{error}</p>
             </div>
           )}
+
+          {/* The structure panel and module-count control belong here too, not
+              only on the empty-state form. Once a framework exists the form is
+              never shown again, so an author who wanted to upload their approved
+              structure or change the module count had no way to reach either —
+              the only visible control was "Export", which downloads. */}
+          <div className="pt-6 border-t border-teal-200">
+            <ModuleBlueprintPanel
+              workflowId={workflow._id}
+              saved={(workflow.step4 as any)?.moduleBlueprint}
+              savedSource={(workflow.step4 as any)?.blueprintSource}
+              creditFramework={(workflow.step1 as any)?.creditFramework}
+              onSaved={onRefresh}
+              disabled={isCurrentlyGenerating}
+            />
+            <ModuleCountControl
+              workflowId={workflow._id}
+              currentCount={workflow.step4?.modules?.length ?? 0}
+              creditFramework={(workflow.step1 as any)?.creditFramework}
+              hasBlueprint={!!(workflow.step4 as any)?.moduleBlueprint?.length}
+              onSaved={onRefresh}
+              disabled={isCurrentlyGenerating}
+            />
+          </div>
 
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-6 border-t border-teal-200">
