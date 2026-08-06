@@ -231,9 +231,19 @@ export async function deriveSubjectFields(programmeText: string): Promise<string
   const total = groups.reduce((sum: number, g: any) => sum + (g.count || 0), 0);
   if (total === 0) return [];
 
-  /** A field carrying under this share of the programme's literature is noise. */
-  const MIN_SHARE = 0.04;
-  const MAX_FIELDS = 8;
+  /**
+   * A field carrying under this share of the programme's literature is noise.
+   *
+   * Set with margin deliberately. In the Business Administration distribution
+   * Medicine sits at roughly 4% — high enough that a 4% bar would have re-admitted
+   * the clinical papers this filter exists to exclude. At 8% that programme
+   * resolves to Social Sciences, Business/Management and Economics, which is what
+   * a business degree should cite. The cost is losing a genuinely adjacent field
+   * that happens to fall below the bar; a module short of sources says so, which
+   * is recoverable, whereas an off-topic citation reads as authoritative.
+   */
+  const MIN_SHARE = 0.08;
+  const MAX_FIELDS = 6;
 
   const kept = groups
     .filter((g: any) => g.count / total >= MIN_SHARE)
