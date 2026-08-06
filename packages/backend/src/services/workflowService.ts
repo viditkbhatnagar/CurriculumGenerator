@@ -21,6 +21,7 @@ import {
   gatherModuleSources,
   deriveSubjectFields,
   citationAuthors,
+  titleSimilarity,
   SourceLookupUnavailable,
 } from './academicSourceService';
 
@@ -4867,6 +4868,66 @@ CRITICAL VALIDATION:
    * being left empty, and the shortfall is recorded so it is visible instead of
    * quietly counted as compliant.
    */
+  /**
+   * Decide which module learning outcome each source supports.
+   *
+   * Step 5 shows a per-module tick for "every MLO has a source behind it", which
+   * is `mlos.every(id => someSource.linkedMLOs.includes(id))`. Sources were being
+   * linked to the first two outcomes in array order, so a module with four
+   * outcomes could never satisfy it however good its reading list was — and where
+   * it did pass, it passed because of position, which tells a reviewer nothing.
+   *
+   * Each source now claims the outcome whose statement it most resembles, and any
+   * outcome left uncited is given the source that best matches it. Lexical overlap
+   * is a weak signal, but it is a real one, and it is applied to sources that were
+   * retrieved for this module in the first place.
+   *
+   * `alreadyLinked` are sources whose mapping is left alone — applied sources
+   * carry the model's own choice — so their coverage counts and is not duplicated.
+   */
+  private linkSourcesToMLOs(sources: any[], mlos: any[], alreadyLinked: any[] = []): void {
+    const mloIds = mlos.map((m: any) => m.id).filter(Boolean);
+    if (mloIds.length === 0 || sources.length === 0) return;
+
+    const statements = mlos.map((m: any) => String(m.statement || ''));
+    const score = sources.map((s: any) => statements.map((st) => titleSimilarity(s.title, st)));
+
+    const bestMloFor = (sourceIndex: number): number => {
+      let best = 0;
+      for (let j = 1; j < mloIds.length; j++) {
+        if (score[sourceIndex][j] > score[sourceIndex][best]) best = j;
+      }
+      return best;
+    };
+
+    sources.forEach((s: any, i: number) => {
+      s.linkedMLOs = [mloIds[bestMloFor(i)]];
+    });
+
+    const covered = new Set<string>([
+      ...sources.flatMap((s: any) => s.linkedMLOs),
+      ...alreadyLinked.flatMap((s: any) => s.linkedMLOs || []),
+    ]);
+
+    mloIds.forEach((mloId: string, j: number) => {
+      if (covered.has(mloId)) return;
+
+      // Best match for this outcome, and where nothing matches — overlap can be
+      // zero across the board — the source carrying the least, so one entry does
+      // not end up claiming every outcome.
+      let best = 0;
+      for (let i = 1; i < sources.length; i++) {
+        const better = score[i][j] > score[best][j];
+        const tied =
+          score[i][j] === score[best][j] &&
+          sources[i].linkedMLOs.length < sources[best].linkedMLOs.length;
+        if (better || tied) best = i;
+      }
+      sources[best].linkedMLOs.push(mloId);
+      covered.add(mloId);
+    });
+  }
+
   private async replaceAcademicSourcesWithVerified(
     workflow: ICurriculumWorkflow,
     generated: any[]
@@ -4952,12 +5013,16 @@ CRITICAL VALIDATION:
             subjectField: s.subjectField,
           },
           moduleId: module.id,
-          linkedMLOs: mloIds.slice(0, 2),
+          // Filled in below, once the whole set is known: which outcome a source
+          // supports depends on what the other sources cover.
+          linkedMLOs: [] as string[],
           relevantTopics: (module.topics || []).slice(0, 3),
           complexityLevel: 'intermediate',
           estimatedReadingHours: 1.5,
           agiCompliant: true,
         }));
+
+        this.linkSourcesToMLOs(verified, module.mlos || [], applied);
       } catch (error) {
         if (error instanceof SourceLookupUnavailable) {
           lookupUnavailable = error.message;
