@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { CurriculumWorkflow } from '@/types/workflow';
 import { api } from '@/lib/api';
+import { formatAuthorList } from '@/lib/citation';
 
 // Canvas mode types
 type EditTarget = {
@@ -307,7 +308,7 @@ function StepDataViewer({
           <div key={source.id || idx} className="bg-white rounded-lg p-3 border border-teal-200">
             <p className="text-sm text-teal-800 font-medium">{source.title}</p>
             <p className="text-xs text-teal-600 mt-1">
-              {source.authors?.join(', ')} ({source.year})
+              {formatAuthorList(source.authors)} ({source.year})
             </p>
             <div className="flex gap-2 mt-2">
               <span
@@ -665,7 +666,7 @@ function MessageBubble({
                           <div key={idx} className="bg-white border border-teal-200 rounded-lg p-3">
                             <p className="text-sm font-medium text-teal-700">{src.title}</p>
                             <p className="text-xs text-teal-600 mt-1">
-                              {src.authors?.join(', ')} ({src.year})
+                              {formatAuthorList(src.authors)} ({src.year})
                             </p>
                             {src.category && (
                               <span className="inline-block mt-2 px-2 py-0.5 bg-teal-100 rounded text-xs text-teal-600">

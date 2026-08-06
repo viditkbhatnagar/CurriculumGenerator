@@ -10,6 +10,7 @@ import { orderByStep4 } from '@/lib/moduleOrder';
 import { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
 import { toast } from '@/stores/toastStore';
+import { formatAuthorList } from '@/lib/citation';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1934,7 +1935,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                           <div className="space-y-1">
                             {currentLesson.materials.readingReferences.map((ref, i) => (
                               <div key={i} className="text-xs text-teal-700">
-                                • {ref.authors?.join(', ')} ({ref.year}). {ref.title}
+                                • {formatAuthorList(ref.authors)} ({ref.year}). {ref.title}
                               </div>
                             ))}
                           </div>

@@ -17,6 +17,7 @@ import {
 import { useStepStatus } from '@/hooks/useStepStatus';
 import { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
+import { formatAuthorList } from '@/lib/citation';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -922,7 +923,7 @@ function ReadingCard({
             </div>
             <h4 className="text-teal-800 font-medium">{reading.title}</h4>
             <p className="text-sm text-teal-600">
-              {reading.authors?.join(', ')} ({reading.year})
+              {formatAuthorList(reading.authors)} ({reading.year})
             </p>
           </div>
           <div className="text-right shrink-0">

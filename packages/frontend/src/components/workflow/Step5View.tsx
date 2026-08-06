@@ -21,6 +21,7 @@ import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
 import FilePreviewModal from './FilePreviewModal';
 import { downloadFile } from '@/lib/download';
+import { formatAuthorList, toAuthorArray } from '@/lib/citation';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -100,7 +101,7 @@ function SourceEditModal({
   isSaving: boolean;
 }) {
   const [title, setTitle] = useState(source.title || '');
-  const [authors, setAuthors] = useState<string[]>(source.authors || []);
+  const [authors, setAuthors] = useState<string[]>(toAuthorArray(source.authors));
   const [year, setYear] = useState(source.year || new Date().getFullYear());
   const [citation, setCitation] = useState(source.citation || '');
   const [doi, setDoi] = useState(source.doi || '');
@@ -815,7 +816,7 @@ function SourceCard({
           <div className="flex-1">
             <h4 className="text-teal-800 font-medium leading-tight">{source.title}</h4>
             <p className="text-sm text-teal-600 mt-1">
-              {source.authors?.join(', ')} ({source.year})
+              {formatAuthorList(source.authors)} ({source.year})
             </p>
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
