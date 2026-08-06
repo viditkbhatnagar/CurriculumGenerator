@@ -245,14 +245,23 @@ export async function deriveSubjectFields(programmeText: string): Promise<string
   const MIN_SHARE = 0.08;
   const MAX_FIELDS = 6;
 
+  /**
+   * Never confine a search to one or two fields. A flat distribution used to
+   * collapse to the single largest, which put a Business Administration degree
+   * entirely inside Psychology — on-topic-looking, but with every
+   * business-and-management journal excluded.
+   */
+  const MIN_FIELDS = 3;
+
+  const ranked = groups.map((g: any) => String(g.key).replace('https://openalex.org/', ''));
   const kept = groups
     .filter((g: any) => g.count / total >= MIN_SHARE)
     .slice(0, MAX_FIELDS)
     .map((g: any) => String(g.key).replace('https://openalex.org/', ''));
 
-  // Always keep the strongest field, even if the distribution is very flat.
-  if (kept.length === 0) {
-    kept.push(String(groups[0].key).replace('https://openalex.org/', ''));
+  for (const field of ranked) {
+    if (kept.length >= MIN_FIELDS) break;
+    if (!kept.includes(field)) kept.push(field);
   }
 
   loggingService.info('Derived subject fields for programme', {

@@ -2685,6 +2685,7 @@ CRITICAL VALIDATION:
       // Modules the source search could not serve. Kept on the document so a gap
       // is something the author can see and act on, not just a log line.
       sourceShortfalls: (workflow as any).__sourceShortfalls || [],
+      subjectFields: (workflow as any).__subjectFields || [],
       validatedAt: new Date(),
     };
 
@@ -4950,15 +4951,28 @@ CRITICAL VALIDATION:
     // "management", "communication" or "development" returns clinical medicine:
     // those words carry a different meaning in the medical literature, and its
     // open-access papers are cited far more heavily than any business article.
+    //
+    // Derived from the title alone. Including the programme description put a
+    // Business Administration degree entirely inside Psychology: prose like
+    // "equips students with the knowledge, skills and professional competencies
+    // required to excel" matches the education and psychology literature far
+    // better than it matches business, and it drowned out the title.
     const step1 = (workflow.step1 as any) || {};
+    const title = String(step1.programTitle || '').trim();
     const subjectFields = await deriveSubjectFields(
-      `${step1.programTitle || ''} ${String(step1.programDescription || '').slice(0, 200)}`
+      // Only fall back to the description when the title is too short to classify.
+      title.length >= 15
+        ? title
+        : `${title} ${String(step1.programDescription || '').slice(0, 150)}`
     );
     if (subjectFields.length === 0) {
       loggingService.warn('No subject fields derived; source search will be unconstrained', {
         workflowId: String(workflow._id),
       });
     }
+    // Recorded on the document so what the search was confined to is inspectable
+    // afterwards, without needing the server logs.
+    (workflow as any).__subjectFields = subjectFields;
 
     // Once the lookup service is out of allowance every further call fails, so
     // stop asking and record honestly which modules went unverified.
