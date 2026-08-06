@@ -17,6 +17,7 @@ import { loggingService } from './loggingService';
 import { RAGEngine } from './ragEngine';
 import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
+import { gatherModuleSources } from './academicSourceService';
 
 // Initialize RAG Engine and Knowledge Base Service for context retrieval
 const ragEngine = new RAGEngine();
@@ -2524,8 +2525,19 @@ CRITICAL VALIDATION:
 
     const sourcesContent = await this.generateStep5Content(workflow);
 
-    // Process and validate sources
-    const sources = sourcesContent.sources || [];
+    // Replace model-written journal citations with ones looked up for real.
+    //
+    // Citations the model composes do not survive checking: sampling ten DOIs
+    // from a generated business curriculum found six that did not exist and
+    // three that belonged to unrelated papers. Everything downstream — reading
+    // lists, lesson plans, assignments, the exam — cites whatever lands here, so
+    // the academic half of the list is now searched rather than written. Applied
+    // sources (professional bodies, industry reports, government research) stay
+    // as generated: those are named organisations with real, checkable pages.
+    const sources = await this.replaceAcademicSourcesWithVerified(
+      workflow,
+      sourcesContent.sources || []
+    );
     const currentYear = new Date().getFullYear();
 
     // Calculate statistics
@@ -4834,6 +4846,123 @@ CRITICAL VALIDATION:
    * Generate Step 5 content using BATCH-WISE generation per module
    * This prevents timeouts by generating sources for one module at a time
    */
+  /**
+   * Swap generated journal citations for real ones, module by module.
+   *
+   * Each module is searched against OpenAlex using its title and topics, taking
+   * peer-reviewed work with a free full text where possible. The applied and
+   * professional sources the model produced are kept — those cite organisations
+   * whose pages exist — and only the academic entries, the ones that were being
+   * invented, are replaced.
+   *
+   * A module the search cannot serve keeps its generated sources rather than
+   * being left empty, and the shortfall is recorded so it is visible instead of
+   * quietly counted as compliant.
+   */
+  private async replaceAcademicSourcesWithVerified(
+    workflow: ICurriculumWorkflow,
+    generated: any[]
+  ): Promise<any[]> {
+    const modules = (workflow.step4 as any)?.modules || [];
+    if (modules.length === 0) return generated;
+
+    const APPLIED_CATEGORIES = new Set([
+      'professional_body',
+      'industry_report',
+      'government_research',
+      'institutional',
+    ]);
+    const currentYear = new Date().getFullYear();
+    const shortfalls: string[] = [];
+    const output: any[] = [];
+
+    for (const module of modules) {
+      const forModule = generated.filter((s: any) => s.moduleId === module.id);
+      const applied = forModule.filter((s: any) => APPLIED_CATEGORIES.has(s.category));
+      const mloIds = (module.mlos || []).map((m: any) => m.id).filter(Boolean);
+
+      let verified: any[] = [];
+      try {
+        const topics = [
+          ...(module.topics || []),
+          ...(module.mlos || []).map((m: any) => m.statement),
+        ].filter(Boolean);
+
+        const result = await gatherModuleSources(module.title, topics, {
+          target: 6,
+          peerReviewedShare: 0.6,
+          fromYear: currentYear - 8,
+          requireFullText: true,
+        });
+        if (result.shortfall) shortfalls.push(result.shortfall);
+
+        verified = result.sources.map((s, index) => ({
+          id: `src-${module.code || module.id}-${index + 1}`,
+          title: s.title,
+          authors: s.authors,
+          year: s.year,
+          publisher: s.venue || s.publisher,
+          doi: s.doi || undefined,
+          citation: `${s.authors} (${s.year}). ${s.title}. ${s.venue}.${s.doi ? ` https://doi.org/${s.doi}` : ''}`,
+          url: s.pdfUrl || s.url,
+          category: s.isPeerReviewed ? 'peer_reviewed_journal' : 'open_access',
+          type: 'academic',
+          accessStatus: s.pdfUrl
+            ? 'free_full_text'
+            : s.isOpenAccess
+              ? 'open_access'
+              : 'subscription',
+          accessNote: s.pdfUrl ? 'Full text freely available' : 'Open access landing page',
+          complianceBadges: {
+            peerReviewed: s.isPeerReviewed,
+            openAccess: s.isOpenAccess,
+            fullTextAvailable: !!s.pdfUrl,
+            // Recorded so an author can see the claim is checkable, not asserted.
+            verifiedVia: 'OpenAlex',
+          },
+          moduleId: module.id,
+          linkedMLOs: mloIds.slice(0, 2),
+          relevantTopics: (module.topics || []).slice(0, 3),
+          complexityLevel: 'intermediate',
+          estimatedReadingHours: 1.5,
+          agiCompliant: true,
+        }));
+      } catch (error) {
+        loggingService.warn('Academic source lookup failed for module, keeping generated list', {
+          moduleId: module.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      if (verified.length === 0) {
+        // Search found nothing usable — better the generated list than none, but
+        // say so rather than presenting it as verified.
+        shortfalls.push(
+          `No verified academic sources could be found for "${module.title}"; its generated references are unverified and should be checked before use.`
+        );
+        output.push(...forModule);
+      } else {
+        output.push(...verified, ...applied);
+      }
+    }
+
+    // Anything the model attached to no module at all.
+    output.push(...generated.filter((s: any) => !s.moduleId));
+
+    if (shortfalls.length) {
+      (workflow as any).__sourceShortfalls = shortfalls;
+      loggingService.warn('Step 5 source shortfalls', { count: shortfalls.length, shortfalls });
+    }
+    loggingService.info('Step 5 academic sources verified', {
+      workflowId: String(workflow._id),
+      modules: modules.length,
+      verified: output.filter((s) => s.complianceBadges?.verifiedVia).length,
+      total: output.length,
+    });
+
+    return output;
+  }
+
   private async generateStep5Content(workflow: ICurriculumWorkflow): Promise<any> {
     const currentYear = new Date().getFullYear();
     const fiveYearsAgo = currentYear - 5;
