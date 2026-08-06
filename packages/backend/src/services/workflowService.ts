@@ -17,7 +17,12 @@ import { loggingService } from './loggingService';
 import { RAGEngine } from './ragEngine';
 import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
-import { gatherModuleSources } from './academicSourceService';
+import {
+  gatherModuleSources,
+  deriveSubjectFields,
+  citationAuthors,
+  SourceLookupUnavailable,
+} from './academicSourceService';
 
 // Initialize RAG Engine and Knowledge Base Service for context retrieval
 const ragEngine = new RAGEngine();
@@ -2676,6 +2681,9 @@ CRITICAL VALIDATION:
       agiCompliant,
       complianceIssues,
       adminOverrideRequired: !agiCompliant,
+      // Modules the source search could not serve. Kept on the document so a gap
+      // is something the author can see and act on, not just a log line.
+      sourceShortfalls: (workflow as any).__sourceShortfalls || [],
       validatedAt: new Date(),
     };
 
@@ -4876,6 +4884,25 @@ CRITICAL VALIDATION:
     const shortfalls: string[] = [];
     const output: any[] = [];
 
+    // Confine every search to the subject fields this programme actually belongs
+    // to. Without it, searching a module title containing a word like
+    // "management", "communication" or "development" returns clinical medicine:
+    // those words carry a different meaning in the medical literature, and its
+    // open-access papers are cited far more heavily than any business article.
+    const step1 = (workflow.step1 as any) || {};
+    const subjectFields = await deriveSubjectFields(
+      `${step1.programTitle || ''} ${String(step1.programDescription || '').slice(0, 200)}`
+    );
+    if (subjectFields.length === 0) {
+      loggingService.warn('No subject fields derived; source search will be unconstrained', {
+        workflowId: String(workflow._id),
+      });
+    }
+
+    // Once the lookup service is out of allowance every further call fails, so
+    // stop asking and record honestly which modules went unverified.
+    let lookupUnavailable: string | null = null;
+
     for (const module of modules) {
       const forModule = generated.filter((s: any) => s.moduleId === module.id);
       const applied = forModule.filter((s: any) => APPLIED_CATEGORIES.has(s.category));
@@ -4883,6 +4910,7 @@ CRITICAL VALIDATION:
 
       let verified: any[] = [];
       try {
+        if (lookupUnavailable) throw new SourceLookupUnavailable(lookupUnavailable);
         const topics = [
           ...(module.topics || []),
           ...(module.mlos || []).map((m: any) => m.statement),
@@ -4893,6 +4921,7 @@ CRITICAL VALIDATION:
           peerReviewedShare: 0.6,
           fromYear: currentYear - 8,
           requireFullText: true,
+          subjectFields,
         });
         if (result.shortfall) shortfalls.push(result.shortfall);
 
@@ -4903,7 +4932,7 @@ CRITICAL VALIDATION:
           year: s.year,
           publisher: s.venue || s.publisher,
           doi: s.doi || undefined,
-          citation: `${s.authors} (${s.year}). ${s.title}. ${s.venue}.${s.doi ? ` https://doi.org/${s.doi}` : ''}`,
+          citation: `${citationAuthors(s.authors)} (${s.year}). ${s.title}. ${s.venue}.${s.doi ? ` https://doi.org/${s.doi}` : ''}`,
           url: s.pdfUrl || s.url,
           category: s.isPeerReviewed ? 'peer_reviewed_journal' : 'open_access',
           type: 'academic',
@@ -4919,6 +4948,8 @@ CRITICAL VALIDATION:
             fullTextAvailable: !!s.pdfUrl,
             // Recorded so an author can see the claim is checkable, not asserted.
             verifiedVia: 'OpenAlex',
+            // Kept so off-topic drift can be audited without re-querying.
+            subjectField: s.subjectField,
           },
           moduleId: module.id,
           linkedMLOs: mloIds.slice(0, 2),
@@ -4928,19 +4959,32 @@ CRITICAL VALIDATION:
           agiCompliant: true,
         }));
       } catch (error) {
-        loggingService.warn('Academic source lookup failed for module, keeping generated list', {
-          moduleId: module.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
+        if (error instanceof SourceLookupUnavailable) {
+          lookupUnavailable = error.message;
+        } else {
+          loggingService.warn('Academic source lookup failed for module', {
+            moduleId: module.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
 
       if (verified.length === 0) {
-        // Search found nothing usable — better the generated list than none, but
-        // say so rather than presenting it as verified.
+        // Nothing could be looked up for this module. Its applied sources — named
+        // professional bodies and government research — are kept, but the
+        // model-written journal citations are dropped rather than shown.
+        //
+        // Sampling found roughly nine in ten of those DOIs to be wrong: either
+        // non-existent or pointing at an unrelated paper. A visible gap is
+        // recoverable by re-running the step; a plausible fake citation gets
+        // carried into reading lists, lesson plans and the exam, and is only
+        // caught if somebody clicks it.
         shortfalls.push(
-          `No verified academic sources could be found for "${module.title}"; its generated references are unverified and should be checked before use.`
+          lookupUnavailable
+            ? `"${module.title}" has no academic sources: ${lookupUnavailable}`
+            : `No academic sources could be found for "${module.title}". Its applied sources are kept; re-run the step to try again.`
         );
-        output.push(...forModule);
+        output.push(...applied);
       } else {
         output.push(...verified, ...applied);
       }
@@ -4948,6 +4992,18 @@ CRITICAL VALIDATION:
 
     // Anything the model attached to no module at all.
     output.push(...generated.filter((s: any) => !s.moduleId));
+
+    const verifiedCount = output.filter((s) => s.complianceBadges?.verifiedVia).length;
+
+    // Not one module could be served. That is an outage or an exhausted
+    // allowance, not a curriculum problem, so fail loudly and leave the author's
+    // existing Step 5 untouched instead of replacing it with a stripped list.
+    if (verifiedCount === 0) {
+      throw new Error(
+        lookupUnavailable ||
+          'No academic sources could be looked up for any module. The source database did not respond — nothing has been changed; please try again.'
+      );
+    }
 
     if (shortfalls.length) {
       (workflow as any).__sourceShortfalls = shortfalls;

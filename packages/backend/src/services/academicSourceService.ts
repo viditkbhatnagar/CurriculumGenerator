@@ -27,7 +27,14 @@ const REQUEST_SPACING_MS = 150;
 
 export interface AcademicSource {
   title: string;
-  authors: string;
+  /**
+   * One entry per author, APA 7 surname-initial form. An array rather than a
+   * joined string because that is what the rest of the workflow expects: the
+   * Step 5 view renders `authors.join(', ')`, and the Step 6 reading-list prompt
+   * does the same. A string here type-checks against `any` step data and then
+   * fails at runtime.
+   */
+  authors: string[];
   year: number | null;
   venue: string;
   publisher: string;
@@ -39,6 +46,8 @@ export interface AcademicSource {
   isPeerReviewed: boolean;
   isOpenAccess: boolean;
   citedByCount: number;
+  /** OpenAlex's subject classification, recorded so off-topic drift is auditable. */
+  subjectField: string | null;
   /** Present so a caller can show why a source was considered credible. */
   evidence: { source: 'openalex'; venueType: string | null; openAlexId: string };
 }
@@ -50,6 +59,15 @@ export interface SearchOptions {
   peerReviewedOnly?: boolean;
   /** Require a free full text the learner can actually open. */
   requireFullText?: boolean;
+  /**
+   * OpenAlex subject field ids ("fields/14") to confine results to. Without
+   * this a search for a module called "Introduction to Management &
+   * Organisations" returns clinical medicine, because "management" in the
+   * medical literature means managing a disease and those papers are cited
+   * orders of magnitude more often than any business article. See
+   * {@link deriveSubjectFields}.
+   */
+  subjectFields?: string[];
   limit?: number;
 }
 
@@ -62,6 +80,24 @@ async function paced<T>(fn: () => Promise<T>): Promise<T> {
   return fn();
 }
 
+/**
+ * Raised when the lookup service will not answer any more requests today.
+ *
+ * OpenAlex meters its API: a works search costs $0.001 against a small daily
+ * allowance, and a 46-module programme spends roughly one allowance per full
+ * Step 5 run. Once it is gone every subsequent call returns 429 until midnight
+ * UTC, so there is no point retrying the remaining modules — and, more
+ * importantly, this must not be mistaken for "no sources exist". Falling back to
+ * model-written citations here would quietly reintroduce the fabrications this
+ * service exists to prevent.
+ */
+export class SourceLookupUnavailable extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SourceLookupUnavailable';
+  }
+}
+
 async function getJson(url: string, timeoutMs = 20000): Promise<any | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -70,23 +106,60 @@ async function getJson(url: string, timeoutMs = 20000): Promise<any | null> {
       signal: controller.signal,
       headers: { 'User-Agent': `curriculum-generator/1.0 (mailto:${CONTACT})` },
     });
+    if (res.status === 429) {
+      const resetSeconds = Number(res.headers.get('x-ratelimit-reset') || 0);
+      const hours = resetSeconds ? Math.ceil(resetSeconds / 3600) : null;
+      throw new SourceLookupUnavailable(
+        'The academic source database (OpenAlex) has reached its daily request allowance' +
+          (hours ? `, which resets in about ${hours}h.` : '.')
+      );
+    }
     if (!res.ok) return null;
     return await res.json();
-  } catch {
+  } catch (error) {
+    if (error instanceof SourceLookupUnavailable) throw error;
     return null;
   } finally {
     clearTimeout(timer);
   }
 }
 
-const formatAuthors = (work: any): string => {
+/**
+ * "Jane A. Smith" -> "Smith, J. A.", the form APA 7 reference lists use.
+ *
+ * Corporate authors ("World Health Organization") have no surname to invert and
+ * are returned unchanged.
+ */
+const toApaName = (displayName: string): string => {
+  const parts = String(displayName).trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return parts[0] || '';
+
+  const surname = parts[parts.length - 1];
+  const initials = parts
+    .slice(0, -1)
+    .map((part) => `${part[0].toUpperCase()}.`)
+    .join(' ');
+  return `${surname}, ${initials}`;
+};
+
+/** APA 7 lists up to 20 authors before eliding; beyond that it abbreviates. */
+const MAX_LISTED_AUTHORS = 20;
+
+const formatAuthors = (work: any): string[] => {
   const names = (work.authorships || [])
-    .slice(0, 4)
     .map((a: any) => a.author?.display_name)
+    .filter(Boolean)
+    .map(toApaName)
     .filter(Boolean);
-  if (names.length === 0) return 'Unknown';
-  const more = (work.authorships || []).length > 4 ? ' et al.' : '';
-  return names.join(', ') + more;
+  return names.length > 0 ? names.slice(0, MAX_LISTED_AUTHORS) : ['Unknown'];
+};
+
+/** Join an author list the way a reference list reads. */
+export const citationAuthors = (authors: string[]): string => {
+  if (authors.length === 0) return 'Unknown';
+  if (authors.length === 1) return authors[0];
+  if (authors.length > 6) return `${authors[0]} et al.`;
+  return `${authors.slice(0, -1).join(', ')}, & ${authors[authors.length - 1]}`;
 };
 
 /**
@@ -122,8 +195,61 @@ function toSource(work: any): AcademicSource | null {
     isPeerReviewed: isPeerReviewedVenue(work),
     isOpenAccess: !!oa.is_oa,
     citedByCount: work.cited_by_count || 0,
+    subjectField: work.primary_topic?.field?.display_name || null,
     evidence: { source: 'openalex', venueType: source?.type ?? null, openAlexId: work.id || '' },
   };
+}
+
+/**
+ * Work out which subject fields a programme belongs to, so module searches can
+ * be confined to them.
+ *
+ * This deliberately uses `group_by`, which aggregates over every matching work
+ * rather than the first page of results. Tallying the fields of the top 50 hits
+ * does not work: those hits are exactly the polluted ones, so a business
+ * programme "derives" Medicine from its own bad results and then admits more of
+ * them. Aggregate counts across hundreds of thousands of works are not swayed by
+ * a handful of heavily-cited outliers.
+ *
+ * One request per programme. Returns [] if it cannot tell, which leaves search
+ * unconstrained rather than wrongly narrowed.
+ */
+export async function deriveSubjectFields(programmeText: string): Promise<string[]> {
+  const text = String(programmeText || '')
+    .trim()
+    .slice(0, 300);
+  if (text.length < 4) return [];
+
+  const url =
+    `${OPENALEX}/works?search=${encodeURIComponent(text)}` +
+    `&filter=type:article&group_by=primary_topic.field.id&mailto=${CONTACT}`;
+
+  const data = await paced(() => getJson(url));
+  const groups = (data?.group_by || []).filter((g: any) => g.key && g.key !== 'unknown');
+  if (groups.length === 0) return [];
+
+  const total = groups.reduce((sum: number, g: any) => sum + (g.count || 0), 0);
+  if (total === 0) return [];
+
+  /** A field carrying under this share of the programme's literature is noise. */
+  const MIN_SHARE = 0.04;
+  const MAX_FIELDS = 8;
+
+  const kept = groups
+    .filter((g: any) => g.count / total >= MIN_SHARE)
+    .slice(0, MAX_FIELDS)
+    .map((g: any) => String(g.key).replace('https://openalex.org/', ''));
+
+  // Always keep the strongest field, even if the distribution is very flat.
+  if (kept.length === 0) {
+    kept.push(String(groups[0].key).replace('https://openalex.org/', ''));
+  }
+
+  loggingService.info('Derived subject fields for programme', {
+    programme: text.slice(0, 60),
+    fields: kept,
+  });
+  return kept;
 }
 
 /** Search OpenAlex for works matching a topic. Returns [] rather than throwing. */
@@ -131,17 +257,26 @@ export async function searchAcademicSources(
   query: string,
   options: SearchOptions = {}
 ): Promise<AcademicSource[]> {
-  const { fromYear, peerReviewedOnly = false, requireFullText = false, limit = 10 } = options;
+  const {
+    fromYear,
+    peerReviewedOnly = false,
+    requireFullText = false,
+    subjectFields,
+    limit = 10,
+  } = options;
 
   const filters = ['type:article'];
   if (fromYear) filters.push(`from_publication_date:${fromYear}-01-01`);
   if (requireFullText) filters.push('is_oa:true');
+  if (subjectFields?.length) filters.push(`primary_topic.field.id:${subjectFields.join('|')}`);
   filters.push('has_doi:true');
 
   const url =
     `${OPENALEX}/works?search=${encodeURIComponent(query)}` +
     `&filter=${filters.join(',')}` +
-    `&sort=relevance_score:desc&per-page=${Math.min(50, limit * 3)}&mailto=${CONTACT}`;
+    // A request costs the same whatever the page size, and the metered daily
+    // allowance is small, so always take the largest page and filter locally.
+    `&sort=relevance_score:desc&per-page=50&mailto=${CONTACT}`;
 
   const data = await paced(() => getJson(url));
   if (!data?.results) {
@@ -218,9 +353,16 @@ export async function gatherModuleSources(
     peerReviewedShare?: number;
     fromYear?: number;
     requireFullText?: boolean;
+    subjectFields?: string[];
   } = {}
 ): Promise<{ sources: AcademicSource[]; peerReviewedPercent: number; shortfall: string | null }> {
-  const { target = 6, peerReviewedShare = 0.6, fromYear, requireFullText = false } = options;
+  const {
+    target = 6,
+    peerReviewedShare = 0.6,
+    fromYear,
+    requireFullText = false,
+    subjectFields,
+  } = options;
 
   const queries = [moduleTitle, ...topics.slice(0, 4)].filter(
     (q) => typeof q === 'string' && q.trim().length > 3
@@ -234,7 +376,8 @@ export async function gatherModuleSources(
     const results = await searchAcademicSources(query, {
       fromYear,
       requireFullText,
-      limit: 8,
+      subjectFields,
+      limit: 50,
     });
     for (const source of results) {
       const key = source.doi || source.title.toLowerCase();
@@ -245,10 +388,11 @@ export async function gatherModuleSources(
     if (peerReviewed.length >= target) break;
   }
 
-  const byImpact = (a: AcademicSource, b: AcademicSource) => b.citedByCount - a.citedByCount;
-  peerReviewed.sort(byImpact);
-  other.sort(byImpact);
-
+  // Kept in relevance order. Sorting by citation count was what surfaced
+  // clinical practice guidelines for a module called "Introduction to
+  // Management & Organisations": the most-cited open-access papers matching
+  // almost any query are biomedical, by a wide margin. Relevance is what a
+  // reading list needs; the subject-field filter supplies the credibility floor.
   const wantPeerReviewed = Math.ceil(target * peerReviewedShare);
   const chosen = [...peerReviewed.slice(0, Math.max(wantPeerReviewed, target - other.length))];
   for (const source of other) {
