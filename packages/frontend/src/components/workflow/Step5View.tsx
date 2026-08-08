@@ -86,6 +86,19 @@ const ACCESS_STATUS_CONFIG: Record<string, { label: string; icon: string; color:
     icon: '🔍',
     color: 'bg-teal-400/20 text-teal-600',
   },
+  // Looked-up sources are stored with these two statuses. They were missing here, so
+  // every one of them fell through to the "Under Review" fallback below — a warning
+  // chip on hundreds of cards whose full text is in fact freely readable.
+  free_full_text: {
+    label: 'Free Full Text',
+    icon: '🔓',
+    color: 'bg-green-500/20 text-green-700',
+  },
+  subscription: {
+    label: 'Subscription',
+    icon: '🏛️',
+    color: 'bg-amber-500/20 text-amber-500',
+  },
 };
 
 // Source Edit Modal Component

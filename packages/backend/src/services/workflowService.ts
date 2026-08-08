@@ -2517,33 +2517,24 @@ CRITICAL VALIDATION:
   // ==========================================================================
 
   /**
-   * Process Step 5: Topic-Level Sources (AGI Academic Standards)
-   * Per workflow v2.2: Identify, validate, and tag high-quality academic and
-   * professional sources with APA 7th edition citations
+   * Recompute every Step 5 aggregate from a list of sources.
+   *
+   * Extracted from processStep5 so that adding, editing or deleting a single source
+   * recomputes the same numbers a full generation would - with no LLM call and no
+   * source lookups. Only processStep5 used to compute these, so any manual change left
+   * validationReport, complianceIssues, agiCompliant and adminOverrideRequired
+   * describing a source list that no longer existed: a curriculum could show
+   * "less than 70% freely accessible" while every remaining source had a free PDF.
    */
-  async processStep5(workflowId: string): Promise<ICurriculumWorkflow> {
-    const workflow = await CurriculumWorkflow.findById(workflowId);
-    if (!workflow || !workflow.step4) {
-      throw new Error('Workflow not found or Step 4 not complete');
-    }
-
-    loggingService.info('Processing Step 5: Topic-Level Sources (AGI Standards)', { workflowId });
-
-    const sourcesContent = await this.generateStep5Content(workflow);
-
-    // Replace model-written journal citations with ones looked up for real.
-    //
-    // Citations the model composes do not survive checking: sampling ten DOIs
-    // from a generated business curriculum found six that did not exist and
-    // three that belonged to unrelated papers. Everything downstream — reading
-    // lists, lesson plans, assignments, the exam — cites whatever lands here, so
-    // the academic half of the list is now searched rather than written. Applied
-    // sources (professional bodies, industry reports, government research) stay
-    // as generated: those are named organisations with real, checkable pages.
-    const sources = await this.replaceAcademicSourcesWithVerified(
-      workflow,
-      sourcesContent.sources || []
-    );
+  buildStep5Summary(
+    sources: any[],
+    modules: any[],
+    extras: {
+      sourceShortfalls?: string[];
+      subjectFields?: string[];
+      retractionsRemoved?: any[];
+    } = {}
+  ): any {
     const currentYear = new Date().getFullYear();
 
     // Calculate statistics
@@ -2566,7 +2557,6 @@ CRITICAL VALIDATION:
     }
 
     // Build module summaries
-    const modules = workflow.step4.modules || [];
     const moduleSummaries = modules.map((mod: any) => {
       const modSources = sourcesByModule[mod.id] || [];
       const modPeerReviewed = modSources.filter(
@@ -2617,12 +2607,20 @@ CRITICAL VALIDATION:
       'government_research', // NEW: Gov.uk, OECD, World Bank, etc.
     ];
 
-    // Count free access sources
+    // Count free access sources.
+    //
+    // 'free_full_text' is what a looked-up source is stored as when OpenAlex gives a
+    // direct link to a legally free PDF — the strongest form of free access there is.
+    // It was missing from this list, so every verified source was counted as paywalled:
+    // the programme reported "Less than 70% of sources are freely accessible" while
+    // 274 of 413 sources had a working free PDF.
     const freeAccessSources = sources.filter(
       (s: any) =>
         s.accessStatus === 'free_access' ||
         s.accessStatus === 'open_access' ||
-        s.complianceBadges?.freeAccess === true
+        s.accessStatus === 'free_full_text' ||
+        s.complianceBadges?.freeAccess === true ||
+        s.complianceBadges?.fullTextAvailable === true
     );
 
     const validationReport = {
@@ -2663,7 +2661,7 @@ CRITICAL VALIDATION:
 
     const agiCompliant = Object.values(validationReport).every((v) => v === true);
 
-    workflow.step5 = {
+    return {
       sources,
       sourcesByModule,
       moduleSummaries,
@@ -2684,10 +2682,82 @@ CRITICAL VALIDATION:
       adminOverrideRequired: !agiCompliant,
       // Modules the source search could not serve. Kept on the document so a gap
       // is something the author can see and act on, not just a log line.
-      sourceShortfalls: (workflow as any).__sourceShortfalls || [],
-      subjectFields: (workflow as any).__subjectFields || [],
+      sourceShortfalls: extras.sourceShortfalls || [],
+      subjectFields: extras.subjectFields || [],
+      retractionsRemoved: extras.retractionsRemoved || [],
       validatedAt: new Date(),
     };
+  }
+
+  /**
+   * Rebuild Step 5's aggregates from the sources already stored, and save.
+   *
+   * Cheap and safe to call after any edit to the source list. Author decisions
+   * (approval) are carried across, since recomputing validity is not the same as
+   * un-approving what a human signed off.
+   */
+  async recomputeStep5(workflowId: string): Promise<ICurriculumWorkflow> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow || !workflow.step5) {
+      throw new Error('Step 5 has not been generated for this workflow');
+    }
+    const previous = workflow.step5 as any;
+
+    workflow.step5 = this.buildStep5Summary(
+      previous.sources || [],
+      (workflow.step4 as any)?.modules || [],
+      {
+        sourceShortfalls: previous.sourceShortfalls || [],
+        subjectFields: previous.subjectFields || [],
+        retractionsRemoved: previous.retractionsRemoved || [],
+      }
+    );
+    (workflow.step5 as any).approvedAt = previous.approvedAt;
+    (workflow.step5 as any).approvedBy = previous.approvedBy;
+
+    workflow.markModified('step5');
+    await workflow.save();
+
+    loggingService.info('Step 5 aggregates recomputed', {
+      workflowId,
+      totalSources: (workflow.step5 as any).totalSources,
+      agiCompliant: (workflow.step5 as any).agiCompliant,
+    });
+    return workflow;
+  }
+
+  /**
+   * Process Step 5: Topic-Level Sources (AGI Academic Standards)
+   * Per workflow v2.2: Identify, validate, and tag high-quality academic and
+   * professional sources with APA 7th edition citations
+   */
+  async processStep5(workflowId: string): Promise<ICurriculumWorkflow> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow || !workflow.step4) {
+      throw new Error('Workflow not found or Step 4 not complete');
+    }
+
+    loggingService.info('Processing Step 5: Topic-Level Sources (AGI Standards)', { workflowId });
+
+    const sourcesContent = await this.generateStep5Content(workflow);
+
+    // Replace model-written journal citations with ones looked up for real.
+    //
+    // Citations the model composes do not survive checking: sampling ten DOIs
+    // from a generated business curriculum found six that did not exist and
+    // three that belonged to unrelated papers. Everything downstream — reading
+    // lists, lesson plans, assignments, the exam — cites whatever lands here, so
+    // the academic half of the list is now searched rather than written. Applied
+    // sources (professional bodies, industry reports, government research) stay
+    // as generated: those are named organisations with real, checkable pages.
+    const sources = await this.replaceAcademicSourcesWithVerified(
+      workflow,
+      sourcesContent.sources || []
+    );
+    workflow.step5 = this.buildStep5Summary(sources, workflow.step4.modules || [], {
+      sourceShortfalls: (workflow as any).__sourceShortfalls || [],
+      subjectFields: (workflow as any).__subjectFields || [],
+    });
 
     workflow.currentStep = 5;
     workflow.status = 'step5_complete';
@@ -2700,11 +2770,12 @@ CRITICAL VALIDATION:
 
     await workflow.save();
 
+    const summary = workflow.step5 as any;
     loggingService.info('Step 5 processed', {
       workflowId,
-      totalSources,
-      agiCompliant,
-      complianceIssues: complianceIssues.length,
+      totalSources: summary.totalSources,
+      agiCompliant: summary.agiCompliant,
+      complianceIssues: (summary.complianceIssues || []).length,
     });
 
     return workflow;
