@@ -48,6 +48,8 @@ export interface AcademicSource {
   citedByCount: number;
   /** OpenAlex's subject classification, recorded so off-topic drift is auditable. */
   subjectField: string | null;
+  /** Reconstructed from OpenAlex's inverted index; used to judge topical fit. */
+  abstract: string;
   /** Present so a caller can show why a source was considered credible. */
   evidence: { source: 'openalex'; venueType: string | null; openAlexId: string };
 }
@@ -189,6 +191,165 @@ export function looksRetracted(title: string): boolean {
 }
 
 /**
+ * OpenAlex ships abstracts as an inverted index ({word: [positions]}) to sidestep
+ * copyright on the contiguous text. Rebuilding it costs nothing — it arrives in the
+ * same response we already pay for — and it is far the strongest relevance signal
+ * available, because a title alone often says nothing about fit ("Fintechs: A
+ * literature review and research agenda" shares no words with the module that wants it).
+ */
+function reconstructAbstract(index: Record<string, number[]> | null | undefined): string {
+  if (!index) return '';
+  const words: string[] = [];
+  for (const [word, positions] of Object.entries(index)) {
+    for (const position of positions) words[position] = word;
+  }
+  return words.filter(Boolean).join(' ').slice(0, 2000);
+}
+
+/** Words too common in academic writing to say anything about subject fit. */
+const GENERIC_TERMS = new Set([
+  'study',
+  'studies',
+  'review',
+  'analysis',
+  'research',
+  'paper',
+  'article',
+  'approach',
+  'using',
+  'based',
+  'framework',
+  'evidence',
+  'perspective',
+  'perspectives',
+  'implications',
+  'case',
+  'cases',
+  'model',
+  'models',
+  'effect',
+  'effects',
+  'impact',
+  'impacts',
+  'role',
+  'roles',
+  'towards',
+  'toward',
+  'new',
+  'novel',
+  'systematic',
+  'literature',
+  'empirical',
+  'theory',
+  'theoretical',
+  'findings',
+  'results',
+  'data',
+  'from',
+  'with',
+  'into',
+  'their',
+  'there',
+  'this',
+  'that',
+  'these',
+  'those',
+  'which',
+  'while',
+  'have',
+  'been',
+  'more',
+  'most',
+  'than',
+]);
+
+const tokenise = (text: string): string[] =>
+  String(text || '')
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    // Length 2 and up so ESG, NPV, IRR, HRM, KPI, ROI survive; a 4-character floor
+    // silently deleted exactly the terms that identify a business module.
+    .filter((w) => w.length >= 2 && !/^\d+$/.test(w) && !GENERIC_TERMS.has(w));
+
+/**
+ * What a module is about, with each of its terms weighted by how unusual it is across
+ * the programme. "management" appears in half a business degree's modules and so counts
+ * for almost nothing; "portfolio" or "annuities" identify one module and count for a lot.
+ */
+export interface ModuleProfile {
+  moduleId: string;
+  terms: Map<string, number>;
+}
+
+/**
+ * Build one profile per module, with idf computed across the programme's own modules.
+ *
+ * Note the idf base is the module set actually present, so a short certificate gives
+ * coarser weights than a 46-module degree.
+ */
+export function buildModuleProfiles(
+  modules: { id: string; title?: string; topics?: string[]; mlos?: { statement?: string }[] }[]
+): Map<string, ModuleProfile> {
+  const docs = modules.map((m) => ({
+    id: m.id,
+    tokens: new Set(
+      tokenise(
+        [m.title || '', ...(m.topics || []), ...(m.mlos || []).map((x) => x.statement || '')].join(
+          ' '
+        )
+      )
+    ),
+  }));
+
+  const documentFrequency = new Map<string, number>();
+  for (const doc of docs) {
+    for (const token of doc.tokens) {
+      documentFrequency.set(token, (documentFrequency.get(token) || 0) + 1);
+    }
+  }
+
+  const total = Math.max(1, docs.length);
+  const profiles = new Map<string, ModuleProfile>();
+  for (const doc of docs) {
+    const terms = new Map<string, number>();
+    for (const token of doc.tokens) {
+      terms.set(token, Math.log(total / (documentFrequency.get(token) || 1)) + 1);
+    }
+    profiles.set(doc.id, { moduleId: doc.id, terms });
+  }
+  return profiles;
+}
+
+/**
+ * How much of a module's distinctive vocabulary a source actually speaks.
+ *
+ * Used only to ORDER candidates within one module, never to reject one. That matters:
+ * an earlier design used a lexical score as a hard cut and, measured against a hand
+ * labelled set, it would have deleted 14 sources a business academic would keep —
+ * including the best-aligned ESG papers in the corpus — while flipping 15 modules to
+ * non-compliant. Ordering cannot drop a good source; at worst it ranks one lower.
+ *
+ * Because comparison is always within a single module, the module's total weight is a
+ * constant and no normalisation is needed. Each distinct term counts once, so a long
+ * abstract cannot win on volume.
+ */
+export function moduleRelevance(
+  profile: ModuleProfile | undefined,
+  source: AcademicSource
+): number {
+  if (!profile) return 0;
+  const sourceTerms = new Set(tokenise(`${source.title} ${source.abstract || ''}`));
+  let score = 0;
+  for (const term of sourceTerms) {
+    score += profile.terms.get(term) || 0;
+  }
+  return score;
+}
+
+/**
  * A work counts as peer-reviewed when it appeared in a journal or conference
  * proceedings. Preprint servers and repositories host unrefereed material, so
  * they are excluded however reputable they are — that distinction is the whole
@@ -233,6 +394,7 @@ function toSource(work: any): AcademicSource | null {
     isOpenAccess: !!oa.is_oa,
     citedByCount: work.cited_by_count || 0,
     subjectField: work.primary_topic?.field?.display_name || null,
+    abstract: reconstructAbstract(work.abstract_inverted_index),
     evidence: { source: 'openalex', venueType: source?.type ?? null, openAlexId: work.id || '' },
   };
 }
@@ -414,6 +576,8 @@ export async function gatherModuleSources(
     fromYear?: number;
     requireFullText?: boolean;
     subjectFields?: string[];
+    /** Ordering signal: which of the candidates actually speak to this module. */
+    profile?: ModuleProfile;
   } = {}
 ): Promise<{ sources: AcademicSource[]; peerReviewedPercent: number; shortfall: string | null }> {
   const {
@@ -422,20 +586,24 @@ export async function gatherModuleSources(
     fromYear,
     requireFullText = false,
     subjectFields,
+    profile,
   } = options;
 
-  // Two queries per module, not five.
+  // One query per module: its title.
   //
-  // The daily OpenAlex allowance is $0.10, and a works request costs $0.001 - about 100
-  // requests a day. This loop used to allow five per module, so a 46-module programme
-  // could ask for 231 and cross the ceiling mid-run. That does not fail cleanly: once a
-  // 429 arrives every remaining module silently ends up with no academic sources, and
-  // the step only throws if the whole programme got none, so a half-empty curriculum
-  // gets saved looking finished. Capping the fan-out keeps the worst case at 93.
-  const MAX_QUERIES_PER_MODULE = 2;
-  const queries = [moduleTitle, ...topics]
-    .filter((q) => typeof q === 'string' && q.trim().length > 3)
-    .slice(0, MAX_QUERIES_PER_MODULE);
+  // Two other shapes were tried and measured against this curriculum, and both were
+  // worse. Five queries per module (the original) could ask for 231 requests against a
+  // daily allowance of about 100, and crossing it mid-run does not fail cleanly - after
+  // a 429 every remaining module silently ends up with no academic sources, and the step
+  // only throws if the whole programme got none, so a half-empty curriculum gets saved
+  // looking finished. Adding a second query on the module's most distinctive topic was
+  // an attempt to rescue modules whose titles are ordinary words ("People and
+  // Organisations"); it pulled in an Indonesian early-childhood education paper, a
+  // Ukrainian record titled "Помилково введена" ("erroneously entered") and NGO human
+  // rights work, all of which the relevance ranking then promoted for containing
+  // "teamwork" and "organisations". A narrower pool of one good query beats a wider pool
+  // of two, and 47 requests per run leaves real headroom.
+  const queries = [moduleTitle].filter((q) => typeof q === 'string' && q.trim().length > 3);
 
   const seen = new Set<string>();
   const peerReviewed: AcademicSource[] = [];
@@ -454,7 +622,29 @@ export async function gatherModuleSources(
       seen.add(key);
       (source.isPeerReviewed ? peerReviewed : other).push(source);
     }
-    if (peerReviewed.length >= target) break;
+  }
+
+  // Both queries always run. There used to be an early break once six peer-reviewed
+  // candidates had been seen, which sounded thrifty and was actively harmful: the first
+  // page reliably returns about fifty of them, so the break fired every single time and
+  // the second, more specific query never executed at all. The module that most needed
+  // it - "People and Organisations", whose title words match half the social sciences -
+  // was therefore never asked about motivation, teamwork or leadership. Two queries for
+  // 46 modules plus one to classify the programme is 93 requests, inside the daily 100.
+
+  // Order by how much of the module's distinctive vocabulary each candidate speaks.
+  //
+  // A page holds ~50 candidates and only 6 are used, so which 6 is the whole question.
+  // Taking them in OpenAlex's own relevance order is what let "Aboriginal community
+  // controlled health organisations" into a module on People and Organisations: measured
+  // over this curriculum, the off-topic rate climbs from 15% at rank 1 to over 40% by
+  // ranks 4-6, because a keyword match on one word is enough to reach the tail of a page.
+  // Ranking is applied to both pools, and nothing is discarded for scoring low.
+  if (profile) {
+    const byRelevance = (a: AcademicSource, b: AcademicSource) =>
+      moduleRelevance(profile, b) - moduleRelevance(profile, a);
+    peerReviewed.sort(byRelevance);
+    other.sort(byRelevance);
   }
 
   // Kept in relevance order. Sorting by citation count was what surfaced

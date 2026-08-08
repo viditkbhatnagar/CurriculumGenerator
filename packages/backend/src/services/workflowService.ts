@@ -20,6 +20,7 @@ import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundi
 import {
   gatherModuleSources,
   deriveSubjectFields,
+  buildModuleProfiles,
   citationAuthors,
   titleSimilarity,
   SourceLookupUnavailable,
@@ -5045,6 +5046,11 @@ CRITICAL VALIDATION:
     // afterwards, without needing the server logs.
     (workflow as any).__subjectFields = subjectFields;
 
+    // Weight each module's vocabulary by how unusual it is across this programme, so a
+    // candidate can be judged on the terms that actually identify the module rather than
+    // on words every business module shares.
+    const moduleProfiles = buildModuleProfiles(modules);
+
     // Once the lookup service is out of allowance every further call fails, so
     // stop asking and record honestly which modules went unverified.
     let lookupUnavailable: string | null = null;
@@ -5065,9 +5071,17 @@ CRITICAL VALIDATION:
         const result = await gatherModuleSources(module.title, topics, {
           target: 6,
           peerReviewedShare: 0.6,
-          fromYear: currentYear - 8,
+          // Five years, matching the recency rule the compliance check applies. It used
+          // to be eight, which guaranteed a standing "some sources are outdated without
+          // seminal justification" failure on every curriculum. Measured across five of
+          // this programme's modules, tightening it costs nothing: roughly 49 of every 50
+          // results are still peer-reviewed with a free full text at either floor.
+          // Genuinely foundational older work belongs in a seminal lane that records why
+          // it was kept, not in a loosened floor that admits everything.
+          fromYear: currentYear - 5,
           requireFullText: true,
           subjectFields,
+          profile: moduleProfiles.get(module.id),
         });
         if (result.shortfall) shortfalls.push(result.shortfall);
 
