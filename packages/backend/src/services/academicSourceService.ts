@@ -163,6 +163,32 @@ export const citationAuthors = (authors: string[]): string => {
 };
 
 /**
+ * Does this title announce its own retraction?
+ *
+ * A cheap backstop for the registry checks, and the only check available for sources
+ * that carry no DOI at all. Publishers mark retractions in the title itself, either as
+ * a leading marker ("RETRACTED: ...", "RETRACTED ARTICLE: ...") or a trailing
+ * parenthetical ("... (Retracted)").
+ *
+ * Deliberately narrow. A bare /retract/ substring test was measured against 50 works
+ * from this programme's own subject fields and produced 15 false positives, flagging
+ * both topology papers where "retract" is a technical noun ("Retracts of hypercubes")
+ * and meta-research legitimately about retraction ("Why and how do journals retract
+ * articles?"). "withdrawn" and "removed" are not matched: both registries already
+ * report them, and neither had a measured negative sample to justify the risk.
+ */
+export function looksRetracted(title: string): boolean {
+  const text = String(title || '')
+    // Publishers sometimes wrap the marker in markup: "<i>Retracted</i>: ...".
+    .replace(/<[^>]+>/g, '')
+    .trim();
+  return (
+    /^\s*retracted\b[^:\-–]{0,24}?\s*(?::|-|–|\b(?=article\b))/i.test(text) ||
+    /\(\s*retracted\s*\)\s*$/i.test(text)
+  );
+}
+
+/**
  * A work counts as peer-reviewed when it appeared in a journal or conference
  * proceedings. Preprint servers and repositories host unrefereed material, so
  * they are excluded however reputable they are — that distinction is the whole
@@ -179,6 +205,17 @@ const isPeerReviewedVenue = (work: any): boolean => {
 
 function toSource(work: any): AcademicSource | null {
   if (!work?.display_name) return null;
+  // Defence in depth behind the is_retracted filter, and the only guard that applies
+  // when a work arrives from anywhere other than a filtered search. Compared against
+  // `true` rather than tested for truthiness so an absent field never drops good work.
+  if (work.is_retracted === true) return null;
+  if (looksRetracted(work.display_name)) {
+    loggingService.warn('Dropped a source whose title announces a retraction', {
+      title: String(work.display_name).slice(0, 160),
+      doi: work.doi || null,
+    });
+    return null;
+  }
   const source = work.primary_location?.source;
   const oa = work.open_access || {};
   const doi = work.doi ? String(work.doi).replace(/^https?:\/\/doi\.org\//, '') : null;
@@ -289,6 +326,10 @@ export async function searchAcademicSources(
   if (requireFullText) filters.push('is_oa:true');
   if (subjectFields?.length) filters.push(`primary_topic.field.id:${subjectFields.join('|')}`);
   filters.push('has_doi:true');
+  // Never return retracted work. OpenAlex populates is_retracted on every work and
+  // accepts it as a server-side filter, so this costs nothing and reclaims a slot in
+  // the fixed 50-result page instead of spending one on a paper that must be discarded.
+  filters.push('is_retracted:false');
 
   const url =
     `${OPENALEX}/works?search=${encodeURIComponent(query)}` +
@@ -383,9 +424,18 @@ export async function gatherModuleSources(
     subjectFields,
   } = options;
 
-  const queries = [moduleTitle, ...topics.slice(0, 4)].filter(
-    (q) => typeof q === 'string' && q.trim().length > 3
-  );
+  // Two queries per module, not five.
+  //
+  // The daily OpenAlex allowance is $0.10, and a works request costs $0.001 - about 100
+  // requests a day. This loop used to allow five per module, so a 46-module programme
+  // could ask for 231 and cross the ceiling mid-run. That does not fail cleanly: once a
+  // 429 arrives every remaining module silently ends up with no academic sources, and
+  // the step only throws if the whole programme got none, so a half-empty curriculum
+  // gets saved looking finished. Capping the fan-out keeps the worst case at 93.
+  const MAX_QUERIES_PER_MODULE = 2;
+  const queries = [moduleTitle, ...topics]
+    .filter((q) => typeof q === 'string' && q.trim().length > 3)
+    .slice(0, MAX_QUERIES_PER_MODULE);
 
   const seen = new Set<string>();
   const peerReviewed: AcademicSource[] = [];
@@ -412,22 +462,46 @@ export async function gatherModuleSources(
   // Management & Organisations": the most-cited open-access papers matching
   // almost any query are biomedical, by a wide margin. Relevance is what a
   // reading list needs; the subject-field filter supplies the credibility floor.
-  const wantPeerReviewed = Math.ceil(target * peerReviewedShare);
-  const chosen = [...peerReviewed.slice(0, Math.max(wantPeerReviewed, target - other.length))];
+  //
+  // Peer-reviewed candidates fill the list first, up to the target. The previous
+  // expression was `peerReviewed.slice(0, Math.max(wantPeerReviewed, target - other.length))`,
+  // which capped peer-reviewed picks at `target - other.length` whenever any
+  // non-peer-reviewed candidate existed: with a target of 6 and two others in hand it
+  // took 4 peer-reviewed papers and gave the last two slots away, no matter how many
+  // peer-reviewed candidates were sitting unused. That is why so many modules reported
+  // exactly 67% — four of six — rather than what the search actually found.
+  const chosen = peerReviewed.slice(0, target);
+  const usedOther: AcademicSource[] = [];
   for (const source of other) {
     if (chosen.length >= target) break;
     chosen.push(source);
+    usedOther.push(source);
   }
 
   const actualPeerReviewed = chosen.filter((s) => s.isPeerReviewed).length;
   const percent = chosen.length ? Math.round((actualPeerReviewed / chosen.length) * 100) : 0;
 
+  // Two different shortfalls, reported separately because they mean different things:
+  // not enough peer-reviewed work exists on the topic, versus the list had to be padded
+  // with material that is open but unrefereed (the SME's "unknown/unclear academic
+  // source - review before proceeding" case).
+  const shortfalls: string[] = [];
+  if (percent < peerReviewedShare * 100) {
+    shortfalls.push(
+      `Only ${actualPeerReviewed} of ${chosen.length} sources for "${moduleTitle}" are peer-reviewed (${percent}%). Searching found no more that met the filters.`
+    );
+  }
+  if (usedOther.length > 0) {
+    shortfalls.push(
+      `${usedOther.length} source(s) for "${moduleTitle}" are open but not peer-reviewed and should be reviewed before use: ${usedOther
+        .map((s) => `"${s.title}"`)
+        .join(', ')}.`
+    );
+  }
+
   return {
     sources: chosen,
     peerReviewedPercent: percent,
-    shortfall:
-      percent < peerReviewedShare * 100
-        ? `Only ${actualPeerReviewed} of ${chosen.length} sources for "${moduleTitle}" are peer-reviewed (${percent}%). Searching found no more that met the filters.`
-        : null,
+    shortfall: shortfalls.length ? shortfalls.join(' ') : null,
   };
 }
