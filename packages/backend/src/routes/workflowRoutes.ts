@@ -2770,6 +2770,15 @@ router.put(
       workflow.markModified('step5');
       await workflow.save();
 
+      // Recompute the step's aggregates. Editing a source changes the peer-reviewed
+      // share, the free-access ratio, MLO coverage and the compliance verdict; without
+      // this the panel keeps showing numbers for the list as it was before the edit.
+      await workflowService
+        .recomputeStep5(id)
+        .catch((err) =>
+          loggingService.warn('Step 5 recompute after source change failed', { err })
+        );
+
       loggingService.info('Source updated successfully', { sourceId, source });
 
       res.json({
@@ -2923,6 +2932,13 @@ router.post('/:id/step5/source', validateJWT, loadUser, async (req: Request, res
       }
     }
 
+    // Recompute the step's aggregates. Editing a source changes the peer-reviewed
+    // share, the free-access ratio, MLO coverage and the compliance verdict; without
+    // this the panel keeps showing numbers for the list as it was before the edit.
+    await workflowService
+      .recomputeStep5(id)
+      .catch((err) => loggingService.warn('Step 5 recompute after source change failed', { err }));
+
     loggingService.info('Source added to Step 5', {
       workflowId: id,
       sourceId,
@@ -3001,6 +3017,15 @@ router.delete(
           loggingService.warn('Audit log for source delete failed', { auditErr });
         }
       }
+
+      // Recompute the step's aggregates. Editing a source changes the peer-reviewed
+      // share, the free-access ratio, MLO coverage and the compliance verdict; without
+      // this the panel keeps showing numbers for the list as it was before the edit.
+      await workflowService
+        .recomputeStep5(id)
+        .catch((err) =>
+          loggingService.warn('Step 5 recompute after source change failed', { err })
+        );
 
       loggingService.info('Source removed from Step 5', { workflowId: id, sourceId, moduleId });
       res.json({ success: true, message: 'Source removed' });
