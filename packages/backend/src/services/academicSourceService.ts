@@ -578,6 +578,14 @@ export async function gatherModuleSources(
     subjectFields?: string[];
     /** Ordering signal: which of the candidates actually speak to this module. */
     profile?: ModuleProfile;
+    /**
+     * Optional semantic re-ranker, applied to the whole candidate pool before six are
+     * chosen. Supplied as a callback so this module stays a plain HTTP client with no
+     * dependency on an embedding provider. When absent, the lexical profile above is
+     * used, which is weaker: it cannot tell "Fundamentals of Financial Accounting" from
+     * "fundamental principles of machine learning".
+     */
+    rank?: (candidates: AcademicSource[]) => Promise<AcademicSource[]>;
   } = {}
 ): Promise<{ sources: AcademicSource[]; peerReviewedPercent: number; shortfall: string | null }> {
   const {
@@ -587,6 +595,7 @@ export async function gatherModuleSources(
     requireFullText = false,
     subjectFields,
     profile,
+    rank,
   } = options;
 
   // One query per module: its title.
@@ -640,7 +649,13 @@ export async function gatherModuleSources(
   // over this curriculum, the off-topic rate climbs from 15% at rank 1 to over 40% by
   // ranks 4-6, because a keyword match on one word is enough to reach the tail of a page.
   // Ranking is applied to both pools, and nothing is discarded for scoring low.
-  if (profile) {
+  if (rank) {
+    const [rankedPeerReviewed, rankedOther] = await Promise.all([rank(peerReviewed), rank(other)]);
+    peerReviewed.length = 0;
+    peerReviewed.push(...rankedPeerReviewed);
+    other.length = 0;
+    other.push(...rankedOther);
+  } else if (profile) {
     const byRelevance = (a: AcademicSource, b: AcademicSource) =>
       moduleRelevance(profile, b) - moduleRelevance(profile, a);
     peerReviewed.sort(byRelevance);

@@ -853,6 +853,20 @@ function SourceCard({
                 Added manually
               </span>
             )}
+            {/* Placement check. A professional or industry source that reads as a closer
+                fit for a different module is flagged rather than moved, because a module
+                needs at least one applied source to count as compliant. */}
+            {(source as any).complianceBadges?.relevanceReview && (
+              <span
+                className="text-xs px-2 py-0.5 rounded-full border border-orange-400 bg-orange-50 text-orange-700"
+                title={
+                  (source as any).complianceBadges?.relevanceNote ||
+                  'May belong to a different module'
+                }
+              >
+                Check placement
+              </span>
+            )}
           </div>
         </div>
 

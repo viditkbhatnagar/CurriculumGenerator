@@ -22,9 +22,17 @@ import {
   deriveSubjectFields,
   buildModuleProfiles,
   citationAuthors,
-  titleSimilarity,
   SourceLookupUnavailable,
 } from './academicSourceService';
+import {
+  buildModuleSemantics,
+  rankByMeaning,
+  scoreAgainstMLOs,
+  scoreAgainstModules,
+  MLO_SUPPORT_FLOOR,
+  MAX_MLOS_PER_SOURCE,
+  type ModuleSemantics,
+} from './sourceRelevanceService';
 
 // Initialize RAG Engine and Knowledge Base Service for context retrieval
 const ragEngine = new RAGEngine();
@@ -4942,63 +4950,161 @@ CRITICAL VALIDATION:
    * quietly counted as compliant.
    */
   /**
-   * Decide which module learning outcome each source supports.
+   * Decide which module learning outcome each source supports, by meaning.
    *
-   * Step 5 shows a per-module tick for "every MLO has a source behind it", which
-   * is `mlos.every(id => someSource.linkedMLOs.includes(id))`. Sources were being
-   * linked to the first two outcomes in array order, so a module with four
-   * outcomes could never satisfy it however good its reading list was — and where
-   * it did pass, it passed because of position, which tells a reviewer nothing.
+   * Step 5 shows a per-module tick for "every outcome has a source behind it", computed
+   * as `mlos.every(id => someSource.linkedMLOs.includes(id))`. Two earlier versions of
+   * this were unsound in different ways. The first assigned the first two outcomes in
+   * array order, so a module with four outcomes could never pass however good its reading
+   * list was. The second scored word overlap between the source title and the outcome
+   * statement - but an outcome is one sentence, overlap with it is usually zero, and when
+   * every score tied at zero the winner was whichever outcome sat at index 0. Measured
+   * over the stored links, 265 of 574 had no overlap at all with the outcome they were
+   * attached to: the tick was green on the strength of coin flips.
    *
-   * Each source now claims the outcome whose statement it most resembles, and any
-   * outcome left uncited is given the source that best matches it. Lexical overlap
-   * is a weak signal, but it is a real one, and it is applied to sources that were
-   * retrieved for this module in the first place.
+   * Similarity is now computed in embedding space, and a source that resembles no outcome
+   * closely enough claims none. The outcome then shows as uncovered, which is the honest
+   * result - an awarding body leans on this tick, so a false green is worse than a red.
    *
-   * `alreadyLinked` are sources whose mapping is left alone — applied sources
-   * carry the model's own choice — so their coverage counts and is not duplicated.
+   * Every per-outcome score is stored on the source, so the floor can be re-derived later
+   * without paying for another generation.
+   *
+   * `alreadyLinked` are sources whose mapping is left alone - applied sources carry the
+   * model's own choice - so their coverage counts and is not duplicated.
    */
-  private linkSourcesToMLOs(sources: any[], mlos: any[], alreadyLinked: any[] = []): void {
+  private async linkSourcesToMLOs(
+    sources: any[],
+    mlos: any[],
+    semantics: ModuleSemantics | undefined,
+    alreadyLinked: any[] = []
+  ): Promise<void> {
     const mloIds = mlos.map((m: any) => m.id).filter(Boolean);
     if (mloIds.length === 0 || sources.length === 0) return;
 
-    const statements = mlos.map((m: any) => String(m.statement || ''));
-    const score = sources.map((s: any) => statements.map((st) => titleSimilarity(s.title, st)));
+    const scores = await scoreAgainstMLOs(sources, semantics);
+    if (scores.size === 0) {
+      // No semantic signal available. Leave the mapping empty rather than inventing one:
+      // an uncovered outcome is recoverable, a fabricated claim of coverage is not.
+      sources.forEach((s: any) => {
+        s.linkedMLOs = [];
+      });
+      loggingService.warn('No outcome scores available; sources left unmapped', {
+        sources: sources.length,
+      });
+      return;
+    }
 
-    const bestMloFor = (sourceIndex: number): number => {
-      let best = 0;
-      for (let j = 1; j < mloIds.length; j++) {
-        if (score[sourceIndex][j] > score[sourceIndex][best]) best = j;
-      }
-      return best;
-    };
+    sources.forEach((source: any) => {
+      const perMlo = scores.get(source) || {};
+      const ranked = mloIds
+        .map((mloId: string) => ({ mloId, score: perMlo[mloId] ?? 0 }))
+        .sort((a, b) => b.score - a.score);
 
-    sources.forEach((s: any, i: number) => {
-      s.linkedMLOs = [mloIds[bestMloFor(i)]];
+      source.mloScores = perMlo;
+      source.linkedMLOs = ranked
+        .filter((entry) => entry.score >= MLO_SUPPORT_FLOOR)
+        .slice(0, MAX_MLOS_PER_SOURCE)
+        .map((entry) => entry.mloId);
     });
 
+    // An outcome nothing has claimed goes to its own best match, but still only if that
+    // match clears the floor. Below it the outcome stays uncovered on purpose.
     const covered = new Set<string>([
-      ...sources.flatMap((s: any) => s.linkedMLOs),
+      ...sources.flatMap((s: any) => s.linkedMLOs || []),
       ...alreadyLinked.flatMap((s: any) => s.linkedMLOs || []),
     ]);
 
-    mloIds.forEach((mloId: string, j: number) => {
-      if (covered.has(mloId)) return;
+    for (const mloId of mloIds) {
+      if (covered.has(mloId)) continue;
 
-      // Best match for this outcome, and where nothing matches — overlap can be
-      // zero across the board — the source carrying the least, so one entry does
-      // not end up claiming every outcome.
-      let best = 0;
-      for (let i = 1; i < sources.length; i++) {
-        const better = score[i][j] > score[best][j];
-        const tied =
-          score[i][j] === score[best][j] &&
-          sources[i].linkedMLOs.length < sources[best].linkedMLOs.length;
-        if (better || tied) best = i;
+      let best: any = null;
+      let bestScore = 0;
+      for (const source of sources) {
+        const score = (scores.get(source) || {})[mloId] ?? 0;
+        if (score > bestScore) {
+          bestScore = score;
+          best = source;
+        }
       }
-      sources[best].linkedMLOs.push(mloId);
-      covered.add(mloId);
-    });
+      if (best && bestScore >= MLO_SUPPORT_FLOOR) {
+        best.linkedMLOs = [...(best.linkedMLOs || []), mloId];
+        covered.add(mloId);
+      }
+    }
+
+    const uncovered = mloIds.filter((id: string) => !covered.has(id));
+    if (uncovered.length > 0) {
+      loggingService.info('Outcomes with no source close enough to support them', {
+        uncovered,
+        floor: MLO_SUPPORT_FLOOR,
+      });
+    }
+  }
+
+  /**
+   * Flag applied and industry sources that sit under the wrong module.
+   *
+   * These are written by the model, not looked up, and it assigns them in one pass over
+   * the whole programme - so a CIPD People Analytics factsheet lands under Consumer
+   * Behaviour & Marketing Analytics, and Deloitte's Global Marketing Trends under Project
+   * Management. Both name real organisations and real reports; the source is fine, the
+   * placement is not.
+   *
+   * They are flagged rather than removed. A module needs at least one applied source to
+   * count as compliant, so deleting them would turn a placement problem into a compliance
+   * failure and hand the author a worse document. A flag with the better-fitting module
+   * named is what a reviewer can actually act on.
+   */
+  private async flagMisplacedAppliedSources(
+    sources: any[],
+    modules: any[],
+    semantics: Map<string, ModuleSemantics>
+  ): Promise<number> {
+    const applied = sources.filter((s: any) => s.type === 'applied' || s.type === 'industry');
+    if (applied.length === 0 || semantics.size === 0) return 0;
+
+    const scored = await scoreAgainstModules(applied, modules, semantics);
+    if (scored.size === 0) return 0;
+
+    /** How much better another module must fit before the placement is called wrong. */
+    const REASSIGNMENT_MARGIN = 0.08;
+
+    let flagged = 0;
+    for (const source of applied) {
+      const perModule = scored.get(source);
+      if (!perModule) continue;
+
+      const own = perModule[source.moduleId] ?? 0;
+      let bestId = source.moduleId;
+      let best = own;
+      for (const [moduleId, score] of Object.entries(perModule)) {
+        if (score > best) {
+          best = score;
+          bestId = moduleId;
+        }
+      }
+
+      source.moduleFitScore = Number(own.toFixed(4));
+      if (bestId !== source.moduleId && best - own >= REASSIGNMENT_MARGIN) {
+        const better = modules.find((m: any) => m.id === bestId);
+        source.complianceBadges = {
+          ...(source.complianceBadges || {}),
+          relevanceReview: true,
+          relevanceNote: `Placed under this module, but reads as a closer fit for "${
+            better?.title || bestId
+          }". Worth reviewing before use.`,
+        };
+        flagged += 1;
+      }
+    }
+
+    if (flagged > 0) {
+      loggingService.info('Applied sources flagged as possibly misplaced', {
+        flagged,
+        of: applied.length,
+      });
+    }
+    return flagged;
   }
 
   private async replaceAcademicSourcesWithVerified(
@@ -5048,8 +5154,23 @@ CRITICAL VALIDATION:
 
     // Weight each module's vocabulary by how unusual it is across this programme, so a
     // candidate can be judged on the terms that actually identify the module rather than
-    // on words every business module shares.
+    // on words every business module shares. Kept as a fallback for when embeddings are
+    // unavailable; the semantic pass below is what actually decides.
     const moduleProfiles = buildModuleProfiles(modules);
+
+    // Embed every module and every learning outcome once. This is what stops a keyword
+    // collision - "Fundamentals of Financial Accounting" against "fundamental principles
+    // of machine learning" - from being read as a match. If it fails, the run continues on
+    // the lexical profile rather than aborting: a weaker ordering is still better than
+    // losing a generation.
+    let semantics = new Map<string, ModuleSemantics>();
+    try {
+      semantics = await buildModuleSemantics(modules);
+    } catch (error) {
+      loggingService.warn('Could not build module semantics; falling back to lexical order', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     // Once the lookup service is out of allowance every further call fails, so
     // stop asking and record honestly which modules went unverified.
@@ -5082,6 +5203,10 @@ CRITICAL VALIDATION:
           requireFullText: true,
           subjectFields,
           profile: moduleProfiles.get(module.id),
+          rank: semantics.has(module.id)
+            ? async (candidates) =>
+                (await rankByMeaning(candidates, semantics.get(module.id))).map((s) => s.source)
+            : undefined,
         });
         if (result.shortfall) shortfalls.push(result.shortfall);
 
@@ -5121,7 +5246,12 @@ CRITICAL VALIDATION:
           agiCompliant: true,
         }));
 
-        this.linkSourcesToMLOs(verified, module.mlos || [], applied);
+        await this.linkSourcesToMLOs(
+          verified,
+          module.mlos || [],
+          semantics.get(module.id),
+          applied
+        );
       } catch (error) {
         if (error instanceof SourceLookupUnavailable) {
           lookupUnavailable = error.message;
@@ -5156,6 +5286,20 @@ CRITICAL VALIDATION:
 
     // Anything the model attached to no module at all.
     output.push(...generated.filter((s: any) => !s.moduleId));
+
+    const misplaced = await this.flagMisplacedAppliedSources(output, modules, semantics).catch(
+      (error) => {
+        loggingService.warn('Could not check applied-source placement', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return 0;
+      }
+    );
+    if (misplaced > 0) {
+      shortfalls.push(
+        `${misplaced} professional or industry source(s) read as a better fit for a different module and are flagged for review.`
+      );
+    }
 
     const verifiedCount = output.filter((s) => s.complianceBadges?.verifiedVia).length;
 
