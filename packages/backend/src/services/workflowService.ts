@@ -29,8 +29,8 @@ import {
   rankByMeaning,
   scoreAgainstMLOs,
   scoreAgainstModules,
+  assignOutcomes,
   MLO_SUPPORT_FLOOR,
-  MAX_MLOS_PER_SOURCE,
   type ModuleSemantics,
 } from './sourceRelevanceService';
 
@@ -4995,44 +4995,14 @@ CRITICAL VALIDATION:
     }
 
     sources.forEach((source: any) => {
-      const perMlo = scores.get(source) || {};
-      const ranked = mloIds
-        .map((mloId: string) => ({ mloId, score: perMlo[mloId] ?? 0 }))
-        .sort((a, b) => b.score - a.score);
-
-      source.mloScores = perMlo;
-      source.linkedMLOs = ranked
-        .filter((entry) => entry.score >= MLO_SUPPORT_FLOOR)
-        .slice(0, MAX_MLOS_PER_SOURCE)
-        .map((entry) => entry.mloId);
+      source.mloScores = scores.get(source) || {};
     });
 
-    // An outcome nothing has claimed goes to its own best match, but still only if that
-    // match clears the floor. Below it the outcome stays uncovered on purpose.
-    const covered = new Set<string>([
-      ...sources.flatMap((s: any) => s.linkedMLOs || []),
-      ...alreadyLinked.flatMap((s: any) => s.linkedMLOs || []),
-    ]);
-
-    for (const mloId of mloIds) {
-      if (covered.has(mloId)) continue;
-
-      let best: any = null;
-      let bestScore = 0;
-      for (const source of sources) {
-        const score = (scores.get(source) || {})[mloId] ?? 0;
-        if (score > bestScore) {
-          bestScore = score;
-          best = source;
-        }
-      }
-      if (best && bestScore >= MLO_SUPPORT_FLOOR) {
-        best.linkedMLOs = [...(best.linkedMLOs || []), mloId];
-        covered.add(mloId);
-      }
-    }
-
-    const uncovered = mloIds.filter((id: string) => !covered.has(id));
+    // The assignment rule itself lives in the relevance service, so the same code runs
+    // here and in an offline repair. That matters because the support floor is a
+    // judgement: with the scores stored, changing it re-derives the mapping for free
+    // instead of costing another generation.
+    const { uncovered } = assignOutcomes(sources, mloIds, alreadyLinked);
     if (uncovered.length > 0) {
       loggingService.info('Outcomes with no source close enough to support them', {
         uncovered,

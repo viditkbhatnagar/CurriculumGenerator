@@ -251,7 +251,80 @@ export async function scoreAgainstModules<T extends { title?: string; abstract?:
  * Every score is persisted alongside the assignment, so this number can be re-derived
  * against real data without another generation.
  */
-export const MLO_SUPPORT_FLOOR = 0.25;
+export const MLO_SUPPORT_FLOOR = 0.42;
+
+/**
+ * Why 0.42 and not something rounder: measured over 1,104 source-to-outcome pairs from a
+ * real 46-module programme, the cosine distribution runs min 0.178, p10 0.372, median
+ * 0.487, p90 0.596. An earlier floor of 0.25 excluded four pairs out of 1,104 — it was
+ * doing nothing at all, and "a source that resembles no outcome claims none" was a
+ * promise the code never kept. 0.42 sits between the tenth percentile and the median, so
+ * a weak pairing is actually refused.
+ *
+ * Same-domain text embeds close together, so these numbers do not transfer to a different
+ * kind of programme. The per-outcome scores are stored on every source precisely so this
+ * can be re-derived from real data rather than guessed again.
+ */
 
 /** How many outcomes one source may reasonably be said to support. */
 export const MAX_MLOS_PER_SOURCE = 2;
+
+/**
+ * Turn stored per-outcome scores into outcome assignments.
+ *
+ * Pure, and separate from the scoring, so the same rule runs during generation and in an
+ * offline repair. That separation is the point: the floor below is a judgement, and when
+ * it changes the mapping can be re-derived from the scores already on the document
+ * instead of paying for another generation to find out.
+ *
+ * Mutates `linkedMLOs` on each source. Sources in `alreadyLinked` keep their own mapping
+ * and only contribute their coverage.
+ */
+export function assignOutcomes(
+  sources: { mloScores?: Record<string, number>; linkedMLOs?: string[] }[],
+  mloIds: string[],
+  alreadyLinked: { linkedMLOs?: string[] }[] = []
+): { uncovered: string[] } {
+  if (mloIds.length === 0 || sources.length === 0) return { uncovered: [] };
+
+  for (const source of sources) {
+    const scores = source.mloScores || {};
+    source.linkedMLOs = mloIds
+      .map((mloId) => ({ mloId, score: scores[mloId] ?? 0 }))
+      .filter((entry) => entry.score >= MLO_SUPPORT_FLOOR)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, MAX_MLOS_PER_SOURCE)
+      .map((entry) => entry.mloId);
+  }
+
+  const covered = new Set<string>([
+    ...sources.flatMap((s) => s.linkedMLOs || []),
+    ...alreadyLinked.flatMap((s) => s.linkedMLOs || []),
+  ]);
+
+  for (const mloId of mloIds) {
+    if (covered.has(mloId)) continue;
+
+    // Among sources that genuinely clear the floor for this outcome, prefer the one
+    // carrying the fewest links, so filling a gap respects the per-source cap rather than
+    // loading every leftover outcome onto whichever source scores highest.
+    let best: { linkedMLOs?: string[] } | null = null;
+    let bestScore = 0;
+    for (const source of sources) {
+      const score = (source.mloScores || {})[mloId] ?? 0;
+      if (score < MLO_SUPPORT_FLOOR) continue;
+      const load = (source.linkedMLOs || []).length;
+      const bestLoad = best ? (best.linkedMLOs || []).length : Infinity;
+      if (!best || load < bestLoad || (load === bestLoad && score > bestScore)) {
+        best = source;
+        bestScore = score;
+      }
+    }
+    if (best) {
+      best.linkedMLOs = [...(best.linkedMLOs || []), mloId];
+      covered.add(mloId);
+    }
+  }
+
+  return { uncovered: mloIds.filter((id) => !covered.has(id)) };
+}
