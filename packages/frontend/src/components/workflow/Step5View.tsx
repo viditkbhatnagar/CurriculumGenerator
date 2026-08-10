@@ -1286,6 +1286,37 @@ function ModuleSummaryCard({ summary }: { summary: ModuleSourceSummary }) {
         </div>
       </div>
 
+      {/* Name the outcomes rather than only ticking or crossing.
+          A ✗ told an author nothing about what to go and find, and the two reasons an
+          outcome can look thin are different: nothing supports it at all, or nothing
+          scholarly does. The second is often normal — outcomes like "calculate NPV" or
+          "build an Excel dashboard" are taught by textbooks and professional guides, not
+          by journal articles. */}
+      {(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const s = summary as any;
+        const uncovered: string[] = Array.isArray(s.uncoveredMLOs) ? s.uncoveredMLOs : [];
+        const noAcademic: string[] = Array.isArray(s.mlosWithoutAcademicSource)
+          ? s.mlosWithoutAcademicSource.filter((id: string) => !uncovered.includes(id))
+          : [];
+        if (uncovered.length === 0 && noAcademic.length === 0) return null;
+        return (
+          <div className="mt-3 space-y-1 text-xs">
+            {uncovered.length > 0 && (
+              <p className="text-red-600">
+                <span className="font-medium">No source at all:</span> {uncovered.join(', ')}
+              </p>
+            )}
+            {noAcademic.length > 0 && (
+              <p className="text-amber-600">
+                <span className="font-medium">Only professional/industry sources:</span>{' '}
+                {noAcademic.join(', ')}
+              </p>
+            )}
+          </div>
+        );
+      })()}
+
       <div className="mt-3 pt-3 border-t border-teal-200/50 flex items-center justify-between text-xs">
         <span className="text-teal-500">
           Academic: {summary.academicCount} | Applied: {summary.appliedCount}

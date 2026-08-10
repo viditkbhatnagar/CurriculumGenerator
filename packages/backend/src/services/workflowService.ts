@@ -2598,6 +2598,17 @@ CRITICAL VALIDATION:
         ),
         allocatedIndependentHours: mod.selfStudyHours || mod.independentHours || 0,
         allMLOsSupported: modMLOs.every((mloId: string) => supportedMLOs.has(mloId)),
+        // Which outcomes have nothing behind them, and which have nothing SCHOLARLY behind
+        // them. The single tick could only say "all covered" or "not all covered", which
+        // told an author nothing about what to go and find. Several outcomes ask students
+        // to calculate NPV, build an Excel model or map a process with SIPOC - things
+        // peer-reviewed journals do not teach - so an outcome carried only by a
+        // professional-body guide is a normal state of affairs, not a defect, and the two
+        // cases need telling apart.
+        uncoveredMLOs: modMLOs.filter((mloId: string) => !supportedMLOs.has(mloId)),
+        mlosWithoutAcademicSource: modMLOs.filter(
+          (mloId: string) => !modAcademic.some((s: any) => (s.linkedMLOs || []).includes(mloId))
+        ),
         agiCompliant:
           modPeerReviewed.length / (modSources.length || 1) >= 0.5 &&
           modAcademic.length > 0 &&
