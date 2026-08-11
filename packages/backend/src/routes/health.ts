@@ -25,6 +25,11 @@ router.get('/health', async (req, res) => {
       typeof process.constrainedMemory === 'function' ? process.constrainedMemory() : 0;
     res.status(statusCode).json({
       ...healthStatus,
+      // Which commit is actually serving. Uptime alone is not enough to tell whether a
+      // push has landed: a deploy that started after a commit was made may still be
+      // running the previous one, and acting on that assumption means "verifying" a fix
+      // against the build that does not contain it.
+      commit: (process.env.RENDER_GIT_COMMIT || '').slice(0, 7) || null,
       memory: {
         containerLimitMB: constrained ? mb(constrained) : null,
         hostTotalMB: mb(os.totalmem()),
