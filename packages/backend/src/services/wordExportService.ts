@@ -12,6 +12,7 @@ import {
 } from 'docx';
 import OpenAI from 'openai';
 import { loggingService } from './loggingService';
+import { moduleLabelOf } from '../utils/moduleIdentity';
 
 interface WorkflowData {
   projectName: string;
@@ -2607,9 +2608,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
       const orderedPacks = this.orderModulesByStep4(step12.moduleAssignmentPacks, step4);
       for (const modulePack of orderedPacks) {
-        contentChildren.push(
-          this.createH3(`${modulePack.moduleCode || ''} — ${modulePack.moduleTitle || ''}`)
-        );
+        contentChildren.push(this.createH3(moduleLabelOf(modulePack)));
 
         const variants: [string, any][] = [
           ['In-Person', modulePack.variants?.in_person],

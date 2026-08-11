@@ -9,6 +9,7 @@ import {
   CaseStudyActivity,
   FormativeCheck,
 } from '../models/CurriculumWorkflow';
+import { moduleCodeOf } from '../utils/moduleIdentity';
 
 /**
  * PPT Generation Service
@@ -493,7 +494,7 @@ Return ONLY valid JSON, no markdown formatting.`;
 
     return {
       moduleTitle: moduleData.title,
-      moduleCode: moduleData.moduleCode,
+      moduleCode: moduleCodeOf(moduleData),
       slides,
     };
   }

@@ -55,6 +55,7 @@ import { isStepDone } from '../services/stepGating';
 import { sanitizeReadingPayload } from '../services/readingValidator';
 import { sanitizeSourcePayload } from '../services/sourceValidator';
 import crypto from 'crypto';
+import { moduleLabelOf } from '../utils/moduleIdentity';
 
 const router = Router();
 
@@ -4815,7 +4816,16 @@ router.post('/:id/step10/approve', validateJWT, loadUser, async (req: Request, r
     if (modulesWithoutLessons.length > 0) {
       return res.status(400).json({
         success: false,
-        error: `Some modules have no lessons generated: ${modulesWithoutLessons.map((m: any) => m.moduleCode).join(', ')}`,
+        // Resolve names through step4: lesson plans frequently carry no moduleCode, and
+        // mapping it directly produced "Some modules have no lessons generated: , , , ,".
+        error: `Some modules have no lessons generated: ${modulesWithoutLessons
+          .map((m: any) =>
+            moduleLabelOf(
+              (workflow.step4 as any)?.modules?.find((s4: any) => s4.id === (m.moduleId || m.id)) ||
+                m
+            )
+          )
+          .join(', ')}`,
       });
     }
 
@@ -6778,7 +6788,7 @@ router.post('/:id/export/scorm', async (req: Request, res: Response) => {
           ?.map(
             (module: any, idx: number) => `
       <item identifier="module_${idx + 1}" identifierref="resource_module_${idx + 1}">
-        <title>${module.moduleCode}: ${module.title}</title>
+        <title>${moduleLabelOf(module)}</title>
       </item>`
           )
           .join('') || ''
@@ -6814,7 +6824,7 @@ router.post('/:id/export/scorm', async (req: Request, res: Response) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${module.moduleCode}: ${module.title}</title>
+  <title>${moduleLabelOf(module)}</title>
   <style>
     body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
     h1 { color: #1F4788; }
@@ -6824,7 +6834,7 @@ router.post('/:id/export/scorm', async (req: Request, res: Response) => {
   </style>
 </head>
 <body>
-  <h1>${module.moduleCode}: ${module.title}</h1>
+  <h1>${moduleLabelOf(module)}</h1>
   <p>${module.description || ''}</p>
   
   <h2>Module Learning Outcomes</h2>

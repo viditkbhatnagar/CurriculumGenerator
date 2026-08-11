@@ -4,6 +4,7 @@ import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { loggingService } from '../services/loggingService';
 import { validateJWT, loadUser } from '../middleware/auth';
 import JSZip from 'jszip';
+import { moduleCodeOf, moduleFileSlugOf } from '../utils/moduleIdentity';
 
 const router = express.Router();
 
@@ -116,14 +117,14 @@ router.post('/generate/module/:workflowId/:moduleId', async (req: Request, res: 
     loggingService.info('Starting PPT generation for single module', {
       workflowId,
       moduleId,
-      moduleCode: module.moduleCode,
+      moduleCode: moduleCodeOf(module),
     });
 
     // Generate PPT
     const pptBuffer = await pptGenerationService.generateModulePPT(moduleId, workflow);
 
     // Set headers for download
-    const filename = `${module.moduleCode}_${module.title.replace(/[^a-zA-Z0-9]/g, '_')}.pptx`;
+    const filename = `${moduleFileSlugOf(module)}.pptx`;
 
     res.setHeader(
       'Content-Type',
