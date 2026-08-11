@@ -36,7 +36,9 @@ import { loggingService } from './loggingService';
 // v6: Step 3 PLO headings use the display code (PLO7) rather than the internal id
 //     (plo-user-…), and the Step 2 KSC lookup no longer lets the legacy
 //     attitudeItems mirror overwrite edited competencies.
-const EXPORT_FORMAT_VERSION = 'v6';
+// v7: Step 5 and Step 6 module headings name the module ("M35: Strategic Human
+//     Resource Management — Readings") instead of printing the raw document id.
+const EXPORT_FORMAT_VERSION = 'v7';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {
