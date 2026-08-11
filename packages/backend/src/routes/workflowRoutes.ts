@@ -8623,6 +8623,21 @@ router.get(
         overallStatus = 'completed';
       }
 
+      // A step that is still writing must not be reported as finished.
+      //
+      // Bull job records expire, and once one is gone the check above falls back to "there
+      // is data, therefore it is done". Steps 7, 8 and 9 build up their output module by
+      // module over the better part of an hour, so partial data is the normal state for
+      // most of a run — and reporting it complete told an author their assessments were
+      // ready when 21 of 46 modules had been written. She reviewed that document and
+      // reported the missing modules as a defect, which is a fair reading of what she was
+      // shown. stepProgress is the record of whether the step actually finished, so it
+      // wins over the presence of data.
+      const progress = (workflow.stepProgress || []).find((p: any) => p.step === step);
+      if (progress?.status === 'in_progress' && !progress?.completedAt) {
+        overallStatus = 'processing';
+      }
+
       res.json({
         success: true,
         data: {
