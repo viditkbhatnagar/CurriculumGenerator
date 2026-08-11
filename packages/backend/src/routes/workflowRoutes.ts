@@ -6557,9 +6557,11 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
       step2: workflow.step2,
     };
     workflowData[`step${stepNumber}`] = workflow[stepKey];
-    // Step 10 lesson plans also surface module-level independent activities,
-    // independent hours and the MLO alignment map, which live in step4.
-    if (stepNumber === 10) workflowData.step4 = workflow.step4;
+    // Steps 5, 6 and 10 all need the module list from step4: 10 for module-level
+    // independent activities, hours and the MLO alignment map, and 5 and 6 to head each
+    // group with the module's code and title rather than its raw document id. Without it
+    // those headings silently fall back to "mod-m35".
+    if ([5, 6, 10].includes(stepNumber)) workflowData.step4 = workflow.step4;
 
     const STEP_SLUGS: Record<number, string> = {
       1: 'Program-Foundation',
