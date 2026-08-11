@@ -204,10 +204,11 @@ export function stepExportContentHash(
     stepNumber,
     moduleIndex,
     target: workflow[`step${stepNumber}`],
-    // The Step 10 export also renders module-level independent activities /
-    // hours / MLO alignment from step4, so its cache must invalidate when
-    // step4 changes (and to bust copies cached before that was added).
-    aux: stepNumber === 10 ? workflow.step4 : undefined,
+    // Steps 5, 6 and 10 all render from step4 as well as their own data — 10 for
+    // module-level independent activities, hours and MLO alignment, 5 and 6 to name each
+    // module in its heading — so their caches must invalidate when step4 changes, and
+    // including it here also busts copies cached before each of those was added.
+    aux: [5, 6, 10].includes(stepNumber) ? workflow.step4 : undefined,
   });
 }
 
