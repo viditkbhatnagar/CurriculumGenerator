@@ -3512,6 +3512,42 @@ router.delete(
 );
 
 /**
+ * POST /api/v3/workflow/:id/step6/fill-missing
+ *
+ * Generate reading lists for modules that have none, leaving every existing list alone.
+ *
+ * A module whose generation failed used to disappear without trace, and the only remedy was
+ * to regenerate the whole step - rewriting dozens of good reading lists to recover one, at
+ * the cost of a full run. This fills only the gaps.
+ */
+router.post(
+  '/:id/step6/fill-missing',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const result = await workflowService.generateMissingStep6Modules(id);
+
+      res.json({
+        success: true,
+        data: result,
+        message:
+          result.repaired.length > 0
+            ? `Generated reading lists for ${result.repaired.length} module(s).`
+            : 'Every module already has a reading list.',
+      });
+    } catch (error) {
+      loggingService.error('Error filling missing Step 6 modules', { error });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fill missing modules',
+      });
+    }
+  }
+);
+
+/**
  * POST /api/v3/workflow/:id/step6/approve
  * Approve Step 6 and advance to Step 7
  */

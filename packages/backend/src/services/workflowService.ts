@@ -2806,40 +2806,15 @@ CRITICAL VALIDATION:
    * Per workflow v2.2: Transform AGI-validated sources into structured reading lists
    * with Core (3-6) and Supplementary (4-8) per module
    */
-  async processStep6(workflowId: string): Promise<ICurriculumWorkflow> {
-    const workflow = await CurriculumWorkflow.findById(workflowId);
-    if (!workflow || !workflow.step5) {
-      throw new Error('Workflow not found or Step 5 not complete');
-    }
-
-    const sources = workflow.step5?.sources || [];
-    const modules = workflow.step4?.modules || [];
-
-    loggingService.info('Processing Step 6: Reading Lists', {
-      workflowId,
-      sourcesCount: sources.length,
-      modulesCount: modules.length,
-      sourcesSample: sources.slice(0, 3).map((s: any) => ({ id: s.id, title: s.title })),
-    });
-
-    // If no sources, we can't generate readings - use fallback
-    if (sources.length === 0) {
-      loggingService.warn('Step 6: No sources available - generating placeholder readings');
-    }
-
-    const readingContent = await this.generateStep6Content(workflow);
-
-    loggingService.info('Step 6: Generation complete', {
-      readingsCount: readingContent.readings?.length || 0,
-      hasFallback: !!readingContent._fallback,
-      hasDebugError: !!readingContent._debugError,
-    });
-
-    // Process readings
-    const readings = readingContent.readings || [];
-    // modules already declared above
-
-    // Organize readings by module
+  /**
+   * Recompute every Step 6 aggregate from a list of readings.
+   *
+   * Extracted from processStep6 for the same reason as its Step 5 counterpart: repairing a
+   * single module must produce the same totals, summaries and validation verdict a full
+   * generation would, with no LLM call. Without it, filling one gap would leave the counts
+   * and compliance report describing the reading list as it was before.
+   */
+  buildStep6Summary(readings: any[], modules: any[], extras: { failedModules?: any[] } = {}): any {
     const moduleReadings: Record<string, any[]> = {};
     for (const reading of readings) {
       const modId = reading.moduleId || 'unassigned';
@@ -2919,7 +2894,7 @@ CRITICAL VALIDATION:
 
     const isValid = Object.values(validationReport).every((v) => v === true);
 
-    workflow.step6 = {
+    return {
       readings,
       moduleReadings,
       moduleSummaries,
@@ -2932,8 +2907,145 @@ CRITICAL VALIDATION:
       validationReport,
       isValid,
       validationIssues,
+      // Modules whose reading list could not be generated even after a retry. Recorded so
+      // a missing module is something the author is told about rather than something they
+      // discover by noticing it absent from an exported document.
+      failedModules: extras.failedModules || [],
       validatedAt: new Date(),
     };
+  }
+
+  /**
+   * Generate reading lists for modules that have none, and nothing else.
+   *
+   * A module whose generation failed used to be lost silently, and the only remedy was to
+   * regenerate the whole step - rewriting 45 good reading lists to recover one, at the cost
+   * of a full run. This fills just the gaps and leaves everything else untouched.
+   */
+  async generateMissingStep6Modules(workflowId: string): Promise<{
+    repaired: string[];
+    stillMissing: string[];
+  }> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow || !workflow.step6) {
+      throw new Error('Step 6 has not been generated for this workflow');
+    }
+
+    const modules = (workflow.step4 as any)?.modules || [];
+    const existing = ((workflow.step6 as any).readings || []) as any[];
+    const covered = new Set(existing.map((r) => r.moduleId).filter(Boolean));
+    const missing = modules.filter((m: any) => !covered.has(m.id));
+
+    if (missing.length === 0) {
+      return { repaired: [], stillMissing: [] };
+    }
+
+    loggingService.info('Step 6: filling gaps for modules with no readings', {
+      workflowId,
+      modules: missing.map((m: any) => m.id),
+    });
+
+    const sources = ((workflow.step5 as any)?.sources || []) as any[];
+    const programTitle = (workflow.step1 as any)?.programTitle || 'Program';
+    const academicLevel = (workflow.step1 as any)?.academicLevel || 'Level 5';
+
+    const repaired: string[] = [];
+    const stillMissing: any[] = [];
+    const added: any[] = [];
+
+    for (const mod of missing) {
+      const modSources = sources.filter((s) => s.moduleId === mod.id);
+      const independentHours = mod.selfStudyHours || mod.independentHours || 10;
+      try {
+        const result = await this.generateReadingsForModule({
+          moduleId: mod.id,
+          moduleTitle: mod.title,
+          independentHours,
+          independentMinutes: independentHours * 60,
+          mlos: (mod.mlos || []).map((mlo: any) => ({ id: mlo.id, statement: mlo.statement })),
+          availableSources: modSources.map((s: any) => ({
+            id: s.id,
+            title: s.title,
+            authors: s.authors,
+            year: s.year,
+            citation: s.citation,
+            category: s.category,
+            type: s.type,
+            linkedMLOs: s.linkedMLOs,
+            complexity: s.complexityLevel || 'intermediate',
+            complianceBadges: s.complianceBadges,
+          })),
+          programTitle,
+          academicLevel,
+        });
+        added.push(...(result.readings || []));
+        repaired.push(mod.id);
+      } catch (error) {
+        stillMissing.push({
+          moduleId: mod.id,
+          moduleTitle: mod.title,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    const previous = ((workflow.step6 as any).failedModules || []) as any[];
+    const remaining = [
+      ...previous.filter((f: any) => !repaired.includes(f.moduleId)),
+      ...stillMissing.filter((f: any) => !previous.some((p: any) => p.moduleId === f.moduleId)),
+    ];
+
+    workflow.step6 = this.buildStep6Summary([...existing, ...added], modules, {
+      failedModules: remaining,
+    });
+    workflow.markModified('step6');
+    await workflow.save();
+
+    loggingService.info('Step 6: gap fill complete', {
+      workflowId,
+      repaired,
+      stillMissing: stillMissing.map((f) => f.moduleId),
+    });
+    return { repaired, stillMissing: stillMissing.map((f) => f.moduleId) };
+  }
+
+  async processStep6(workflowId: string): Promise<ICurriculumWorkflow> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow || !workflow.step5) {
+      throw new Error('Workflow not found or Step 5 not complete');
+    }
+
+    const sources = workflow.step5?.sources || [];
+    const modules = workflow.step4?.modules || [];
+
+    loggingService.info('Processing Step 6: Reading Lists', {
+      workflowId,
+      sourcesCount: sources.length,
+      modulesCount: modules.length,
+      sourcesSample: sources.slice(0, 3).map((s: any) => ({ id: s.id, title: s.title })),
+    });
+
+    // If no sources, we can't generate readings - use fallback
+    if (sources.length === 0) {
+      loggingService.warn('Step 6: No sources available - generating placeholder readings');
+    }
+
+    const readingContent = await this.generateStep6Content(workflow);
+
+    loggingService.info('Step 6: Generation complete', {
+      readingsCount: readingContent.readings?.length || 0,
+      hasFallback: !!readingContent._fallback,
+      hasDebugError: !!readingContent._debugError,
+    });
+
+    // Process readings
+    const readings = readingContent.readings || [];
+    // modules already declared above
+
+    // Organize readings by module
+    workflow.step6 = this.buildStep6Summary(readings, modules, {
+      failedModules: readingContent.failedModules || [],
+    });
 
     workflow.currentStep = 6;
     workflow.status = 'step6_complete';
@@ -2946,12 +3058,14 @@ CRITICAL VALIDATION:
 
     await workflow.save();
 
+    const step6Summary = workflow.step6 as any;
     loggingService.info('Step 6 processed', {
       workflowId,
       totalReadings: readings.length,
-      coreCount,
-      supplementaryCount,
-      isValid,
+      coreCount: step6Summary.coreCount,
+      supplementaryCount: step6Summary.supplementaryCount,
+      isValid: step6Summary.isValid,
+      failedModules: (step6Summary.failedModules || []).length,
     });
 
     return workflow;
@@ -5769,11 +5883,56 @@ Return ONLY valid JSON:
         });
 
         return moduleReadings;
-      } catch (moduleError) {
-        loggingService.error(`Step 6: Error generating readings for module ${mod.id}`, {
-          error: moduleError instanceof Error ? moduleError.message : String(moduleError),
+      } catch (firstError) {
+        // Retry once before giving up. Most failures here are transient - a truncated JSON
+        // response or a rate limit - and a single retry recovers them.
+        loggingService.warn(`Step 6: Retrying readings for module ${mod.id}`, {
+          error: firstError instanceof Error ? firstError.message : String(firstError),
         });
-        return { readings: [], summary: null };
+        try {
+          const retried = await this.generateReadingsForModule({
+            moduleId: mod.id,
+            moduleTitle: mod.title,
+            independentHours,
+            independentMinutes: independentHours * 60,
+            mlos: mlos.map((mlo: any) => ({ id: mlo.id, statement: mlo.statement })),
+            availableSources: modSources.map((s: any) => ({
+              id: s.id,
+              title: s.title,
+              authors: s.authors,
+              year: s.year,
+              citation: s.citation,
+              category: s.category,
+              type: s.type,
+              linkedMLOs: s.linkedMLOs,
+              complexity: s.complexityLevel || 'intermediate',
+              complianceBadges: s.complianceBadges,
+            })),
+            programTitle,
+            academicLevel,
+          });
+          loggingService.info(`Step 6: Module ${mod.id} recovered on retry`, {
+            readingsGenerated: retried.readings.length,
+          });
+          return retried;
+        } catch (retryError) {
+          // Still failed. Returning an empty result used to be the end of it: the module
+          // simply vanished from the reading lists, the step reported success, and the
+          // author found out by noticing a module missing from the exported document. It
+          // now records the failure where they can see it.
+          loggingService.error(`Step 6: Gave up on readings for module ${mod.id}`, {
+            error: retryError instanceof Error ? retryError.message : String(retryError),
+          });
+          return {
+            readings: [],
+            summary: null,
+            failure: {
+              moduleId: mod.id,
+              moduleTitle: mod.title,
+              message: retryError instanceof Error ? retryError.message : String(retryError),
+            },
+          };
+        }
       }
     });
 
@@ -5784,11 +5943,20 @@ Return ONLY valid JSON:
     const allReadings: any[] = [];
     const moduleSummaries: any[] = [];
 
+    const failures: any[] = [];
     for (const result of results) {
       allReadings.push(...(result.readings || []));
       if (result.summary) {
         moduleSummaries.push(result.summary);
       }
+      if ((result as any).failure) failures.push((result as any).failure);
+    }
+
+    if (failures.length > 0) {
+      loggingService.error('Step 6: modules with no reading list', {
+        count: failures.length,
+        modules: failures.map((f) => f.moduleId),
+      });
     }
 
     loggingService.info('Step 6: PARALLEL generation complete', {
@@ -5799,6 +5967,7 @@ Return ONLY valid JSON:
     return {
       readings: allReadings,
       moduleSummaries,
+      failedModules: failures,
     };
   }
 

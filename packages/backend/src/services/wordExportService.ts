@@ -961,7 +961,34 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   /**
    * Generate Step 5 (Academic Sources) section
    */
-  private async generateStep5Section(step5: any, contentChildren: any[]): Promise<void> {
+  /**
+   * Resolve a module id to something a reader recognises.
+   *
+   * The reading-list and source sections headed each group with the raw document id
+   * ("Module mod-m35 Readings"), which tells a curriculum author nothing and makes a gap
+   * hard to spot - a reviewer noticing that "mod-m35" was absent had to go and look up
+   * which module that was. Renders "M35: Strategic Human Resource Management" where both
+   * parts exist, degrading to whichever is present, because imported modules carry an
+   * empty code and an id like "mod-imported-d330ccc03102".
+   */
+  private buildModuleLabels(step4: any): Map<string, string> {
+    const labels = new Map<string, string>();
+    for (const module of step4?.modules || []) {
+      if (!module?.id) continue;
+      const code = String(module.code || '').trim();
+      const title = String(module.title || '').trim();
+      const label = [code, title].filter(Boolean).join(': ');
+      labels.set(module.id, label || module.id);
+    }
+    return labels;
+  }
+
+  private async generateStep5Section(
+    step5: any,
+    contentChildren: any[],
+    step4?: any
+  ): Promise<void> {
+    const moduleLabels = this.buildModuleLabels(step4);
     if (!step5?.sources?.length) return;
 
     contentChildren.push(
@@ -1005,7 +1032,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     // Module-specific sources
     Object.entries(sourcesByModule).forEach(([moduleId, sources]) => {
-      contentChildren.push(this.createH2(`Module ${moduleId} Sources`));
+      contentChildren.push(this.createH2(`${moduleLabels.get(moduleId) || moduleId} — Sources`));
       sources.forEach((source: any) => {
         contentChildren.push(
           new Paragraph({
@@ -1026,8 +1053,13 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   /**
    * Generate Step 6 (Reading Lists) section
    */
-  private async generateStep6Section(step6: any, contentChildren: any[]): Promise<void> {
+  private async generateStep6Section(
+    step6: any,
+    contentChildren: any[],
+    step4?: any
+  ): Promise<void> {
     if (!step6) return;
+    const moduleLabels = this.buildModuleLabels(step4);
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
@@ -1109,7 +1141,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           });
 
           if (uniqueModuleReadings.length > 0) {
-            contentChildren.push(this.createH2(`Module ${moduleId} Readings`));
+            contentChildren.push(
+              this.createH2(`${moduleLabels.get(moduleId) || moduleId} — Readings`)
+            );
             uniqueModuleReadings.forEach((readingText) => {
               contentChildren.push(
                 new Paragraph({
@@ -3508,10 +3542,10 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       addSection(4, (out) => this.generateStep4Section(workflow.step4, out, kscMap));
     }
     if (workflow.step5?.sources?.length) {
-      addSection(5, (out) => this.generateStep5Section(workflow.step5, out));
+      addSection(5, (out) => this.generateStep5Section(workflow.step5, out, workflow.step4));
     }
     if (workflow.step6) {
-      addSection(6, (out) => this.generateStep6Section(workflow.step6, out));
+      addSection(6, (out) => this.generateStep6Section(workflow.step6, out, workflow.step4));
     }
     if (
       workflow.step7?.formativeAssessments?.length ||
@@ -3746,10 +3780,10 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         await this.generateStep4Section(stepData, contentChildren, kscMap);
         break;
       case 5:
-        await this.generateStep5Section(stepData, contentChildren);
+        await this.generateStep5Section(stepData, contentChildren, workflow.step4);
         break;
       case 6:
-        await this.generateStep6Section(stepData, contentChildren);
+        await this.generateStep6Section(stepData, contentChildren, workflow.step4);
         break;
       case 7:
         await this.generateStep7Section(stepData, contentChildren);
