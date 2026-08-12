@@ -6571,7 +6571,7 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
     // independent activities, hours and the MLO alignment map, and 5 and 6 to head each
     // group with the module's code and title rather than its raw document id. Without it
     // those headings silently fall back to "mod-m35".
-    if ([5, 6, 10].includes(stepNumber)) workflowData.step4 = workflow.step4;
+    if ([5, 6, 7, 10].includes(stepNumber)) workflowData.step4 = workflow.step4;
 
     const STEP_SLUGS: Record<number, string> = {
       1: 'Program-Foundation',

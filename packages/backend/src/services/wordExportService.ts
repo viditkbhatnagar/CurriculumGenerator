@@ -1168,7 +1168,12 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   /**
    * Generate Step 7 (Assessment Package) section
    */
-  private async generateStep7Section(step7: any, contentChildren: any[]): Promise<void> {
+  private async generateStep7Section(
+    step7: any,
+    contentChildren: any[],
+    step4?: any
+  ): Promise<void> {
+    const moduleLabels = this.buildModuleLabels(step4);
     if (
       !step7?.formativeAssessments?.length &&
       !step7?.summativeAssessments?.length &&
@@ -1248,7 +1253,15 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           new Paragraph({
             children: [
               new TextRun({
-                text: `Module: ${assessment.moduleId || 'N/A'} | Type: ${assessment.assessmentType || 'N/A'} | Max Marks: ${assessment.maxMarks || 'N/A'}`,
+                // Name the module, and print the outcomes the assessment was generated
+                // against. The mapping was there all along under `alignedMLOs` — it was
+                // simply never rendered, so the document looked unmapped when it was not.
+                text: [
+                  `Module: ${moduleLabels.get(assessment.moduleId) || assessment.moduleId || 'N/A'}`,
+                  `Type: ${assessment.assessmentType || 'N/A'}`,
+                  `Max Marks: ${assessment.maxMarks ?? 'N/A'}`,
+                  `MLOs: ${(assessment.alignedMLOs || assessment.linkedMLOs || []).join(', ') || 'not mapped'}`,
+                ].join(' | '),
                 size: FONT_SIZES.BODY,
                 font: FONT_FAMILY,
                 italics: true,
@@ -3551,7 +3564,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       workflow.step7?.summativeAssessments?.length ||
       workflow.step7?.sampleQuestions
     ) {
-      addSection(7, (out) => this.generateStep7Section(workflow.step7, out));
+      addSection(7, (out) => this.generateStep7Section(workflow.step7, out, workflow.step4));
     }
     if (workflow.step8?.caseStudies?.length) {
       addSection(8, (out) => this.generateStep8Section(workflow.step8, out));
@@ -3785,7 +3798,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         await this.generateStep6Section(stepData, contentChildren, workflow.step4);
         break;
       case 7:
-        await this.generateStep7Section(stepData, contentChildren);
+        await this.generateStep7Section(stepData, contentChildren, workflow.step4);
         break;
       case 8:
         await this.generateStep8Section(stepData, contentChildren);

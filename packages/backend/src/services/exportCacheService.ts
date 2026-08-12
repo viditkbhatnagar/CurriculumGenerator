@@ -38,7 +38,9 @@ import { loggingService } from './loggingService';
 //     attitudeItems mirror overwrite edited competencies.
 // v7: Step 5 and Step 6 module headings name the module ("M35: Strategic Human
 //     Resource Management — Readings") instead of printing the raw document id.
-const EXPORT_FORMAT_VERSION = 'v7';
+// v8: Step 7 assessments name their module and print the outcomes they were generated
+//     against (alignedMLOs), which were stored but never rendered.
+const EXPORT_FORMAT_VERSION = 'v8';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {
@@ -208,7 +210,7 @@ export function stepExportContentHash(
     // module-level independent activities, hours and MLO alignment, 5 and 6 to name each
     // module in its heading — so their caches must invalidate when step4 changes, and
     // including it here also busts copies cached before each of those was added.
-    aux: [5, 6, 10].includes(stepNumber) ? workflow.step4 : undefined,
+    aux: [5, 6, 7, 10].includes(stepNumber) ? workflow.step4 : undefined,
   });
 }
 
