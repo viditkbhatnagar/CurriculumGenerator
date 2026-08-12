@@ -117,17 +117,15 @@ export class AssessmentGeneratorService {
   /**
    * Generate complete assessment package with chunked strategy
    */
-  async generateAssessments(
+  /**
+   * Assemble the generation request from a workflow. Extracted so a single module can be
+   * regenerated on exactly the same inputs as a full run.
+   */
+  private buildRequest(
     workflow: ICurriculumWorkflow,
-    userPreferences: AssessmentUserPreferences,
-    progressCallback?: (progress: AssessmentGenerationProgress) => void
-  ): Promise<AssessmentGenerationResponse> {
-    loggingService.info('Starting Assessment Generation', {
-      workflowId: workflow._id,
-      structure: userPreferences.assessmentStructure,
-    });
-
-    const request: AssessmentGenerationRequest = {
+    userPreferences: AssessmentUserPreferences
+  ): AssessmentGenerationRequest {
+    return {
       programFoundation: workflow.step1,
       competencyFrameworks: workflow.step2,
       courseFramework: {
@@ -140,7 +138,79 @@ export class AssessmentGeneratorService {
       topicSources: workflow.step5?.topicSources || [],
       readingLists: workflow.step6?.moduleReadingLists || [],
       userPreferences,
-    };
+    } as AssessmentGenerationRequest;
+  }
+
+  /**
+   * Generate formative assessments for named modules only.
+   *
+   * Needed for two reasons. A module whose outcomes are edited needs its assessments
+   * rewritten without paying for the whole programme again — a full Step 7 run is around
+   * an hour of sequential generation. And Step 7 is the one step that runs tied to a
+   * browser connection, so runs are routinely cut short partway through; this fills in the
+   * modules that were never reached.
+   *
+   * Failures are returned rather than swallowed, so a caller can report which modules
+   * still have nothing.
+   */
+  async generateFormativesForModules(
+    workflow: ICurriculumWorkflow,
+    userPreferences: AssessmentUserPreferences,
+    moduleIds: string[]
+  ): Promise<{
+    formatives: FormativeAssessment[];
+    failed: { moduleId: string; message: string }[];
+  }> {
+    const request = this.buildRequest(workflow, userPreferences);
+    const wanted = new Set(moduleIds);
+    const modules = (request.modules || []).filter((m: any) => wanted.has(m.id));
+
+    const formativePerModule = userPreferences.formativePerModule || 1;
+    const formativeTypes = userPreferences.formativeTypesPerUnit;
+
+    const formatives: FormativeAssessment[] = [];
+    const failed: { moduleId: string; message: string }[] = [];
+
+    for (const module of modules) {
+      // The module's own index in the full list, so prompts that reference position
+      // (progressive difficulty across the programme) stay correct.
+      const moduleIndex = (request.modules || []).findIndex((m: any) => m.id === module.id);
+      try {
+        const generated = await this.generateModuleFormativeAssessments(
+          module,
+          moduleIndex,
+          request,
+          formativePerModule,
+          formativeTypes
+        );
+        formatives.push(...generated);
+      } catch (error) {
+        failed.push({
+          moduleId: module.id,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        loggingService.error('Per-module formative generation failed', {
+          moduleId: module.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      await this.delay(this.INTER_CALL_DELAY);
+    }
+
+    return { formatives, failed };
+  }
+
+  async generateAssessments(
+    workflow: ICurriculumWorkflow,
+    userPreferences: AssessmentUserPreferences,
+    progressCallback?: (progress: AssessmentGenerationProgress) => void
+  ): Promise<AssessmentGenerationResponse> {
+    loggingService.info('Starting Assessment Generation', {
+      workflowId: workflow._id,
+      structure: userPreferences.assessmentStructure,
+    });
+
+    const request = this.buildRequest(workflow, userPreferences);
 
     const response: AssessmentGenerationResponse = {
       formativeAssessments: [],

@@ -3513,6 +3513,43 @@ router.delete(
 );
 
 /**
+ * POST /api/v3/workflow/:id/step7/regenerate-modules
+ * Body: { moduleIds: string[] }
+ *
+ * Rewrite the assessments for specific modules, leaving the rest alone. Needed when a
+ * module's outcomes change, and to fill in modules a cut-short Step 7 run never reached.
+ */
+router.post(
+  '/:id/step7/regenerate-modules',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const moduleIds: string[] = Array.isArray(req.body?.moduleIds) ? req.body.moduleIds : [];
+      if (moduleIds.length === 0) {
+        return res
+          .status(400)
+          .json({ success: false, error: 'moduleIds must be a non-empty array' });
+      }
+
+      const result = await workflowService.regenerateStep7Modules(id, moduleIds);
+      return res.json({
+        success: true,
+        data: result,
+        message: `Regenerated assessments for ${result.regenerated.length} module(s).`,
+      });
+    } catch (error) {
+      loggingService.error('Error regenerating Step 7 modules', { error });
+      return res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to regenerate assessments',
+      });
+    }
+  }
+);
+
+/**
  * POST /api/v3/workflow/:id/step6/fill-missing
  *
  * Generate reading lists for modules that have none, leaving every existing list alone.

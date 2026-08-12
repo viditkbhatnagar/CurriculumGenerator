@@ -3080,6 +3080,64 @@ CRITICAL VALIDATION:
    * Process Step 7: Comprehensive Assessment Generation
    * Uses Assessment Generator Contract with chunked generation to avoid timeouts
    */
+  /**
+   * Regenerate Step 7 formative assessments for named modules only.
+   *
+   * Two situations need this. When a module's outcomes are edited, its assessments are
+   * measuring something the curriculum no longer claims and must be rewritten — but a full
+   * Step 7 run is roughly an hour of sequential generation across the whole programme, so
+   * rewriting one module should not cost that. And because Step 7 runs over a browser
+   * connection rather than a durable job, runs are routinely cut short; this fills in the
+   * modules that were never reached without discarding the ones that succeeded.
+   *
+   * Existing assessments for the named modules are replaced, not appended to.
+   */
+  async regenerateStep7Modules(
+    workflowId: string,
+    moduleIds: string[]
+  ): Promise<{ regenerated: string[]; failed: { moduleId: string; message: string }[] }> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow || !workflow.step7) {
+      throw new Error('Step 7 has not been generated for this workflow');
+    }
+    const preferences = (workflow.step7 as any).userPreferences;
+    if (!preferences) {
+      throw new Error('Step 7 has no stored assessment preferences to regenerate against');
+    }
+
+    const { assessmentGeneratorService } = await import('./assessmentGeneratorService');
+    const { formatives, failed } = await assessmentGeneratorService.generateFormativesForModules(
+      workflow,
+      preferences,
+      moduleIds
+    );
+
+    const regenerated = [...new Set(formatives.map((f: any) => f.moduleId))];
+    const untouched = ((workflow.step7 as any).formativeAssessments || []).filter(
+      (f: any) => !regenerated.includes(f.moduleId)
+    );
+
+    (workflow.step7 as any).formativeAssessments = [...untouched, ...formatives];
+
+    // Keep the mapping flag honest about what is now stored.
+    const all = (workflow.step7 as any).formativeAssessments || [];
+    (workflow.step7 as any).validation = {
+      ...((workflow.step7 as any).validation || {}),
+      allFormativesMapped:
+        all.length > 0 && all.every((f: any) => (f.alignedMLOs || []).length > 0),
+    };
+
+    workflow.markModified('step7');
+    await workflow.save();
+
+    loggingService.info('Step 7 formatives regenerated for named modules', {
+      workflowId,
+      regenerated,
+      failed: failed.map((f) => f.moduleId),
+    });
+    return { regenerated, failed };
+  }
+
   async processStep7(
     workflowId: string,
     userPreferences: {
