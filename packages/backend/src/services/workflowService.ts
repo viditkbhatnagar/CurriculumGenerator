@@ -17,6 +17,7 @@ import { loggingService } from './loggingService';
 import { RAGEngine } from './ragEngine';
 import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
+import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
 import {
   gatherModuleSources,
   deriveSubjectFields,
@@ -3119,12 +3120,18 @@ CRITICAL VALIDATION:
 
     (workflow.step7 as any).formativeAssessments = [...untouched, ...formatives];
 
-    // Keep the mapping flag honest about what is now stored.
+    // Recompute percentage weightings across the whole step: a module's assessments share
+    // its 100% between them, so replacing one module's set changes those percentages.
     const all = (workflow.step7 as any).formativeAssessments || [];
+    const summatives = (workflow.step7 as any).summativeAssessments || [];
+    const totals = applyAssessmentWeightings(all, summatives, (preferences as any).weightages);
+
+    // Keep the flags honest about what is now stored.
     (workflow.step7 as any).validation = {
       ...((workflow.step7 as any).validation || {}),
       allFormativesMapped:
         all.length > 0 && all.every((f: any) => (f.alignedMLOs || []).length > 0),
+      weightsSum100: weightingsAreComplete(totals),
     };
 
     workflow.markModified('step7');
@@ -3225,11 +3232,29 @@ CRITICAL VALIDATION:
       (sa) => sa.alignmentTable.length > 0
     );
 
-    // Check weightages sum to 100 for summative assessments
-    let weightsSum100 = true;
+    // Assign each assessment its percentage weighting from the author's own
+    // formative/summative split, then report whether every module sums to 100%.
+    //
+    // The previous check only inspected the internal component weights of summative
+    // assessments, so with no summatives generated it was vacuously true, and it never
+    // asked the question that matters: does this module's assessment add up to a whole
+    // module mark? Percentages are computed rather than requested — a model told to make
+    // numbers sum to 100 nearly does, inconsistently, and exactness is the one property
+    // an awarding body checks.
+    const weightingTotals = applyAssessmentWeightings(
+      assessmentResponse.formativeAssessments as any[],
+      assessmentResponse.summativeAssessments as any[],
+      (userPreferences as any).weightages
+    );
+    let weightsSum100 = weightingsAreComplete(weightingTotals);
+
+    // A summative whose own components do not add up is still a defect.
     assessmentResponse.summativeAssessments.forEach((sa) => {
-      const totalWeight = sa.components.reduce((sum, comp) => sum + comp.weight, 0);
-      if (Math.abs(totalWeight - 100) > 0.1) {
+      const totalWeight = (sa.components || []).reduce(
+        (sum: number, comp: any) => sum + (comp.weight || 0),
+        0
+      );
+      if (sa.components?.length && Math.abs(totalWeight - 100) > 0.1) {
         weightsSum100 = false;
       }
     });

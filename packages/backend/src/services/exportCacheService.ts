@@ -40,7 +40,9 @@ import { loggingService } from './loggingService';
 //     Resource Management — Readings") instead of printing the raw document id.
 // v8: Step 7 assessments name their module and print the outcomes they were generated
 //     against (alignedMLOs), which were stored but never rendered.
-const EXPORT_FORMAT_VERSION = 'v8';
+// v9: Step 7 assessments render percentage weighting plus the student brief, marking
+//     guide and rubric as three separate artefacts.
+const EXPORT_FORMAT_VERSION = 'v9';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {

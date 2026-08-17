@@ -610,96 +610,90 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
       practicalTasks: [],
     });
 
-    // Debug: Log form data being sent
-    console.log('[Step7Form] Using STREAMING endpoint for complete question generation:', {
-      formativePerModule: formData.formativePerModule,
-      formativePerModuleType: typeof formData.formativePerModule,
-      weightages: formData.weightages,
-      structure: formData.assessmentStructure,
-    });
-
-    startGeneration(workflow._id, 7, 2400); // 40 minutes estimated for complete questions (120+ detailed questions)
+    startGeneration(workflow._id, 7, 2400); // ~40 minutes for a full programme
 
     try {
-      // Use STREAMING endpoint to avoid timeouts with complete question generation
+      // Queue the work, then poll — do not stream it.
+      //
+      // This used to POST to /step7/stream and read the response body for the whole run,
+      // so generation lived inside a browser connection: closing the tab or a backend
+      // deploy killed it partway through, leaving a half-written step that reported
+      // success. One author lost an hour of generation twice that way, at 29 of 46
+      // modules, and reviewed the partial document believing it complete. The queued route
+      // runs on the worker with retries and survives both.
       const token = localStorage.getItem('auth_token');
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
 
-      const response = await fetch(`${API_BASE_URL}/api/v3/workflow/${workflow._id}/step7/stream`, {
+      const queued = await fetch(`${API_BASE_URL}/api/v3/workflow/${workflow._id}/step7`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers,
         body: JSON.stringify(formData),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to start generation');
+      if (!queued.ok) {
+        throw new Error('Failed to start assessment generation');
       }
 
-      // Read the SSE stream
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No reader available');
-      }
+      // Poll until the step reports it has finished. The status endpoint reads
+      // stepProgress, so "processing" genuinely means still writing.
+      const POLL_INTERVAL_MS = 15000;
+      // Generation is sequential across modules; a large programme legitimately runs for
+      // well over an hour, so the ceiling is generous rather than tight.
+      const MAX_POLLS = 480;
 
-      const decoder = new TextDecoder();
-      let buffer = '';
+      for (let attempt = 0; attempt < MAX_POLLS; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
 
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        const statusResponse = await fetch(
+          `${API_BASE_URL}/api/v3/workflow/${workflow._id}/step/7/status`,
+          { headers }
+        );
+        if (!statusResponse.ok) continue;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const status = await statusResponse.json();
+        const state = status?.data?.status;
 
-        for (const line of lines) {
-          if (line.startsWith('data:')) {
-            try {
-              const data = JSON.parse(line.slice(5).trim());
-              console.log('[SSE Event]', data.type, data);
-
-              // Accumulate streaming data for real-time display
-              if (data.type === 'formative_batch' && data.formatives) {
-                setStreamingFormatives((prev) => [...prev, ...data.formatives]);
-              } else if (data.type === 'summative_batch' && data.summatives) {
-                setStreamingSummatives((prev) => [...prev, ...data.summatives]);
-              } else if (data.type === 'sample_batch' && data.samples) {
-                const sampleType = data.sampleType;
-                setStreamingSamples((prev) => ({
-                  ...prev,
-                  [sampleType]: data.samples,
-                }));
-              } else if (data.type === 'complete') {
-                console.log('[Step7Form] ✅ Generation complete!');
-                completeGeneration(workflow._id, 7);
-
-                // Invalidate React Query cache to force refetch with fresh data
-                console.log('[Step7Form] Invalidating workflow cache and refetching...');
-                await queryClient.invalidateQueries({ queryKey: ['workflow', workflow._id] });
-
-                // Force an immediate refetch to ensure we get the latest data
-                await queryClient.refetchQueries({ queryKey: ['workflow', workflow._id] });
-
-                // Also call onRefresh to trigger parent component update
-                await onRefresh();
-
-                console.log(
-                  '[Step7Form] Data refreshed, UI should now show results with Approve button'
-                );
-                return;
-              } else if (data.type === 'error') {
-                throw new Error(data.error);
+        // Show real progress from the durable run. The queued path has no event stream, so
+        // the counts come from what has actually been written to the curriculum — which is
+        // a truer picture than a stream of intentions anyway.
+        if (state === 'processing' || state === 'queued') {
+          try {
+            const snapshot = await fetch(`${API_BASE_URL}/api/v3/workflow/${workflow._id}`, {
+              headers,
+            });
+            if (snapshot.ok) {
+              const body = await snapshot.json();
+              const step7 = body?.data?.step7 || body?.step7;
+              if (step7) {
+                setStreamingFormatives(step7.formativeAssessments || []);
+                setStreamingSummatives(step7.summativeAssessments || []);
               }
-            } catch (e) {
-              console.error('[SSE] Parse error:', e);
             }
+          } catch {
+            // Progress display only — never interrupt the wait for a failed snapshot.
           }
         }
+
+        if (state === 'completed') {
+          completeGeneration(workflow._id, 7);
+          await queryClient.invalidateQueries({ queryKey: ['workflow', workflow._id] });
+          await queryClient.refetchQueries({ queryKey: ['workflow', workflow._id] });
+          await onRefresh();
+          return;
+        }
+        if (state === 'failed') {
+          throw new Error(
+            status?.data?.job?.failedReason || 'Assessment generation failed. Please try again.'
+          );
+        }
       }
+
+      throw new Error(
+        'Assessment generation is taking longer than expected. It is still running in the background — reopen this step shortly to see the result.'
+      );
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate assessments';
       console.error('Failed to generate assessments:', err);

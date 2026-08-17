@@ -1168,6 +1168,86 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   /**
    * Generate Step 7 (Assessment Package) section
    */
+  /**
+   * Render an assessment's student brief, marking guide and rubric as three separate
+   * artefacts.
+   *
+   * They are deliberately distinct documents rather than one blended description: the
+   * brief is what a learner reads and carries no answers, the marking guide is what a
+   * marker reads and carries the indicative content, and the rubric is the banded criteria
+   * a mark is justified against. Anything absent is skipped rather than rendered as an
+   * empty heading.
+   */
+  private renderAssessmentArtefacts(assessment: any, contentChildren: any[]): void {
+    const para = (text: string, opts: { bold?: boolean; indent?: boolean } = {}) =>
+      new Paragraph({
+        children: [
+          new TextRun({
+            text,
+            size: FONT_SIZES.BODY,
+            font: FONT_FAMILY,
+            bold: opts.bold,
+          }),
+        ],
+        spacing: { after: 60, line: LINE_SPACING },
+        ...(opts.indent ? { indent: { left: 360 } } : {}),
+      });
+
+    const brief = assessment.studentBrief;
+    if (brief && typeof brief === 'object') {
+      contentChildren.push(para('Student brief', { bold: true }));
+      if (brief.context) contentChildren.push(para(`Context: ${brief.context}`, { indent: true }));
+      if (brief.task) contentChildren.push(para(`Task: ${brief.task}`, { indent: true }));
+      if (Array.isArray(brief.deliverables) && brief.deliverables.length) {
+        contentChildren.push(
+          para(`Deliverables: ${brief.deliverables.join('; ')}`, { indent: true })
+        );
+      }
+      if (brief.conditions)
+        contentChildren.push(para(`Conditions: ${brief.conditions}`, { indent: true }));
+      if (brief.submissionFormat) {
+        contentChildren.push(para(`Submission: ${brief.submissionFormat}`, { indent: true }));
+      }
+    }
+
+    const guide = assessment.markingGuide;
+    if (guide && typeof guide === 'object') {
+      contentChildren.push(para('Marking guide', { bold: true }));
+      for (const row of guide.markAllocation || []) {
+        contentChildren.push(
+          para(`${row.component || 'Component'} — ${row.marks ?? '?'} marks`, { indent: true })
+        );
+        if (row.indicativeContent) {
+          contentChildren.push(
+            para(`Indicative content: ${row.indicativeContent}`, { indent: true })
+          );
+        }
+      }
+      if (guide.markerNotes)
+        contentChildren.push(para(`Marker notes: ${guide.markerNotes}`, { indent: true }));
+    }
+
+    const rubric = assessment.rubric;
+    if (Array.isArray(rubric) && rubric.length) {
+      contentChildren.push(para('Rubric', { bold: true }));
+      for (const criterion of rubric) {
+        contentChildren.push(
+          para(`${criterion.criterion || 'Criterion'} (${criterion.maxMarks ?? '?'} marks)`, {
+            bold: true,
+            indent: true,
+          })
+        );
+        for (const level of criterion.levels || []) {
+          contentChildren.push(
+            para(`${level.band || ''} (${level.markRange || ''}): ${level.descriptor || ''}`, {
+              indent: true,
+            })
+          );
+        }
+      }
+    }
+  }
+
   private async generateStep7Section(
     step7: any,
     contentChildren: any[],
@@ -1260,6 +1340,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                   `Module: ${moduleLabels.get(assessment.moduleId) || assessment.moduleId || 'N/A'}`,
                   `Type: ${assessment.assessmentType || 'N/A'}`,
                   `Max Marks: ${assessment.maxMarks ?? 'N/A'}`,
+                  `Weighting: ${assessment.weighting != null ? `${assessment.weighting}%` : 'not set'}`,
                   `MLOs: ${(assessment.alignedMLOs || assessment.linkedMLOs || []).join(', ') || 'not mapped'}`,
                 ].join(' | '),
                 size: FONT_SIZES.BODY,
@@ -1312,6 +1393,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             );
           }
         }
+
+        // The brief, marking guide and rubric, as three separate artefacts.
+        this.renderAssessmentArtefacts(assessment, contentChildren);
 
         // Questions (if available)
         if (assessment.questions?.length) {

@@ -459,6 +459,32 @@ Return ONLY valid JSON with COMPLETE QUESTIONS:
         "Understanding of relationships between concepts"
       ],
       "maxMarks": 12,
+      "studentBrief": {
+        "context": "One or two sentences setting the scenario the learner is working in.",
+        "task": "What the learner must actually do, in plain imperative language.",
+        "deliverables": ["What they submit, one entry per artefact"],
+        "conditions": "Time allowed, open/closed book, individual or group, word or length limit.",
+        "submissionFormat": "e.g. single PDF, 500 words, or completed online quiz"
+      },
+      "markingGuide": {
+        "totalMarks": 12,
+        "markAllocation": [
+          { "component": "Section or question group", "marks": 6, "indicativeContent": "What a correct response contains, specific enough to mark against." }
+        ],
+        "markerNotes": "Guidance for the marker: common misconceptions, what to accept as equivalent, where to award partial credit."
+      },
+      "rubric": [
+        {
+          "criterion": "Name the criterion, drawn from assessmentCriteria",
+          "maxMarks": 6,
+          "levels": [
+            { "band": "Distinction", "markRange": "5-6", "descriptor": "What performance at this band looks like for THIS criterion." },
+            { "band": "Merit", "markRange": "4", "descriptor": "..." },
+            { "band": "Pass", "markRange": "3", "descriptor": "..." },
+            { "band": "Fail", "markRange": "0-2", "descriptor": "..." }
+          ]
+        }
+      ],
       "questions": [
         {
           "questionNumber": 1,
@@ -498,6 +524,16 @@ CRITICAL REQUIREMENTS:
 8. All question text must be complete and ready to use - NO placeholders like "[insert]" or "[fill in]"
 9. For MCQs, set "correctAnswer" to the FULL TEXT of the correct option, copied EXACTLY from the "options" array (never a number, letter, or paraphrase), and begin the "rationale" by quoting that same option — so the marked answer always matches the explanation
 10. Rationales should explain WHY the correct answer is right and why each other option is wrong
+11. studentBrief, markingGuide and rubric are REQUIRED and must be three distinct artefacts, not
+    restatements of one another. The brief is what the learner reads and contains no answers; the
+    marking guide is what the marker reads and contains the indicative content; the rubric is the
+    banded criteria the mark is justified against.
+12. markingGuide.markAllocation must sum EXACTLY to maxMarks, and the rubric's criteria maxMarks
+    must also sum EXACTLY to maxMarks. One criterion per assessmentCriteria entry.
+13. Rubric descriptors must be specific to this module's content — a descriptor that would read
+    identically on any assessment ("shows good understanding") is not usable for marking.
+14. Do NOT invent a percentage weighting; the programme's formative/summative split is applied
+    afterwards from the author's own settings.
 11. Difficulty should progress from Easy → Medium → Hard within the assessment`;
 
     try {
