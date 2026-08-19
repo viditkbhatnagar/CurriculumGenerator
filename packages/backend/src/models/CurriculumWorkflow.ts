@@ -1145,7 +1145,17 @@ export interface ICurriculumWorkflow extends Document {
       weightsSum100: boolean;
       sufficientSampleQuestions: boolean;
       plosCovered: boolean;
+      /** Did every module in step4 actually receive assessments? */
+      allModulesCovered?: boolean;
     };
+
+    /**
+     * Modules whose assessments could not be generated, even after a retry.
+     *
+     * Recorded because a module missing from a step that reports success is invisible:
+     * eleven of forty-six were lost from one run and found only by reading the export.
+     */
+    failedModules?: { moduleId: string; moduleTitle?: string; message: string }[];
 
     // Metadata
     generatedAt: Date;

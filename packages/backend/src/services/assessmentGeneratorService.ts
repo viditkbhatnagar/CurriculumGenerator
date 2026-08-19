@@ -83,7 +83,142 @@ export function normalizeMcqAnswer(q: any): void {
   q.correctAnswer = opts[idx];
 }
 
+/** Bloom levels in order, so "at least this demanding" is answerable. */
+const BLOOM_ORDER = ['remember', 'understand', 'apply', 'analyse', 'evaluate', 'create'];
+
+const normaliseBloom = (level: string | undefined): string => {
+  const value = String(level || '')
+    .toLowerCase()
+    .trim();
+  // British and American spellings both appear in stored outcomes.
+  if (value === 'analyze') return 'analyse';
+  return BLOOM_ORDER.includes(value) ? value : 'understand';
+};
+
+/**
+ * Which formative formats can actually evidence a given Bloom level.
+ *
+ * A multiple-choice knowledge check cannot show that a learner can evaluate a client's
+ * current-state process or create a work breakdown structure — it can only show they
+ * recognise the right answer. An author who ticks every format still needs the format
+ * chosen per module, because a Level 4 introduction and a Level 6 consulting module are
+ * not assessed the same way.
+ */
+const FORMATS_BY_BLOOM: Record<string, string[]> = {
+  remember: ['Short quizzes', 'MCQ knowledge checks', 'Worksheets / problem sets'],
+  understand: [
+    'Short quizzes',
+    'MCQ knowledge checks',
+    'Worksheets / problem sets',
+    'Short written reflections',
+    'Discussion prompts',
+  ],
+  apply: [
+    'Scenario-based micro-tasks',
+    'Worksheets / problem sets',
+    'Practice simulations',
+    'Coding / technical tasks',
+    'Short quizzes',
+  ],
+  analyse: [
+    'Mini-case exercises',
+    'Scenario-based micro-tasks',
+    'Practice simulations',
+    'Coding / technical tasks',
+    'Discussion prompts',
+  ],
+  evaluate: [
+    'Mini-case exercises',
+    'Practice simulations',
+    'Short written reflections',
+    'Discussion prompts',
+    'Scenario-based micro-tasks',
+  ],
+  create: [
+    'Mini-case exercises',
+    'Practice simulations',
+    'Coding / technical tasks',
+    'Scenario-based micro-tasks',
+  ],
+};
+
+export interface FormatPlan {
+  /** One format per assessment, chosen for the outcomes it has to evidence. */
+  formats: string[];
+  /** The most demanding Bloom level this module's outcomes ask for. */
+  highestBloom: string;
+  /** Set when the author's permitted formats cannot evidence that level. */
+  warning: string | null;
+}
+
+/**
+ * Choose the format for each of a module's assessments.
+ *
+ * Constrained to what the author permitted — their list is a decision, not a suggestion —
+ * but ordered by what the module's outcomes actually require, so the demanding modules get
+ * the case exercises and simulations rather than everything collapsing to the first two
+ * entries on the list. Where the permitted list cannot evidence the module's highest Bloom
+ * level, that is reported rather than silently accepted.
+ */
+export function planFormativeFormats(
+  module: any,
+  allowedTypes: string[],
+  count: number
+): FormatPlan {
+  const allowed = (allowedTypes || []).filter((type) => type && type !== 'None');
+  const blooms = (module?.mlos || []).map((mlo: any) => normaliseBloom(mlo?.bloomLevel));
+  const highestBloom = blooms.length
+    ? blooms.reduce((a: string, b: string) =>
+        BLOOM_ORDER.indexOf(b) > BLOOM_ORDER.indexOf(a) ? b : a
+      )
+    : 'understand';
+
+  if (allowed.length === 0) {
+    return { formats: [], highestBloom, warning: null };
+  }
+
+  const suited = (FORMATS_BY_BLOOM[highestBloom] || []).filter((f) => allowed.includes(f));
+  const rest = allowed.filter((f) => !suited.includes(f));
+
+  // Rotate WITHIN the suited formats so modules sharing a Bloom level do not all receive an
+  // identical pair — "blended mix" should mean something across the programme, not only
+  // within a module. Rotating over the whole permitted list instead put quizzes and MCQ
+  // checks back onto create-level consulting modules, which is the very complaint this
+  // exists to answer, so the unsuited formats are only ever used to make up a shortfall.
+  const rotation = Number(module?.sequenceOrder ?? 0) || 0;
+  const formats: string[] = [];
+  for (let i = 0; i < count; i += 1) {
+    if (suited.length > 0) {
+      formats.push(suited[(rotation + i) % suited.length]);
+    } else if (rest.length > 0) {
+      formats.push(rest[(rotation + i) % rest.length]);
+    }
+  }
+
+  // A module needing more assessments than there are suitable formats reuses them rather
+  // than dropping to an unsuitable one; only an empty suited list falls back.
+  const ordered = [...suited, ...rest];
+  while (formats.length < count && ordered.length > 0) {
+    formats.push(ordered[formats.length % ordered.length]);
+  }
+
+  const warning =
+    suited.length === 0
+      ? `Module "${module?.title || module?.id}" has outcomes at Bloom level "${highestBloom}", which none of the permitted formative formats (${allowed.join(', ')}) can evidence. Consider allowing mini-case exercises or practice simulations.`
+      : null;
+
+  return { formats, highestBloom, warning };
+}
+
 export class AssessmentGeneratorService {
+  /**
+   * Modules whose assessments could not be generated, even after a retry.
+   *
+   * Exposed so the caller can persist it: a module missing from a step that reports success
+   * is invisible until somebody reads the document and notices.
+   */
+  failedModules: { moduleId: string; moduleTitle?: string; message: string }[] = [];
+
   private readonly MODULE_TIMEOUT = 240000; // 4 minutes per module formative (increased for full questions)
   private readonly SUMMATIVE_TIMEOUT = 240000; // 4 minutes for summative
   private readonly SAMPLE_BATCH_TIMEOUT = 180000; // 3 minutes per sample type
@@ -161,6 +296,7 @@ export class AssessmentGeneratorService {
     formatives: FormativeAssessment[];
     failed: { moduleId: string; message: string }[];
   }> {
+    this.failedModules = [];
     const request = this.buildRequest(workflow, userPreferences);
     const wanted = new Set(moduleIds);
     const modules = (request.modules || []).filter((m: any) => wanted.has(m.id));
@@ -210,6 +346,7 @@ export class AssessmentGeneratorService {
       structure: userPreferences.assessmentStructure,
     });
 
+    this.failedModules = [];
     const request = this.buildRequest(workflow, userPreferences);
 
     const response: AssessmentGenerationResponse = {
@@ -361,11 +498,29 @@ export class AssessmentGeneratorService {
         if (i < modules.length - 1) {
           await this.delay(this.INTER_CALL_DELAY);
         }
-      } catch (error) {
-        loggingService.error(`Failed to generate formatives for module ${module.id}`, {
-          error: error instanceof Error ? error.message : String(error),
+      } catch (firstError) {
+        // Retry once. Most failures here are transient — a truncated JSON response or a
+        // rate limit — and a single retry recovers them.
+        loggingService.warn(`Retrying formatives for module ${module.id}`, {
+          error: firstError instanceof Error ? firstError.message : String(firstError),
         });
-        // Continue with next module instead of failing completely
+        try {
+          const retried = await this.generateModuleFormativeAssessments(
+            module,
+            i,
+            request,
+            formativePerModule,
+            formativeTypes
+          );
+          allFormatives.push(...retried);
+        } catch (retryError) {
+          // Continuing silently is what lost eleven modules from a completed run: the step
+          // reported success, and the author found out by reading the exported document and
+          // listing the modules that were not in it.
+          const message = retryError instanceof Error ? retryError.message : String(retryError);
+          this.failedModules.push({ moduleId: module.id, moduleTitle: module.title, message });
+          loggingService.error(`Gave up on formatives for module ${module.id}`, { message });
+        }
       }
     }
 
@@ -382,6 +537,19 @@ export class AssessmentGeneratorService {
     formativePerModule: number,
     formativeTypes: string[]
   ): Promise<FormativeAssessment[]> {
+    // Decide the format for each assessment from what the module's outcomes require,
+    // within what the author permitted. Left to the prompt alone, a list of permitted
+    // types produced the first two entries for all 46 modules — every Level 6 consulting
+    // module assessed by multiple-choice.
+    const plan = planFormativeFormats(module, formativeTypes, formativePerModule);
+    if (plan.warning) {
+      loggingService.warn("Permitted formats cannot evidence this module's outcomes", {
+        moduleId: module?.id,
+        highestBloom: plan.highestBloom,
+        warning: plan.warning,
+      });
+    }
+
     const systemPrompt = `You are an educational assessment designer specializing in formative assessments for vocational and professional education.
 
 Formative assessments are low-stakes, frequent checks for understanding that:
@@ -421,7 +589,12 @@ ${(module.topics || []).map((t: any) => `- ${t.title || t}`).join('\n')}
 
 **User Preferences:**
 - Assessment Balance: ${request.userPreferences.assessmentBalance}
-- Formative Types Requested: ${formativeTypes.filter((t) => t !== 'None').join(', ')}
+- Formative Types Permitted: ${formativeTypes.filter((t) => t !== 'None').join(', ')}
+- FORMAT FOR EACH ASSESSMENT (use exactly these, in this order, one per assessment):
+${plan.formats.map((f, i) => `  ${i + 1}. ${f}`).join('\n')}
+- Most demanding outcome level in this module: ${plan.highestBloom.toUpperCase()}${
+      plan.warning ? `\n- NOTE: ${plan.warning}` : ''
+    }
 - Real-World Scenarios: ${request.userPreferences.useRealWorldScenarios ? 'Yes' : 'No'}
 - Workplace Performance Alignment: ${request.userPreferences.alignToWorkplacePerformance ? 'Yes' : 'No'}
 
@@ -448,7 +621,8 @@ Return ONLY valid JSON with COMPLETE QUESTIONS:
       "id": "form-${module.id}-001",
       "moduleId": "${module.id}",
       "title": "Short Quiz: Core Concepts in [Topic]",
-      "assessmentType": "Short quizzes",
+      "assessmentType": "<the format assigned to this assessment above>",
+      "targetBloomLevels": ["the Bloom level of each MLO this assessment covers"],
       "description": "A 10-12 question quiz covering fundamental concepts from this module",
       "instructions": "Complete this quiz after reviewing the module materials. You have 20 minutes. Questions test your understanding of key definitions and principles.",
       "alignedPLOs": ["PLO1", "PLO2"],
@@ -534,6 +708,15 @@ CRITICAL REQUIREMENTS:
     identically on any assessment ("shows good understanding") is not usable for marking.
 14. Do NOT invent a percentage weighting; the programme's formative/summative split is applied
     afterwards from the author's own settings.
+15. assessmentType MUST be the format assigned to that assessment in the list above. Do not
+    substitute a quiz or MCQ check for a case exercise or simulation.
+16. BLOOM FLOOR — every question must work at or above the Bloom level of the MLO it assesses.
+    An outcome written at APPLY cannot be evidenced by a recall question, and one written at
+    EVALUATE or CREATE cannot be evidenced by a question that only asks the learner to apply a
+    formula. Lower-level questions may be included ONLY as scaffolding within an assessment
+    whose main tasks meet the outcome's level, and the assessment as a whole must reach it.
+17. Set each question's bloomLevel to the level that question genuinely operates at — do not
+    label a recall question "apply" to satisfy rule 16.
 11. Difficulty should progress from Easy → Medium → Hard within the assessment`;
 
     try {

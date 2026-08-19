@@ -1342,6 +1342,18 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                   `Max Marks: ${assessment.maxMarks ?? 'N/A'}`,
                   `Weighting: ${assessment.weighting != null ? `${assessment.weighting}%` : 'not set'}`,
                   `MLOs: ${(assessment.alignedMLOs || assessment.linkedMLOs || []).join(', ') || 'not mapped'}`,
+                  // Bloom was rendered for PLOs, MLOs and lessons but nowhere in Step 7, so
+                  // an author could not see whether a task worked at the level its outcome
+                  // demands.
+                  `Bloom: ${
+                    (assessment.targetBloomLevels || []).join(', ') ||
+                    [
+                      ...new Set(
+                        (assessment.questions || []).map((q: any) => q.bloomLevel).filter(Boolean)
+                      ),
+                    ].join(', ') ||
+                    'not stated'
+                  }`,
                 ].join(' | '),
                 size: FONT_SIZES.BODY,
                 font: FONT_FAMILY,
@@ -1423,6 +1435,24 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                     font: FONT_FAMILY,
                     bold: true,
                   }),
+                  ...(q.bloomLevel || q.points != null
+                    ? [
+                        new TextRun({
+                          text: `  [${[
+                            q.bloomLevel ? `Bloom: ${q.bloomLevel}` : null,
+                            q.points != null
+                              ? `${q.points} mark${q.points === 1 ? '' : 's'}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}]`,
+                          size: FONT_SIZES.BODY,
+                          font: FONT_FAMILY,
+                          italics: true,
+                          color: '4a5568',
+                        }),
+                      ]
+                    : []),
                 ],
                 spacing: { before: 80, after: 40, line: LINE_SPACING },
               })

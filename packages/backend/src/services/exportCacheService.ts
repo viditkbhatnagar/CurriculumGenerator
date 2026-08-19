@@ -42,7 +42,9 @@ import { loggingService } from './loggingService';
 //     against (alignedMLOs), which were stored but never rendered.
 // v9: Step 7 assessments render percentage weighting plus the student brief, marking
 //     guide and rubric as three separate artefacts.
-const EXPORT_FORMAT_VERSION = 'v9';
+// v10: Step 7 renders Bloom levels — per assessment and per question — which were stored
+//      but shown only for PLOs, MLOs and lessons.
+const EXPORT_FORMAT_VERSION = 'v10';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {

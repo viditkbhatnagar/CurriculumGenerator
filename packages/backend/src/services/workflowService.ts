@@ -3259,17 +3259,37 @@ CRITICAL VALIDATION:
       }
     });
 
+    const { assessmentGeneratorService: generator } = await import('./assessmentGeneratorService');
+    const failedModules = [...generator.failedModules];
+    if (failedModules.length > 0) {
+      loggingService.error('Step 7: modules with no assessments', {
+        workflowId,
+        count: failedModules.length,
+        modules: failedModules.map((f) => f.moduleId),
+      });
+    }
+
+    const modulesExpected = ((workflow.step4 as any)?.modules || []).length;
+    const modulesCovered = new Set(
+      assessmentResponse.formativeAssessments.map((fa: any) => fa.moduleId)
+    ).size;
+
     const validation = {
       allFormativesMapped,
       allSummativesMapped,
       weightsSum100,
       sufficientSampleQuestions: totalSampleQuestions >= 20,
       plosCovered: ploIds.every((ploId: string) => coveredPloIds.has(ploId)),
+      // Whether every module actually got assessments. Nothing checked this, so a run that
+      // dropped eleven of forty-six modules still reported itself valid, and the author
+      // discovered it by reading the export and listing what was not in it.
+      allModulesCovered: modulesExpected > 0 && modulesCovered === modulesExpected,
     };
 
     // Store in workflow
     workflow.step7 = {
       userPreferences: userPreferences as any,
+      failedModules,
       formativeAssessments: assessmentResponse.formativeAssessments as any,
       summativeAssessments: assessmentResponse.summativeAssessments as any,
       sampleQuestions: assessmentResponse.sampleQuestions as any,
@@ -3560,12 +3580,31 @@ CRITICAL VALIDATION:
       }
     });
 
+    const { assessmentGeneratorService: generator } = await import('./assessmentGeneratorService');
+    const failedModules = [...generator.failedModules];
+    if (failedModules.length > 0) {
+      loggingService.error('Step 7: modules with no assessments', {
+        workflowId,
+        count: failedModules.length,
+        modules: failedModules.map((f) => f.moduleId),
+      });
+    }
+
+    const modulesExpected = ((workflow.step4 as any)?.modules || []).length;
+    const modulesCovered = new Set(
+      assessmentResponse.formativeAssessments.map((fa: any) => fa.moduleId)
+    ).size;
+
     const validation = {
       allFormativesMapped,
       allSummativesMapped,
       weightsSum100,
       sufficientSampleQuestions: totalSampleQuestions >= 20,
       plosCovered: ploIds.every((ploId: string) => coveredPloIds.has(ploId)),
+      // Whether every module actually got assessments. Nothing checked this, so a run that
+      // dropped eleven of forty-six modules still reported itself valid, and the author
+      // discovered it by reading the export and listing what was not in it.
+      allModulesCovered: modulesExpected > 0 && modulesCovered === modulesExpected,
     };
 
     // Update validation

@@ -529,7 +529,19 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
     certificationStyles: ['None'],
     academicTypes: ['None'],
     summativeFormat: 'mixed_format',
-    formativeTypesPerUnit: ['Short quizzes', 'MCQ knowledge checks'],
+    // Default to every format, not two.
+    //
+    // An author who chose "Blended Mix" and never opened this list got exactly two formats
+    // across all 46 modules — quizzes and MCQ checks — including on Level 6 consulting
+    // modules whose outcomes are written at evaluate and create. The generator can only
+    // choose from what is permitted here, so permitting everything by default lets it match
+    // the format to each module's outcomes; narrowing the list stays an explicit decision.
+    // Everything except the two that are not general-purpose: 'None' is a sentinel, and
+    // coding tasks are discipline-specific — appropriate for an analytics module, wrong for
+    // Business Economics — so an author opts into that one rather than out of it.
+    formativeTypesPerUnit: FORMATIVE_TYPES.filter(
+      (type) => type !== 'None' && type !== 'Coding / technical tasks'
+    ),
     formativePerModule: 2,
     weightages: {
       formative: 30,
