@@ -34,6 +34,7 @@ import {
   EssaySamplePrompt,
   PracticalSampleTask,
 } from '../types/assessmentGenerator';
+import { balanceMcqPositions } from '../utils/mcqBalance';
 
 /**
  * Reconcile an MCQ's correct-answer fields so the ticked answer always matches
@@ -141,6 +142,68 @@ const FORMATS_BY_BLOOM: Record<string, string[]> = {
     'Scenario-based micro-tasks',
   ],
 };
+
+/**
+ * What a task must actually ask the learner to do, per Bloom level.
+ *
+ * Supplied by the programme's subject-matter expert, and it fixes something the format
+ * names alone could not. Choosing "mini-case exercise" for a create-level outcome still
+ * left the assessment asking questions about a plan rather than requiring the learner to
+ * produce one: across the programme, 36 of 47 create-level outcomes name a concrete
+ * artefact — a dashboard, report, proposal, roadmap — and no assessment collected it.
+ *
+ * Her wording is kept verbatim so the intent is not paraphrased away, including the point
+ * that quizzes and multiple-choice are perfectly valid at understand level provided they
+ * test comprehension rather than recall.
+ */
+const TASK_SHAPES_BY_BLOOM: Record<string, string> = {
+  remember:
+    'recall and recognition items, used sparingly and only as scaffolding towards a higher-level task',
+  understand:
+    'explaining a concept, interpreting information, classifying examples, comparing concepts, summarising meaning, or selecting the correct explanation in a scenario — quizzes and MCQs are valid here PROVIDED they assess comprehension, not simple memorisation',
+  apply:
+    'working a method or framework on a given case: calculations with interpretation, applying a model to a scenario, producing a worked output',
+  analyse: 'case analysis, data or problem analysis, scenario diagnosis',
+  evaluate: 'critical evaluation, comparison with justification, recommendations',
+  create:
+    'a project or design task, a strategy proposal, an implementation plan, or a presentation/report — the learner must PRODUCE the artefact, not answer questions about producing one',
+};
+
+/**
+ * Artefacts a create-level outcome commonly names. Used to check that the assessment
+ * actually collects what the outcome promises.
+ */
+const ARTEFACT_WORDS = [
+  'dashboard',
+  'report',
+  'plan',
+  'proposal',
+  'presentation',
+  'roadmap',
+  'model',
+  'brief',
+  'strategy',
+  'map',
+  'portfolio',
+  'framework',
+  'pack',
+  'budget',
+  'forecast',
+];
+
+/** The artefacts this module's outcomes require the learner to produce, if any. */
+export function requiredArtefacts(module: any): string[] {
+  const wanted = new Set<string>();
+  for (const mlo of module?.mlos || []) {
+    const level = normaliseBloom(mlo?.bloomLevel);
+    if (level !== 'create' && level !== 'evaluate') continue;
+    const statement = String(mlo?.statement || '').toLowerCase();
+    for (const word of ARTEFACT_WORDS) {
+      if (statement.includes(word)) wanted.add(word);
+    }
+  }
+  return [...wanted];
+}
 
 export interface FormatPlan {
   /** One format per assessment, chosen for the outcomes it has to evidence. */
@@ -603,9 +666,21 @@ ${(module.topics || []).map((t: any) => `- ${t.title || t}`).join('\n')}
 - Formative Types Permitted: ${formativeTypes.filter((t) => t !== 'None').join(', ')}
 - FORMAT FOR EACH ASSESSMENT (use exactly these, in this order, one per assessment):
 ${plan.formats.map((f, i) => `  ${i + 1}. ${f}`).join('\n')}
-- Most demanding outcome level in this module: ${plan.highestBloom.toUpperCase()}${
-      plan.warning ? `\n- NOTE: ${plan.warning}` : ''
-    }
+- Most demanding outcome level in this module: ${plan.highestBloom.toUpperCase()}
+
+**WHAT THE TASK MUST ASK THE LEARNER TO DO, BY OUTCOME LEVEL**
+${[...new Set((module.mlos || []).map((m: any) => normaliseBloom(m?.bloomLevel)))]
+  .map((level) => `- ${String(level).toUpperCase()}: ${TASK_SHAPES_BY_BLOOM[String(level)] || ''}`)
+  .join('\n')}
+${
+  requiredArtefacts(module).length
+    ? `\n**ARTEFACTS THIS MODULE'S OUTCOMES REQUIRE THE LEARNER TO PRODUCE:** ${requiredArtefacts(
+        module
+      ).join(
+        ', '
+      )}\nAt least one assessment MUST collect the artefact itself as a deliverable. An outcome that says "create a dashboard" is not evidenced by questions about dashboards.`
+    : ''
+}${plan.warning ? `\n- NOTE: ${plan.warning}` : ''}
 - Real-World Scenarios: ${request.userPreferences.useRealWorldScenarios ? 'Yes' : 'No'}
 - Workplace Performance Alignment: ${request.userPreferences.alignToWorkplacePerformance ? 'Yes' : 'No'}
 
@@ -715,6 +790,12 @@ CRITICAL REQUIREMENTS:
     banded criteria the mark is justified against.
 12. markingGuide.markAllocation must sum EXACTLY to maxMarks, and the rubric's criteria maxMarks
     must also sum EXACTLY to maxMarks. One criterion per assessmentCriteria entry.
+12a. The two must AGREE with each other, not merely each add up. Use the same components in
+    the same order with the same marks in markAllocation and rubric — the guide says what a
+    correct response contains, the rubric says how well it was done, and they must be two
+    views of ONE mark split. In an earlier bank both summed correctly while splitting the
+    marks differently in 35 of 92 assessments, so two markers using the two documents awarded
+    different marks for identical work.
 13. Rubric descriptors must be specific to this module's content — a descriptor that would read
     identically on any assessment ("shows good understanding") is not usable for marking.
 14. Do NOT invent a percentage weighting; the programme's formative/summative split is applied
@@ -728,6 +809,17 @@ CRITICAL REQUIREMENTS:
     whose main tasks meet the outcome's level, and the assessment as a whole must reach it.
 17. Set each question's bloomLevel to the level that question genuinely operates at — do not
     label a recall question "apply" to satisfy rule 16.
+18. TASK SHAPE — every task must take the shape listed above for the outcome level it
+    assesses. At understand level a quiz is correct, but the items must ask the learner to
+    explain, interpret, classify, compare, summarise or pick the right explanation for a
+    situation — not to recall a definition. At analyse level give them a case, a dataset or
+    a scenario to diagnose. At evaluate level require a judgement WITH justification, or a
+    comparison leading to a recommendation. At create level the deliverable is the evidence.
+19. MCQ ANSWER DESIGN — distractors must be the same length and the same grammatical shape
+    as the correct option, and plausible to someone who has not studied. Do NOT write a
+    correct option that is longer, more detailed or more hedged than the distractors: across
+    an earlier bank, 82% of correct answers were the longest option and 69% were option A,
+    which let a candidate pass 645 questions without any subject knowledge.
 11. Difficulty should progress from Easy → Medium → Hard within the assessment`;
 
     try {
@@ -738,10 +830,21 @@ CRITICAL REQUIREMENTS:
 
       const parsed = this.parseJSON(response, `formative-${module.id}`);
       const formativeAssessments = parsed.formativeAssessments || [];
-      // Reconcile MCQ correct-answer with its rationale (text ↔ index).
+      // Reconcile MCQ correct-answer with its rationale (text ↔ index), then even out the
+      // answer key. Left as generated, 69% of correct answers landed on option A — enough
+      // for a candidate to pass the bank by always choosing A.
       for (const fa of formativeAssessments) {
         for (const q of fa?.questions || []) {
           if (q?.questionType === 'mcq') normalizeMcqAnswer(q);
+        }
+        const { balanced, skipped } = balanceMcqPositions(fa?.questions || []);
+        if (skipped > 0) {
+          loggingService.warn('MCQ items left unbalanced because the answer key was ambiguous', {
+            moduleId: module.id,
+            assessment: fa?.id,
+            skipped,
+            balanced,
+          });
         }
       }
       return formativeAssessments;
