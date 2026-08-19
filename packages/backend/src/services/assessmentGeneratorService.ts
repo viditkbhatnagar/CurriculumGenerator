@@ -282,7 +282,17 @@ export class AssessmentGeneratorService {
    */
   failedModules: { moduleId: string; moduleTitle?: string; message: string }[] = [];
 
-  private readonly MODULE_TIMEOUT = 240000; // 4 minutes per module formative (increased for full questions)
+  /**
+   * Per-module budget for the formative call.
+   *
+   * Four minutes was enough when a module returned two assessments of questions. It is not
+   * enough now that each one also carries a student brief, a marking guide and a banded
+   * rubric, and that create-level modules must set out a task producing a real artefact:
+   * six of the seven modules that failed a regeneration failed on exactly this timeout, at
+   * 240000ms, having produced nothing. Twelve minutes leaves headroom without letting a
+   * genuinely stuck call block the queue indefinitely.
+   */
+  private readonly MODULE_TIMEOUT = 720000;
   private readonly SUMMATIVE_TIMEOUT = 240000; // 4 minutes for summative
   private readonly SAMPLE_BATCH_TIMEOUT = 180000; // 3 minutes per sample type
   private readonly INTER_CALL_DELAY = 1000; // 1 second delay between API calls
