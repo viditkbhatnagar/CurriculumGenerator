@@ -171,6 +171,32 @@ const TASK_SHAPES_BY_BLOOM: Record<string, string> = {
 };
 
 /**
+ * How each artefact is actually named in a deliverable.
+ *
+ * A learning outcome says "presentation"; a brief says "4-6 slide deck with speaker notes".
+ * Both are the same artefact, and matching on the outcome's own word alone reports a gap
+ * that is not there — it did exactly that for Leadership & Personal Effectiveness, whose
+ * deliverable is a slide deck with a recorded narration.
+ */
+const ARTEFACT_SYNONYMS: Record<string, string[]> = {
+  presentation: ['presentation', 'slide deck', 'slides', 'pitch', 'narration', 'deck'],
+  dashboard: ['dashboard', 'power bi', 'powerbi', 'visualisation', 'visualization', 'chart pack'],
+  report: ['report', 'write-up', 'memo', 'briefing note', 'written submission'],
+  plan: ['plan', 'schedule', 'timetable', 'gantt', 'wbs', 'work breakdown'],
+  proposal: ['proposal', 'business case', 'recommendation paper', 'pitch document'],
+  roadmap: ['roadmap', 'phased plan', 'implementation sequence'],
+  model: ['model', 'spreadsheet', 'workbook', 'xlsx', 'excel file', 'calculation sheet'],
+  strategy: ['strategy', 'strategic plan', 'positioning statement'],
+  map: ['map', 'process map', 'journey map', 'strategy map'],
+  forecast: ['forecast', 'projection', 'cash flow'],
+  budget: ['budget', 'costing'],
+  brief: ['brief', 'briefing'],
+  portfolio: ['portfolio'],
+  framework: ['framework'],
+  pack: ['pack'],
+};
+
+/**
  * Artefacts a create-level outcome commonly names. Used to check that the assessment
  * actually collects what the outcome promises.
  */
@@ -204,6 +230,32 @@ export function requiredArtefacts(module: any): string[] {
     }
   }
   return [...wanted];
+}
+
+/**
+ * Which artefacts a module's outcomes promise but its assessments never collect.
+ *
+ * An outcome reading "create an interactive KPI dashboard" is not evidenced by questions
+ * about dashboards, so this compares what the outcomes name against what the briefs
+ * actually ask to be handed in — allowing for the fact that a deliverable describes the
+ * artefact in its own words. Returns the artefacts that are genuinely uncollected.
+ */
+export function uncollectedArtefacts(
+  module: any,
+  assessments: { studentBrief?: { deliverables?: string[]; task?: string } }[]
+): string[] {
+  const wanted = requiredArtefacts(module);
+  if (wanted.length === 0) return [];
+
+  const submitted = assessments
+    .flatMap((a) => [...(a.studentBrief?.deliverables || []), a.studentBrief?.task || ''])
+    .join(' ')
+    .toLowerCase();
+
+  return wanted.filter((artefact) => {
+    const names = ARTEFACT_SYNONYMS[artefact] || [artefact];
+    return !names.some((name) => submitted.includes(name));
+  });
 }
 
 export interface FormatPlan {
@@ -685,11 +737,15 @@ ${[...new Set((module.mlos || []).map((m: any) => normaliseBloom(m?.bloomLevel))
   .join('\n')}
 ${
   requiredArtefacts(module).length
-    ? `\n**ARTEFACTS THIS MODULE'S OUTCOMES REQUIRE THE LEARNER TO PRODUCE:** ${requiredArtefacts(
-        module
-      ).join(
-        ', '
-      )}\nAt least one assessment MUST collect the artefact itself as a deliverable. An outcome that says "create a dashboard" is not evidenced by questions about dashboards.`
+    ? `\n**ARTEFACTS THIS MODULE'S OUTCOMES REQUIRE THE LEARNER TO PRODUCE**
+${requiredArtefacts(module)
+  .map((a) => `  - a ${a}`)
+  .join('\n')}
+EVERY ONE of these must appear in studentBrief.deliverables of at least one assessment, named
+as the thing being handed in — "a one-page implementation roadmap", not "answers about
+roadmaps". An outcome saying "create a dashboard" is not evidenced by questions about
+dashboards. Measured on an earlier run, 14 of 37 modules promised an artefact and collected
+nothing of the kind, leaving those outcomes unassessed.`
     : ''
 }${plan.warning ? `\n- NOTE: ${plan.warning}` : ''}
 - Real-World Scenarios: ${request.userPreferences.useRealWorldScenarios ? 'Yes' : 'No'}
@@ -826,11 +882,13 @@ CRITICAL REQUIREMENTS:
     situation — not to recall a definition. At analyse level give them a case, a dataset or
     a scenario to diagnose. At evaluate level require a judgement WITH justification, or a
     comparison leading to a recommendation. At create level the deliverable is the evidence.
-19. MCQ ANSWER DESIGN — distractors must be the same length and the same grammatical shape
-    as the correct option, and plausible to someone who has not studied. Do NOT write a
-    correct option that is longer, more detailed or more hedged than the distractors: across
-    an earlier bank, 82% of correct answers were the longest option and 69% were option A,
-    which let a candidate pass 645 questions without any subject knowledge.
+19. MCQ ANSWER DESIGN — every option in an item must be within 20% of the others in
+    character count, and share the same grammatical shape. Count the characters before you
+    finalise an item. Do NOT write a correct option that is longer, more qualified or more
+    detailed than its distractors: measured on an earlier bank the correct option was the
+    longest in 82% of items and, at the median, 36% longer than the average distractor, so a
+    candidate scoring by length alone passed without studying. A distractor must be wrong on
+    the subject, never wrong because it is terser or vaguer than the answer.
 11. Difficulty should progress from Easy → Medium → Hard within the assessment`;
 
     try {

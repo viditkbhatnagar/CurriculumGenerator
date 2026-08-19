@@ -3140,6 +3140,35 @@ CRITICAL VALIDATION:
       (workflow.step7 as any).formativeAssessments =
         (latest.step7 as any).formativeAssessments || [];
     }
+    // Record any outcome that promises an artefact the assessments do not collect, so an
+    // unassessable outcome is visible on the document rather than only findable by reading
+    // every brief.
+    const { uncollectedArtefacts } = await import('./assessmentGeneratorService');
+    const artefactGaps: string[] = [];
+    for (const moduleId of moduleIds) {
+      const module = ((workflow.step4 as any)?.modules || []).find((m: any) => m.id === moduleId);
+      const forModule = formatives.filter((f: any) => f.moduleId === moduleId);
+      if (!module || forModule.length === 0) continue;
+      const missing = uncollectedArtefacts(module, forModule as any);
+      if (missing.length > 0) {
+        artefactGaps.push(
+          `"${module.title}" has outcomes requiring a ${missing.join(' and a ')}, but no assessment collects one.`
+        );
+      }
+    }
+    if (artefactGaps.length > 0) {
+      loggingService.warn('Step 7: outcomes promising an artefact that is never collected', {
+        workflowId,
+        gaps: artefactGaps,
+      });
+      (workflow.step7 as any).artefactGaps = [
+        ...(((workflow.step7 as any).artefactGaps || []) as string[]).filter(
+          (g) => !moduleIds.some((id) => g.includes(id))
+        ),
+        ...artefactGaps,
+      ];
+    }
+
     const regenerated = [...new Set(formatives.map((f: any) => f.moduleId))];
 
     // Recompute percentage weightings across the whole step: a module's assessments share
