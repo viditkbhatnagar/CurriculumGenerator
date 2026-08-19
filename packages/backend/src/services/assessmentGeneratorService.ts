@@ -667,6 +667,16 @@ export class AssessmentGeneratorService {
   /**
    * Generate formative assessments for a single module
    */
+  /**
+   * Generate a module's formative assessments — one model call per assessment.
+   *
+   * Both assessments used to come back from a single call. Once each one also had to carry a
+   * student brief, a marking guide, a banded rubric and 10-12 questions with options and
+   * rationales, that response outgrew the 32k output budget: two modules came back with
+   * "Unterminated string in JSON" — truncated mid-sentence — and four others took between 14
+   * and 28 minutes. One assessment per call sits well inside the budget, returns faster, and
+   * confines a failure to a single assessment instead of losing the module.
+   */
   private async generateModuleFormativeAssessments(
     module: any,
     moduleIndex: number,
@@ -687,6 +697,44 @@ export class AssessmentGeneratorService {
       });
     }
 
+    const produced: FormativeAssessment[] = [];
+    const failures: string[] = [];
+    for (let slot = 0; slot < plan.formats.length; slot += 1) {
+      try {
+        const one = await this.generateOneFormative(module, moduleIndex, request, plan, slot);
+        produced.push(...one);
+      } catch (error) {
+        failures.push(
+          `${plan.formats[slot]}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+      if (slot < plan.formats.length - 1) await this.delay(this.INTER_CALL_DELAY);
+    }
+
+    // One usable assessment is worth keeping; none at all is a module failure.
+    if (produced.length === 0) {
+      throw new Error(`No assessment could be generated for ${module.id}: ${failures.join(' | ')}`);
+    }
+    if (failures.length > 0) {
+      loggingService.warn('Some assessments failed for this module; keeping the rest', {
+        moduleId: module.id,
+        produced: produced.length,
+        failures,
+      });
+    }
+    return produced;
+  }
+
+  /** One assessment, in the format the plan assigned to this slot. */
+  private async generateOneFormative(
+    module: any,
+    moduleIndex: number,
+    request: AssessmentGenerationRequest,
+    plan: FormatPlan,
+    slot: number
+  ): Promise<FormativeAssessment[]> {
+    const assignedFormat = plan.formats[slot];
+
     const systemPrompt = `You are an educational assessment designer specializing in formative assessments for vocational and professional education.
 
 Formative assessments are low-stakes, frequent checks for understanding that:
@@ -704,7 +752,7 @@ You design assessments that are:
 
 ${this.spellingDirective(request)}`;
 
-    const userPrompt = `Generate ${formativePerModule} formative assessment(s) for this module.
+    const userPrompt = `Generate EXACTLY ONE formative assessment for this module, in the format "${assignedFormat}".
 ${this.marketContextBlock(request)}
 === PROGRAMME CONTEXT ===
 Programme: ${request.programFoundation?.programTitle || 'Professional Development Programme'}
@@ -726,9 +774,13 @@ ${(module.topics || []).map((t: any) => `- ${t.title || t}`).join('\n')}
 
 **User Preferences:**
 - Assessment Balance: ${request.userPreferences.assessmentBalance}
-- Formative Types Permitted: ${formativeTypes.filter((t) => t !== 'None').join(', ')}
-- FORMAT FOR EACH ASSESSMENT (use exactly these, in this order, one per assessment):
-${plan.formats.map((f, i) => `  ${i + 1}. ${f}`).join('\n')}
+- Formative Types Permitted: ${(request.userPreferences.formativeTypesPerUnit || [])
+      .filter((t: string) => t !== 'None')
+      .join(', ')}
+- FORMAT FOR THIS ASSESSMENT: ${assignedFormat}
+- (the module's other assessment(s) use: ${
+      plan.formats.filter((_, i) => i !== slot).join(', ') || 'none'
+    } — do not duplicate their coverage)
 - Most demanding outcome level in this module: ${plan.highestBloom.toUpperCase()}
 
 **WHAT THE TASK MUST ASK THE LEARNER TO DO, BY OUTCOME LEVEL**
@@ -758,7 +810,7 @@ ${
     : `- Align with: ${request.userPreferences.certificationStyles.join(', ')} standards where applicable`
 }
 
-Generate ${formativePerModule} formative assessment(s) that:
+Generate EXACTLY ONE formative assessment, in the format "${assignedFormat}", that:
 1. Each assesses 2-4 MLOs from this module
 2. Uses different assessment types from the requested list
 3. Includes clear instructions for learners
