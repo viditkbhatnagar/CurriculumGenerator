@@ -35,6 +35,7 @@ import {
   PracticalSampleTask,
 } from '../types/assessmentGenerator';
 import { balanceMcqPositions } from '../utils/mcqBalance';
+import { derivePloAlignment } from '../utils/ploAlignment';
 
 /**
  * Reconcile an MCQ's correct-answer fields so the ticked answer always matches
@@ -843,7 +844,16 @@ CRITICAL REQUIREMENTS:
       // Reconcile MCQ correct-answer with its rationale (text ↔ index), then even out the
       // answer key. Left as generated, 69% of correct answers landed on option A — enough
       // for a candidate to pass the bank by always choosing A.
+      // PLO alignment is derived from the curriculum, never taken from the model: asked to
+      // name them, it cited PLOs the module is not mapped to in 71% of cases and invented
+      // identifiers that do not exist at all.
+      const programmePloIds = new Set<string>(
+        ((request.courseFramework?.programLearningOutcomes as any[]) || [])
+          .map((plo: any) => plo?.code || plo?.id)
+          .filter(Boolean)
+      );
       for (const fa of formativeAssessments) {
+        fa.alignedPLOs = derivePloAlignment(fa, module, programmePloIds);
         for (const q of fa?.questions || []) {
           if (q?.questionType === 'mcq') normalizeMcqAnswer(q);
         }
