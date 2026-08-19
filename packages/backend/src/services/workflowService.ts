@@ -3107,18 +3107,40 @@ CRITICAL VALIDATION:
     }
 
     const { assessmentGeneratorService } = await import('./assessmentGeneratorService');
+
+    // Persist after every module rather than once at the end. Generating a dozen modules
+    // takes long enough that a restart or a dropped connection in the middle is normal, and
+    // a single save at the end throws away everything that succeeded.
+    const persistModule = async (moduleId: string, generated: any[]): Promise<void> => {
+      const fresh = await CurriculumWorkflow.findById(workflowId);
+      if (!fresh || !fresh.step7) return;
+      const existing = ((fresh.step7 as any).formativeAssessments || []).filter(
+        (f: any) => f.moduleId !== moduleId
+      );
+      (fresh.step7 as any).formativeAssessments = [...existing, ...generated];
+      fresh.markModified('step7');
+      await fresh.save();
+      loggingService.info('Step 7: module assessments saved', {
+        workflowId,
+        moduleId,
+        count: generated.length,
+      });
+    };
+
     const { formatives, failed } = await assessmentGeneratorService.generateFormativesForModules(
       workflow,
       preferences,
-      moduleIds
+      moduleIds,
+      persistModule
     );
 
+    // Re-read: the per-module saves above are the source of truth now.
+    const latest = await CurriculumWorkflow.findById(workflowId);
+    if (latest?.step7) {
+      (workflow.step7 as any).formativeAssessments =
+        (latest.step7 as any).formativeAssessments || [];
+    }
     const regenerated = [...new Set(formatives.map((f: any) => f.moduleId))];
-    const untouched = ((workflow.step7 as any).formativeAssessments || []).filter(
-      (f: any) => !regenerated.includes(f.moduleId)
-    );
-
-    (workflow.step7 as any).formativeAssessments = [...untouched, ...formatives];
 
     // Recompute percentage weightings across the whole step: a module's assessments share
     // its 100% between them, so replacing one module's set changes those percentages.

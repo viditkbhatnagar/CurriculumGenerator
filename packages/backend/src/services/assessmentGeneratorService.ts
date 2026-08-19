@@ -291,7 +291,15 @@ export class AssessmentGeneratorService {
   async generateFormativesForModules(
     workflow: ICurriculumWorkflow,
     userPreferences: AssessmentUserPreferences,
-    moduleIds: string[]
+    moduleIds: string[],
+    /**
+     * Called as each module completes, so the caller can persist progressively.
+     *
+     * Without it a caller can only save once every module has finished, so a restart or a
+     * dropped connection discards the lot — the same fragility that cost this programme an
+     * hour of Step 7 twice over.
+     */
+    onModuleComplete?: (moduleId: string, formatives: FormativeAssessment[]) => Promise<void>
   ): Promise<{
     formatives: FormativeAssessment[];
     failed: { moduleId: string; message: string }[];
@@ -320,6 +328,9 @@ export class AssessmentGeneratorService {
           formativeTypes
         );
         formatives.push(...generated);
+        if (onModuleComplete) {
+          await onModuleComplete(module.id, generated);
+        }
       } catch (error) {
         failed.push({
           moduleId: module.id,
