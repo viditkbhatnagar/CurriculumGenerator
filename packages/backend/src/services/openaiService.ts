@@ -508,7 +508,12 @@ export class OpenAIService {
           timeout: timeout, // Pass timeout to each request
         });
 
-        for await (const chunk of stream) {
+        // `requestBody` is assembled as a plain object, so the SDK cannot narrow to its
+        // streaming overload from the literal `stream: true` at line 491 and types the result
+        // as a single completion. The call does stream; the cast states what the request asked
+        // for. Without it this file fails to compile under ts-jest, which is why nothing that
+        // imports it could be tested.
+        for await (const chunk of stream as unknown as AsyncIterable<any>) {
           const content = chunk.choices[0]?.delta?.content || '';
           if (content) {
             callback({ content, done: false });

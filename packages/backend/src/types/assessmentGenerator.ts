@@ -317,4 +317,11 @@ export interface AssessmentGenerationProgress {
   completedSteps: number;
   estimatedTimeRemaining?: number; // seconds
   error?: string;
+  /**
+   * Partial results emitted as each module completes, for the Step 7 SSE stream.
+   *
+   * The streaming callbacks have passed this since streaming was added; the interface never
+   * declared it, so the file did not compile under ts-jest and could not be tested at all.
+   */
+  data?: Record<string, unknown>;
 }
