@@ -1147,6 +1147,29 @@ export interface ICurriculumWorkflow extends Document {
       plosCovered: boolean;
       /** Did every module in step4 actually receive assessments? */
       allModulesCovered?: boolean;
+      /** Does every assessment reach the Bloom level its own outcomes are written at? */
+      bloomFloorMet?: boolean;
+    };
+
+    /**
+     * How the generated assessments sit against the taxonomy.
+     *
+     * Step 3 has computed a Bloom distribution for its outcomes since it was written; Step 7
+     * computed nothing, so an assessment pitched below its outcome was invisible until
+     * somebody read the document and checked it by hand.
+     */
+    bloomReport?: {
+      floorMet: boolean;
+      distribution: Record<string, number>;
+      shortfalls: {
+        moduleId: string;
+        moduleTitle?: string;
+        assessmentId?: string;
+        required: string;
+        reached: string | null;
+      }[];
+      questionsBelowFloor: number;
+      totalQuestions: number;
     };
 
     /**

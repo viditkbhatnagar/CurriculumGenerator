@@ -13,6 +13,7 @@ import {
 import OpenAI from 'openai';
 import { loggingService } from './loggingService';
 import { moduleLabelOf } from '../utils/moduleIdentity';
+import { bloomIndex, normaliseBloom } from './assessmentGeneratorService';
 
 interface WorkflowData {
   projectName: string;
@@ -1254,6 +1255,26 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     step4?: any
   ): Promise<void> {
     const moduleLabels = this.buildModuleLabels(step4);
+    // The Bloom level of every outcome in the programme, so an assessment can be printed
+    // against the level its outcomes actually demand rather than the level the model said it
+    // had hit. Derived here as well as at generation so an already-generated document shows
+    // the truth on its next export instead of needing a re-run.
+    const mloBloom = new Map<string, string>();
+    const mloModule = new Map<string, any>();
+    for (const module of (step4?.modules || []) as any[]) {
+      for (const mlo of (module?.mlos || []) as any[]) {
+        if (!mlo?.id) continue;
+        mloBloom.set(String(mlo.id), normaliseBloom(mlo?.bloomLevel));
+        mloModule.set(String(mlo.id), module);
+      }
+    }
+    const requiredLevels = (assessment: any): string[] => {
+      const levels = (assessment?.alignedMLOs || assessment?.linkedMLOs || [])
+        .map((id: any) => mloBloom.get(String(id)))
+        .filter(Boolean) as string[];
+      return [...new Set(levels)].sort((x, y) => bloomIndex(x) - bloomIndex(y));
+    };
+
     if (
       !step7?.formativeAssessments?.length &&
       !step7?.summativeAssessments?.length &&
@@ -1344,15 +1365,20 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                   `MLOs: ${(assessment.alignedMLOs || assessment.linkedMLOs || []).join(', ') || 'not mapped'}`,
                   // Bloom was rendered for PLOs, MLOs and lessons but nowhere in Step 7, so
                   // an author could not see whether a task worked at the level its outcome
-                  // demands.
-                  `Bloom: ${
-                    (assessment.targetBloomLevels || []).join(', ') ||
+                  // demands. Both halves are printed — what the outcomes require and what the
+                  // tasks reach — because printing only one of them is what let an assessment
+                  // sitting below its outcome look correct on the page.
+                  `Outcome level required: ${requiredLevels(assessment).join(', ') || 'not mapped'}`,
+                  `Tasks reach: ${
                     [
-                      ...new Set(
-                        (assessment.questions || []).map((q: any) => q.bloomLevel).filter(Boolean)
+                      ...new Set<string>(
+                        (assessment.questions || [])
+                          .map((q: any) => normaliseBloom(q.bloomLevel))
+                          .filter(Boolean) as string[]
                       ),
-                    ].join(', ') ||
-                    'not stated'
+                    ]
+                      .sort((x, y) => bloomIndex(x) - bloomIndex(y))
+                      .join(', ') || 'not stated'
                   }`,
                 ].join(' | '),
                 size: FONT_SIZES.BODY,
@@ -1439,7 +1465,17 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                     ? [
                         new TextRun({
                           text: `  [${[
-                            q.bloomLevel ? `Bloom: ${q.bloomLevel}` : null,
+                            q.bloomLevel ? `Bloom: ${normaliseBloom(q.bloomLevel)}` : null,
+                            // The outcome this task evidences, and its level. A question can
+                            // only be judged against the outcome it assesses, and printing
+                            // the two side by side is what makes a shortfall visible.
+                            q.alignedMLO
+                              ? `for ${q.alignedMLO}${
+                                  mloBloom.get(String(q.alignedMLO))
+                                    ? ` (${mloBloom.get(String(q.alignedMLO))})`
+                                    : ''
+                                }`
+                              : null,
                             q.points != null
                               ? `${q.points} mark${q.points === 1 ? '' : 's'}`
                               : null,

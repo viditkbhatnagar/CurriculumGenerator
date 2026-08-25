@@ -3325,6 +3325,23 @@ CRITICAL VALIDATION:
       assessmentResponse.formativeAssessments.map((fa: any) => fa.moduleId)
     ).size;
 
+    // Whether the assessments actually work at the level their outcomes are written at.
+    // Until this existed the Bloom floor was an instruction in a prompt and nothing more:
+    // the taxonomy order was consulted in exactly one place in the whole backend, to pick a
+    // format, and the author found the gap by reading the exported document.
+    const { auditProgrammeBloom } = await import('./assessmentGeneratorService');
+    const bloomReport = auditProgrammeBloom(
+      assessmentResponse.formativeAssessments as any[],
+      ((workflow.step4 as any)?.modules || []) as any[]
+    );
+    if (!bloomReport.floorMet) {
+      loggingService.warn('Step 7: assessments below the Bloom level of their outcomes', {
+        workflowId,
+        shortfalls: bloomReport.shortfalls.length,
+        questionsBelowFloor: bloomReport.questionsBelowFloor,
+      });
+    }
+
     const validation = {
       allFormativesMapped,
       allSummativesMapped,
@@ -3335,6 +3352,8 @@ CRITICAL VALIDATION:
       // dropped eleven of forty-six modules still reported itself valid, and the author
       // discovered it by reading the export and listing what was not in it.
       allModulesCovered: modulesExpected > 0 && modulesCovered === modulesExpected,
+      // Whether every assessment reaches the Bloom level its own outcomes demand.
+      bloomFloorMet: bloomReport.floorMet,
     };
 
     // Store in workflow
@@ -3346,6 +3365,7 @@ CRITICAL VALIDATION:
       sampleQuestions: assessmentResponse.sampleQuestions as any,
       lmsPackages: assessmentResponse.lmsPackages,
       validation,
+      bloomReport,
       generatedAt: new Date(),
     };
 
@@ -3646,6 +3666,23 @@ CRITICAL VALIDATION:
       assessmentResponse.formativeAssessments.map((fa: any) => fa.moduleId)
     ).size;
 
+    // Whether the assessments actually work at the level their outcomes are written at.
+    // Until this existed the Bloom floor was an instruction in a prompt and nothing more:
+    // the taxonomy order was consulted in exactly one place in the whole backend, to pick a
+    // format, and the author found the gap by reading the exported document.
+    const { auditProgrammeBloom } = await import('./assessmentGeneratorService');
+    const bloomReport = auditProgrammeBloom(
+      assessmentResponse.formativeAssessments as any[],
+      ((workflow.step4 as any)?.modules || []) as any[]
+    );
+    if (!bloomReport.floorMet) {
+      loggingService.warn('Step 7: assessments below the Bloom level of their outcomes', {
+        workflowId,
+        shortfalls: bloomReport.shortfalls.length,
+        questionsBelowFloor: bloomReport.questionsBelowFloor,
+      });
+    }
+
     const validation = {
       allFormativesMapped,
       allSummativesMapped,
@@ -3656,10 +3693,13 @@ CRITICAL VALIDATION:
       // dropped eleven of forty-six modules still reported itself valid, and the author
       // discovered it by reading the export and listing what was not in it.
       allModulesCovered: modulesExpected > 0 && modulesCovered === modulesExpected,
+      // Whether every assessment reaches the Bloom level its own outcomes demand.
+      bloomFloorMet: bloomReport.floorMet,
     };
 
     // Update validation
     workflow.step7!.validation = validation;
+    (workflow.step7 as any).bloomReport = bloomReport;
     workflow.currentStep = 7;
     workflow.status = 'step7_complete';
 

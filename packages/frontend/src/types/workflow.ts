@@ -980,6 +980,25 @@ export interface Step7Assessments {
     weightsSum100: boolean;
     sufficientSampleQuestions: boolean;
     plosCovered: boolean;
+    /** Did every module in step4 actually receive assessments? */
+    allModulesCovered?: boolean;
+    /** Does every assessment reach the Bloom level its own outcomes are written at? */
+    bloomFloorMet?: boolean;
+  };
+
+  /** How the generated assessments sit against the taxonomy. */
+  bloomReport?: {
+    floorMet: boolean;
+    distribution: Record<string, number>;
+    shortfalls: {
+      moduleId: string;
+      moduleTitle?: string;
+      assessmentId?: string;
+      required: string;
+      reached: string | null;
+    }[];
+    questionsBelowFloor: number;
+    totalQuestions: number;
   };
 
   // Metadata

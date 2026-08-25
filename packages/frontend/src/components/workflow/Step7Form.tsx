@@ -856,6 +856,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
 
   const isApproved = !!workflow.step7?.approvedAt;
   const validation = workflow.step7?.validation;
+  const bloomReport = (workflow.step7 as any)?.bloomReport;
 
   // Toggle array item
   const toggleArrayItem = (array: string[], item: string) => {
@@ -1627,7 +1628,54 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                 <span className={validation.plosCovered ? 'text-emerald-400' : 'text-red-400'}>
                   {validation.plosCovered ? '✓' : '✗'} All PLOs Covered
                 </span>
+                {validation.allModulesCovered !== undefined && (
+                  <span
+                    className={validation.allModulesCovered ? 'text-emerald-400' : 'text-red-400'}
+                  >
+                    {validation.allModulesCovered ? '✓' : '✗'} All Modules Covered
+                  </span>
+                )}
+                {validation.bloomFloorMet !== undefined && (
+                  <span className={validation.bloomFloorMet ? 'text-emerald-400' : 'text-red-400'}>
+                    {validation.bloomFloorMet ? '✓' : '✗'} Bloom Level Met
+                  </span>
+                )}
               </div>
+
+              {/*
+                Naming the modules that fall short. A flag alone tells the author something is
+                wrong without telling them where, and Step 7 runs across 46 modules.
+              */}
+              {bloomReport && !bloomReport.floorMet && (
+                <div className="mt-3 pt-3 border-t border-amber-500/30 text-xs space-y-1">
+                  <p className="text-amber-400">
+                    {bloomReport.questionsBelowFloor > 0 && (
+                      <>
+                        {bloomReport.questionsBelowFloor} of {bloomReport.totalQuestions} questions
+                        sit below the Bloom level of the outcome they assess.{' '}
+                      </>
+                    )}
+                    {bloomReport.shortfalls.length > 0 && (
+                      <>
+                        {bloomReport.shortfalls.length} assessment
+                        {bloomReport.shortfalls.length === 1 ? '' : 's'} never reach the level their
+                        outcomes require.
+                      </>
+                    )}
+                  </p>
+                  {bloomReport.shortfalls.slice(0, 8).map((s: any) => (
+                    <p key={`${s.moduleId}-${s.assessmentId}`} className="text-amber-300/80">
+                      {s.moduleTitle || s.moduleId}: outcomes require {s.required}, tasks reach{' '}
+                      {s.reached || 'nothing'}
+                    </p>
+                  ))}
+                  {bloomReport.shortfalls.length > 8 && (
+                    <p className="text-amber-300/60">
+                      …and {bloomReport.shortfalls.length - 8} more
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
