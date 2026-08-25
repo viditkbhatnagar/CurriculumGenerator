@@ -3177,12 +3177,20 @@ CRITICAL VALIDATION:
     const summatives = (workflow.step7 as any).summativeAssessments || [];
     const totals = applyAssessmentWeightings(all, summatives, (preferences as any).weightages);
 
-    // Keep the flags honest about what is now stored.
+    // Keep the flags honest about what is now stored. The Bloom report is recomputed over
+    // the WHOLE step, not just the regenerated modules: replacing one module's assessments
+    // changes the programme distribution, and a report left over from the previous run would
+    // describe assessments that no longer exist.
+    const { auditProgrammeBloom } = await import('./assessmentGeneratorService');
+    const bloomReport = auditProgrammeBloom(all, ((workflow.step4 as any)?.modules || []) as any[]);
+    (workflow.step7 as any).bloomReport = bloomReport;
+
     (workflow.step7 as any).validation = {
       ...((workflow.step7 as any).validation || {}),
       allFormativesMapped:
         all.length > 0 && all.every((f: any) => (f.alignedMLOs || []).length > 0),
       weightsSum100: weightingsAreComplete(totals),
+      bloomFloorMet: bloomReport.floorMet,
     };
 
     workflow.markModified('step7');
