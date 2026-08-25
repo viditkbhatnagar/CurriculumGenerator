@@ -116,21 +116,45 @@ export interface FormativeAssessment {
   instructions: string;
   alignedPLOs: string[];
   alignedMLOs: string[];
+  /**
+   * The Bloom levels of the MLOs this assessment is mapped to.
+   *
+   * Derived from the curriculum after generation, never taken from the model — it is what
+   * the Word export prints as the assessment's Bloom claim, and asked for it directly the
+   * model named levels no aligned outcome held.
+   */
+  targetBloomLevels?: string[];
   assessmentCriteria: string[]; // High-level criteria (not full rubric)
   maxMarks?: number;
   questions?: Array<{
     // Actual questions for the assessment
     questionNumber: number;
     questionText: string;
-    questionType: 'mcq' | 'short_answer' | 'scenario' | 'calculation' | 'essay';
+    questionType: QuestionType;
     options?: string[]; // For MCQ
     correctAnswer?: string | number; // For MCQ (index) or short answer
     points: number;
+    /** The id of the single MLO this question evidences — what the Bloom floor is checked against. */
+    alignedMLO?: string | null;
     bloomLevel?: string;
     difficulty?: string;
     rationale?: string;
   }>;
 }
+
+/**
+ * The question types the exporter and the LMS know how to render.
+ *
+ * Left free, one programme came back with nineteen distinct values including four spellings
+ * of short answer, so anything keying on the type saw four types where there was one.
+ */
+export type QuestionType =
+  | 'mcq'
+  | 'short_answer'
+  | 'scenario'
+  | 'calculation'
+  | 'practical'
+  | 'file_upload';
 
 // ============================================================================
 // SUMMATIVE ASSESSMENTS (OUTPUT)

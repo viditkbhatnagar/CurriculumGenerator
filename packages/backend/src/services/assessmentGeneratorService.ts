@@ -36,6 +36,18 @@ import {
 } from '../types/assessmentGenerator';
 import { balanceMcqPositions } from '../utils/mcqBalance';
 import { derivePloAlignment } from '../utils/ploAlignment';
+import {
+  normaliseBloom,
+  bloomIndex,
+  questionPlanForBloom,
+  requiredArtefacts,
+  planFormativeFormats,
+  deriveTargetBloomLevels,
+  auditAssessmentBloom,
+  normaliseQuestionType,
+  TASK_SHAPES_BY_BLOOM,
+  type FormatPlan,
+} from './bloomTaxonomy';
 
 /**
  * Reconcile an MCQ's correct-answer fields so the ticked answer always matches
@@ -85,246 +97,26 @@ export function normalizeMcqAnswer(q: any): void {
   q.correctAnswer = opts[idx];
 }
 
-/** Bloom levels in order, so "at least this demanding" is answerable. */
-const BLOOM_ORDER = ['remember', 'understand', 'apply', 'analyse', 'evaluate', 'create'];
-
-const normaliseBloom = (level: string | undefined): string => {
-  const value = String(level || '')
-    .toLowerCase()
-    .trim();
-  // British and American spellings both appear in stored outcomes.
-  if (value === 'analyze') return 'analyse';
-  return BLOOM_ORDER.includes(value) ? value : 'understand';
-};
-
-/**
- * Which formative formats can actually evidence a given Bloom level.
- *
- * A multiple-choice knowledge check cannot show that a learner can evaluate a client's
- * current-state process or create a work breakdown structure — it can only show they
- * recognise the right answer. An author who ticks every format still needs the format
- * chosen per module, because a Level 4 introduction and a Level 6 consulting module are
- * not assessed the same way.
- */
-const FORMATS_BY_BLOOM: Record<string, string[]> = {
-  remember: ['Short quizzes', 'MCQ knowledge checks', 'Worksheets / problem sets'],
-  understand: [
-    'Short quizzes',
-    'MCQ knowledge checks',
-    'Worksheets / problem sets',
-    'Short written reflections',
-    'Discussion prompts',
-  ],
-  apply: [
-    'Scenario-based micro-tasks',
-    'Worksheets / problem sets',
-    'Practice simulations',
-    'Coding / technical tasks',
-    'Short quizzes',
-  ],
-  analyse: [
-    'Mini-case exercises',
-    'Scenario-based micro-tasks',
-    'Practice simulations',
-    'Coding / technical tasks',
-    'Discussion prompts',
-  ],
-  evaluate: [
-    'Mini-case exercises',
-    'Practice simulations',
-    'Short written reflections',
-    'Discussion prompts',
-    'Scenario-based micro-tasks',
-  ],
-  create: [
-    'Mini-case exercises',
-    'Practice simulations',
-    'Coding / technical tasks',
-    'Scenario-based micro-tasks',
-  ],
-};
-
-/**
- * What a task must actually ask the learner to do, per Bloom level.
- *
- * Supplied by the programme's subject-matter expert, and it fixes something the format
- * names alone could not. Choosing "mini-case exercise" for a create-level outcome still
- * left the assessment asking questions about a plan rather than requiring the learner to
- * produce one: across the programme, 36 of 47 create-level outcomes name a concrete
- * artefact — a dashboard, report, proposal, roadmap — and no assessment collected it.
- *
- * Her wording is kept verbatim so the intent is not paraphrased away, including the point
- * that quizzes and multiple-choice are perfectly valid at understand level provided they
- * test comprehension rather than recall.
- */
-const TASK_SHAPES_BY_BLOOM: Record<string, string> = {
-  remember:
-    'recall and recognition items, used sparingly and only as scaffolding towards a higher-level task',
-  understand:
-    'explaining a concept, interpreting information, classifying examples, comparing concepts, summarising meaning, or selecting the correct explanation in a scenario — quizzes and MCQs are valid here PROVIDED they assess comprehension, not simple memorisation',
-  apply:
-    'working a method or framework on a given case: calculations with interpretation, applying a model to a scenario, producing a worked output',
-  analyse: 'case analysis, data or problem analysis, scenario diagnosis',
-  evaluate: 'critical evaluation, comparison with justification, recommendations',
-  create:
-    'a project or design task, a strategy proposal, an implementation plan, or a presentation/report — the learner must PRODUCE the artefact, not answer questions about producing one',
-};
-
-/**
- * How each artefact is actually named in a deliverable.
- *
- * A learning outcome says "presentation"; a brief says "4-6 slide deck with speaker notes".
- * Both are the same artefact, and matching on the outcome's own word alone reports a gap
- * that is not there — it did exactly that for Leadership & Personal Effectiveness, whose
- * deliverable is a slide deck with a recorded narration.
- */
-const ARTEFACT_SYNONYMS: Record<string, string[]> = {
-  presentation: ['presentation', 'slide deck', 'slides', 'pitch', 'narration', 'deck'],
-  dashboard: ['dashboard', 'power bi', 'powerbi', 'visualisation', 'visualization', 'chart pack'],
-  report: ['report', 'write-up', 'memo', 'briefing note', 'written submission'],
-  plan: ['plan', 'schedule', 'timetable', 'gantt', 'wbs', 'work breakdown'],
-  proposal: ['proposal', 'business case', 'recommendation paper', 'pitch document'],
-  roadmap: ['roadmap', 'phased plan', 'implementation sequence'],
-  model: ['model', 'spreadsheet', 'workbook', 'xlsx', 'excel file', 'calculation sheet'],
-  strategy: ['strategy', 'strategic plan', 'positioning statement'],
-  map: ['map', 'process map', 'journey map', 'strategy map'],
-  forecast: ['forecast', 'projection', 'cash flow'],
-  budget: ['budget', 'costing'],
-  brief: ['brief', 'briefing'],
-  portfolio: ['portfolio'],
-  framework: ['framework'],
-  pack: ['pack'],
-};
-
-/**
- * Artefacts a create-level outcome commonly names. Used to check that the assessment
- * actually collects what the outcome promises.
- */
-const ARTEFACT_WORDS = [
-  'dashboard',
-  'report',
-  'plan',
-  'proposal',
-  'presentation',
-  'roadmap',
-  'model',
-  'brief',
-  'strategy',
-  'map',
-  'portfolio',
-  'framework',
-  'pack',
-  'budget',
-  'forecast',
-];
-
-/** The artefacts this module's outcomes require the learner to produce, if any. */
-export function requiredArtefacts(module: any): string[] {
-  const wanted = new Set<string>();
-  for (const mlo of module?.mlos || []) {
-    const level = normaliseBloom(mlo?.bloomLevel);
-    if (level !== 'create' && level !== 'evaluate') continue;
-    const statement = String(mlo?.statement || '').toLowerCase();
-    for (const word of ARTEFACT_WORDS) {
-      if (statement.includes(word)) wanted.add(word);
-    }
-  }
-  return [...wanted];
-}
-
-/**
- * Which artefacts a module's outcomes promise but its assessments never collect.
- *
- * An outcome reading "create an interactive KPI dashboard" is not evidenced by questions
- * about dashboards, so this compares what the outcomes name against what the briefs
- * actually ask to be handed in — allowing for the fact that a deliverable describes the
- * artefact in its own words. Returns the artefacts that are genuinely uncollected.
- */
-export function uncollectedArtefacts(
-  module: any,
-  assessments: { studentBrief?: { deliverables?: string[]; task?: string } }[]
-): string[] {
-  const wanted = requiredArtefacts(module);
-  if (wanted.length === 0) return [];
-
-  const submitted = assessments
-    .flatMap((a) => [...(a.studentBrief?.deliverables || []), a.studentBrief?.task || ''])
-    .join(' ')
-    .toLowerCase();
-
-  return wanted.filter((artefact) => {
-    const names = ARTEFACT_SYNONYMS[artefact] || [artefact];
-    return !names.some((name) => submitted.includes(name));
-  });
-}
-
-export interface FormatPlan {
-  /** One format per assessment, chosen for the outcomes it has to evidence. */
-  formats: string[];
-  /** The most demanding Bloom level this module's outcomes ask for. */
-  highestBloom: string;
-  /** Set when the author's permitted formats cannot evidence that level. */
-  warning: string | null;
-}
-
-/**
- * Choose the format for each of a module's assessments.
- *
- * Constrained to what the author permitted — their list is a decision, not a suggestion —
- * but ordered by what the module's outcomes actually require, so the demanding modules get
- * the case exercises and simulations rather than everything collapsing to the first two
- * entries on the list. Where the permitted list cannot evidence the module's highest Bloom
- * level, that is reported rather than silently accepted.
- */
-export function planFormativeFormats(
-  module: any,
-  allowedTypes: string[],
-  count: number
-): FormatPlan {
-  const allowed = (allowedTypes || []).filter((type) => type && type !== 'None');
-  const blooms = (module?.mlos || []).map((mlo: any) => normaliseBloom(mlo?.bloomLevel));
-  const highestBloom = blooms.length
-    ? blooms.reduce((a: string, b: string) =>
-        BLOOM_ORDER.indexOf(b) > BLOOM_ORDER.indexOf(a) ? b : a
-      )
-    : 'understand';
-
-  if (allowed.length === 0) {
-    return { formats: [], highestBloom, warning: null };
-  }
-
-  const suited = (FORMATS_BY_BLOOM[highestBloom] || []).filter((f) => allowed.includes(f));
-  const rest = allowed.filter((f) => !suited.includes(f));
-
-  // Rotate WITHIN the suited formats so modules sharing a Bloom level do not all receive an
-  // identical pair — "blended mix" should mean something across the programme, not only
-  // within a module. Rotating over the whole permitted list instead put quizzes and MCQ
-  // checks back onto create-level consulting modules, which is the very complaint this
-  // exists to answer, so the unsuited formats are only ever used to make up a shortfall.
-  const rotation = Number(module?.sequenceOrder ?? 0) || 0;
-  const formats: string[] = [];
-  for (let i = 0; i < count; i += 1) {
-    if (suited.length > 0) {
-      formats.push(suited[(rotation + i) % suited.length]);
-    } else if (rest.length > 0) {
-      formats.push(rest[(rotation + i) % rest.length]);
-    }
-  }
-
-  // A module needing more assessments than there are suitable formats reuses them rather
-  // than dropping to an unsuitable one; only an empty suited list falls back.
-  const ordered = [...suited, ...rest];
-  while (formats.length < count && ordered.length > 0) {
-    formats.push(ordered[formats.length % ordered.length]);
-  }
-
-  const warning =
-    suited.length === 0
-      ? `Module "${module?.title || module?.id}" has outcomes at Bloom level "${highestBloom}", which none of the permitted formative formats (${allowed.join(', ')}) can evidence. Consider allowing mini-case exercises or practice simulations.`
-      : null;
-
-  return { formats, highestBloom, warning };
-}
+// The taxonomy rules live in ./bloomTaxonomy — pure decisions about Bloom's levels, with no
+// dependency on the OpenAI client, the logger or the Mongoose models. Re-exported here so
+// existing importers keep working.
+export {
+  BLOOM_ORDER,
+  normaliseBloom,
+  bloomIndex,
+  questionPlanForBloom,
+  requiredArtefacts,
+  uncollectedArtefacts,
+  isDescriptionOnly,
+  assignMlosToSlots,
+  planFormativeFormats,
+  deriveTargetBloomLevels,
+  auditAssessmentBloom,
+  auditProgrammeBloom,
+  normaliseQuestionType,
+  TASK_SHAPES_BY_BLOOM,
+} from './bloomTaxonomy';
+export type { AssessmentSlot, FormatPlan, BloomAudit, BloomReport } from './bloomTaxonomy';
 
 export class AssessmentGeneratorService {
   /**
@@ -731,9 +523,20 @@ export class AssessmentGeneratorService {
     moduleIndex: number,
     request: AssessmentGenerationRequest,
     plan: FormatPlan,
-    slot: number
+    slot: number,
+    repairNote?: string
   ): Promise<FormativeAssessment[]> {
     const assignedFormat = plan.formats[slot];
+    const assignedSlot = plan.slots[slot];
+    // The outcomes this assessment owns, and the level it therefore has to reach. Decided
+    // here rather than left to the model, which previously chose its own coverage from the
+    // full list and then reported back which levels it had hit.
+    const slotMlos = (module.mlos || []).filter((mlo: any) =>
+      (assignedSlot?.mloIds || []).includes(String(mlo?.id))
+    );
+    const slotBloom = assignedSlot?.bloom || plan.highestBloom;
+    const questionPlan = questionPlanForBloom(slotBloom);
+    const slotArtefacts = requiredArtefacts({ mlos: slotMlos });
 
     const systemPrompt = `You are an educational assessment designer specializing in formative assessments for vocational and professional education.
 
@@ -753,6 +556,7 @@ You design assessments that are:
 ${this.spellingDirective(request)}`;
 
     const userPrompt = `Generate EXACTLY ONE formative assessment for this module, in the format "${assignedFormat}".
+${repairNote ? `\n!! THIS IS A SECOND ATTEMPT. The previous one was rejected:\n${repairNote}\n` : ''}
 ${this.marketContextBlock(request)}
 === PROGRAMME CONTEXT ===
 Programme: ${request.programFoundation?.programTitle || 'Professional Development Programme'}
@@ -762,10 +566,22 @@ Industry: ${request.programFoundation?.targetLearner?.industrySector || 'General
 === MODULE: ${module.id} - ${module.title} ===
 Module Code: ${module.moduleCode || `MOD${moduleIndex + 1}`}
 Total Hours: ${module.totalHours || 40}
-Module Aim: ${module.aim || 'Develop core competencies in this subject area'}
+Module Aim: ${module.aim || module.description || 'Develop core competencies in this subject area'}
 
-**MODULE LEARNING OUTCOMES (MLOs):**
-${(module.mlos || []).map((mlo: any) => `- ${mlo.id}: ${mlo.statement} [${mlo.bloomLevel}]`).join('\n')}
+**THE OUTCOMES THIS ASSESSMENT MUST EVIDENCE** (assign every question to one of these)
+${slotMlos
+  .map(
+    (mlo: any) => `- ${mlo.id}: ${mlo.statement} [${normaliseBloom(mlo.bloomLevel).toUpperCase()}]`
+  )
+  .join('\n')}
+
+**The module's other outcomes** (covered by its other assessment — do not assess these here)
+${
+  (module.mlos || [])
+    .filter((mlo: any) => !(assignedSlot?.mloIds || []).includes(String(mlo?.id)))
+    .map((mlo: any) => `- ${mlo.id}: ${mlo.statement} [${normaliseBloom(mlo.bloomLevel)}]`)
+    .join('\n') || '- (none)'
+}
 
 **MODULE TOPICS:**
 ${(module.topics || []).map((t: any) => `- ${t.title || t}`).join('\n')}
@@ -781,23 +597,29 @@ ${(module.topics || []).map((t: any) => `- ${t.title || t}`).join('\n')}
 - (the module's other assessment(s) use: ${
       plan.formats.filter((_, i) => i !== slot).join(', ') || 'none'
     } — do not duplicate their coverage)
-- Most demanding outcome level in this module: ${plan.highestBloom.toUpperCase()}
+- THE LEVEL THIS ASSESSMENT MUST REACH: ${slotBloom.toUpperCase()}
+
+**HOW MANY TASKS, AND OF WHAT KIND, AT ${slotBloom.toUpperCase()} LEVEL**
+Produce ${questionPlan.min}-${questionPlan.max} questions/tasks — ${questionPlan.guidance}.
+This count is set by the outcome level and is NOT negotiable upward: a demanding outcome is
+evidenced by fewer, larger pieces of work, not by more short ones. Do not pad the set to ten
+or twelve items because that is the usual shape of a quiz.
 
 **WHAT THE TASK MUST ASK THE LEARNER TO DO, BY OUTCOME LEVEL**
-${[...new Set((module.mlos || []).map((m: any) => normaliseBloom(m?.bloomLevel)))]
+${[...new Set(slotMlos.map((m: any) => normaliseBloom(m?.bloomLevel)))]
   .map((level) => `- ${String(level).toUpperCase()}: ${TASK_SHAPES_BY_BLOOM[String(level)] || ''}`)
   .join('\n')}
 ${
-  requiredArtefacts(module).length
-    ? `\n**ARTEFACTS THIS MODULE'S OUTCOMES REQUIRE THE LEARNER TO PRODUCE**
-${requiredArtefacts(module)
-  .map((a) => `  - a ${a}`)
-  .join('\n')}
-EVERY ONE of these must appear in studentBrief.deliverables of at least one assessment, named
-as the thing being handed in — "a one-page implementation roadmap", not "answers about
-roadmaps". An outcome saying "create a dashboard" is not evidenced by questions about
-dashboards. Measured on an earlier run, 14 of 37 modules promised an artefact and collected
-nothing of the kind, leaving those outcomes unassessed.`
+  slotArtefacts.length
+    ? `\n**ARTEFACTS THIS ASSESSMENT'S OUTCOMES REQUIRE THE LEARNER TO PRODUCE**
+${slotArtefacts.map((a) => `  - a ${a}`).join('\n')}
+EVERY ONE of these must appear in THIS assessment's studentBrief.deliverables, named as the
+thing being handed in — "a one-page implementation roadmap", not "answers about roadmaps",
+and not "a description of a roadmap". An outcome saying "create a dashboard" is not evidenced
+by questions about dashboards, nor by a wireframe, sketch, outline or description of one: the
+learner hands in the artefact itself. On an earlier run 11 of 43 create-level assessments
+listed the artefact's name inside a deliverable that only described it, leaving those
+outcomes unassessed while appearing to satisfy the requirement.`
     : ''
 }${plan.warning ? `\n- NOTE: ${plan.warning}` : ''}
 - Real-World Scenarios: ${request.userPreferences.useRealWorldScenarios ? 'Yes' : 'No'}
@@ -825,17 +647,16 @@ Return ONLY valid JSON with COMPLETE QUESTIONS:
     {
       "id": "form-${module.id}-001",
       "moduleId": "${module.id}",
-      "title": "Short Quiz: Core Concepts in [Topic]",
-      "assessmentType": "<the format assigned to this assessment above>",
-      "targetBloomLevels": ["the Bloom level of each MLO this assessment covers"],
-      "description": "A 10-12 question quiz covering fundamental concepts from this module",
-      "instructions": "Complete this quiz after reviewing the module materials. You have 20 minutes. Questions test your understanding of key definitions and principles.",
+      "title": "<${assignedFormat}: a title naming the work, not the topic>",
+      "assessmentType": "${assignedFormat}",
+      "description": "<what the learner does in this assessment, at ${slotBloom.toUpperCase()} level>",
+      "instructions": "<what the learner is told before starting: the setting, what is supplied, what to hand in, and how long it should take>",
       "alignedPLOs": ["PLO1", "PLO2"],
-      "alignedMLOs": ["${module.mlos?.[0]?.id || 'M1-LO1'}", "${module.mlos?.[1]?.id || 'M1-LO2'}"],
+      "alignedMLOs": ${JSON.stringify(assignedSlot?.mloIds || [])},
       "assessmentCriteria": [
-        "Accurate recall of key terminology",
-        "Correct application of concepts to simple scenarios",
-        "Understanding of relationships between concepts"
+        "<criterion describing what is being judged, at ${slotBloom.toUpperCase()} level>",
+        "<second criterion>",
+        "<third criterion>"
       ],
       "maxMarks": 12,
       "studentBrief": {
@@ -867,26 +688,17 @@ Return ONLY valid JSON with COMPLETE QUESTIONS:
       "questions": [
         {
           "questionNumber": 1,
-          "questionText": "What is the primary purpose of [concept] in [context]?",
-          "questionType": "mcq",
-          "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
-          "correctAnswer": "Option B text",
-          "points": 1,
-          "bloomLevel": "Remember",
-          "difficulty": "Easy",
-          "rationale": "Correct answer: 'Option B text'. Explanation of why this option is right and why each other option is wrong."
-        },
-        {
-          "questionNumber": 2,
-          "questionText": "In the following scenario: [scenario description]. Which approach would you take and why?",
-          "questionType": "scenario",
-          "correctAnswer": "Expected response covering key points...",
+          "questionText": "<the complete task, with any case, data or figures the learner needs included in full>",
+          "questionType": "one of: mcq | short_answer | scenario | calculation | practical | file_upload",
+          "options": ["<only for mcq — otherwise omit this field>"],
+          "correctAnswer": "<for mcq, the full text of the correct option; otherwise the expected response or marking points>",
           "points": 2,
-          "bloomLevel": "Apply",
-          "difficulty": "Medium",
-          "rationale": "This tests application of concepts to real scenarios"
+          "alignedMLO": "<the id of the ONE outcome above that this task evidences>",
+          "bloomLevel": "<the level this task genuinely operates at — at or above that outcome's level>",
+          "difficulty": "Easy | Medium | Hard",
+          "rationale": "<why the expected answer is correct; for mcq also why each distractor is wrong>"
         }
-        // ... continue for 10-12 total questions
+        // ... continue for ${questionPlan.min}-${questionPlan.max} tasks in total
       ]
     }
   ]
@@ -894,11 +706,16 @@ Return ONLY valid JSON with COMPLETE QUESTIONS:
 
 CRITICAL REQUIREMENTS:
 1. Generate COMPLETE actual questions - NOT just placeholders or descriptions
-2. For quizzes: Include 10-12 detailed questions with all options and correct answers
+2. Produce ${questionPlan.min}-${questionPlan.max} tasks — the count set above for ${slotBloom.toUpperCase()} level. Do not
+   produce a 10-12 item quiz unless that is the count stated for this level.
 3. For MCQs: Include 4 realistic options with clear rationales
 4. For scenario/calculation questions: Provide complete problem statements and expected answers
-5. Vary question types (MCQ, short answer, scenario) within each assessment
-6. Ensure questions align to specific MLOs listed
+5. Choose each question's type from what the task actually requires at ${slotBloom.toUpperCase()} level. Variety
+   for its own sake is NOT a goal: an MCQ inserted into an evaluate-level assessment to vary
+   the format evidences nothing. Use only these values: mcq, short_answer, scenario,
+   calculation, practical, file_upload.
+6. Every question must carry "alignedMLO" naming exactly one outcome id from the list above,
+   and every outcome in that list must be evidenced by at least one question
 7. Make questions practical and relevant to ${request.programFoundation?.targetLearner?.industrySector || 'professional'} contexts
 8. All question text must be complete and ready to use - NO placeholders like "[insert]" or "[fill in]"
 9. For MCQs, set "correctAnswer" to the FULL TEXT of the correct option, copied EXACTLY from the "options" array (never a number, letter, or paraphrase), and begin the "rationale" by quoting that same option — so the marked answer always matches the explanation
@@ -921,7 +738,11 @@ CRITICAL REQUIREMENTS:
     afterwards from the author's own settings.
 15. assessmentType MUST be the format assigned to that assessment in the list above. Do not
     substitute a quiz or MCQ check for a case exercise or simulation.
-16. BLOOM FLOOR — every question must work at or above the Bloom level of the MLO it assesses.
+16. BLOOM FLOOR — every question must work at or above the Bloom level of the outcome named in
+    its own "alignedMLO" field. This is checked in code after you reply, against that field
+    and the outcome levels stated above, and an assessment that does not reach the level its
+    outcomes demand is sent back for regeneration — so a question labelled at a level its
+    text does not support will not pass.
     An outcome written at APPLY cannot be evidenced by a recall question, and one written at
     EVALUATE or CREATE cannot be evidenced by a question that only asks the learner to apply a
     formula. Lower-level questions may be included ONLY as scaffolding within an assessment
@@ -941,7 +762,9 @@ CRITICAL REQUIREMENTS:
     longest in 82% of items and, at the median, 36% longer than the average distractor, so a
     candidate scoring by length alone passed without studying. A distractor must be wrong on
     the subject, never wrong because it is terser or vaguer than the answer.
-11. Difficulty should progress from Easy → Medium → Hard within the assessment`;
+20. Difficulty may rise from Easy to Hard across a set of short items, but never by opening a
+    demanding assessment with recall: at analyse level and above, the first task already sits
+    at the outcome's level. "Easy" there means a smaller case, not a lower cognitive demand.`;
 
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
@@ -964,9 +787,30 @@ CRITICAL REQUIREMENTS:
       );
       for (const fa of formativeAssessments) {
         fa.alignedPLOs = derivePloAlignment(fa, module, programmePloIds);
+
+        // The format and the outcome coverage were decided here before the call; take them
+        // back rather than accepting whatever came home. Rule 15 asked the model not to
+        // substitute a quiz for a simulation, and nothing checked that it had not.
+        fa.assessmentType = assignedFormat;
+        fa.moduleId = module.id;
+        fa.alignedMLOs = [...(assignedSlot?.mloIds || fa.alignedMLOs || [])];
+
+        const validMloIds = new Set((assignedSlot?.mloIds || []).map(String));
         for (const q of fa?.questions || []) {
+          q.questionType = normaliseQuestionType(q?.questionType);
+          q.bloomLevel = normaliseBloom(q?.bloomLevel);
+          // A question naming an outcome this assessment does not own cannot be checked
+          // against anything, so it is pinned to the assessment's most demanding outcome
+          // rather than left to float free of the taxonomy.
+          if (!q.alignedMLO || !validMloIds.has(String(q.alignedMLO))) {
+            q.alignedMLO = assignedSlot?.mloIds?.[0] || null;
+          }
           if (q?.questionType === 'mcq') normalizeMcqAnswer(q);
         }
+
+        // Derived, never taken from the model: the outcomes already carry their levels, and
+        // asked for them directly the model returned levels no aligned outcome held.
+        fa.targetBloomLevels = deriveTargetBloomLevels(fa, module);
         const { balanced, skipped } = balanceMcqPositions(fa?.questions || []);
         if (skipped > 0) {
           loggingService.warn('MCQ items left unbalanced because the answer key was ambiguous', {
@@ -977,6 +821,63 @@ CRITICAL REQUIREMENTS:
           });
         }
       }
+
+      // Check what came back against the level its own outcomes demand. Without this the
+      // Bloom floor was an instruction and nothing more, and every validation flag on the
+      // step was green while 79% of the questions in the create-level modules of the Bachelor
+      // in Business Administration sat below create.
+      if (!repairNote) {
+        const failing = formativeAssessments
+          .map((fa: any) => ({ fa, audit: auditAssessmentBloom(fa, module) }))
+          .filter(({ audit }) => !audit.meetsFloor || audit.belowFloor.length > 0);
+
+        if (failing.length > 0) {
+          const { audit } = failing[0];
+          const note = [
+            !audit.meetsFloor
+              ? `No task reached ${String(audit.required).toUpperCase()} level — the highest was ${String(audit.reached || 'none').toUpperCase()}. The outcomes this assessment carries are written at ${String(audit.required).toUpperCase()}, so at least one task must operate there: ${TASK_SHAPES_BY_BLOOM[String(audit.required)] || ''}.`
+              : null,
+            audit.belowFloor.length > 0
+              ? `${audit.belowFloor.length} question(s) sat below the level of the outcome they were mapped to: ${audit.belowFloor
+                  .slice(0, 6)
+                  .map(
+                    (b) =>
+                      `Q${b.questionNumber} was ${b.level} but ${b.mlo} is written at ${b.required}`
+                  )
+                  .join(
+                    '; '
+                  )}. Rewrite those tasks to work at the outcome's level, or map them to an outcome they genuinely evidence.`
+              : null,
+          ]
+            .filter(Boolean)
+            .join('\n');
+
+          loggingService.warn('Assessment did not meet its Bloom floor; regenerating once', {
+            moduleId: module.id,
+            format: assignedFormat,
+            required: audit.required,
+            reached: audit.reached,
+            belowFloor: audit.belowFloor.length,
+          });
+
+          const repaired = await this.generateOneFormative(
+            module,
+            moduleIndex,
+            request,
+            plan,
+            slot,
+            note
+          );
+          // Keep the better of the two rather than assuming the retry improved things.
+          const scoreOf = (list: any[]) =>
+            list.reduce((worst: number, fa: any) => {
+              const a = auditAssessmentBloom(fa, module);
+              return worst + (a.meetsFloor ? 0 : 100) + a.belowFloor.length;
+            }, 0);
+          if (scoreOf(repaired) <= scoreOf(formativeAssessments)) return repaired;
+        }
+      }
+
       return formativeAssessments;
     } catch (error) {
       loggingService.error(`Error generating formative for module ${module.id}`, {
