@@ -537,25 +537,56 @@ export class AssessmentGeneratorService {
     const slotBloom = assignedSlot?.bloom || plan.highestBloom;
     const questionPlan = questionPlanForBloom(slotBloom);
     const slotArtefacts = requiredArtefacts({ mlos: slotMlos });
+    // Formative activity is ungraded by definition; the module's summative is what carries
+    // the marks. Both used to be generated as graded artefacts and filed under "formative",
+    // which is what the programme's author objected to.
+    const isSummative = (assignedSlot?.purpose || 'module_summative') === 'module_summative';
 
-    const systemPrompt = `You are an educational assessment designer specializing in formative assessments for vocational and professional education.
+    // The system prompt used to describe formatives as low-stakes and "NOT heavily weighted
+    // in final grades", and the same call then demanded a mark total, a marking guide and a
+    // four-band rubric. Every one of a programme's 92 "formative" assessments came back
+    // graded because the prompt made grading non-optional. The two purposes are now written
+    // separately, in the awarding body's own terms.
+    const systemPrompt = isSummative
+      ? `You are an educational assessment designer producing SUMMATIVE module assessments for vocational and professional education.
 
-Formative assessments are low-stakes, frequent checks for understanding that:
-- Provide immediate feedback to learners
-- Identify knowledge gaps early
-- Support progressive skill development
-- Are NOT heavily weighted in final grades
-- Encourage practice and experimentation
+A summative assessment is used at the END of the learning process. It evaluates achievement
+against the module's learning outcomes and assessment criteria, and it is GRADED. It carries
+a mark total, a marking guide, a banded rubric and deliverables the learner submits.
 
 You design assessments that are:
-- Aligned to specific learning outcomes
+- Aligned to every learning outcome the module claims
 - Appropriate for the module's content and level
-- Varied in format to maintain engagement
+- Realistic and relevant to professional contexts
+- Markable by a second marker who was not present for the teaching
+
+${this.spellingDirective(request)}`
+      : `You are an educational designer producing FORMATIVE learning activities for vocational and professional education.
+
+A formative activity is used DURING the learning process. It provides feedback on
+learning-in-process. It is DIALOGUE-BASED and UNGRADED.
+
+This means, without exception:
+- NO marks, NO mark total, NO percentage weighting, NO grade, NO pass/fail decision
+- NO banded rubric and NO marking guide — nobody is awarding anything
+- Its purpose is to reveal what the learner has and has not yet grasped, early enough to act
+- Its output is a conversation: what the tutor says back, what the learner checks themselves
+  against, what the group discusses
+- A wrong answer here is useful information, not a penalty
+
+You design activities that are:
+- Aligned to specific learning outcomes, so the feedback is about something that matters
+- Pitched at the level the outcome is written at
+- Short enough to sit inside a taught session
 - Realistic and relevant to professional contexts
 
 ${this.spellingDirective(request)}`;
 
-    const userPrompt = `Generate EXACTLY ONE formative assessment for this module, in the format "${assignedFormat}".
+    const userPrompt = `Generate EXACTLY ONE ${
+      isSummative
+        ? 'SUMMATIVE module assessment (graded)'
+        : 'FORMATIVE learning activity (ungraded)'
+    } for this module, in the format "${assignedFormat}".
 ${repairNote ? `\n!! THIS IS A SECOND ATTEMPT. The previous one was rejected:\n${repairNote}\n` : ''}
 ${this.marketContextBlock(request)}
 === PROGRAMME CONTEXT ===
@@ -658,7 +689,9 @@ Return ONLY valid JSON with COMPLETE QUESTIONS:
         "<second criterion>",
         "<third criterion>"
       ],
-      "maxMarks": 12,
+${
+  isSummative
+    ? `      "maxMarks": 12,
       "studentBrief": {
         "context": "One or two sentences setting the scenario the learner is working in.",
         "task": "What the learner must actually do, in plain imperative language.",
@@ -684,7 +717,17 @@ Return ONLY valid JSON with COMPLETE QUESTIONS:
             { "band": "Fail", "markRange": "0-2", "descriptor": "..." }
           ]
         }
+      ],`
+    : `      "feedbackGuidance": "<what the tutor says back: the misconceptions this activity is designed to surface, what a strong response shows, and what to do next with a learner who has not grasped it>",
+      "discussionPrompts": [
+        "<a question that opens the activity out to the group and cannot be answered yes or no>",
+        "<a second prompt that pushes them to justify or compare>"
       ],
+      "selfCheckCriteria": [
+        "<something the learner can check their own work against, in their own words>",
+        "<a second self-check>"
+      ],`
+}
       "questions": [
         {
           "questionNumber": 1,
@@ -692,7 +735,7 @@ Return ONLY valid JSON with COMPLETE QUESTIONS:
           "questionType": "one of: mcq | short_answer | scenario | calculation | practical | file_upload",
           "options": ["<only for mcq — otherwise omit this field>"],
           "correctAnswer": "<for mcq, the full text of the correct option; otherwise the expected response or marking points>",
-          "points": 2,
+${isSummative ? '          "points": 2,' : ''}
           "alignedMLO": "<the id of the ONE outcome above that this task evidences>",
           "bloomLevel": "<the level this task genuinely operates at — at or above that outcome's level>",
           "difficulty": "Easy | Medium | Hard",
@@ -720,10 +763,17 @@ CRITICAL REQUIREMENTS:
 8. All question text must be complete and ready to use - NO placeholders like "[insert]" or "[fill in]"
 9. For MCQs, set "correctAnswer" to the FULL TEXT of the correct option, copied EXACTLY from the "options" array (never a number, letter, or paraphrase), and begin the "rationale" by quoting that same option — so the marked answer always matches the explanation
 10. Rationales should explain WHY the correct answer is right and why each other option is wrong
-11. studentBrief, markingGuide and rubric are REQUIRED and must be three distinct artefacts, not
+11. ${
+      isSummative
+        ? `studentBrief, markingGuide and rubric are REQUIRED and must be three distinct artefacts, not
     restatements of one another. The brief is what the learner reads and contains no answers; the
     marking guide is what the marker reads and contains the indicative content; the rubric is the
-    banded criteria the mark is justified against.
+    banded criteria the mark is justified against`
+        : `UNGRADED. Do NOT emit maxMarks, points, weighting, a rubric, a marking guide, a grade,
+    a pass/fail decision or any mark of any kind, anywhere in the response. Emit
+    feedbackGuidance, discussionPrompts and selfCheckCriteria instead — those are what this
+    activity produces. An activity that awards a mark is not formative`
+    }.
 12. markingGuide.markAllocation must sum EXACTLY to maxMarks, and the rubric's criteria maxMarks
     must also sum EXACTLY to maxMarks. One criterion per assessmentCriteria entry.
 12a. The two must AGREE with each other, not merely each add up. Use the same components in
@@ -794,6 +844,21 @@ CRITICAL REQUIREMENTS:
         fa.assessmentType = assignedFormat;
         fa.moduleId = module.id;
         fa.alignedMLOs = [...(assignedSlot?.mloIds || fa.alignedMLOs || [])];
+        fa.purpose = assignedSlot?.purpose || 'module_summative';
+        fa.graded = isSummative;
+
+        // Enforced here, not merely asked for. Told not to award marks, a model still
+        // reaches for a mark total and a rubric because that is the shape of almost every
+        // assessment it has seen — and an ungraded activity carrying a mark is the exact
+        // thing the programme's author objected to.
+        if (!isSummative) {
+          delete fa.maxMarks;
+          delete fa.weighting;
+          delete fa.rubric;
+          delete fa.markingGuide;
+          delete fa.studentBrief;
+          for (const q of fa?.questions || []) delete q.points;
+        }
 
         const validMloIds = new Set((assignedSlot?.mloIds || []).map(String));
         for (const q of fa?.questions || []) {

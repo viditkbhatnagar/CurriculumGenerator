@@ -191,6 +191,11 @@ export interface AssessmentSlot {
   mloIds: string[];
   /** The most demanding level among those outcomes — the level this assessment must reach. */
   bloom: string;
+  /**
+   * Formative activity (ungraded, during learning) or the module's summative (graded, at the
+   * end, evidencing every outcome the module claims).
+   */
+  purpose: 'formative' | 'module_summative';
 }
 
 export interface FormatPlan {
@@ -278,8 +283,18 @@ export function planFormativeFormats(
   // missing one collapsed the rotation to zero for every module.
   const rotation = Number(module?.sequenceOrder ?? module?.sequence ?? 0) || 0;
 
+  const allMloIds = (module?.mlos || []).map((m: any) => String(m?.id)).filter(Boolean);
   const unsuitedLevels: string[] = [];
-  const slots: AssessmentSlot[] = mloSlots.slice(0, count).map((mloIds, i) => {
+  const slots: AssessmentSlot[] = mloSlots.slice(0, count).map((subset, i) => {
+    // The last slot is the module's summative. OTHM: summative assessment "evaluates
+    // achievement against learning outcomes and assessment criteria" — against all of them,
+    // so it carries the module's whole outcome set rather than a share of it. The earlier
+    // slots are formative checks used during learning and take a subset.
+    const isSummative = i === count - 1;
+    const purpose: 'formative' | 'module_summative' = isSummative
+      ? 'module_summative'
+      : 'formative';
+    const mloIds = isSummative && allMloIds.length ? allMloIds : subset;
     const levels = mloIds.map((id) => levelOf.get(id) || 'understand');
     // The format follows the level THIS assessment has to evidence, not the module's
     // highest: an assessment carrying only the understand-level outcome is legitimately a
@@ -290,7 +305,7 @@ export function planFormativeFormats(
     const suited = (FORMATS_BY_BLOOM[bloom] || []).filter((f) => allowed.includes(f));
     if (suited.length === 0) unsuitedLevels.push(bloom);
     const pool = suited.length > 0 ? suited : allowed;
-    return { format: pool[(rotation + i) % pool.length], mloIds, bloom };
+    return { format: pool[(rotation + i) % pool.length], mloIds, bloom, purpose };
   });
 
   const warning = unsuitedLevels.length
