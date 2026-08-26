@@ -1252,10 +1252,19 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
               {formData.assessmentStructure === 'both_formative_and_summative' && (
                 <div>
                   <h4 className="text-teal-800 font-medium mb-3">Assessment Weightages</h4>
+                  {/*
+                    Relabelled from "Formative/Summative Weight". The split is between the
+                    module assessments and the final, not between graded and ungraded work:
+                    formative activity is ungraded by definition and cannot carry a share.
+                  */}
+                  <p className="text-xs text-teal-600 mb-3">
+                    How the programme mark is split. Formative activities are ungraded and carry no
+                    weight.
+                  </p>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm text-teal-600 mb-2">
-                        Formative Weight (%)
+                        Module assessments (% of programme)
                       </label>
                       <input
                         type="number"
@@ -1278,7 +1287,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                     </div>
                     <div>
                       <label className="block text-sm text-teal-600 mb-2">
-                        Summative Weight (%)
+                        Final summative (% of programme)
                       </label>
                       <input
                         type="number"
@@ -1749,7 +1758,19 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                               <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded text-xs">
                                 {assessment.assessmentType}
                               </span>
-                              {assessment.maxMarks && <span>{assessment.maxMarks} marks</span>}
+                              {/*
+                                An ungraded activity shows that it is ungraded rather than
+                                showing nothing where a mark total would be — the absence of
+                                a number reads as a generation failure, not as a decision.
+                              */}
+                              {(assessment as any).purpose === 'formative' ||
+                              (assessment as any).graded === false ? (
+                                <span className="px-2 py-1 bg-teal-100 text-teal-700 rounded text-xs">
+                                  Ungraded · feedback only
+                                </span>
+                              ) : (
+                                assessment.maxMarks && <span>{assessment.maxMarks} marks</span>
+                              )}
                               <span>Module: {assessment.moduleId}</span>
                             </div>
                             <p className="text-sm text-teal-700 mb-2">{assessment.description}</p>

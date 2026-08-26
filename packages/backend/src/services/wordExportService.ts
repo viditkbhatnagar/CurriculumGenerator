@@ -1275,6 +1275,206 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       return [...new Set(levels)].sort((x, y) => bloomIndex(x) - bloomIndex(y));
     };
 
+    // Formative activity and module summative live in the same stored array; they are told
+    // apart by `purpose`. Records written before the distinction existed carry marks and a
+    // rubric, which is what they are — module summatives filed under the wrong name.
+    const allModuleAssessments = (step7?.formativeAssessments || []) as any[];
+    const isFormativeActivity = (a: any): boolean =>
+      a?.purpose === 'formative' || a?.graded === false;
+    const formativeActivities = allModuleAssessments.filter(isFormativeActivity);
+    const moduleSummatives = allModuleAssessments.filter((a) => !isFormativeActivity(a));
+
+    // One renderer for both purposes. The graded apparatus — marks, weighting, the
+    // marking guide and the rubric — is printed only where it exists, so an ungraded
+    // activity no longer reports "Max Marks: N/A | Weighting: not set" as though
+    // something had failed to generate.
+    const renderModuleAssessments = async (list: any[], graded: boolean) => {
+      for (const assessment of list) {
+        contentChildren.push(
+          this.createH3(`${assessment.title || 'Untitled Assessment'}`),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: [
+                  `Module: ${moduleLabels.get(assessment.moduleId) || assessment.moduleId || 'N/A'}`,
+                  `Type: ${assessment.assessmentType || 'N/A'}`,
+                  ...(graded
+                    ? [
+                        `Max Marks: ${assessment.maxMarks ?? 'N/A'}`,
+                        `Weighting: ${assessment.weighting != null ? `${assessment.weighting}% of the module mark` : 'not set'}`,
+                      ]
+                    : ['Ungraded — feedback only']),
+                  `MLOs: ${(assessment.alignedMLOs || assessment.linkedMLOs || []).join(', ') || 'not mapped'}`,
+                  `Outcome level required: ${requiredLevels(assessment).join(', ') || 'not mapped'}`,
+                  `Tasks reach: ${
+                    [
+                      ...new Set<string>(
+                        (assessment.questions || [])
+                          .map((q: any) => normaliseBloom(q.bloomLevel))
+                          .filter(Boolean) as string[]
+                      ),
+                    ]
+                      .sort((x, y) => bloomIndex(x) - bloomIndex(y))
+                      .join(', ') || 'not stated'
+                  }`,
+                ].join(' | '),
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+                italics: true,
+                color: '4a5568',
+              }),
+            ],
+            spacing: { after: 100, line: LINE_SPACING },
+          })
+        );
+
+        if (assessment.description) {
+          const formatted = await this.formatTextIntelligently(
+            assessment.description,
+            'Assessment Description'
+          );
+          if (formatted.paragraphs.length > 0) {
+            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+          }
+        }
+
+        if (assessment.instructions) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Instructions:',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { before: 100, after: 50, line: LINE_SPACING },
+            })
+          );
+
+          const formatted = await this.formatTextIntelligently(
+            assessment.instructions,
+            'Assessment Instructions'
+          );
+          if (formatted.paragraphs.length > 0) {
+            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+          }
+          if (formatted.bullets.length > 0) {
+            contentChildren.push(
+              ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
+            );
+          }
+        }
+
+        this.renderAssessmentArtefacts(assessment, contentChildren);
+
+        if (assessment.questions?.length) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Questions:',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { before: 100, after: 50, line: LINE_SPACING },
+            })
+          );
+
+          assessment.questions.forEach((q: any, idx: number) => {
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${idx + 1}. ${q.questionText || q.text || ''}`,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
+                    bold: true,
+                  }),
+                  ...(q.bloomLevel || q.points != null
+                    ? [
+                        new TextRun({
+                          text: `  [${[
+                            q.bloomLevel ? `Bloom: ${normaliseBloom(q.bloomLevel)}` : null,
+                            q.alignedMLO
+                              ? `for ${q.alignedMLO}${
+                                  mloBloom.get(String(q.alignedMLO))
+                                    ? ` (${mloBloom.get(String(q.alignedMLO))})`
+                                    : ''
+                                }`
+                              : null,
+                            q.points != null
+                              ? `${q.points} mark${q.points === 1 ? '' : 's'}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}]`,
+                          size: FONT_SIZES.BODY,
+                          font: FONT_FAMILY,
+                          italics: true,
+                          color: '4a5568',
+                        }),
+                      ]
+                    : []),
+                ],
+                spacing: { before: 80, after: 40, line: LINE_SPACING },
+              })
+            );
+
+            if (q.questionType === 'mcq' && q.options?.length) {
+              q.options.forEach((option: string, optIdx: number) => {
+                const letter = String.fromCharCode(65 + optIdx);
+                const isCorrect =
+                  q.correctOptionIndex === optIdx ||
+                  q.correctAnswer === optIdx ||
+                  (typeof q.correctAnswer === 'string' && q.correctAnswer === option);
+                contentChildren.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: `    ${letter}. ${option}${isCorrect ? ' ✓' : ''}`,
+                        size: FONT_SIZES.BODY,
+                        font: FONT_FAMILY,
+                        bold: isCorrect,
+                      }),
+                    ],
+                    spacing: { after: 30, line: LINE_SPACING },
+                  })
+                );
+              });
+            }
+
+            if (q.rationale) {
+              contentChildren.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `Rationale: ${q.rationale}`,
+                      size: FONT_SIZES.BODY,
+                      font: FONT_FAMILY,
+                      italics: true,
+                      color: '4a5568',
+                    }),
+                  ],
+                  spacing: { after: 60, line: LINE_SPACING },
+                })
+              );
+            }
+          });
+        }
+
+        contentChildren.push(
+          new Paragraph({
+            children: [],
+            spacing: { after: 300 },
+          })
+        );
+      }
+    };
+
     if (
       !step7?.formativeAssessments?.length &&
       !step7?.summativeAssessments?.length &&
@@ -1315,28 +1515,41 @@ If the content is better as bullets, put it in bullets array and leave paragraph
               this.createTableCell(String(userPrefs.assessmentBalance || 'Blended mix')),
             ],
           }),
+          // The table used to print "Formative Weight 30% / Summative Weight 70%" above 92
+          // items each stamped "Weighting: 50%". Both numbers were real; neither described
+          // the other. The split is between the module assessments and the final, and
+          // formative activity is ungraded, so it is stated as such rather than given a
+          // share it cannot hold.
           new TableRow({
             children: [
-              this.createTableCell('Formative Weight'),
-              this.createTableCell(`${userPrefs.weightages?.formative || 0}%`),
+              this.createTableCell('Module assessments (graded)'),
+              this.createTableCell(
+                `${userPrefs.weightages?.formative || 0}% of the programme mark, shared across ${moduleSummatives.length} module assessment(s)`
+              ),
             ],
           }),
           new TableRow({
             children: [
-              this.createTableCell('Summative Weight'),
-              this.createTableCell(`${userPrefs.weightages?.summative || 0}%`),
+              this.createTableCell('Final summative (graded)'),
+              this.createTableCell(
+                `${userPrefs.weightages?.summative || 0}% of the programme mark`
+              ),
             ],
           }),
           new TableRow({
             children: [
-              this.createTableCell('Total Formatives'),
-              this.createTableCell(String(step7.formativeAssessments?.length || 0)),
+              this.createTableCell('Formative activities'),
+              this.createTableCell(
+                `${formativeActivities.length} — ungraded, used during learning to give feedback (no marks, no weighting)`
+              ),
             ],
           }),
           new TableRow({
             children: [
-              this.createTableCell('Total Summatives'),
-              this.createTableCell(String(step7.summativeAssessments?.length || 0)),
+              this.createTableCell('Total graded assessments'),
+              this.createTableCell(
+                String(moduleSummatives.length + (step7.summativeAssessments?.length || 0))
+              ),
             ],
           }),
         ],
@@ -1344,215 +1557,48 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       new Paragraph({ children: [], spacing: { after: 200 } })
     );
 
-    // Formative Assessments Section
-    if (step7.formativeAssessments?.length) {
-      contentChildren.push(this.createH2('7.2 Formative Assessments'));
+    // Formative activity: ungraded, dialogue-based, used during learning.
+    if (formativeActivities.length) {
+      contentChildren.push(this.createH2('7.2 Formative Activities (ungraded)'));
+      contentChildren.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: 'Used during the learning process to give feedback on learning-in-process. Dialogue-based and ungraded: these carry no marks and no weighting, and are not part of the final grade.',
+              size: FONT_SIZES.BODY,
+              font: FONT_FAMILY,
+              italics: true,
+            }),
+          ],
+          spacing: { after: 160 },
+        })
+      );
 
-      for (const assessment of step7.formativeAssessments) {
-        contentChildren.push(
-          this.createH3(`${assessment.title || 'Untitled Assessment'}`),
-          new Paragraph({
-            children: [
-              new TextRun({
-                // Name the module, and print the outcomes the assessment was generated
-                // against. The mapping was there all along under `alignedMLOs` — it was
-                // simply never rendered, so the document looked unmapped when it was not.
-                text: [
-                  `Module: ${moduleLabels.get(assessment.moduleId) || assessment.moduleId || 'N/A'}`,
-                  `Type: ${assessment.assessmentType || 'N/A'}`,
-                  `Max Marks: ${assessment.maxMarks ?? 'N/A'}`,
-                  `Weighting: ${assessment.weighting != null ? `${assessment.weighting}%` : 'not set'}`,
-                  `MLOs: ${(assessment.alignedMLOs || assessment.linkedMLOs || []).join(', ') || 'not mapped'}`,
-                  // Bloom was rendered for PLOs, MLOs and lessons but nowhere in Step 7, so
-                  // an author could not see whether a task worked at the level its outcome
-                  // demands. Both halves are printed — what the outcomes require and what the
-                  // tasks reach — because printing only one of them is what let an assessment
-                  // sitting below its outcome look correct on the page.
-                  `Outcome level required: ${requiredLevels(assessment).join(', ') || 'not mapped'}`,
-                  `Tasks reach: ${
-                    [
-                      ...new Set<string>(
-                        (assessment.questions || [])
-                          .map((q: any) => normaliseBloom(q.bloomLevel))
-                          .filter(Boolean) as string[]
-                      ),
-                    ]
-                      .sort((x, y) => bloomIndex(x) - bloomIndex(y))
-                      .join(', ') || 'not stated'
-                  }`,
-                ].join(' | '),
-                size: FONT_SIZES.BODY,
-                font: FONT_FAMILY,
-                italics: true,
-                color: '4a5568',
-              }),
-            ],
-            spacing: { after: 100, line: LINE_SPACING },
-          })
-        );
-
-        // Description
-        if (assessment.description) {
-          const formatted = await this.formatTextIntelligently(
-            assessment.description,
-            'Assessment Description'
-          );
-          if (formatted.paragraphs.length > 0) {
-            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
-          }
-        }
-
-        // Instructions
-        if (assessment.instructions) {
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: 'Instructions:',
-                  bold: true,
-                  size: FONT_SIZES.BODY,
-                  font: FONT_FAMILY,
-                }),
-              ],
-              spacing: { before: 100, after: 50, line: LINE_SPACING },
-            })
-          );
-
-          const formatted = await this.formatTextIntelligently(
-            assessment.instructions,
-            'Assessment Instructions'
-          );
-          if (formatted.paragraphs.length > 0) {
-            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
-          }
-          if (formatted.bullets.length > 0) {
-            contentChildren.push(
-              ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
-            );
-          }
-        }
-
-        // The brief, marking guide and rubric, as three separate artefacts.
-        this.renderAssessmentArtefacts(assessment, contentChildren);
-
-        // Questions (if available)
-        if (assessment.questions?.length) {
-          contentChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: 'Questions:',
-                  bold: true,
-                  size: FONT_SIZES.BODY,
-                  font: FONT_FAMILY,
-                }),
-              ],
-              spacing: { before: 100, after: 50, line: LINE_SPACING },
-            })
-          );
-
-          assessment.questions.forEach((q: any, idx: number) => {
-            contentChildren.push(
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: `${idx + 1}. ${q.questionText || q.text || ''}`,
-                    size: FONT_SIZES.BODY,
-                    font: FONT_FAMILY,
-                    bold: true,
-                  }),
-                  ...(q.bloomLevel || q.points != null
-                    ? [
-                        new TextRun({
-                          text: `  [${[
-                            q.bloomLevel ? `Bloom: ${normaliseBloom(q.bloomLevel)}` : null,
-                            // The outcome this task evidences, and its level. A question can
-                            // only be judged against the outcome it assesses, and printing
-                            // the two side by side is what makes a shortfall visible.
-                            q.alignedMLO
-                              ? `for ${q.alignedMLO}${
-                                  mloBloom.get(String(q.alignedMLO))
-                                    ? ` (${mloBloom.get(String(q.alignedMLO))})`
-                                    : ''
-                                }`
-                              : null,
-                            q.points != null
-                              ? `${q.points} mark${q.points === 1 ? '' : 's'}`
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}]`,
-                          size: FONT_SIZES.BODY,
-                          font: FONT_FAMILY,
-                          italics: true,
-                          color: '4a5568',
-                        }),
-                      ]
-                    : []),
-                ],
-                spacing: { before: 80, after: 40, line: LINE_SPACING },
-              })
-            );
-
-            // MCQ options (indented)
-            if (q.questionType === 'mcq' && q.options?.length) {
-              q.options.forEach((option: string, optIdx: number) => {
-                const letter = String.fromCharCode(65 + optIdx);
-                // Tick by index (correctOptionIndex / legacy numeric correctAnswer)
-                // OR by text (canonical correctAnswer = the option's full text).
-                const isCorrect =
-                  q.correctOptionIndex === optIdx ||
-                  q.correctAnswer === optIdx ||
-                  (typeof q.correctAnswer === 'string' && q.correctAnswer === option);
-                contentChildren.push(
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: `    ${letter}. ${option}${isCorrect ? ' ✓' : ''}`,
-                        size: FONT_SIZES.BODY,
-                        font: FONT_FAMILY,
-                        bold: isCorrect,
-                      }),
-                    ],
-                    spacing: { after: 30, line: LINE_SPACING },
-                  })
-                );
-              });
-            }
-
-            // Rationale if available
-            if (q.rationale) {
-              contentChildren.push(
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: `Rationale: ${q.rationale}`,
-                      size: FONT_SIZES.BODY,
-                      font: FONT_FAMILY,
-                      italics: true,
-                      color: '4a5568',
-                    }),
-                  ],
-                  spacing: { after: 60, line: LINE_SPACING },
-                })
-              );
-            }
-          });
-        }
-
-        // Spacing between assessments
-        contentChildren.push(
-          new Paragraph({
-            children: [],
-            spacing: { after: 300 },
-          })
-        );
-      }
+      await renderModuleAssessments(formativeActivities, false);
     }
 
-    // Summative Assessments Section
+    // Module summatives: graded, at the end of the module, evidencing its outcomes.
+    if (moduleSummatives.length) {
+      contentChildren.push(this.createH2('7.3 Module Summative Assessments (graded)'));
+      contentChildren.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: 'Used at the end of each module to evaluate achievement against its learning outcomes and assessment criteria. Graded: each carries a mark total, a marking guide and a banded rubric. Weightings below are each assessment\u2019s share of its own module\u2019s mark.',
+              size: FONT_SIZES.BODY,
+              font: FONT_FAMILY,
+              italics: true,
+            }),
+          ],
+          spacing: { after: 160 },
+        })
+      );
+      await renderModuleAssessments(moduleSummatives, true);
+    }
+
+    // Course-level summative.
     if (step7.summativeAssessments?.length) {
-      contentChildren.push(this.createH2('7.3 Summative Assessments'));
+      contentChildren.push(this.createH2('7.4 Final Summative Assessment (graded)'));
 
       for (const assessment of step7.summativeAssessments) {
         contentChildren.push(

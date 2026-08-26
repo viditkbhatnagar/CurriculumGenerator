@@ -854,6 +854,13 @@ export interface AssessmentUserPreferences {
 }
 
 export interface FormativeAssessment {
+  /** 'formative' (ungraded, during learning) or 'module_summative' (graded, at the end). */
+  purpose?: 'formative' | 'module_summative';
+  /** False for formative activity: no marks, no weighting, no rubric. */
+  graded?: boolean;
+  feedbackGuidance?: string;
+  discussionPrompts?: string[];
+  selfCheckCriteria?: string[];
   id: string;
   moduleId: string;
   title: string;
