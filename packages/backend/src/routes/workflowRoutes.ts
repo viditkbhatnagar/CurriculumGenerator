@@ -3550,6 +3550,38 @@ router.post(
 );
 
 /**
+ * POST /api/v3/workflow/:id/step7/recompute
+ *
+ * Recompute Step 7's weightings, Bloom report and validation flags from the assessments
+ * already stored. No model calls, no content changes.
+ *
+ * Needed because those fields are derived but were only ever written at the end of a
+ * generation run: a run that saved its modules and then failed on the final write left the
+ * content correct and every derived field stale, with no way to repair the arithmetic short
+ * of regenerating content that was already right.
+ */
+router.post('/:id/step7/recompute', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    if (!workflow || !workflow.step7) {
+      return res.status(404).json({ success: false, error: 'Workflow or Step 7 not found' });
+    }
+    const result = await workflowService.recomputeStep7Derived(workflow);
+    return res.json({
+      success: true,
+      data: result,
+      message: `Recomputed weightings and validation across ${result.assessments} assessment(s).`,
+    });
+  } catch (error) {
+    loggingService.error('Error recomputing Step 7 derived fields', { error });
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to recompute Step 7',
+    });
+  }
+});
+
+/**
  * POST /api/v3/workflow/:id/step6/fill-missing
  *
  * Generate reading lists for modules that have none, leaving every existing list alone.

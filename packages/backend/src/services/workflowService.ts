@@ -3093,6 +3093,61 @@ CRITICAL VALIDATION:
    *
    * Existing assessments for the named modules are replaced, not appended to.
    */
+  /**
+   * Recompute everything Step 7 derives from its own stored content.
+   *
+   * Weightings, the Bloom report and the validation flags are all functions of the
+   * assessments already in the document — no model call is involved — but they were only
+   * ever written at the end of a generation run. When a run persisted its modules and then
+   * failed on the final save (a MongoDB connection refused mid-write, in the case that
+   * prompted this), the content was correct and every derived field was left describing the
+   * previous state: four assessments with no weighting at all, and `weightsSum100` still
+   * reporting true over them.
+   *
+   * Separated so the arithmetic can be repaired on its own, rather than by regenerating
+   * content that is already right.
+   */
+  async recomputeStep7Derived(workflow: ICurriculumWorkflow): Promise<{
+    weightsSum100: boolean;
+    bloomFloorMet: boolean;
+    assessments: number;
+  }> {
+    const step7 = workflow.step7 as any;
+    if (!step7) throw new Error('Step 7 has no data to recompute');
+
+    const all = step7.formativeAssessments || [];
+    const summatives = step7.summativeAssessments || [];
+    const weightages = step7.userPreferences?.weightages;
+
+    const totals = applyAssessmentWeightings(all, summatives, weightages);
+
+    const { auditProgrammeBloom } = await import('./assessmentGeneratorService');
+    const bloomReport = auditProgrammeBloom(all, ((workflow.step4 as any)?.modules || []) as any[]);
+    step7.bloomReport = bloomReport;
+
+    const weightsSum100 = weightingsAreComplete(totals);
+    step7.validation = {
+      ...(step7.validation || {}),
+      allFormativesMapped:
+        all.length > 0 && all.every((f: any) => (f.alignedMLOs || []).length > 0),
+      weightsSum100,
+      bloomFloorMet: bloomReport.floorMet,
+    };
+
+    workflow.markModified('step7.formativeAssessments');
+    workflow.markModified('step7');
+    await workflow.save();
+
+    loggingService.info('Step 7 derived fields recomputed', {
+      workflowId: String(workflow._id),
+      assessments: all.length,
+      weightsSum100,
+      bloomFloorMet: bloomReport.floorMet,
+    });
+
+    return { weightsSum100, bloomFloorMet: bloomReport.floorMet, assessments: all.length };
+  }
+
   async regenerateStep7Modules(
     workflowId: string,
     moduleIds: string[]
@@ -3171,30 +3226,7 @@ CRITICAL VALIDATION:
 
     const regenerated = [...new Set(formatives.map((f: any) => f.moduleId))];
 
-    // Recompute percentage weightings across the whole step: a module's assessments share
-    // its 100% between them, so replacing one module's set changes those percentages.
-    const all = (workflow.step7 as any).formativeAssessments || [];
-    const summatives = (workflow.step7 as any).summativeAssessments || [];
-    const totals = applyAssessmentWeightings(all, summatives, (preferences as any).weightages);
-
-    // Keep the flags honest about what is now stored. The Bloom report is recomputed over
-    // the WHOLE step, not just the regenerated modules: replacing one module's assessments
-    // changes the programme distribution, and a report left over from the previous run would
-    // describe assessments that no longer exist.
-    const { auditProgrammeBloom } = await import('./assessmentGeneratorService');
-    const bloomReport = auditProgrammeBloom(all, ((workflow.step4 as any)?.modules || []) as any[]);
-    (workflow.step7 as any).bloomReport = bloomReport;
-
-    (workflow.step7 as any).validation = {
-      ...((workflow.step7 as any).validation || {}),
-      allFormativesMapped:
-        all.length > 0 && all.every((f: any) => (f.alignedMLOs || []).length > 0),
-      weightsSum100: weightingsAreComplete(totals),
-      bloomFloorMet: bloomReport.floorMet,
-    };
-
-    workflow.markModified('step7');
-    await workflow.save();
+    await this.recomputeStep7Derived(workflow);
 
     loggingService.info('Step 7 formatives regenerated for named modules', {
       workflowId,
