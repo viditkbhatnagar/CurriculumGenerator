@@ -15,11 +15,26 @@ export interface WeightableAssessment {
   moduleId?: string;
   maxMarks?: number;
   weighting?: number;
+  /** False for formative activity, which carries no marks and no weighting. */
+  graded?: boolean;
+  purpose?: string;
 }
 
 export interface WeightageSplit {
+  /**
+   * Share of the programme mark carried by the module assessments, collectively.
+   *
+   * Named `formative` because that is the key the author's stored preferences already use;
+   * it never meant "the weight of ungraded activity", which by definition is nil.
+   */
   formative?: number;
+  /** Share of the programme mark carried by the final, course-level summative. */
   summative?: number;
+}
+
+/** An assessment that carries no marks: ungraded formative activity. */
+export function isUngraded(a: WeightableAssessment): boolean {
+  return a.graded === false || a.purpose === 'formative';
 }
 
 /** Percentages are stored to one decimal place; more precision than an awarding body uses. */
@@ -54,52 +69,87 @@ function distribute(assessments: WeightableAssessment[], pool: number): void {
 }
 
 /**
- * Assign a `weighting` to every assessment, module by module.
+ * Assign a `weighting` to every assessment.
  *
- * Formatives share the formative pool and summatives the summative pool, so each module's
- * assessments sum to 100% of that module's mark. Mutates the assessments and returns a
- * per-module total for verification.
+ * Two rules, both of which the previous version got wrong in ways the author caught by
+ * reading the document.
+ *
+ * Ungraded formative activity is weighted nil. Previously nothing recorded that an
+ * assessment was ungraded, so a module's two "formatives" were handed the whole 100% of it
+ * — the export printed "Weighting: 50%" on each of 92 dialogue-based activities while the
+ * strategy table above them said formatives were worth 30%. Two numbers from two sources,
+ * never reconciled.
+ *
+ * The configured split is between the MODULE assessments and the FINAL summative, not
+ * between graded and ungraded work. The old code applied it only when a module held both a
+ * formative and a summative, which no module ever did — `module_level` summatives are
+ * declared in the types and generated nowhere — so the branch carrying the author's 30/70
+ * had never executed for any programme the system can produce.
+ *
+ * Mutates the assessments and returns a per-group total for verification.
  */
 export function applyAssessmentWeightings(
-  formatives: WeightableAssessment[],
-  summatives: WeightableAssessment[],
+  moduleAssessments: WeightableAssessment[],
+  courseSummatives: WeightableAssessment[],
   weightages: WeightageSplit | undefined
 ): { moduleId: string; total: number }[] {
-  const formativePool = weightages?.formative ?? 30;
-  const summativePool = weightages?.summative ?? 70;
-
-  const moduleIds = new Set<string>(
-    [...formatives, ...summatives].map((a) => a.moduleId || 'unassigned')
-  );
-
   const totals: { moduleId: string; total: number }[] = [];
 
+  // Ungraded activity carries no weight. Stated explicitly rather than left undefined, so
+  // the export prints "ungraded" instead of "not set" and cannot be mistaken for an
+  // oversight.
+  for (const assessment of moduleAssessments) {
+    if (isUngraded(assessment)) assessment.weighting = 0;
+  }
+
+  const graded = moduleAssessments.filter((a) => !isUngraded(a));
+  const moduleIds = new Set<string>(graded.map((a) => a.moduleId || 'unassigned'));
+
+  // Within a module, its graded assessments share that module's own mark in proportion to
+  // their marks. What share the module holds of the whole programme is a separate statement,
+  // made once at programme level rather than smeared across 46 modules as fractions of a
+  // percent.
   for (const moduleId of moduleIds) {
-    const inModule = (list: WeightableAssessment[]) =>
-      list.filter((a) => (a.moduleId || 'unassigned') === moduleId);
-
-    const moduleFormatives = inModule(formatives);
-    const moduleSummatives = inModule(summatives);
-
-    // Where a module has only one kind of assessment, that kind carries the whole 100%:
-    // reporting a module as weighted to 30 because its summative has not been generated
-    // yet would describe the pipeline's state, not the assessment design.
-    const hasBoth = moduleFormatives.length > 0 && moduleSummatives.length > 0;
-    distribute(moduleFormatives, hasBoth ? formativePool : moduleFormatives.length ? 100 : 0);
-    distribute(moduleSummatives, hasBoth ? summativePool : moduleSummatives.length ? 100 : 0);
-
+    const inModule = graded.filter((a) => (a.moduleId || 'unassigned') === moduleId);
+    distribute(inModule, 100);
     totals.push({
       moduleId,
-      total: round(
-        [...moduleFormatives, ...moduleSummatives].reduce((sum, a) => sum + (a.weighting || 0), 0)
-      ),
+      total: round(inModule.reduce((sum, a) => sum + (a.weighting || 0), 0)),
+    });
+  }
+
+  // The final summative is one instrument at course level, not a module, and was previously
+  // bucketed under a fabricated module id — leaving a 46-module programme with 47 entries in
+  // the totals array, one of which was not a module.
+  if (courseSummatives.length > 0) {
+    distribute(courseSummatives, 100);
+    totals.push({
+      moduleId: 'course-level',
+      total: round(courseSummatives.reduce((sum, a) => sum + (a.weighting || 0), 0)),
     });
   }
 
   return totals;
 }
 
-/** Do every module's assessments sum to 100%? What `weightsSum100` should mean. */
+/**
+ * The programme-level split the author configured, stated as a sentence the export can print.
+ *
+ * Kept separate from per-assessment weighting because they answer different questions: what
+ * share of the programme the module work carries, versus what share of a module each of its
+ * assessments carries. Printing only the first while stamping the second on every item is
+ * what made the document contradict itself.
+ */
+export function programmeSplit(weightages: WeightageSplit | undefined): {
+  moduleAssessments: number;
+  finalSummative: number;
+} {
+  return {
+    moduleAssessments: weightages?.formative ?? 30,
+    finalSummative: weightages?.summative ?? 70,
+  };
+}
+
 export function weightingsAreComplete(totals: { total: number }[]): boolean {
   return totals.length > 0 && totals.every((t) => Math.abs(t.total - 100) < 0.05);
 }

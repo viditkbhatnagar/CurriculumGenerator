@@ -107,13 +107,46 @@ export interface AssessmentUserPreferences {
 // FORMATIVE ASSESSMENTS (OUTPUT)
 // ============================================================================
 
+/**
+ * What an assessment is FOR, which decides whether it carries marks.
+ *
+ * OTHM states the distinction plainly: formative assessment is "used during the learning
+ * process", "provides feedback on learning-in-process" and is "dialogue-based, UNGRADED";
+ * summative assessment is "used at the end of the learning process", "evaluates achievement
+ * against learning outcomes and assessment criteria" and is "GRADED Pass / Refer".
+ *
+ * Step 7 had no field of this kind at all. It generated two graded, weighted, rubric-bearing
+ * assessments per module and filed them under `formativeAssessments`, so a programme's
+ * subject-matter expert opened the document and found marks, weightings, rubrics and graded
+ * deliverables beneath a heading that means the opposite.
+ */
+export type AssessmentPurpose = 'formative' | 'module_summative';
+
 export interface FormativeAssessment {
   id: string;
   moduleId: string;
   title: string;
   assessmentType: string; // quiz, mini_case, reflection, worksheet, etc.
+  /**
+   * Formative (ungraded, during learning) or module summative (graded, end of module).
+   * Absent on records generated before the distinction existed — treat those as
+   * `module_summative`, which is what they are in substance.
+   */
+  purpose?: AssessmentPurpose;
+  /** False for formative activity: no marks, no weighting, no rubric. */
+  graded?: boolean;
   description: string;
   instructions: string;
+  /**
+   * What the tutor says back, and what the learner checks themselves against.
+   *
+   * The graded half of OTHM's table had a rich representation here and the dialogue half had
+   * none, so there was nothing the export could have rendered as formative even if it had
+   * been relabelled.
+   */
+  feedbackGuidance?: string;
+  discussionPrompts?: string[];
+  selfCheckCriteria?: string[];
   alignedPLOs: string[];
   alignedMLOs: string[];
   /**
