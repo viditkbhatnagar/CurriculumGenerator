@@ -1194,6 +1194,27 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         ...(opts.indent ? { indent: { left: 360 } } : {}),
       });
 
+    // What a formative activity produces instead of a mark: the tutor's feedback, what the
+    // group discusses, and what the learner checks their own work against. These are the
+    // whole substance of an ungraded activity — generated but never rendered, the formative
+    // section would have been a title and a heading saying it carries no marks.
+    if (assessment.feedbackGuidance) {
+      contentChildren.push(para('Feedback guidance (for the tutor)', { bold: true }));
+      contentChildren.push(para(String(assessment.feedbackGuidance), { indent: true }));
+    }
+    if (Array.isArray(assessment.discussionPrompts) && assessment.discussionPrompts.length) {
+      contentChildren.push(para('Discussion prompts', { bold: true }));
+      for (const prompt of assessment.discussionPrompts) {
+        contentChildren.push(para(`• ${prompt}`, { indent: true }));
+      }
+    }
+    if (Array.isArray(assessment.selfCheckCriteria) && assessment.selfCheckCriteria.length) {
+      contentChildren.push(para('Learner self-check', { bold: true }));
+      for (const check of assessment.selfCheckCriteria) {
+        contentChildren.push(para(`• ${check}`, { indent: true }));
+      }
+    }
+
     const brief = assessment.studentBrief;
     if (brief && typeof brief === 'object') {
       contentChildren.push(para('Student brief', { bold: true }));
