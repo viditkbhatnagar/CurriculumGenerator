@@ -148,7 +148,10 @@ export function requiredArtefacts(module: any): string[] {
     if (level !== 'create' && level !== 'evaluate') continue;
     const statement = String(mlo?.statement || '').toLowerCase();
     for (const word of ARTEFACT_WORDS) {
-      if (statement.includes(word)) wanted.add(word);
+      // Whole words only. As substrings, "plan" matched inside "explanation" and "map"
+      // inside "roadmap", manufacturing artefact requirements the outcome never made and
+      // feeding them into the generation prompt.
+      if (new RegExp(`\\b${word}s?\\b`).test(statement)) wanted.add(word);
     }
   }
   return [...wanted];
@@ -252,7 +255,8 @@ export function assignMlosToSlots(module: any, count: number): string[][] {
 export function planFormativeFormats(
   module: any,
   allowedTypes: string[],
-  count: number
+  count: number,
+  opts?: { includeSummative?: boolean }
 ): FormatPlan {
   const allowed = (allowedTypes || []).filter((type) => type && type !== 'None');
   const blooms = (module?.mlos || []).map((mlo: any) => normaliseBloom(mlo?.bloomLevel));
@@ -290,7 +294,10 @@ export function planFormativeFormats(
     // achievement against learning outcomes and assessment criteria" — against all of them,
     // so it carries the module's whole outcome set rather than a share of it. The earlier
     // slots are formative checks used during learning and take a subset.
-    const isSummative = i === count - 1;
+    // "Formative only" must mean exactly that. Making the last slot summative regardless
+    // gave an author who asked for no graded assessment a graded one anyway.
+    const includeSummative = opts?.includeSummative !== false;
+    const isSummative = includeSummative && i === count - 1;
     const purpose: 'formative' | 'module_summative' = isSummative
       ? 'module_summative'
       : 'formative';
@@ -316,6 +323,22 @@ export function planFormativeFormats(
 }
 
 /** Position of a level in the taxonomy, or -1 for anything unrecognised. */
+/**
+ * The stored level, or empty string if the record does not state one.
+ *
+ * `normaliseBloom` folds anything unrecognised to 'understand', which is the right answer
+ * when deciding how to generate and the wrong one when reporting what exists: a question
+ * that recorded no level was being printed as reaching 'understand', turning an absence into
+ * an assertion. Rendering and counting use this; generation keeps the default.
+ */
+export function statedBloom(level: string | undefined): string {
+  const key = String(level || '')
+    .trim()
+    .toLowerCase()
+    .replace('analyze', 'analyse');
+  return BLOOM_ORDER.includes(key) ? key : '';
+}
+
 export function bloomIndex(level: string | undefined): number {
   return BLOOM_ORDER.indexOf(normaliseBloom(level));
 }
@@ -475,6 +498,10 @@ export interface BloomReport {
   /** Questions below the level of the outcome they are mapped to. */
   questionsBelowFloor: number;
   totalQuestions: number;
+  /** Questions carrying an `alignedMLO`, i.e. those the floor check could actually test. */
+  checkableQuestions?: number;
+  /** Questions whose record states no Bloom level at all. */
+  unstatedQuestions?: number;
 }
 
 /**
@@ -492,6 +519,8 @@ export function auditProgrammeBloom(formatives: any[], modules: any[]): BloomRep
   const shortfalls: BloomReport['shortfalls'] = [];
   let questionsBelowFloor = 0;
   let totalQuestions = 0;
+  let checkableQuestions = 0;
+  let unstatedQuestions = 0;
 
   for (const fa of formatives || []) {
     const module = byId.get(String(fa?.moduleId));
@@ -500,8 +529,12 @@ export function auditProgrammeBloom(formatives: any[], modules: any[]): BloomRep
     const audit = auditAssessmentBloom(fa, module);
     for (const q of fa?.questions || []) {
       totalQuestions += 1;
-      const level = normaliseBloom(q?.bloomLevel);
-      distribution[level] = (distribution[level] || 0) + 1;
+      // Only levels the record actually states are counted. Folding an unlabelled question
+      // to 'understand' put questions into the distribution that had never claimed a level.
+      const level = statedBloom(q?.bloomLevel);
+      if (level) distribution[level] = (distribution[level] || 0) + 1;
+      else unstatedQuestions += 1;
+      if (q?.alignedMLO) checkableQuestions += 1;
     }
     questionsBelowFloor += audit.belowFloor.length;
 
@@ -522,6 +555,12 @@ export function auditProgrammeBloom(formatives: any[], modules: any[]): BloomRep
     shortfalls,
     questionsBelowFloor,
     totalQuestions,
+    // How much of the programme the floor check could actually see. Reporting "0 below
+    // floor" against every question implies a check that ran on all of them; questions
+    // generated before per-question outcome mapping carry no `alignedMLO` and cannot be
+    // checked at all, and saying so is the difference between a result and a green light.
+    checkableQuestions,
+    unstatedQuestions,
   };
 }
 

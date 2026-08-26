@@ -38,6 +38,7 @@ import { balanceMcqPositions } from '../utils/mcqBalance';
 import { derivePloAlignment } from '../utils/ploAlignment';
 import {
   normaliseBloom,
+  statedBloom,
   bloomIndex,
   questionPlanForBloom,
   requiredArtefacts,
@@ -103,6 +104,7 @@ export function normalizeMcqAnswer(q: any): void {
 export {
   BLOOM_ORDER,
   normaliseBloom,
+  statedBloom,
   bloomIndex,
   questionPlanForBloom,
   requiredArtefacts,
@@ -480,7 +482,9 @@ export class AssessmentGeneratorService {
     // within what the author permitted. Left to the prompt alone, a list of permitted
     // types produced the first two entries for all 46 modules — every Level 6 consulting
     // module assessed by multiple-choice.
-    const plan = planFormativeFormats(module, formativeTypes, formativePerModule);
+    const plan = planFormativeFormats(module, formativeTypes, formativePerModule, {
+      includeSummative: request.userPreferences.assessmentStructure !== 'formative_only',
+    });
     if (plan.warning) {
       loggingService.warn("Permitted formats cannot evidence this module's outcomes", {
         moduleId: module?.id,
@@ -506,6 +510,20 @@ export class AssessmentGeneratorService {
     // One usable assessment is worth keeping; none at all is a module failure.
     if (produced.length === 0) {
       throw new Error(`No assessment could be generated for ${module.id}: ${failures.join(' | ')}`);
+    }
+
+    // Losing the graded summative is a module failure even when a formative activity
+    // survived. The caller replaces the module's stored assessments with whatever comes
+    // back, so returning the ungraded half as a partial success would delete a module's
+    // marks, rubric and marking guide and report the module as regenerated.
+    const producedSummative = produced.some(
+      (fa: any) => fa?.purpose === 'module_summative' || fa?.graded === true
+    );
+    const wantedSummative = plan.slots.some((slot) => slot.purpose === 'module_summative');
+    if (wantedSummative && !producedSummative) {
+      throw new Error(
+        `Only ungraded activity was generated for ${module.id}; its summative failed: ${failures.join(' | ')}`
+      );
     }
     if (failures.length > 0) {
       loggingService.warn('Some assessments failed for this module; keeping the rest', {
@@ -641,7 +659,7 @@ ${[...new Set(slotMlos.map((m: any) => normaliseBloom(m?.bloomLevel)))]
   .map((level) => `- ${String(level).toUpperCase()}: ${TASK_SHAPES_BY_BLOOM[String(level)] || ''}`)
   .join('\n')}
 ${
-  slotArtefacts.length
+  isSummative && slotArtefacts.length
     ? `\n**ARTEFACTS THIS ASSESSMENT'S OUTCOMES REQUIRE THE LEARNER TO PRODUCE**
 ${slotArtefacts.map((a) => `  - a ${a}`).join('\n')}
 EVERY ONE of these must appear in THIS assessment's studentBrief.deliverables, named as the
@@ -824,6 +842,11 @@ CRITICAL REQUIREMENTS:
 
       const parsed = this.parseJSON(response, `formative-${module.id}`);
       const formativeAssessments = parsed.formativeAssessments || [];
+      // Valid JSON containing no assessment is a failed slot, not an empty success — the
+      // caller must be able to retry it rather than persist the absence.
+      if (formativeAssessments.length === 0) {
+        throw new Error(`Model returned no assessment for ${module.id} (${assignedFormat})`);
+      }
       // Reconcile MCQ correct-answer with its rationale (text ↔ index), then even out the
       // answer key. Left as generated, 69% of correct answers landed on option A — enough
       // for a candidate to pass the bank by always choosing A.
@@ -861,6 +884,18 @@ CRITICAL REQUIREMENTS:
         }
 
         const validMloIds = new Set((assignedSlot?.mloIds || []).map(String));
+        // Pinned to the most demanding outcome this assessment carries, not whichever the
+        // curriculum happens to list first: the fallback sets the floor the question is then
+        // judged against, so the lenient choice would quietly excuse it.
+        const levelOfMlo = new Map<string, string>(
+          (module.mlos || []).map((m: any) => [String(m?.id), normaliseBloom(m?.bloomLevel)])
+        );
+        const fallbackMlo =
+          [...(assignedSlot?.mloIds || [])].sort(
+            (a, b) =>
+              bloomIndex(levelOfMlo.get(String(b)) || '') -
+              bloomIndex(levelOfMlo.get(String(a)) || '')
+          )[0] || null;
         for (const q of fa?.questions || []) {
           q.questionType = normaliseQuestionType(q?.questionType);
           q.bloomLevel = normaliseBloom(q?.bloomLevel);
@@ -868,7 +903,7 @@ CRITICAL REQUIREMENTS:
           // against anything, so it is pinned to the assessment's most demanding outcome
           // rather than left to float free of the taxonomy.
           if (!q.alignedMLO || !validMloIds.has(String(q.alignedMLO))) {
-            q.alignedMLO = assignedSlot?.mloIds?.[0] || null;
+            q.alignedMLO = fallbackMlo;
           }
           if (q?.questionType === 'mcq') normalizeMcqAnswer(q);
         }
@@ -925,21 +960,40 @@ CRITICAL REQUIREMENTS:
             belowFloor: audit.belowFloor.length,
           });
 
-          const repaired = await this.generateOneFormative(
-            module,
-            moduleIndex,
-            request,
-            plan,
-            slot,
-            note
-          );
+          // The repair is a second model call and can fail in every way the first can. A
+          // throw here used to take the usable first attempt down with it, and an empty
+          // array scored zero — better than any real assessment — so a parse that returned
+          // nothing replaced a working assessment with none at all. Both were ways of
+          // losing content while reporting success, which is the failure this whole run has
+          // been about.
+          let repaired: FormativeAssessment[] = [];
+          try {
+            repaired = await this.generateOneFormative(
+              module,
+              moduleIndex,
+              request,
+              plan,
+              slot,
+              note
+            );
+          } catch (repairError) {
+            loggingService.warn('Bloom repair attempt failed; keeping the first attempt', {
+              moduleId: module.id,
+              format: assignedFormat,
+              error: repairError instanceof Error ? repairError.message : String(repairError),
+            });
+            return formativeAssessments;
+          }
+
           // Keep the better of the two rather than assuming the retry improved things.
           const scoreOf = (list: any[]) =>
             list.reduce((worst: number, fa: any) => {
               const a = auditAssessmentBloom(fa, module);
               return worst + (a.meetsFloor ? 0 : 100) + a.belowFloor.length;
             }, 0);
-          if (scoreOf(repaired) <= scoreOf(formativeAssessments)) return repaired;
+          if (repaired.length > 0 && scoreOf(repaired) <= scoreOf(formativeAssessments)) {
+            return repaired;
+          }
         }
       }
 

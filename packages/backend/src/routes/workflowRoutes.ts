@@ -3927,6 +3927,9 @@ router.put(
         assessmentCriteria,
         maxMarks,
         questions,
+        feedbackGuidance,
+        discussionPrompts,
+        selfCheckCriteria,
       } = req.body;
 
       loggingService.info('Updating formative assessment', { workflowId: id, assessmentId, title });
@@ -3952,8 +3955,30 @@ router.put(
       if (alignedPLOs !== undefined) assessment.alignedPLOs = alignedPLOs;
       if (alignedMLOs !== undefined) assessment.alignedMLOs = alignedMLOs;
       if (assessmentCriteria !== undefined) assessment.assessmentCriteria = assessmentCriteria;
-      if (maxMarks !== undefined) assessment.maxMarks = maxMarks;
       if (questions !== undefined) assessment.questions = questions;
+
+      // An ungraded activity cannot acquire a mark total by being edited. The field was
+      // accepted unconditionally and persisted, while both the export and the screen then
+      // ignored it — a number the author had typed, saved, and never saw again.
+      const isUngradedActivity =
+        (assessment as any).purpose === 'formative' || (assessment as any).graded === false;
+      if (maxMarks !== undefined) {
+        if (isUngradedActivity) {
+          return res.status(400).json({
+            success: false,
+            error:
+              'This is an ungraded formative activity, so it carries no marks. Change its purpose to a module summative first if it should be graded.',
+          });
+        }
+        assessment.maxMarks = maxMarks;
+      }
+
+      // The fields an ungraded activity is actually made of had no way to be edited at all.
+      if (feedbackGuidance !== undefined) (assessment as any).feedbackGuidance = feedbackGuidance;
+      if (discussionPrompts !== undefined)
+        (assessment as any).discussionPrompts = discussionPrompts;
+      if (selfCheckCriteria !== undefined)
+        (assessment as any).selfCheckCriteria = selfCheckCriteria;
 
       // Mark as modified and save. step7 is a Mixed field — mark the nested
       // array path too (matches the proven pattern in workflowService) so the

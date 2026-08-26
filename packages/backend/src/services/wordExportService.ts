@@ -13,7 +13,7 @@ import {
 import OpenAI from 'openai';
 import { loggingService } from './loggingService';
 import { moduleLabelOf } from '../utils/moduleIdentity';
-import { bloomIndex, normaliseBloom } from './assessmentGeneratorService';
+import { bloomIndex, statedBloom } from './assessmentGeneratorService';
 
 interface WorkflowData {
   projectName: string;
@@ -1281,12 +1281,10 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     // had hit. Derived here as well as at generation so an already-generated document shows
     // the truth on its next export instead of needing a re-run.
     const mloBloom = new Map<string, string>();
-    const mloModule = new Map<string, any>();
     for (const module of (step4?.modules || []) as any[]) {
       for (const mlo of (module?.mlos || []) as any[]) {
         if (!mlo?.id) continue;
-        mloBloom.set(String(mlo.id), normaliseBloom(mlo?.bloomLevel));
-        mloModule.set(String(mlo.id), module);
+        mloBloom.set(String(mlo.id), statedBloom(mlo?.bloomLevel));
       }
     }
     const requiredLevels = (assessment: any): string[] => {
@@ -1327,11 +1325,14 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                     : ['Ungraded — feedback only']),
                   `MLOs: ${(assessment.alignedMLOs || assessment.linkedMLOs || []).join(', ') || 'not mapped'}`,
                   `Outcome level required: ${requiredLevels(assessment).join(', ') || 'not mapped'}`,
+                  // `statedBloom`, not the generation-time normaliser: that folds anything
+                  // unrecognised to 'understand', so a question recording no level was being
+                  // printed as reaching one. An absence must read as an absence.
                   `Tasks reach: ${
                     [
                       ...new Set<string>(
                         (assessment.questions || [])
-                          .map((q: any) => normaliseBloom(q.bloomLevel))
+                          .map((q: any) => statedBloom(q.bloomLevel))
                           .filter(Boolean) as string[]
                       ),
                     ]
@@ -1419,7 +1420,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                     ? [
                         new TextRun({
                           text: `  [${[
-                            q.bloomLevel ? `Bloom: ${normaliseBloom(q.bloomLevel)}` : null,
+                            statedBloom(q.bloomLevel)
+                              ? `Bloom: ${statedBloom(q.bloomLevel)}`
+                              : null,
                             q.alignedMLO
                               ? `for ${q.alignedMLO}${
                                   mloBloom.get(String(q.alignedMLO))
@@ -1640,6 +1643,19 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     // Course-level summative.
     if (step7.summativeAssessments?.length) {
       contentChildren.push(this.createH2('7.4 Final Summative Assessment (graded)'));
+      contentChildren.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: 'Used at the end of the programme to evaluate achievement against the programme learning outcomes.',
+              size: FONT_SIZES.BODY,
+              font: FONT_FAMILY,
+              italics: true,
+            }),
+          ],
+          spacing: { after: 160 },
+        })
+      );
 
       for (const assessment of step7.summativeAssessments) {
         contentChildren.push(

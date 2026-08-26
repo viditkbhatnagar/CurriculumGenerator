@@ -103,7 +103,11 @@ export function applyAssessmentWeightings(
   }
 
   const graded = moduleAssessments.filter((a) => !isUngraded(a));
-  const moduleIds = new Set<string>(graded.map((a) => a.moduleId || 'unassigned'));
+  // Every module that has any assessment at all gets an entry, not only those with graded
+  // work. Deriving the id set from the graded list alone made a module that had lost its
+  // summative simply vanish from the totals, and `weightingsAreComplete` then reported
+  // completeness across the modules that happened to survive.
+  const moduleIds = new Set<string>(moduleAssessments.map((a) => a.moduleId || 'unassigned'));
 
   // Within a module, its graded assessments share that module's own mark in proportion to
   // their marks. What share the module holds of the whole programme is a separate statement,
@@ -112,6 +116,9 @@ export function applyAssessmentWeightings(
   for (const moduleId of moduleIds) {
     const inModule = graded.filter((a) => (a.moduleId || 'unassigned') === moduleId);
     distribute(inModule, 100);
+    // A module holding only ungraded activity totals nil, and the flag fails honestly. It
+    // has no assessment that counts towards anything, which is a defect worth surfacing —
+    // not a module to leave out of the arithmetic so the sum still looks right.
     totals.push({
       moduleId,
       total: round(inModule.reduce((sum, a) => sum + (a.weighting || 0), 0)),

@@ -1743,7 +1743,22 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                         d="M9 5H7a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
                       />
                     </svg>
-                    Formative Assessments ({workflow.step7?.formativeAssessments?.length ?? 0})
+                    {/*
+                      The stored array holds both purposes. Heading it "Formative
+                      Assessments" is what set the expectation the exported document then
+                      contradicted, so the screen now names what is actually in the list.
+                    */}
+                    {(() => {
+                      const all = workflow.step7?.formativeAssessments ?? [];
+                      const ungraded = all.filter(
+                        (a: any) => a.purpose === 'formative' || a.graded === false
+                      ).length;
+                      const graded = all.length - ungraded;
+                      if (ungraded && graded)
+                        return `Module Assessments (${ungraded} formative · ${graded} graded)`;
+                      if (ungraded) return `Formative Activities — ungraded (${ungraded})`;
+                      return `Module Summative Assessments — graded (${graded})`;
+                    })()}
                   </h4>
                   <div className="space-y-4">
                     {workflow.step7?.formativeAssessments?.map((assessment) => (

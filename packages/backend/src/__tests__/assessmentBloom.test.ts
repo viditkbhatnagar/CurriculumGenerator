@@ -17,6 +17,8 @@ import {
   deriveTargetBloomLevels,
   isDescriptionOnly,
   normaliseBloom,
+  requiredArtefacts,
+  statedBloom,
   normaliseQuestionType,
   planFormativeFormats,
   questionPlanForBloom,
@@ -397,5 +399,78 @@ describe('isDescriptionOnly', () => {
   it('leaves a real deliverable alone', () => {
     expect(isDescriptionOnly('A working interactive KPI dashboard (.pbix)')).toBe(false);
     expect(isDescriptionOnly('A one-page implementation roadmap')).toBe(false);
+  });
+});
+
+describe('statedBloom', () => {
+  it('reports an absent level as absent rather than folding it to understand', () => {
+    // normaliseBloom's default is right when deciding how to generate and wrong when
+    // reporting what exists: the export was printing "Tasks reach: understand" for
+    // questions whose records stated no level at all.
+    expect(statedBloom(undefined)).toBe('');
+    expect(statedBloom('')).toBe('');
+    expect(statedBloom('Creating')).toBe('');
+    expect(normaliseBloom(undefined)).toBe('understand');
+  });
+
+  it('still folds the spellings it does recognise', () => {
+    expect(statedBloom('Analyze')).toBe('analyse');
+    expect(statedBloom(' CREATE ')).toBe('create');
+  });
+});
+
+describe('requiredArtefacts', () => {
+  it('does not read an artefact out of a longer word', () => {
+    // As substrings, "plan" matched inside "explanation" and "map" inside "roadmap",
+    // manufacturing requirements the outcome never made.
+    const module = {
+      mlos: [mlo('LO1', 'create', 'Create clear explanations of the pricing mechanism')],
+    };
+    expect(requiredArtefacts(module)).toEqual([]);
+  });
+
+  it('still finds the artefact an outcome genuinely names', () => {
+    const module = {
+      mlos: [mlo('LO1', 'create', 'Create an implementation roadmap and a costed plan')],
+    };
+    expect(requiredArtefacts(module).sort()).toEqual(['plan', 'roadmap']);
+  });
+});
+
+describe('planFormativeFormats — assessmentStructure', () => {
+  it('produces no graded summative when the author asked for formative only', () => {
+    const module = { id: 'M1', mlos: [mlo('LO1', 'apply'), mlo('LO2', 'create')] };
+    const plan = planFormativeFormats(module, ALL_FORMATS, 2, { includeSummative: false });
+    expect(plan.slots.every((s) => s.purpose === 'formative')).toBe(true);
+  });
+
+  it('includes the summative by default', () => {
+    const module = { id: 'M1', mlos: [mlo('LO1', 'apply')] };
+    const plan = planFormativeFormats(module, ALL_FORMATS, 2);
+    expect(plan.slots.some((s) => s.purpose === 'module_summative')).toBe(true);
+  });
+});
+
+describe('auditProgrammeBloom — honest denominators', () => {
+  it('separates questions it could check from questions it could not', () => {
+    // Pre-change questions carry no alignedMLO, so the floor check cannot test them.
+    // Reporting "0 below floor" against all of them implies a check that never ran.
+    const modules = [{ id: 'M1', title: 'M1', mlos: [mlo('LO1', 'create')] }];
+    const formatives = [
+      {
+        moduleId: 'M1',
+        alignedMLOs: ['LO1'],
+        questions: [
+          { questionNumber: 1, alignedMLO: 'LO1', bloomLevel: 'create' },
+          { questionNumber: 2, bloomLevel: 'apply' },
+          { questionNumber: 3 },
+        ],
+      },
+    ];
+    const report = auditProgrammeBloom(formatives, modules) as any;
+    expect(report.totalQuestions).toBe(3);
+    expect(report.checkableQuestions).toBe(1);
+    expect(report.unstatedQuestions).toBe(1);
+    expect(report.distribution.understand).toBe(0);
   });
 });

@@ -79,13 +79,17 @@ describe('applyAssessmentWeightings', () => {
     expect(weightingsAreComplete([])).toBe(false);
   });
 
-  it('leaves a module of purely ungraded activity out of the totals rather than claiming 100', () => {
+  it('reports a module holding only ungraded activity as totalling nil, not as absent', () => {
+    // Leaving it out of the totals was the more comfortable answer and the wrong one: a
+    // module whose graded assessment failed to generate would disappear from the arithmetic
+    // and `weightingsAreComplete` would report completeness over the modules that survived.
     const totals = applyAssessmentWeightings(
       [{ moduleId: 'M9', purpose: 'formative', graded: false }],
       [],
       { formative: 30, summative: 70 }
     );
-    expect(totals).toEqual([]);
+    expect(totals).toEqual([{ moduleId: 'M9', total: 0 }]);
+    expect(weightingsAreComplete(totals)).toBe(false);
   });
 });
 
