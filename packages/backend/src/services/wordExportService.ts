@@ -1579,6 +1579,26 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     );
 
     // Formative activity: ungraded, dialogue-based, used during learning.
+    // The heading is printed even when there are none, so the section numbering means the
+    // same thing in every document and a reader is told why the section is empty rather
+    // than left to wonder what happened to 7.2.
+    if (!formativeActivities.length && moduleSummatives.length) {
+      contentChildren.push(this.createH2('7.2 Formative Activities (ungraded)'));
+      contentChildren.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: 'None yet. This programme\u2019s assessments were generated before formative activity was separated from graded assessment, so every item below is graded and appears under 7.3. Regenerate Step 7 to produce the ungraded, dialogue-based activities that accompany each module.',
+              size: FONT_SIZES.BODY,
+              font: FONT_FAMILY,
+              italics: true,
+            }),
+          ],
+          spacing: { after: 200 },
+        })
+      );
+    }
+
     if (formativeActivities.length) {
       contentChildren.push(this.createH2('7.2 Formative Activities (ungraded)'));
       contentChildren.push(
