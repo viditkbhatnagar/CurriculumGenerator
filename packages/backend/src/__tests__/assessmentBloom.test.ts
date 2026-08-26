@@ -124,18 +124,34 @@ describe('planFormativeFormats', () => {
     }
   });
 
-  it('pitches each assessment at the level of the outcomes IT carries, not the module peak', () => {
-    // The module reaches create, but the assessment carrying only the understand-level
-    // outcome is legitimately a comprehension quiz. Choosing on the module's highest level
-    // alone made every assessment in a mixed module the same shape.
+  it('makes the last slot the module summative and gives it every outcome', () => {
+    // OTHM: summative assessment "evaluates achievement against learning outcomes and
+    // assessment criteria" — against all of them. The formative slots take a subset,
+    // because they are checks used during learning rather than the final reckoning.
     const module = {
       id: 'M1',
       sequenceOrder: 1,
       mlos: [mlo('LO1', 'create'), mlo('LO2', 'understand')],
     };
     const plan = planFormativeFormats(module, ALL_FORMATS, 2);
-    const levels = plan.slots.map((s) => s.bloom).sort();
-    expect(levels).toEqual(['create', 'understand']);
+    expect(plan.slots.map((s) => s.purpose)).toEqual(['formative', 'module_summative']);
+
+    const summative = plan.slots[1];
+    expect(summative.mloIds.sort()).toEqual(['LO1', 'LO2']);
+    expect(summative.bloom).toBe('create');
+
+    // The formative check carries only part of the module and is pitched at what it carries.
+    expect(plan.slots[0].mloIds.length).toBeLessThan(summative.mloIds.length);
+  });
+
+  it('gives every module exactly one summative slot', () => {
+    const module = { id: 'M1', mlos: [mlo('LO1', 'apply'), mlo('LO2', 'analyse')] };
+    for (const count of [1, 2, 3]) {
+      const plan = planFormativeFormats(module, ALL_FORMATS, count);
+      const summatives = plan.slots.filter((s) => s.purpose === 'module_summative');
+      expect(summatives).toHaveLength(1);
+      expect(plan.slots[plan.slots.length - 1].purpose).toBe('module_summative');
+    }
   });
 
   it('warns instead of silently accepting formats that cannot evidence the outcome', () => {
