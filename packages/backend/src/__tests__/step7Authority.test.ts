@@ -16,11 +16,56 @@ import { step7SpecifiesExam, approvedSummativeFor } from '../services/step7Autho
 const wf = (step7: any): any => ({ step7 });
 
 describe('step7SpecifiesExam', () => {
-  it('allows the exam when the format enum says so', () => {
-    expect(step7SpecifiesExam(wf({ userPreferences: { summativeFormat: 'mixed_format' } }))).toBe(
-      true
-    );
+  it('allows the exam when the format enum names one', () => {
     expect(step7SpecifiesExam(wf({ userPreferences: { summativeFormat: 'mcq_exam' } }))).toBe(true);
+  });
+
+  it('does not treat "mixed format" as an exam on its own', () => {
+    // It is the default every existing programme carries, and it says the summative has
+    // several components without saying what they are. Auto-allowing it left the gate unable
+    // to refuse anything — a decoration rather than a check.
+    expect(step7SpecifiesExam(wf({ userPreferences: { summativeFormat: 'mixed_format' } }))).toBe(
+      false
+    );
+  });
+
+  it('allows a mixed-format programme whose components include an exam — the live BBA', () => {
+    expect(
+      step7SpecifiesExam(
+        wf({
+          userPreferences: { summativeFormat: 'mixed_format' },
+          summativeAssessments: [
+            {
+              components: [
+                {
+                  componentType: 'practical_exam',
+                  name: 'Section A: Financial Reporting Practical Exam',
+                },
+                { componentType: 'oral_presentation', name: 'Section D: Presentation & Viva' },
+              ],
+            },
+          ],
+        })
+      )
+    ).toBe(true);
+  });
+
+  it('refuses a mixed-format programme assessed by portfolio and prototype', () => {
+    expect(
+      step7SpecifiesExam(
+        wf({
+          userPreferences: { summativeFormat: 'mixed_format' },
+          summativeAssessments: [
+            {
+              components: [
+                { componentType: 'design_research_portfolio', name: 'Design research portfolio' },
+                { componentType: 'prototype_practical', name: 'Prototype practical' },
+              ],
+            },
+          ],
+        })
+      )
+    ).toBe(false);
   });
 
   it('allows the exam when a designed component is one — the live BBA case', () => {

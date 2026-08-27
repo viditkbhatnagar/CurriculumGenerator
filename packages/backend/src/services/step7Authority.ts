@@ -58,8 +58,14 @@ export function step7SpecifiesExam(workflow: any): boolean {
   const prefs: any = (workflow?.step7 as any)?.userPreferences || {};
 
   // The format is a stored enum, so it is compared as one rather than substring-matched.
+  // Only `mcq_exam` names an exam by itself. `mixed_format` says the summative has several
+  // components without saying what they are, and it is the default every existing programme
+  // carries — treating it as an exam made the gate incapable of ever refusing, which is a
+  // decoration rather than a check. It falls through to the components below, where this
+  // programme's "Practical Exam" and "Cross-Module Objective Test" answer the question
+  // properly and a portfolio-and-prototype programme's components do not.
   const format = String(prefs.summativeFormat ?? '');
-  if (format === 'mcq_exam' || format === 'mixed_format') return true;
+  if (format === 'mcq_exam') return true;
 
   // Whole words only: without boundaries "example", "latest" and "greatest" all counted as
   // an exam, so the author's own prose could open the gate by accident.
