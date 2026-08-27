@@ -24,6 +24,7 @@ import {
   normaliseBloomLevel,
   BLOOM_LEVEL_ORDER,
 } from '../services/workflowService';
+import { step7SpecifiesExam } from '../services/step7Authority';
 import { parseBlueprintWorkbook, applyProgrammeHours } from '../services/moduleBlueprintService';
 import { loggingService } from '../services/loggingService';
 import { CurriculumWorkflow, ICurriculumWorkflow } from '../models/CurriculumWorkflow';
@@ -5855,7 +5856,7 @@ router.post('/:id/step13', validateJWT, loadUser, async (req: Request, res: Resp
     // The same check runs inside processStep13, but a verdict that will never change should
     // not be discovered inside a queued job that then retries it and writes a failure the
     // author has to go looking for.
-    if (!workflowService.step7SpecifiesExam(existingWorkflow)) {
+    if (!step7SpecifiesExam(existingWorkflow)) {
       return res.status(400).json({
         success: false,
         error:

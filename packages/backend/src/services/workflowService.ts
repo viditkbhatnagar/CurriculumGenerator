@@ -18,6 +18,7 @@ import { RAGEngine } from './ragEngine';
 import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
 import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
+import { approvedSummativeFor, step7SpecifiesExam } from './step7Authority';
 import {
   gatherModuleSources,
   deriveSubjectFields,
@@ -4970,48 +4971,6 @@ CRITICAL VALIDATION:
   /**
    * Process Step 12: Generate Assignment Packs for all modules (full sync)
    */
-  /**
-   * The Step 7 module summative that Step 12's pack is the learner-facing form of.
-   *
-   * Step 7 is the authoritative assessment design: generating packs blind produced a second,
-   * independently invented graded assignment per module, and the programme's reviewer asked
-   * which one was real.
-   *
-   * A module generated before `purpose` existed holds two graded records and neither is
-   * marked as the summative, so the one covering the module's whole outcome set is preferred,
-   * then the one carrying the most marks. Where neither stands out, nothing is returned and
-   * Step 12 generates as it did before — anointing an arbitrary half of a module's assessment
-   * as "the approved summative" would be worse than not converting at all.
-   */
-  private approvedSummativeFor(workflow: ICurriculumWorkflow, module: any): any | undefined {
-    const records: any[] = ((workflow.step7 as any)?.formativeAssessments || []).filter(
-      (a: any) => a?.moduleId === module?.id
-    );
-    if (records.length === 0) return undefined;
-
-    const marked = records.find((a: any) => a?.purpose === 'module_summative');
-    if (marked) return marked;
-
-    const legacy = records.filter((a: any) => a?.purpose === undefined && a?.graded !== false);
-    if (legacy.length === 1) return legacy[0];
-    if (legacy.length === 0) return undefined;
-
-    const moduleMloIds = new Set(
-      (module?.mlos || []).map((m: any) => String(m?.id)).filter(Boolean)
-    );
-    const coversAll = legacy.filter(
-      (a: any) =>
-        moduleMloIds.size > 0 &&
-        (a.alignedMLOs || []).length >= moduleMloIds.size &&
-        [...moduleMloIds].every((id) => (a.alignedMLOs || []).map(String).includes(id))
-    );
-    if (coversAll.length === 1) return coversAll[0];
-
-    const byMarks = [...legacy].sort((a, b) => (b.maxMarks || 0) - (a.maxMarks || 0));
-    if ((byMarks[0]?.maxMarks || 0) > (byMarks[1]?.maxMarks || 0)) return byMarks[0];
-    return undefined;
-  }
-
   async processStep12(workflowId: string): Promise<ICurriculumWorkflow> {
     const workflow = await CurriculumWorkflow.findById(workflowId);
     if (!workflow || !workflow.step11) {
@@ -5027,7 +4986,7 @@ CRITICAL VALIDATION:
     const moduleAssignmentPacks: any[] = [];
 
     for (const mod of modules) {
-      const approved = this.approvedSummativeFor(workflow, mod);
+      const approved = approvedSummativeFor(workflow, mod);
       const moduleContext = {
         moduleId: mod.id,
         // step4.modules[] uses `code`; some legacy/intermediate shapes use `moduleCode`.
@@ -5173,7 +5132,7 @@ CRITICAL VALIDATION:
     // Every Step 12 run in production comes through here — the queue and both routes call
     // this method, not processStep12. Wiring the approved summative into that one and not
     // this one left the change inert on every reachable path.
-    const approvedForModule = this.approvedSummativeFor(workflow, moduleToProcess);
+    const approvedForModule = approvedSummativeFor(workflow, moduleToProcess);
 
     const moduleContext = {
       moduleId: moduleToProcess.id,
@@ -5383,32 +5342,6 @@ CRITICAL VALIDATION:
    * Process Step 13: Generate Summative Exam Package
    * Single generation (not module-by-module)
    */
-  /**
-   * Whether Step 7's assessment design calls for an exam at all.
-   *
-   * Each module is graded by its own summative, so a programme-level exam is an addition,
-   * not a default — and generating one unconditionally gave every programme a second
-   * course-wide summative that nothing reconciled with the one Step 7 already held.
-   *
-   * The format is a stored enum and is compared as one. The free-text fields are matched on
-   * whole words only: without boundaries "example", "latest" and "greatest" all counted as
-   * an exam, so an author's prose could open the gate by accident.
-   */
-  step7SpecifiesExam(workflow: ICurriculumWorkflow): boolean {
-    const prefs: any = (workflow.step7 as any)?.userPreferences || {};
-    const format = String(prefs.summativeFormat ?? '');
-    if (format === 'mcq_exam' || format === 'mixed_format') return true;
-
-    const mentionsExam = (v: unknown) =>
-      /\b(exams?|examinations?|tests?|mcqs?)\b/i.test(String(v ?? ''));
-    if (mentionsExam(prefs.userDefinedSummativeDescription)) return true;
-
-    const components: any[] = ((workflow.step7 as any)?.summativeAssessments || []).flatMap(
-      (sa: any) => sa?.components || []
-    );
-    return components.some((c) => mentionsExam(c?.componentType) || mentionsExam(c?.name));
-  }
-
   async processStep13(
     workflowId: string,
     onProgress?: (pct: number) => void
@@ -5421,7 +5354,7 @@ CRITICAL VALIDATION:
     // sync-fallback and worker paths.
     {
       const wf = await CurriculumWorkflow.findById(workflowId);
-      if (wf && !this.step7SpecifiesExam(wf)) {
+      if (wf && !step7SpecifiesExam(wf)) {
         throw new Error(
           "Step 7's assessment design does not specify an exam, so there is no exam for Step 13 to generate. If the programme should end in an exam, say so in Step 7 (summative format or components) and regenerate."
         );
