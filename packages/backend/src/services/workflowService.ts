@@ -4935,7 +4935,21 @@ CRITICAL VALIDATION:
 
     const moduleAssignmentPacks: any[] = [];
 
+    // Step 7 is the authoritative assessment design: Step 12's packs are the learner-facing
+    // form of the module summative already approved there, not a second, independently
+    // invented assessment. Generating them blind produced exactly that — 46 modules each
+    // holding one graded assessment in Step 7 and a different graded assignment in Step 12,
+    // and the programme's reviewer asked which one was real.
+    const step7Records: any[] = (workflow.step7 as any)?.formativeAssessments || [];
+    const summativeFor = (moduleId: string) =>
+      step7Records.find(
+        (a: any) =>
+          a?.moduleId === moduleId &&
+          (a?.purpose === 'module_summative' || (a?.purpose === undefined && a?.graded !== false))
+      );
+
     for (const mod of modules) {
+      const approved = summativeFor(mod.id);
       const moduleContext = {
         moduleId: mod.id,
         // step4.modules[] uses `code`; some legacy/intermediate shapes use `moduleCode`.
@@ -4951,6 +4965,18 @@ CRITICAL VALIDATION:
         totalHours: mod.totalHours,
         contactHours: mod.contactHours,
         independentHours: mod.independentHours ?? mod.selfStudyHours,
+        approvedSummative: approved
+          ? {
+              title: approved.title,
+              assessmentType: approved.assessmentType,
+              description: approved.description,
+              maxMarks: approved.maxMarks,
+              alignedMLOs: approved.alignedMLOs || [],
+              studentBrief: approved.studentBrief,
+              markingGuide: approved.markingGuide,
+              rubric: approved.rubric,
+            }
+          : undefined,
       };
 
       const packs = await assignmentPackService.generateModuleAssignmentPacks(
@@ -5266,6 +5292,29 @@ CRITICAL VALIDATION:
     workflowId: string,
     onProgress?: (pct: number) => void
   ): Promise<ICurriculumWorkflow> {
+    // Step 7 owns the assessment design; Step 13 renders an exam only where that design
+    // actually specifies one. Left ungated it generated a second course-wide summative for
+    // every programme, alongside the one Step 7 already holds, with nothing reconciling the
+    // two — the reviewer's instruction is that Step 7 is authoritative and an exam exists
+    // only where it says so.
+    {
+      const wf = await CurriculumWorkflow.findById(workflowId);
+      const prefs: any = (wf?.step7 as any)?.userPreferences || {};
+      const components: any[] = ((wf?.step7 as any)?.summativeAssessments || []).flatMap(
+        (sa: any) => sa?.components || []
+      );
+      const mentionsExam = (v: unknown) => /exam|test\b|mcq/i.test(String(v ?? ''));
+      const examSpecified =
+        mentionsExam(prefs.summativeFormat) ||
+        mentionsExam(prefs.userDefinedSummativeDescription) ||
+        components.some((c) => mentionsExam(c?.componentType) || mentionsExam(c?.name));
+      if (!examSpecified) {
+        throw new Error(
+          "Step 7's assessment design does not specify an exam, so there is no exam for Step 13 to generate. If the programme should end in an exam, say so in Step 7 (summative format or components) and regenerate."
+        );
+      }
+    }
+
     const workflow = await CurriculumWorkflow.findById(workflowId);
     if (!workflow || !workflow.step12) {
       throw new Error('Workflow not found or Step 12 not complete');

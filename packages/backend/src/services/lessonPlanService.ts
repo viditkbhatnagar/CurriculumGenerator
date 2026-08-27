@@ -2504,8 +2504,16 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
       }
     }
 
-    // Sort by match score (best matches first)
-    matchingAssessments.sort((a, b) => b.matchScore - a.matchScore);
+    // Ungraded formative activity first, then by MLO match. Step 7's array now holds both
+    // purposes, and an in-lesson check built from a module's GRADED summative would put the
+    // final assessment's content into a three-minute warm-up — the check should come from
+    // the activity that was designed to be one.
+    const isFormative = (a: any) => a?.purpose === 'formative' || a?.graded === false;
+    matchingAssessments.sort(
+      (a, b) =>
+        Number(isFormative(b.assessment)) - Number(isFormative(a.assessment)) ||
+        b.matchScore - a.matchScore
+    );
 
     // Return top 3 assessments
     return matchingAssessments.slice(0, 3).map((m) => m.assessment);

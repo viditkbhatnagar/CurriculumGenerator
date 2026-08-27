@@ -35,6 +35,17 @@ interface ModuleContext {
   totalHours: number;
   contactHours: number;
   independentHours: number;
+  /** The module summative approved in Step 7 — the pack is its learner-facing form. */
+  approvedSummative?: {
+    title?: string;
+    assessmentType?: string;
+    description?: string;
+    maxMarks?: number;
+    alignedMLOs?: string[];
+    studentBrief?: any;
+    markingGuide?: any;
+    rubric?: any;
+  };
 }
 
 interface WorkflowContext {
@@ -202,8 +213,30 @@ Return ONLY valid JSON, no markdown formatting.`;
       .map((plo) => `${plo.id}: ${plo.statement} [${plo.bloomLevel}]`)
       .join('\n');
 
-    return `Generate a COMPLETE ASSIGNMENT PACK for the following module, tailored for ${variantLabel} delivery.
+    // The pack converts the assessment approved in Step 7 rather than inventing a new one:
+    // the three variants are delivery formats of the SAME assessment, so a learner assessed
+    // in person and a learner assessed remotely are doing the same work to the same rubric.
+    const approvedBlock = module.approvedSummative
+      ? `
+**THE APPROVED MODULE ASSESSMENT (Step 7) — convert THIS, do not invent a new one:**
+Title: ${module.approvedSummative.title || 'untitled'}
+Type: ${module.approvedSummative.assessmentType || 'not stated'}
+Max marks: ${module.approvedSummative.maxMarks ?? 'not stated'}
+Assessed outcomes: ${(module.approvedSummative.alignedMLOs || []).join(', ') || 'not stated'}
+${module.approvedSummative.description ? `Description: ${module.approvedSummative.description}` : ''}
+${module.approvedSummative.studentBrief ? `Student brief: ${JSON.stringify(module.approvedSummative.studentBrief)}` : ''}
+${module.approvedSummative.markingGuide ? `Marking guide: ${JSON.stringify(module.approvedSummative.markingGuide)}` : ''}
+${module.approvedSummative.rubric ? `Rubric: ${JSON.stringify(module.approvedSummative.rubric)}` : ''}
 
+This assignment pack is the learner-facing form of the assessment above, adapted for
+${variantLabel} delivery. Keep the task, the assessed outcomes, the mark total and the rubric
+criteria; adapt only what the delivery mode requires (setting, submission logistics,
+supervision, timing). Do NOT change what is being assessed or how it is marked.
+`
+      : '';
+
+    return `Generate a COMPLETE ASSIGNMENT PACK for the following module, tailored for ${variantLabel} delivery.
+${approvedBlock}
 **PROGRAM CONTEXT:**
 Program: ${context.programTitle}
 Level: ${context.academicLevel}
