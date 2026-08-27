@@ -126,32 +126,37 @@ describe('planFormativeFormats', () => {
     }
   });
 
-  it('makes the last slot the module summative and gives it every outcome', () => {
-    // OTHM: summative assessment "evaluates achievement against learning outcomes and
-    // assessment criteria" — against all of them. The formative slots take a subset,
-    // because they are checks used during learning rather than the final reckoning.
+  it('produces the configured number of formatives PLUS one module summative', () => {
+    // "Two formative activities per module" must yield two. The summative used to consume
+    // the last formative slot, so an author who configured two received one — and the
+    // programme's reviewer asked where the second had gone.
     const module = {
       id: 'M1',
       sequenceOrder: 1,
       mlos: [mlo('LO1', 'create'), mlo('LO2', 'understand')],
     };
     const plan = planFormativeFormats(module, ALL_FORMATS, 2);
-    expect(plan.slots.map((s) => s.purpose)).toEqual(['formative', 'module_summative']);
+    expect(plan.slots.map((s) => s.purpose)).toEqual([
+      'formative',
+      'formative',
+      'module_summative',
+    ]);
 
-    const summative = plan.slots[1];
+    // OTHM: the summative "evaluates achievement against learning outcomes and assessment
+    // criteria" — against all of them. Each formative takes a subset.
+    const summative = plan.slots[2];
     expect(summative.mloIds.sort()).toEqual(['LO1', 'LO2']);
     expect(summative.bloom).toBe('create');
-
-    // The formative check carries only part of the module and is pitched at what it carries.
     expect(plan.slots[0].mloIds.length).toBeLessThan(summative.mloIds.length);
   });
 
-  it('gives every module exactly one summative slot', () => {
+  it('gives every module exactly one summative slot, on top of the formative count', () => {
     const module = { id: 'M1', mlos: [mlo('LO1', 'apply'), mlo('LO2', 'analyse')] };
     for (const count of [1, 2, 3]) {
       const plan = planFormativeFormats(module, ALL_FORMATS, count);
-      const summatives = plan.slots.filter((s) => s.purpose === 'module_summative');
-      expect(summatives).toHaveLength(1);
+      expect(plan.slots).toHaveLength(count + 1);
+      expect(plan.slots.filter((s) => s.purpose === 'formative')).toHaveLength(count);
+      expect(plan.slots.filter((s) => s.purpose === 'module_summative')).toHaveLength(1);
       expect(plan.slots[plan.slots.length - 1].purpose).toBe('module_summative');
     }
   });

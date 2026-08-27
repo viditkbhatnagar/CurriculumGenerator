@@ -289,19 +289,12 @@ export function planFormativeFormats(
 
   const allMloIds = (module?.mlos || []).map((m: any) => String(m?.id)).filter(Boolean);
   const unsuitedLevels: string[] = [];
-  const slots: AssessmentSlot[] = mloSlots.slice(0, count).map((subset, i) => {
-    // The last slot is the module's summative. OTHM: summative assessment "evaluates
-    // achievement against learning outcomes and assessment criteria" — against all of them,
-    // so it carries the module's whole outcome set rather than a share of it. The earlier
-    // slots are formative checks used during learning and take a subset.
-    // "Formative only" must mean exactly that. Making the last slot summative regardless
-    // gave an author who asked for no graded assessment a graded one anyway.
-    const includeSummative = opts?.includeSummative !== false;
-    const isSummative = includeSummative && i === count - 1;
-    const purpose: 'formative' | 'module_summative' = isSummative
-      ? 'module_summative'
-      : 'formative';
-    const mloIds = isSummative && allMloIds.length ? allMloIds : subset;
+
+  const buildSlot = (
+    mloIds: string[],
+    purpose: 'formative' | 'module_summative',
+    rotationIndex: number
+  ): AssessmentSlot => {
     const levels = mloIds.map((id) => levelOf.get(id) || 'understand');
     // The format follows the level THIS assessment has to evidence, not the module's
     // highest: an assessment carrying only the understand-level outcome is legitimately a
@@ -312,8 +305,26 @@ export function planFormativeFormats(
     const suited = (FORMATS_BY_BLOOM[bloom] || []).filter((f) => allowed.includes(f));
     if (suited.length === 0) unsuitedLevels.push(bloom);
     const pool = suited.length > 0 ? suited : allowed;
-    return { format: pool[(rotation + i) % pool.length], mloIds, bloom, purpose };
-  });
+    return { format: pool[(rotation + rotationIndex) % pool.length], mloIds, bloom, purpose };
+  };
+
+  // `count` is the number of FORMATIVE activities — the author's "formative per module"
+  // setting means what it says. The summative is an ADDITIONAL slot, not the last formative
+  // slot repurposed: making it consume one of the count meant an author who configured two
+  // formative activities per module received one, and the programme's reviewer noticed the
+  // missing one immediately. OTHM: the summative "evaluates achievement against learning
+  // outcomes and assessment criteria" — against all of them, so it carries the module's
+  // whole outcome set while each formative takes a subset.
+  // "Formative only" must mean exactly that: no summative slot at all.
+  const includeSummative = opts?.includeSummative !== false;
+  const slots: AssessmentSlot[] = mloSlots
+    .slice(0, count)
+    .map((subset, i) => buildSlot(subset, 'formative', i));
+  if (includeSummative) {
+    slots.push(
+      buildSlot(allMloIds.length ? allMloIds : mloSlots[0] || [], 'module_summative', count)
+    );
+  }
 
   const warning = unsuitedLevels.length
     ? `Module "${module?.title || module?.id}" has outcomes at Bloom level "${[...new Set(unsuitedLevels)].join(', ')}", which none of the permitted formative formats (${allowed.join(', ')}) can evidence. Consider allowing mini-case exercises or practice simulations.`
