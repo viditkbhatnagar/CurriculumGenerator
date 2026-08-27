@@ -649,3 +649,40 @@ export function isDescriptionOnly(deliverable: string): boolean {
   const text = String(deliverable || '').toLowerCase();
   return DESCRIPTION_HEDGES.some((hedge) => hedge.test(text));
 }
+
+/**
+ * Modules that came back with fewer formative activities than the author configured.
+ *
+ * A formative slot that fails is kept as a partial success — the module still has its
+ * graded summative, so nothing throws and nothing is recorded. That is precisely how a
+ * module ends up showing one formative activity where two were asked for, which is what the
+ * programme's reviewer found when she opened the two sample modules. Counting them is the
+ * only way the shortfall is visible without reading the document.
+ */
+export function formativeShortfalls(
+  assessments: any[],
+  modules: any[],
+  formativePerModule: number
+): { moduleId: string; moduleTitle?: string; expected: number; found: number }[] {
+  if (!formativePerModule || formativePerModule < 1) return [];
+  const shortfalls: { moduleId: string; moduleTitle?: string; expected: number; found: number }[] =
+    [];
+  for (const module of modules || []) {
+    const id = String(module?.id ?? '');
+    if (!id) continue;
+    const records = (assessments || []).filter((a: any) => a?.moduleId === id);
+    // A module generated before `purpose` existed has no formative activity at all, and
+    // reporting all 46 of those as shortfalls would bury the ones that genuinely failed.
+    if (!records.some((a: any) => a?.purpose)) continue;
+    const found = records.filter((a: any) => a?.purpose === 'formative').length;
+    if (found < formativePerModule) {
+      shortfalls.push({
+        moduleId: id,
+        moduleTitle: module?.title,
+        expected: formativePerModule,
+        found,
+      });
+    }
+  }
+  return shortfalls;
+}

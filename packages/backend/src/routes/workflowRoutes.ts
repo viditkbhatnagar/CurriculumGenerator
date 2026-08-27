@@ -5851,6 +5851,18 @@ router.post('/:id/step13', validateJWT, loadUser, async (req: Request, res: Resp
       });
     }
 
+    // Step 7 owns the assessment design, so decide here whether it calls for an exam at all.
+    // The same check runs inside processStep13, but a verdict that will never change should
+    // not be discovered inside a queued job that then retries it and writes a failure the
+    // author has to go looking for.
+    if (!workflowService.step7SpecifiesExam(existingWorkflow)) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "Step 7's assessment design does not specify an exam, so there is no exam for Step 13 to generate. Each module is already graded by its own summative. If the programme should also end in an exam, say so in Step 7 (summative format or components) and regenerate.",
+      });
+    }
+
     // Optional target market set on the Step 13 screen — persist it so the exam
     // generator localises (currency, law, brands, spelling). Stored under the
     // Step 7 assessment preferences (the exam already reads it from there), so

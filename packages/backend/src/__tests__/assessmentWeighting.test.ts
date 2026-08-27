@@ -33,7 +33,7 @@ describe('applyAssessmentWeightings', () => {
   it('weights ungraded formative activity at nil, not at half a module', () => {
     const formative: WeightableAssessment = { moduleId: 'M1', purpose: 'formative', graded: false };
     const summative: WeightableAssessment = { moduleId: 'M1', graded: true, maxMarks: 40 };
-    applyAssessmentWeightings([formative, summative], [], { formative: 30, summative: 70 });
+    applyAssessmentWeightings([formative, summative], []);
     expect(formative.weighting).toBe(0);
     expect(summative.weighting).toBe(100);
   });
@@ -41,7 +41,7 @@ describe('applyAssessmentWeightings', () => {
   it('shares a module mark between its graded assessments in proportion to marks', () => {
     const a: WeightableAssessment = { moduleId: 'M1', graded: true, maxMarks: 30 };
     const b: WeightableAssessment = { moduleId: 'M1', graded: true, maxMarks: 10 };
-    applyAssessmentWeightings([a, b], [], { formative: 30, summative: 70 });
+    applyAssessmentWeightings([a, b], []);
     expect(a.weighting).toBe(75);
     expect(b.weighting).toBe(25);
     expect((a.weighting || 0) + (b.weighting || 0)).toBe(100);
@@ -52,10 +52,7 @@ describe('applyAssessmentWeightings', () => {
     // with 47 entries in the totals array, one of which was not a module.
     const moduleWork = [{ moduleId: 'M1', graded: true, maxMarks: 20 }];
     const final = [{ maxMarks: 100 }];
-    const totals = applyAssessmentWeightings(moduleWork, final, {
-      formative: 30,
-      summative: 70,
-    });
+    const totals = applyAssessmentWeightings(moduleWork, final);
     expect(totals.map((t) => t.moduleId).sort()).toEqual(['M1', 'course-level']);
     expect(totals.find((t) => t.moduleId === 'unassigned')).toBeUndefined();
   });
@@ -67,8 +64,7 @@ describe('applyAssessmentWeightings', () => {
         { moduleId: 'M1', graded: true, maxMarks: 20 },
         { moduleId: 'M2', graded: true, maxMarks: 15 },
       ],
-      [{ maxMarks: 100 }],
-      { formative: 30, summative: 70 }
+      [{ maxMarks: 100 }]
     );
     expect(weightingsAreComplete(totals)).toBe(true);
   });
@@ -84,8 +80,7 @@ describe('applyAssessmentWeightings', () => {
     // and `weightingsAreComplete` would report completeness over the modules that survived.
     const totals = applyAssessmentWeightings(
       [{ moduleId: 'M9', purpose: 'formative', graded: false }],
-      [],
-      { formative: 30, summative: 70 }
+      []
     );
     expect(totals).toEqual([{ moduleId: 'M9', total: 0 }]);
     expect(weightingsAreComplete(totals)).toBe(false);

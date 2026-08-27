@@ -19,6 +19,7 @@ import {
   normaliseBloom,
   requiredArtefacts,
   statedBloom,
+  formativeShortfalls,
   normaliseQuestionType,
   planFormativeFormats,
   questionPlanForBloom,
@@ -477,5 +478,48 @@ describe('auditProgrammeBloom — honest denominators', () => {
     expect(report.checkableQuestions).toBe(1);
     expect(report.unstatedQuestions).toBe(1);
     expect(report.distribution.understand).toBe(0);
+  });
+});
+
+describe('formativeShortfalls', () => {
+  const modules = [
+    { id: 'M1', title: 'One', mlos: [mlo('LO1', 'apply')] },
+    { id: 'M2', title: 'Two', mlos: [mlo('LO2', 'apply')] },
+  ];
+
+  it('names a module that came back with fewer formatives than configured', () => {
+    // A failed formative slot is kept as a partial success — the module still has its
+    // summative, so nothing throws. That is exactly how a module ends up showing one
+    // activity where two were asked for, which is what the reviewer found.
+    const assessments = [
+      { moduleId: 'M1', purpose: 'formative' },
+      { moduleId: 'M1', purpose: 'module_summative' },
+      { moduleId: 'M2', purpose: 'formative' },
+      { moduleId: 'M2', purpose: 'formative' },
+      { moduleId: 'M2', purpose: 'module_summative' },
+    ];
+    const gaps = formativeShortfalls(assessments, modules, 2);
+    expect(gaps).toEqual([{ moduleId: 'M1', moduleTitle: 'One', expected: 2, found: 1 }]);
+  });
+
+  it('reports nothing when every module has its full complement', () => {
+    const assessments = modules.flatMap((m) => [
+      { moduleId: m.id, purpose: 'formative' },
+      { moduleId: m.id, purpose: 'formative' },
+      { moduleId: m.id, purpose: 'module_summative' },
+    ]);
+    expect(formativeShortfalls(assessments, modules, 2)).toEqual([]);
+  });
+
+  it('ignores modules generated before the distinction existed', () => {
+    // Those hold two graded records and no formative activity at all. Reporting all of them
+    // as shortfalls would bury the modules that genuinely failed.
+    const legacy = [
+      { moduleId: 'M1', maxMarks: 12 },
+      { moduleId: 'M1', maxMarks: 12 },
+      { moduleId: 'M2', maxMarks: 12 },
+      { moduleId: 'M2', maxMarks: 12 },
+    ];
+    expect(formativeShortfalls(legacy, modules, 2)).toEqual([]);
   });
 });

@@ -3111,6 +3111,7 @@ CRITICAL VALIDATION:
     weightsSum100: boolean;
     bloomFloorMet: boolean;
     assessments: number;
+    formativeGaps: number;
   }> {
     const step7 = workflow.step7 as any;
     if (!step7) throw new Error('Step 7 has no data to recompute');
@@ -3119,11 +3120,19 @@ CRITICAL VALIDATION:
     const summatives = step7.summativeAssessments || [];
     const weightages = step7.userPreferences?.weightages;
 
-    const totals = applyAssessmentWeightings(all, summatives, weightages);
+    const totals = applyAssessmentWeightings(all, summatives);
 
-    const { auditProgrammeBloom } = await import('./assessmentGeneratorService');
+    const { auditProgrammeBloom, formativeShortfalls } = await import(
+      './assessmentGeneratorService'
+    );
     const bloomReport = auditProgrammeBloom(all, ((workflow.step4 as any)?.modules || []) as any[]);
     step7.bloomReport = bloomReport;
+
+    const formativeGaps = formativeShortfalls(
+      all,
+      ((workflow.step4 as any)?.modules || []) as any[],
+      Number(step7.userPreferences?.formativePerModule) || 0
+    );
 
     const weightsSum100 = weightingsAreComplete(totals);
     step7.validation = {
@@ -3132,7 +3141,9 @@ CRITICAL VALIDATION:
         all.length > 0 && all.every((f: any) => (f.alignedMLOs || []).length > 0),
       weightsSum100,
       bloomFloorMet: bloomReport.floorMet,
+      formativeCountMet: formativeGaps.length === 0,
     };
+    step7.formativeGaps = formativeGaps;
 
     workflow.markModified('step7.formativeAssessments');
     workflow.markModified('step7');
@@ -3145,7 +3156,12 @@ CRITICAL VALIDATION:
       bloomFloorMet: bloomReport.floorMet,
     });
 
-    return { weightsSum100, bloomFloorMet: bloomReport.floorMet, assessments: all.length };
+    return {
+      weightsSum100,
+      bloomFloorMet: bloomReport.floorMet,
+      assessments: all.length,
+      formativeGaps: formativeGaps.length,
+    };
   }
 
   async regenerateStep7Modules(
@@ -3334,8 +3350,7 @@ CRITICAL VALIDATION:
     // an awarding body checks.
     const weightingTotals = applyAssessmentWeightings(
       assessmentResponse.formativeAssessments as any[],
-      assessmentResponse.summativeAssessments as any[],
-      (userPreferences as any).weightages
+      assessmentResponse.summativeAssessments as any[]
     );
     let weightsSum100 = weightingsAreComplete(weightingTotals);
 
@@ -3369,11 +3384,24 @@ CRITICAL VALIDATION:
     // Until this existed the Bloom floor was an instruction in a prompt and nothing more:
     // the taxonomy order was consulted in exactly one place in the whole backend, to pick a
     // format, and the author found the gap by reading the exported document.
-    const { auditProgrammeBloom } = await import('./assessmentGeneratorService');
+    const { auditProgrammeBloom, formativeShortfalls } = await import(
+      './assessmentGeneratorService'
+    );
     const bloomReport = auditProgrammeBloom(
       assessmentResponse.formativeAssessments as any[],
       ((workflow.step4 as any)?.modules || []) as any[]
     );
+    const formativeGaps = formativeShortfalls(
+      assessmentResponse.formativeAssessments as any[],
+      ((workflow.step4 as any)?.modules || []) as any[],
+      Number(userPreferences.formativePerModule) || 0
+    );
+    if (formativeGaps.length > 0) {
+      loggingService.warn('Step 7: modules with fewer formative activities than configured', {
+        workflowId,
+        gaps: formativeGaps,
+      });
+    }
     if (!bloomReport.floorMet) {
       loggingService.warn('Step 7: assessments below the Bloom level of their outcomes', {
         workflowId,
@@ -3394,6 +3422,10 @@ CRITICAL VALIDATION:
       allModulesCovered: modulesExpected > 0 && modulesCovered === modulesExpected,
       // Whether every assessment reaches the Bloom level its own outcomes demand.
       bloomFloorMet: bloomReport.floorMet,
+      // Whether every module got the number of formative activities the author configured.
+      // A failed formative slot is kept as a partial success, so without this a module
+      // silently returns one activity where two were asked for.
+      formativeCountMet: formativeGaps.length === 0,
     };
 
     // Store in workflow
@@ -3710,11 +3742,24 @@ CRITICAL VALIDATION:
     // Until this existed the Bloom floor was an instruction in a prompt and nothing more:
     // the taxonomy order was consulted in exactly one place in the whole backend, to pick a
     // format, and the author found the gap by reading the exported document.
-    const { auditProgrammeBloom } = await import('./assessmentGeneratorService');
+    const { auditProgrammeBloom, formativeShortfalls } = await import(
+      './assessmentGeneratorService'
+    );
     const bloomReport = auditProgrammeBloom(
       assessmentResponse.formativeAssessments as any[],
       ((workflow.step4 as any)?.modules || []) as any[]
     );
+    const formativeGaps = formativeShortfalls(
+      assessmentResponse.formativeAssessments as any[],
+      ((workflow.step4 as any)?.modules || []) as any[],
+      Number(userPreferences.formativePerModule) || 0
+    );
+    if (formativeGaps.length > 0) {
+      loggingService.warn('Step 7: modules with fewer formative activities than configured', {
+        workflowId,
+        gaps: formativeGaps,
+      });
+    }
     if (!bloomReport.floorMet) {
       loggingService.warn('Step 7: assessments below the Bloom level of their outcomes', {
         workflowId,
@@ -3735,6 +3780,10 @@ CRITICAL VALIDATION:
       allModulesCovered: modulesExpected > 0 && modulesCovered === modulesExpected,
       // Whether every assessment reaches the Bloom level its own outcomes demand.
       bloomFloorMet: bloomReport.floorMet,
+      // Whether every module got the number of formative activities the author configured.
+      // A failed formative slot is kept as a partial success, so without this a module
+      // silently returns one activity where two were asked for.
+      formativeCountMet: formativeGaps.length === 0,
     };
 
     // Update validation
@@ -4921,6 +4970,48 @@ CRITICAL VALIDATION:
   /**
    * Process Step 12: Generate Assignment Packs for all modules (full sync)
    */
+  /**
+   * The Step 7 module summative that Step 12's pack is the learner-facing form of.
+   *
+   * Step 7 is the authoritative assessment design: generating packs blind produced a second,
+   * independently invented graded assignment per module, and the programme's reviewer asked
+   * which one was real.
+   *
+   * A module generated before `purpose` existed holds two graded records and neither is
+   * marked as the summative, so the one covering the module's whole outcome set is preferred,
+   * then the one carrying the most marks. Where neither stands out, nothing is returned and
+   * Step 12 generates as it did before — anointing an arbitrary half of a module's assessment
+   * as "the approved summative" would be worse than not converting at all.
+   */
+  private approvedSummativeFor(workflow: ICurriculumWorkflow, module: any): any | undefined {
+    const records: any[] = ((workflow.step7 as any)?.formativeAssessments || []).filter(
+      (a: any) => a?.moduleId === module?.id
+    );
+    if (records.length === 0) return undefined;
+
+    const marked = records.find((a: any) => a?.purpose === 'module_summative');
+    if (marked) return marked;
+
+    const legacy = records.filter((a: any) => a?.purpose === undefined && a?.graded !== false);
+    if (legacy.length === 1) return legacy[0];
+    if (legacy.length === 0) return undefined;
+
+    const moduleMloIds = new Set(
+      (module?.mlos || []).map((m: any) => String(m?.id)).filter(Boolean)
+    );
+    const coversAll = legacy.filter(
+      (a: any) =>
+        moduleMloIds.size > 0 &&
+        (a.alignedMLOs || []).length >= moduleMloIds.size &&
+        [...moduleMloIds].every((id) => (a.alignedMLOs || []).map(String).includes(id))
+    );
+    if (coversAll.length === 1) return coversAll[0];
+
+    const byMarks = [...legacy].sort((a, b) => (b.maxMarks || 0) - (a.maxMarks || 0));
+    if ((byMarks[0]?.maxMarks || 0) > (byMarks[1]?.maxMarks || 0)) return byMarks[0];
+    return undefined;
+  }
+
   async processStep12(workflowId: string): Promise<ICurriculumWorkflow> {
     const workflow = await CurriculumWorkflow.findById(workflowId);
     if (!workflow || !workflow.step11) {
@@ -4935,21 +5026,8 @@ CRITICAL VALIDATION:
 
     const moduleAssignmentPacks: any[] = [];
 
-    // Step 7 is the authoritative assessment design: Step 12's packs are the learner-facing
-    // form of the module summative already approved there, not a second, independently
-    // invented assessment. Generating them blind produced exactly that — 46 modules each
-    // holding one graded assessment in Step 7 and a different graded assignment in Step 12,
-    // and the programme's reviewer asked which one was real.
-    const step7Records: any[] = (workflow.step7 as any)?.formativeAssessments || [];
-    const summativeFor = (moduleId: string) =>
-      step7Records.find(
-        (a: any) =>
-          a?.moduleId === moduleId &&
-          (a?.purpose === 'module_summative' || (a?.purpose === undefined && a?.graded !== false))
-      );
-
     for (const mod of modules) {
-      const approved = summativeFor(mod.id);
+      const approved = this.approvedSummativeFor(workflow, mod);
       const moduleContext = {
         moduleId: mod.id,
         // step4.modules[] uses `code`; some legacy/intermediate shapes use `moduleCode`.
@@ -5092,6 +5170,11 @@ CRITICAL VALIDATION:
           expectedModuleIndex + 1
       ).padStart(2, '0')}`;
 
+    // Every Step 12 run in production comes through here — the queue and both routes call
+    // this method, not processStep12. Wiring the approved summative into that one and not
+    // this one left the change inert on every reachable path.
+    const approvedForModule = this.approvedSummativeFor(workflow, moduleToProcess);
+
     const moduleContext = {
       moduleId: moduleToProcess.id,
       moduleCode: resolvedModuleCode,
@@ -5105,6 +5188,18 @@ CRITICAL VALIDATION:
       totalHours: moduleToProcess.totalHours,
       contactHours: moduleToProcess.contactHours,
       independentHours: moduleToProcess.independentHours ?? moduleToProcess.selfStudyHours,
+      approvedSummative: approvedForModule
+        ? {
+            title: approvedForModule.title,
+            assessmentType: approvedForModule.assessmentType,
+            description: approvedForModule.description,
+            maxMarks: approvedForModule.maxMarks,
+            alignedMLOs: approvedForModule.alignedMLOs || [],
+            studentBrief: approvedForModule.studentBrief,
+            markingGuide: approvedForModule.markingGuide,
+            rubric: approvedForModule.rubric,
+          }
+        : undefined,
     };
 
     // Write initial generation progress so the frontend can show variant-by-variant status
@@ -5288,6 +5383,32 @@ CRITICAL VALIDATION:
    * Process Step 13: Generate Summative Exam Package
    * Single generation (not module-by-module)
    */
+  /**
+   * Whether Step 7's assessment design calls for an exam at all.
+   *
+   * Each module is graded by its own summative, so a programme-level exam is an addition,
+   * not a default — and generating one unconditionally gave every programme a second
+   * course-wide summative that nothing reconciled with the one Step 7 already held.
+   *
+   * The format is a stored enum and is compared as one. The free-text fields are matched on
+   * whole words only: without boundaries "example", "latest" and "greatest" all counted as
+   * an exam, so an author's prose could open the gate by accident.
+   */
+  step7SpecifiesExam(workflow: ICurriculumWorkflow): boolean {
+    const prefs: any = (workflow.step7 as any)?.userPreferences || {};
+    const format = String(prefs.summativeFormat ?? '');
+    if (format === 'mcq_exam' || format === 'mixed_format') return true;
+
+    const mentionsExam = (v: unknown) =>
+      /\b(exams?|examinations?|tests?|mcqs?)\b/i.test(String(v ?? ''));
+    if (mentionsExam(prefs.userDefinedSummativeDescription)) return true;
+
+    const components: any[] = ((workflow.step7 as any)?.summativeAssessments || []).flatMap(
+      (sa: any) => sa?.components || []
+    );
+    return components.some((c) => mentionsExam(c?.componentType) || mentionsExam(c?.name));
+  }
+
   async processStep13(
     workflowId: string,
     onProgress?: (pct: number) => void
@@ -5295,20 +5416,12 @@ CRITICAL VALIDATION:
     // Step 7 owns the assessment design; Step 13 renders an exam only where that design
     // actually specifies one. Left ungated it generated a second course-wide summative for
     // every programme, alongside the one Step 7 already holds, with nothing reconciling the
-    // two — the reviewer's instruction is that Step 7 is authoritative and an exam exists
-    // only where it says so.
+    // two. The route checks this too, so the author gets an immediate answer rather than a
+    // queued job failing on a verdict that will never change; this is the backstop for the
+    // sync-fallback and worker paths.
     {
       const wf = await CurriculumWorkflow.findById(workflowId);
-      const prefs: any = (wf?.step7 as any)?.userPreferences || {};
-      const components: any[] = ((wf?.step7 as any)?.summativeAssessments || []).flatMap(
-        (sa: any) => sa?.components || []
-      );
-      const mentionsExam = (v: unknown) => /exam|test\b|mcq/i.test(String(v ?? ''));
-      const examSpecified =
-        mentionsExam(prefs.summativeFormat) ||
-        mentionsExam(prefs.userDefinedSummativeDescription) ||
-        components.some((c) => mentionsExam(c?.componentType) || mentionsExam(c?.name));
-      if (!examSpecified) {
+      if (wf && !this.step7SpecifiesExam(wf)) {
         throw new Error(
           "Step 7's assessment design does not specify an exam, so there is no exam for Step 13 to generate. If the programme should end in an exam, say so in Step 7 (summative format or components) and regenerate."
         );

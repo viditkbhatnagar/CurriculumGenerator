@@ -229,9 +229,17 @@ ${module.approvedSummative.markingGuide ? `Marking guide: ${JSON.stringify(modul
 ${module.approvedSummative.rubric ? `Rubric: ${JSON.stringify(module.approvedSummative.rubric)}` : ''}
 
 This assignment pack is the learner-facing form of the assessment above, adapted for
-${variantLabel} delivery. Keep the task, the assessed outcomes, the mark total and the rubric
-criteria; adapt only what the delivery mode requires (setting, submission logistics,
-supervision, timing). Do NOT change what is being assessed or how it is marked.
+${variantLabel} delivery. Adapt only what the delivery mode requires (setting, submission
+logistics, supervision, timing). Do NOT change what is being assessed or how it is marked.
+
+Binding constraints, which override the general guidance below:
+- "assessedOutcomes" MUST be exactly these outcome ids, no more and no fewer: ${(module.approvedSummative.alignedMLOs || []).join(', ') || 'as listed in the module outcomes above'}
+- "overview.weighting" MUST be 100 — this is the module's sole summative assessment and
+  carries the whole module grade. Do not invent a percentage.
+- "overview.assignmentType" MUST describe the approved assessment's own type${module.approvedSummative.assessmentType ? ` (${module.approvedSummative.assessmentType})` : ''}, not a different one.
+- The rubric criteria MUST correspond to the approved rubric's criteria, in the same
+  proportions. You may reword a descriptor for the delivery mode; you may not add, drop or
+  re-weight a criterion.
 `
       : '';
 

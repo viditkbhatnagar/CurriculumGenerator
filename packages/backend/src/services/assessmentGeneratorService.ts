@@ -115,6 +115,7 @@ export {
   deriveTargetBloomLevels,
   auditAssessmentBloom,
   auditProgrammeBloom,
+  formativeShortfalls,
   normaliseQuestionType,
   TASK_SHAPES_BY_BLOOM,
 } from './bloomTaxonomy';
@@ -553,7 +554,18 @@ export class AssessmentGeneratorService {
       (assignedSlot?.mloIds || []).includes(String(mlo?.id))
     );
     const slotBloom = assignedSlot?.bloom || plan.highestBloom;
-    const questionPlan = questionPlanForBloom(slotBloom);
+    // The count is set by the outcome level, but it cannot sit below the number of outcomes
+    // this assessment carries: rule 6 requires every outcome evidenced by at least one task,
+    // and the module summative carries ALL of them — a create-level summative over four
+    // outcomes told to produce "2-4 tasks, not negotiable upward" was being ordered to break
+    // one rule or the other.
+    const levelPlan = questionPlanForBloom(slotBloom);
+    const outcomeFloor = (assignedSlot?.mloIds || []).length || 1;
+    const questionPlan = {
+      ...levelPlan,
+      min: Math.max(levelPlan.min, outcomeFloor),
+      max: Math.max(levelPlan.max, outcomeFloor),
+    };
     const slotArtefacts = requiredArtefacts({ mlos: slotMlos });
     // Formative activity is ungraded by definition; the module's summative is what carries
     // the marks. Both used to be generated as graded artefacts and filed under "formative",
@@ -1083,10 +1095,14 @@ ${request.userPreferences.summativeFormat === 'user_defined' ? `- Custom Descrip
 - Higher-Order PLO Policy: ${request.userPreferences.higherOrderPloPolicy}
 ${request.userPreferences.higherOrderPloRules ? `- Higher-Order Rules: ${request.userPreferences.higherOrderPloRules}` : ''}
 
-**Weightages:**
-${Object.entries(request.userPreferences.weightages)
-  .map(([key, value]) => `- ${key}: ${value}%`)
-  .join('\n')}
+**Grading model:**
+- Each module is graded independently by its own summative assessment.
+- This programme-level assessment applies only where the university requires an overall
+  assessment IN ADDITION to the module grades.
+- Do NOT state or imply that it carries a fixed percentage of the programme grade, and do NOT
+  describe the module assessments as a percentage pool. The stored formative/summative
+  numbers are legacy preference keys, not a programme split, and the programme's reviewer
+  rejected that reading explicitly.
 
 **Certification Style Influence:**
 ${

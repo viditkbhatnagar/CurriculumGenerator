@@ -3,12 +3,14 @@
  *
  * Computed here rather than asked of the model. A language model given "make the weights
  * sum to 100" produces numbers that nearly do, inconsistently, and the one thing an
- * awarding body will check is that they sum exactly. The inputs are already present and
- * unambiguous: the author's chosen formative/summative split (30/70 on the Business
- * Administration programme) and each assessment's mark total.
+ * awarding body will check is that they sum exactly.
  *
- * Marks were being generated all along; only the percentages were missing, so this needs
- * no regeneration to apply to work already produced.
+ * Each module is graded independently: its graded assessments share that module's own 100%
+ * in proportion to their marks, and ungraded formative activity carries nil. There is no
+ * programme-level pool. The earlier reading — all module work sharing 30% and a single final
+ * taking 70% — was rejected by the programme's reviewer: "each credit-bearing module should
+ * have its own module grade and the overall programme result should be built from those
+ * module results."
  */
 
 export interface WeightableAssessment {
@@ -20,15 +22,14 @@ export interface WeightableAssessment {
   purpose?: string;
 }
 
+/**
+ * Legacy preference keys, retained only because stored documents contain them.
+ *
+ * They described a programme-level pool that is not the grading model and that nothing in
+ * this module reads. Kept out of the arithmetic rather than reinterpreted.
+ */
 export interface WeightageSplit {
-  /**
-   * Share of the programme mark carried by the module assessments, collectively.
-   *
-   * Named `formative` because that is the key the author's stored preferences already use;
-   * it never meant "the weight of ungraded activity", which by definition is nil.
-   */
   formative?: number;
-  /** Share of the programme mark carried by the final, course-level summative. */
   summative?: number;
 }
 
@@ -80,18 +81,17 @@ function distribute(assessments: WeightableAssessment[], pool: number): void {
  * strategy table above them said formatives were worth 30%. Two numbers from two sources,
  * never reconciled.
  *
- * The configured split is between the MODULE assessments and the FINAL summative, not
- * between graded and ungraded work. The old code applied it only when a module held both a
- * formative and a summative, which no module ever did — `module_level` summatives are
- * declared in the types and generated nowhere — so the branch carrying the author's 30/70
- * had never executed for any programme the system can produce.
+ * There is no programme-level split to apply. The old code carried one and applied it only
+ * when a module held both a formative and a summative, which no module ever did —
+ * `module_level` summatives were declared in the types and generated nowhere — so that
+ * branch had never executed for any programme the system can produce, and the reviewer then
+ * rejected the model it encoded.
  *
  * Mutates the assessments and returns a per-group total for verification.
  */
 export function applyAssessmentWeightings(
   moduleAssessments: WeightableAssessment[],
-  courseSummatives: WeightableAssessment[],
-  weightages: WeightageSplit | undefined
+  courseSummatives: WeightableAssessment[]
 ): { moduleId: string; total: number }[] {
   const totals: { moduleId: string; total: number }[] = [];
 

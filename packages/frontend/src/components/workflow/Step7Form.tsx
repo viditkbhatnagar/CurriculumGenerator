@@ -600,10 +600,12 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
       // Default split
       setFormData((prev) => ({
         ...prev,
-        weightages: {
-          formative: prev.weightages.formative || 30,
-          summative: prev.weightages.summative || 70,
-        },
+        // Reset outright rather than ||-merging the previous pair. Merging kept a truthy
+        // 100 from "formative only" and turned a falsy 0 into 70, so toggling away and back
+        // left the two summing to 170 — and with the weightage inputs gone there was no
+        // control left that could bring it back to 100, so Generate stayed disabled behind a
+        // warning about fields that no longer exist.
+        weightages: { formative: 30, summative: 70 },
       }));
     }
   }, [formData.assessmentStructure]);

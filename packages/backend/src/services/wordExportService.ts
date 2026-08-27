@@ -1273,7 +1273,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   private async generateStep7Section(
     step7: any,
     contentChildren: any[],
-    step4?: any
+    step4?: any,
+    step1Credits?: any
   ): Promise<void> {
     const moduleLabels = this.buildModuleLabels(step4);
     // The Bloom level of every outcome in the programme, so an assessment can be printed
@@ -1303,16 +1304,24 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     const formativeActivities = allModuleAssessments.filter(isFormativeActivity);
     const moduleSummatives = allModuleAssessments.filter((a) => !isFormativeActivity(a));
 
-    // The programme result is credit-weighted, so say what the credits are. Both credit
-    // keys appear in stored step4 data depending on which path wrote the module.
+    // The stored value is an enum key ('mixed_format'), which is not what a validator should
+    // be reading in a submitted document.
+    const humaniseFormat = (v: unknown): string =>
+      String(v ?? '')
+        .replace(/[_-]+/g, ' ')
+        .trim() || 'format not stated';
+
+    // The programme's credit total is the STUDENT LOAD, taken from step1 — not the sum of
+    // every module in step4. On a programme with elective tracks those differ and the sum is
+    // the larger, wrong number: this one carries 46 modules totalling 276 credits, of which
+    // any student takes 180. Printing 276 would misstate the award.
     const step4Modules: any[] = step4?.modules || [];
-    const totalCredits = step4Modules.reduce(
-      (sum: number, m: any) => sum + (Number(m?.credits ?? m?.creditValue) || 0),
-      0
-    );
-    const creditSummary = step4Modules.length
-      ? `${step4Modules.length} modules${totalCredits ? `, ${totalCredits} credits in total` : ''}`
-      : '';
+    const programmeCredits = Number(step1Credits?.credits) || 0;
+    const creditSummary = programmeCredits
+      ? `${programmeCredits} credits, delivered across ${step4Modules.length} module(s)`
+      : step4Modules.length
+        ? `${step4Modules.length} module(s)`
+        : '';
 
     // One renderer for both purposes. The graded apparatus — marks, weighting, the
     // marking guide and the rubric — is printed only where it exists, so an ungraded
@@ -1559,7 +1568,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             children: [
               this.createTableCell('Grading model'),
               this.createTableCell(
-                'Each module is graded independently. Formative activities are ungraded; the module summative assessment carries the module grade.'
+                moduleSummatives.length === 0
+                  ? 'All activity in this programme is ungraded formative: no module grade is produced.'
+                  : 'Each module is graded independently. Formative activities are ungraded; the module summative assessment carries the module grade.'
               ),
             ],
           }),
@@ -1567,7 +1578,11 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             children: [
               this.createTableCell('Programme result'),
               this.createTableCell(
-                `Built from the module results, weighted by credit${creditSummary ? ` (${creditSummary})` : ''}.`
+                moduleSummatives.length === 0
+                  ? step7.summativeAssessments?.length
+                    ? 'Carried entirely by the programme-level assessment below.'
+                    : 'No graded assessment is defined for this programme.'
+                  : `Built from the module results, weighted by credit${creditSummary ? ` (${creditSummary})` : ''}.`
               ),
             ],
           }),
@@ -1590,7 +1605,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
               this.createTableCell('Programme-level assessment'),
               this.createTableCell(
                 step7.summativeAssessments?.length
-                  ? `${step7.summativeAssessments.length} (${step7.summativeAssessments[0]?.format || 'format not stated'}) — applies only where the university requires an overall assessment in addition to the module grades`
+                  ? `${step7.summativeAssessments.length} (${humaniseFormat(step7.summativeAssessments[0]?.format)}) — applies only where the university requires an overall assessment in addition to the module grades`
                   : 'None'
               ),
             ],
@@ -3836,7 +3851,14 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       workflow.step7?.summativeAssessments?.length ||
       workflow.step7?.sampleQuestions
     ) {
-      addSection(7, (out) => this.generateStep7Section(workflow.step7, out, workflow.step4));
+      addSection(7, (out) =>
+        this.generateStep7Section(
+          workflow.step7,
+          out,
+          workflow.step4,
+          workflow.step1?.creditFramework
+        )
+      );
     }
     if (workflow.step8?.caseStudies?.length) {
       addSection(8, (out) => this.generateStep8Section(workflow.step8, out));
@@ -4070,7 +4092,12 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         await this.generateStep6Section(stepData, contentChildren, workflow.step4);
         break;
       case 7:
-        await this.generateStep7Section(stepData, contentChildren, workflow.step4);
+        await this.generateStep7Section(
+          stepData,
+          contentChildren,
+          workflow.step4,
+          (workflow as any).step1?.creditFramework
+        );
         break;
       case 8:
         await this.generateStep8Section(stepData, contentChildren);
