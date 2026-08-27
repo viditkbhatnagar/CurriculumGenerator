@@ -9,10 +9,12 @@ This document describes the health check endpoints available in the Curriculum G
 **Purpose:** Comprehensive health check that verifies all critical services.
 
 **Response Codes:**
+
 - `200` - System is healthy or degraded but operational
 - `503` - System is unhealthy and cannot serve requests
 
 **Response Format:**
+
 ```json
 {
   "status": "healthy" | "degraded" | "unhealthy",
@@ -42,6 +44,7 @@ This document describes the health check endpoints available in the Curriculum G
 ```
 
 **Checks Performed:**
+
 - MongoDB connection and response time
 - Redis connection and response time
 - System metrics (error rate, response time)
@@ -55,10 +58,12 @@ This document describes the health check endpoints available in the Curriculum G
 **Purpose:** Kubernetes-style readiness probe to determine if the service can handle requests.
 
 **Response Codes:**
+
 - `200` - Service is ready to accept traffic
 - `503` - Service is not ready (still initializing or dependencies unavailable)
 
 **Response Format:**
+
 ```json
 {
   "status": "ready",
@@ -67,6 +72,7 @@ This document describes the health check endpoints available in the Curriculum G
 ```
 
 **Checks Performed:**
+
 - MongoDB is connected and responsive
 - Redis is connected and responsive
 
@@ -79,10 +85,12 @@ This document describes the health check endpoints available in the Curriculum G
 **Purpose:** Kubernetes-style liveness probe to determine if the service is alive.
 
 **Response Codes:**
+
 - `200` - Service is alive
 - `503` - Service is dead (should be restarted)
 
 **Response Format:**
+
 ```json
 {
   "status": "alive",
@@ -92,6 +100,7 @@ This document describes the health check endpoints available in the Curriculum G
 ```
 
 **Checks Performed:**
+
 - Process is running and responding
 
 **Use Case:** Container orchestration liveness probes
@@ -103,9 +112,11 @@ This document describes the health check endpoints available in the Curriculum G
 **Purpose:** Retrieve system metrics for monitoring and alerting.
 
 **Query Parameters:**
+
 - `window` - Time window in milliseconds (default: 3600000 = 1 hour)
 
 **Response Format:**
+
 ```json
 {
   "timestamp": "2025-10-28T12:00:00.000Z",
@@ -117,7 +128,7 @@ This document describes the health check endpoints available in the Curriculum G
     "avgResponseTime": 250
   },
   "llm": {
-    "totalCost": 12.50
+    "totalCost": 12.5
   },
   "cache": {
     "hitRate": 0.85
@@ -137,6 +148,7 @@ This document describes the health check endpoints available in the Curriculum G
 **Purpose:** Get service status and configuration information.
 
 **Response Format:**
+
 ```json
 {
   "timestamp": "2025-10-28T12:00:00.000Z",
@@ -171,21 +183,27 @@ This is already configured in the `render.yaml` file for the backend API service
 ## Health Status Definitions
 
 ### Healthy
+
 All services are operational and performing within acceptable parameters:
+
 - Database response time < 1000ms
 - Cache response time < 500ms
 - Error count < 10 in last 5 minutes
 - Average response time < 2000ms
 
 ### Degraded
+
 Services are operational but performance is suboptimal:
+
 - Database response time > 1000ms
 - Cache response time > 500ms
 - Error count > 10 in last 5 minutes
 - Average response time > 2000ms
 
 ### Unhealthy
+
 Critical services are not operational:
+
 - MongoDB is not connected
 - Redis is not responding (non-critical, but logged)
 
@@ -224,12 +242,14 @@ curl https://your-api.onrender.com/status
 ### Health Check Returns 503
 
 **Possible Causes:**
+
 1. MongoDB connection failed - Check `MONGODB_URI` environment variable
 2. Redis connection failed - Check `REDIS_URL` environment variable
 3. High error rate - Check application logs for errors
 4. Slow response times - Check database performance and query optimization
 
 **Resolution Steps:**
+
 1. Check Render logs for error messages
 2. Verify environment variables are set correctly
 3. Check MongoDB Atlas network access whitelist
@@ -239,11 +259,13 @@ curl https://your-api.onrender.com/status
 ### Health Check Times Out
 
 **Possible Causes:**
+
 1. Database query is hanging
 2. Network connectivity issues
 3. Service is overloaded
 
 **Resolution Steps:**
+
 1. Check MongoDB Atlas status
 2. Verify network connectivity between Render and MongoDB Atlas
 3. Scale up service resources if needed
@@ -252,16 +274,21 @@ curl https://your-api.onrender.com/status
 ## Integration with Monitoring Tools
 
 ### Sentry
+
 Error tracking is automatically integrated. Errors are captured and sent to Sentry if `SENTRY_DSN` is configured.
 
 ### Custom Monitoring
+
 Use the `/metrics` endpoint to integrate with custom monitoring solutions:
+
 - Poll metrics at regular intervals
 - Store metrics in time-series database
 - Create dashboards and alerts based on metrics
 
 ### Render Monitoring
+
 Render provides built-in monitoring:
+
 - Service logs
 - Resource usage (CPU, memory)
 - Request metrics

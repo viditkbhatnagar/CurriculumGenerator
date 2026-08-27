@@ -3,6 +3,7 @@
 ## 🎯 Overview
 
 This guide will help you test the complete curriculum generator application, including:
+
 - Backend API (Node.js + MongoDB)
 - Frontend UI (Next.js + React)
 - End-to-end curriculum generation workflow
@@ -10,6 +11,7 @@ This guide will help you test the complete curriculum generator application, inc
 ## 📋 Prerequisites
 
 Before testing, ensure:
+
 - ✅ MongoDB Atlas is connected
 - ✅ Backend server is running
 - ✅ Environment variables are configured
@@ -23,6 +25,7 @@ npm run dev
 ```
 
 **Expected output:**
+
 ```
 MongoDB connected successfully
 Server started successfully
@@ -31,6 +34,7 @@ apiUrl: http://localhost:4000
 ```
 
 **Verify backend is running:**
+
 - Open http://localhost:4000/health in browser
 - Should see: `"database": {"status": "healthy"}`
 
@@ -43,12 +47,14 @@ npm run dev
 ```
 
 **Expected output:**
+
 ```
 - ready started server on 0.0.0.0:3000
 - Local: http://localhost:3000
 ```
 
 **Open the app:**
+
 - Navigate to http://localhost:3000 in your browser
 
 ## 🧪 Step 3: Test Complete Workflow
@@ -222,6 +228,7 @@ open packages/backend/test-api.html
 ### Check Metrics
 
 1. **Health Endpoint**
+
    ```bash
    curl http://localhost:4000/health | jq
    ```
@@ -234,10 +241,12 @@ open packages/backend/test-api.html
 ### Monitor Logs
 
 **Backend Logs:**
+
 - Check Terminal 1 where backend is running
 - Look for errors, warnings, or slow queries
 
 **Frontend Logs:**
+
 - Check Terminal 2 where frontend is running
 - Open browser DevTools → Console tab
 
@@ -246,6 +255,7 @@ open packages/backend/test-api.html
 ### Backend Issues
 
 **Server won't start:**
+
 ```bash
 # Check if port 4000 is in use
 lsof -i :4000
@@ -258,6 +268,7 @@ node packages/backend/test-mongo-connection.js
 ```
 
 **Database errors:**
+
 ```bash
 # Verify MongoDB connection
 curl http://localhost:4000/health
@@ -269,6 +280,7 @@ node packages/backend/verify-collections.js
 ### Frontend Issues
 
 **Frontend won't start:**
+
 ```bash
 # Check if port 3000 is in use
 lsof -i :3000
@@ -280,6 +292,7 @@ npm run dev
 ```
 
 **API connection errors:**
+
 - Check backend is running on port 4000
 - Verify CORS settings in backend
 - Check browser console for errors
@@ -287,12 +300,14 @@ npm run dev
 ### Upload Issues
 
 **File upload fails:**
+
 - Check file format (should be .xlsx)
 - Verify file size (max 50MB)
 - Check upload directory exists
 - Review backend logs for errors
 
 **Parsing errors:**
+
 - Verify Excel file structure
 - Check required columns exist
 - Ensure data types are correct
@@ -300,12 +315,14 @@ npm run dev
 ### Generation Issues
 
 **Curriculum generation fails:**
+
 - Check OpenAI API key is configured
 - Verify sufficient API credits
 - Check backend logs for errors
 - Ensure knowledge base is populated
 
 **Generation takes too long:**
+
 - Normal for large programs (5-10 minutes)
 - Check job queue status
 - Monitor backend logs
@@ -365,16 +382,19 @@ Your app is working correctly if:
 ### Browser DevTools
 
 **Console Tab:**
+
 - View JavaScript errors
 - Test API calls
 - Debug React components
 
 **Network Tab:**
+
 - Monitor API requests
 - Check response times
 - Debug failed requests
 
 **React DevTools:**
+
 - Install React DevTools extension
 - Inspect component state
 - Debug React issues

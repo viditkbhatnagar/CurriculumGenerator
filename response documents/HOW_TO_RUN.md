@@ -21,6 +21,7 @@ npm run dev
 **That's it!** The server is now running with synthetic mock data at `http://localhost:4000`
 
 ### Test It:
+
 ```bash
 # Health check
 curl http://localhost:4000/health
@@ -37,6 +38,7 @@ curl http://localhost:4000/metrics
 ## 🗄️ Run with Real Database (30 Minutes Setup)
 
 ### Prerequisites:
+
 - MongoDB Atlas account (free at https://cloud.mongodb.com)
 - Redis (install with `brew install redis` on macOS)
 - OpenAI API key (optional, for AI features)
@@ -91,6 +93,7 @@ nano .env
 ```
 
 **Update these values in .env:**
+
 ```bash
 # MongoDB (REQUIRED)
 MONGODB_URI=mongodb+srv://user:password@cluster0.xxxxx.mongodb.net/curriculum_db?retryWrites=true&w=majority
@@ -124,18 +127,21 @@ npm run test:redis
 ### Step 5: Start All Services (2 min)
 
 **Terminal 1 - Backend API:**
+
 ```bash
 cd packages/backend
 npm run dev
 ```
 
 **Terminal 2 - Background Worker:**
+
 ```bash
 cd packages/backend
 npm run worker
 ```
 
 **Terminal 3 - Frontend (Optional):**
+
 ```bash
 cd packages/frontend
 npm install
@@ -143,6 +149,7 @@ npm run dev
 ```
 
 ### Access the Application:
+
 - **Backend API:** http://localhost:4000
 - **Frontend:** http://localhost:3000
 - **Health Check:** http://localhost:4000/health
@@ -152,22 +159,26 @@ npm run dev
 ## 🧪 Testing
 
 ### Test MongoDB Connection
+
 ```bash
 cd packages/backend
 npm run test:mongodb
 ```
 
 ### Test Redis Connection
+
 ```bash
 npm run test:redis
 ```
 
 ### Test Vector Search (requires M10+ Atlas cluster)
+
 ```bash
 npm run test:vector-search
 ```
 
 ### Test API Endpoints
+
 ```bash
 # Health check
 curl http://localhost:4000/health
@@ -223,6 +234,7 @@ npm install
 ## 📦 Environment Variables Reference
 
 ### Required Variables:
+
 ```bash
 # Server
 PORT=4000
@@ -239,6 +251,7 @@ USE_MOCK_DATA=false  # Set to true for mock data
 ```
 
 ### Optional Variables:
+
 ```bash
 # OpenAI (for AI features)
 OPENAI_API_KEY=sk-your-key-here
@@ -263,6 +276,7 @@ LOG_LEVEL=debug
 ## 🐛 Troubleshooting
 
 ### "MongoDB connection failed"
+
 ```bash
 # Check your connection string
 cat packages/backend/.env | grep MONGODB_URI
@@ -275,6 +289,7 @@ npm run test:mongodb
 ```
 
 ### "Redis connection refused"
+
 ```bash
 # Check if Redis is running
 redis-cli ping
@@ -285,6 +300,7 @@ sudo systemctl start redis-server  # Linux
 ```
 
 ### "Port already in use"
+
 ```bash
 # Find what's using port 4000
 lsof -i :4000
@@ -294,6 +310,7 @@ PORT=4001
 ```
 
 ### "Module not found" errors
+
 ```bash
 # Clean and reinstall
 rm -rf node_modules
@@ -309,6 +326,7 @@ npm install
 ## 🚀 Deploy to Production
 
 ### Deploy to Render:
+
 ```bash
 # 1. Push code to GitHub
 git add .
@@ -348,6 +366,7 @@ git push origin main
 ## 🎯 Common Development Tasks
 
 ### Add a New Feature
+
 ```bash
 # 1. Create a feature branch
 git checkout -b feature/my-feature
@@ -365,6 +384,7 @@ git push origin feature/my-feature
 ```
 
 ### Run Tests
+
 ```bash
 # All tests
 npm test
@@ -377,6 +397,7 @@ npm run test:watch
 ```
 
 ### Database Migrations
+
 ```bash
 # Check migration status
 npm run migrate:status
@@ -396,6 +417,7 @@ npm run migrate:create my-migration-name
 ## 🎉 You're Ready!
 
 Choose your path:
+
 1. **Quick Demo:** Use mock data (already done!)
 2. **Full Setup:** Follow the Real Database steps above
 3. **Production:** Deploy to Render
@@ -406,4 +428,3 @@ Choose your path:
 
 Last Updated: October 28, 2025
 Status: ✅ 100% Complete and Ready to Run!
-

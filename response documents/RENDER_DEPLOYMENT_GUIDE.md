@@ -85,7 +85,7 @@ Before deploying to Render, ensure you have:
      - `curriculum-redis` - Redis database
 
 3. **Set Environment Variables**
-   
+
    Before deploying, you need to set the following environment variables that are marked as `sync: false` in the blueprint:
 
    **For curriculum-frontend:**
@@ -118,10 +118,11 @@ Before deploying to Render, ensure you have:
    - Check the logs for any errors
 
 2. **Test Health Endpoints**
+
    ```bash
    # Test API health
    curl https://curriculum-api.onrender.com/health
-   
+
    # Should return:
    # {
    #   "status": "healthy",
@@ -138,10 +139,11 @@ Before deploying to Render, ensure you have:
    - Test authentication if configured
 
 4. **Test API Endpoints**
+
    ```bash
    # Test API root
    curl https://curriculum-api.onrender.com/api
-   
+
    # Should return:
    # { "message": "Curriculum Generator API" }
    ```
@@ -151,6 +153,7 @@ Before deploying to Render, ensure you have:
 Auto-deploy is already enabled in the blueprint. Any push to the `main` branch will trigger automatic deployments.
 
 To deploy from a different branch:
+
 1. Go to each service settings
 2. Update the "Branch" field
 3. Save changes
@@ -158,11 +161,13 @@ To deploy from a different branch:
 ### Step 5: Configure Persistent Disk
 
 The persistent disk for file uploads is automatically configured in the blueprint:
+
 - Mount path: `/app/uploads`
 - Size: 10GB
 - Attached to: `curriculum-api` service
 
 To increase disk size:
+
 1. Go to the `curriculum-api` service
 2. Click on "Disks" tab
 3. Adjust the size as needed
@@ -172,32 +177,33 @@ To increase disk size:
 
 ### Required Variables
 
-| Variable | Service | Description | Example |
-|----------|---------|-------------|---------|
-| `MONGODB_URI` | API, Worker | MongoDB Atlas connection string | `mongodb+srv://user:pass@cluster.mongodb.net/curriculum_db` |
-| `OPENAI_API_KEY` | API, Worker | OpenAI API key | `sk-...` |
-| `AUTH0_DOMAIN` | Frontend, API | Auth0 domain | `your-domain.auth0.com` |
-| `AUTH0_AUDIENCE` | API | Auth0 API audience | `https://your-api.com` |
-| `NEXT_PUBLIC_AUTH0_CLIENT_ID` | Frontend | Auth0 client ID | `abc123...` |
+| Variable                      | Service       | Description                     | Example                                                     |
+| ----------------------------- | ------------- | ------------------------------- | ----------------------------------------------------------- |
+| `MONGODB_URI`                 | API, Worker   | MongoDB Atlas connection string | `mongodb+srv://user:pass@cluster.mongodb.net/curriculum_db` |
+| `OPENAI_API_KEY`              | API, Worker   | OpenAI API key                  | `sk-...`                                                    |
+| `AUTH0_DOMAIN`                | Frontend, API | Auth0 domain                    | `your-domain.auth0.com`                                     |
+| `AUTH0_AUDIENCE`              | API           | Auth0 API audience              | `https://your-api.com`                                      |
+| `NEXT_PUBLIC_AUTH0_CLIENT_ID` | Frontend      | Auth0 client ID                 | `abc123...`                                                 |
 
 ### Auto-Generated Variables
 
-| Variable | Service | Description |
-|----------|---------|-------------|
-| `ENCRYPTION_KEY` | API | 32-character encryption key (auto-generated) |
-| `API_SIGNING_SECRET` | API | API signing secret (auto-generated) |
+| Variable             | Service | Description                                  |
+| -------------------- | ------- | -------------------------------------------- |
+| `ENCRYPTION_KEY`     | API     | 32-character encryption key (auto-generated) |
+| `API_SIGNING_SECRET` | API     | API signing secret (auto-generated)          |
 
 ### Optional Variables
 
-| Variable | Service | Description | Default |
-|----------|---------|-------------|---------|
-| `SENTRY_DSN` | API, Worker | Sentry error tracking DSN | None |
-| `LOG_LEVEL` | API, Worker | Logging level | `info` |
-| `OPENAI_CHAT_MODEL` | API, Worker | OpenAI model to use | `gpt-4-turbo` |
+| Variable            | Service     | Description               | Default       |
+| ------------------- | ----------- | ------------------------- | ------------- |
+| `SENTRY_DSN`        | API, Worker | Sentry error tracking DSN | None          |
+| `LOG_LEVEL`         | API, Worker | Logging level             | `info`        |
+| `OPENAI_CHAT_MODEL` | API, Worker | OpenAI model to use       | `gpt-4-turbo` |
 
 ### Auto-Configured Variables
 
 These are automatically set by Render:
+
 - `REDIS_URL` - Redis connection string (from Redis add-on)
 - `NEXT_PUBLIC_API_URL` - API URL (from API service)
 - `CORS_ORIGINS` - Frontend URL (from frontend service)
@@ -207,6 +213,7 @@ These are automatically set by Render:
 ### Recommended Plans
 
 **Development/Testing:**
+
 - Frontend: Starter ($7/month)
 - API: Standard ($25/month)
 - Worker: Starter ($7/month)
@@ -214,6 +221,7 @@ These are automatically set by Render:
 - **Total: ~$46/month**
 
 **Production:**
+
 - Frontend: Standard ($25/month)
 - API: Pro ($85/month)
 - Worker: Standard ($25/month)
@@ -265,6 +273,7 @@ These are automatically set by Render:
 ### Sentry Integration
 
 If Sentry is configured:
+
 1. Errors are automatically captured
 2. View errors in Sentry dashboard
 3. Set up alerts for error spikes
@@ -277,6 +286,7 @@ If Sentry is configured:
 **Symptoms:** Service shows "Deploy failed" or keeps restarting
 
 **Solutions:**
+
 1. Check build logs for compilation errors
 2. Verify all required environment variables are set
 3. Check MongoDB connection string is correct
@@ -287,6 +297,7 @@ If Sentry is configured:
 **Symptoms:** Service shows "Unhealthy" status
 
 **Solutions:**
+
 1. Check service logs for errors
 2. Verify MongoDB connection: `curl https://your-api.onrender.com/health`
 3. Check Redis connection status
@@ -297,6 +308,7 @@ If Sentry is configured:
 **Symptoms:** Jobs stuck in queue, not being processed
 
 **Solutions:**
+
 1. Check worker logs for errors
 2. Verify Redis connection
 3. Verify MongoDB connection
@@ -308,6 +320,7 @@ If Sentry is configured:
 **Symptoms:** File upload returns error or files disappear
 
 **Solutions:**
+
 1. Verify persistent disk is attached to API service
 2. Check disk usage (may be full)
 3. Verify upload directory permissions
@@ -318,6 +331,7 @@ If Sentry is configured:
 **Symptoms:** API responses are slow, timeouts
 
 **Solutions:**
+
 1. Check MongoDB Atlas performance metrics
 2. Verify indexes are created (run migration)
 3. Scale up service plan
@@ -327,16 +341,19 @@ If Sentry is configured:
 ## Database Migrations
 
 Migrations run automatically during deployment as part of the build command:
+
 ```bash
 npm run build && npm run migrate:up
 ```
 
 To run migrations manually:
+
 1. Go to API service in Render
 2. Click "Shell" tab
 3. Run: `npm run migrate:up`
 
 To check migration status:
+
 ```bash
 npm run migrate:status
 ```

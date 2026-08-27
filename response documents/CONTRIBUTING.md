@@ -16,6 +16,7 @@
 ## Commit Guidelines
 
 Follow conventional commits:
+
 - `feat:` New feature
 - `fix:` Bug fix
 - `docs:` Documentation changes
@@ -49,6 +50,7 @@ Follow conventional commits:
 ## Adding Dependencies
 
 ### Node.js packages:
+
 ```bash
 # For specific package
 cd packages/[package-name]
@@ -59,6 +61,7 @@ npm install -w [package-name] [dependency]
 ```
 
 ### Python packages:
+
 ```bash
 cd packages/ai-service
 source venv/bin/activate

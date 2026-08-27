@@ -14,33 +14,33 @@ Since you're on the admin dashboard, here's how to create and generate curriculu
 // Create a test program with all required data
 fetch('http://localhost:4000/api/programs', {
   method: 'POST',
-  headers: {'Content-Type': 'application/json'},
+  headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     program_name: 'Business Intelligence Certificate',
     qualification_level: 'Level 5',
     qualification_type: 'Certificate',
     total_credits: 120,
-    industry_sector: 'Business Intelligence'
+    industry_sector: 'Business Intelligence',
+  }),
+})
+  .then((r) => r.json())
+  .then((data) => {
+    console.log('Program Created:', data);
+    console.log('Program ID:', data._id);
+
+    // Now trigger curriculum generation
+    return fetch(`http://localhost:4000/api/curriculum/generate/${data._id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
   })
-})
-.then(r => r.json())
-.then(data => {
-  console.log('Program Created:', data);
-  console.log('Program ID:', data._id);
-  
-  // Now trigger curriculum generation
-  return fetch(`http://localhost:4000/api/curriculum/generate/${data._id}`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'}
-  });
-})
-.then(r => r.json())
-.then(result => {
-  console.log('Generation Started:', result);
-  console.log('Job ID:', result.jobId);
-  alert('Curriculum generation started! Check console for job ID');
-})
-.catch(err => console.error('Error:', err));
+  .then((r) => r.json())
+  .then((result) => {
+    console.log('Generation Started:', result);
+    console.log('Job ID:', result.jobId);
+    alert('Curriculum generation started! Check console for job ID');
+  })
+  .catch((err) => console.error('Error:', err));
 ```
 
 4. **Check the console** for the Program ID and Job ID
@@ -57,9 +57,9 @@ After creating a program and triggering generation, monitor progress:
 const jobId = 'PASTE_JOB_ID_HERE';
 
 fetch(`http://localhost:4000/api/curriculum/status/${jobId}`)
-  .then(r => r.json())
-  .then(data => console.log('Status:', data))
-  .catch(err => console.error('Error:', err));
+  .then((r) => r.json())
+  .then((data) => console.log('Status:', data))
+  .catch((err) => console.error('Error:', err));
 ```
 
 ---
@@ -81,6 +81,7 @@ fetch(`http://localhost:4000/api/curriculum/status/${jobId}`)
 ## API Endpoints You Can Use:
 
 ### Create Program:
+
 ```
 POST http://localhost:4000/api/programs
 Body: {
@@ -93,26 +94,31 @@ Body: {
 ```
 
 ### List Programs:
+
 ```
 GET http://localhost:4000/api/programs
 ```
 
 ### Get Program Details:
+
 ```
 GET http://localhost:4000/api/programs/:id
 ```
 
 ### Generate Curriculum:
+
 ```
 POST http://localhost:4000/api/curriculum/generate/:programId
 ```
 
 ### Check Generation Status:
+
 ```
 GET http://localhost:4000/api/curriculum/status/:jobId
 ```
 
 ### Get Generated Curriculum:
+
 ```
 GET http://localhost:4000/api/curriculum/:programId
 ```
@@ -135,9 +141,8 @@ GET http://localhost:4000/api/curriculum/:programId
 ## Testing the Complete Flow:
 
 1. ✅ Create program (using console code above)
-2. ✅ Trigger generation 
+2. ✅ Trigger generation
 3. ✅ Monitor status
 4. ✅ View results in dashboard
 
 The frontend should automatically update when programs are created!
-

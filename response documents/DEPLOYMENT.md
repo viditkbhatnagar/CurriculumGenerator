@@ -19,6 +19,7 @@ The application deploys as three separate Render services:
 3. **Background Worker** - Async job processor
 
 Plus two managed add-ons:
+
 - **Render Redis** - Caching and job queue
 - **Persistent Disk** - File storage
 
@@ -90,6 +91,7 @@ Plus two managed add-ons:
 Verify these files exist in your repository:
 
 **packages/backend/package.json** should have:
+
 ```json
 {
   "scripts": {
@@ -102,6 +104,7 @@ Verify these files exist in your repository:
 ```
 
 **packages/frontend/package.json** should have:
+
 ```json
 {
   "scripts": {
@@ -449,6 +452,7 @@ MongoDB Atlas automatically backs up your data:
 ### Service Won't Start
 
 **Check build logs:**
+
 1. Go to service → "Events" tab
 2. Look for build errors
 3. Common issues:
@@ -457,6 +461,7 @@ MongoDB Atlas automatically backs up your data:
    - Environment variable issues
 
 **Check runtime logs:**
+
 1. Go to service → "Logs" tab
 2. Look for startup errors
 3. Common issues:
@@ -467,6 +472,7 @@ MongoDB Atlas automatically backs up your data:
 ### Database Connection Issues
 
 **Error: "MongoServerSelectionTimeoutError"**
+
 - Verify MONGODB_URI is correct
 - Check MongoDB Atlas network access allows 0.0.0.0/0
 - Verify database user credentials
@@ -474,6 +480,7 @@ MongoDB Atlas automatically backs up your data:
 ### Redis Connection Issues
 
 **Error: "Redis connection failed"**
+
 - Verify REDIS_URL is correct
 - Check Redis instance is running
 - Verify Redis plan supports required connections
@@ -545,6 +552,7 @@ If deployment fails:
    - Check for suspicious API activity
 
 3. **Keep dependencies updated:**
+
    ```bash
    npm audit
    npm update

@@ -21,6 +21,7 @@
 The **Curriculum Generator App** is an AI-powered system that automates the creation of professional certification preparation courses for AGCQ. It processes Subject Matter Expert (SME) submissions via Excel templates and uses Retrieval-Augmented Generation (RAG) with OpenAI to generate complete program specifications, unit specifications, and learning materials.
 
 ### Key Capabilities:
+
 - **Excel Upload**: SMEs upload course content via standardized Excel templates
 - **AI Content Generation**: Automated curriculum generation using OpenAI GPT-4
 - **RAG Engine**: Semantic search using MongoDB Atlas Vector Search
@@ -38,6 +39,7 @@ The **Curriculum Generator App** is an AI-powered system that automates the crea
 The project is currently undergoing a migration from PostgreSQL to MongoDB Atlas:
 
 #### Completed ✅
+
 - MongoDB connection layer with Mongoose ODM
 - All Mongoose models created (Program, Module, LearningOutcome, KnowledgeBase, etc.)
 - MongoDB migrations system with migrate-mongo
@@ -51,6 +53,7 @@ The project is currently undergoing a migration from PostgreSQL to MongoDB Atlas
 - Frontend admin dashboard (Next.js 14)
 
 #### In Progress 🔄
+
 - **programService.ts** - Core program management (HIGH PRIORITY)
 - **knowledgeBaseService.ts** - RAG functionality (HIGH PRIORITY)
 - **curriculumGeneratorService.ts** - Generation pipeline (HIGH PRIORITY)
@@ -58,6 +61,7 @@ The project is currently undergoing a migration from PostgreSQL to MongoDB Atlas
 - Other services migration
 
 #### Technical Debt
+
 - Some services still reference PostgreSQL queries
 - Vector search index needs to be created manually in Atlas UI
 - Integration tests need updating for MongoDB
@@ -67,16 +71,18 @@ The project is currently undergoing a migration from PostgreSQL to MongoDB Atlas
 ## 🛠 Technology Stack
 
 ### Frontend
+
 - **Framework**: Next.js 14 (App Router)
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
-- **State Management**: 
+- **State Management**:
   - React Query (server state)
   - Zustand (client state)
 - **UI Components**: Recharts for data visualization
 - **Authentication**: Auth0 React SDK
 
 ### Backend
+
 - **Runtime**: Node.js 18+
 - **Framework**: Express.js
 - **Language**: TypeScript
@@ -86,11 +92,13 @@ The project is currently undergoing a migration from PostgreSQL to MongoDB Atlas
 - **Background Jobs**: Bull queue with worker processes
 
 ### AI/ML Services
+
 - **LLM**: OpenAI GPT-4-turbo (content generation)
 - **Embeddings**: OpenAI text-embedding-3-large (1536 dimensions)
 - **RAG Framework**: Custom implementation with LangChain integration
 
 ### DevOps & Deployment
+
 - **Platform**: Render (Web Services + Background Workers)
 - **Monitoring**: Sentry (error tracking)
 - **Logging**: Winston + CloudWatch
@@ -98,6 +106,7 @@ The project is currently undergoing a migration from PostgreSQL to MongoDB Atlas
 - **File Storage**: Render Persistent Disk
 
 ### Development Tools
+
 - **Package Manager**: npm with workspaces
 - **Build Tool**: Turborepo
 - **Linting**: ESLint
@@ -110,6 +119,7 @@ The project is currently undergoing a migration from PostgreSQL to MongoDB Atlas
 ## 🏗 Project Architecture
 
 ### Monorepo Structure
+
 ```
 curriculum-generator-app/
 ├── packages/
@@ -217,57 +227,69 @@ The curriculum generation process follows 8 stages with progress tracking:
 ## 🚀 Features Implemented
 
 ### For Administrators
+
 ✅ **Program Management**
+
 - Upload and validate SME Excel submissions
 - View program list with status tracking
 - Program detail view with all related data
 
 ✅ **Knowledge Base Management**
+
 - Browse and search knowledge base content
 - Filter by domain, date range, source type
 - View source metadata (credibility scores, publication dates)
 - Delete sources
 
 ✅ **Curriculum Generation**
+
 - Trigger AI-powered curriculum generation
 - Real-time progress tracking via WebSocket
 - View generation status and history
 
 ✅ **Quality Assurance**
+
 - Automated validation against standards
 - Learning outcome structure validation (Bloom's taxonomy)
 - Source recency and credibility checks
 - Citation validation (APA 7 format)
 
 ✅ **Analytics Dashboard**
+
 - Program generation metrics
 - Quality score trends
 - User engagement statistics
 - Success rate tracking
 
 ✅ **Version Control**
+
 - Version history display
 - Visual diff between versions
 - Restore previous versions
 
 ✅ **Export Functionality**
+
 - Export to DOCX, PDF, SCORM formats
 - Bulk export for multiple programs
 - Download progress indication
 
 ### For SMEs (Subject Matter Experts)
+
 ✅ Excel template upload
 ✅ Review generated curricula
 ✅ Provide feedback and request adjustments
 ✅ Status tracking (draft → submitted → under review → approved)
 
 ### For Students (Planned)
+
 🔄 Interactive AI tutor bot
 🔄 Workplace simulations
 🔄 Personalized learning support
 
 ### Backend Features
+
 ✅ **Security**
+
 - Auth0 JWT authentication
 - Rate limiting (100 requests/minute)
 - Input validation and sanitization
@@ -276,6 +298,7 @@ The curriculum generation process follows 8 stages with progress tracking:
 - Encrypted sensitive data
 
 ✅ **Performance**
+
 - Redis caching (API responses, knowledge base queries, embeddings)
 - Database connection pooling (max 20 connections)
 - Performance indexes on all key fields
@@ -283,6 +306,7 @@ The curriculum generation process follows 8 stages with progress tracking:
 - Embedding caching (7-day TTL)
 
 ✅ **Monitoring & Logging**
+
 - Winston structured logging
 - CloudWatch integration
 - Sentry error tracking
@@ -291,6 +315,7 @@ The curriculum generation process follows 8 stages with progress tracking:
 - Alert system for critical issues
 
 ✅ **File Storage**
+
 - Excel file upload handling
 - Persistent disk storage on Render
 - File cleanup for old temp files
@@ -303,6 +328,7 @@ The curriculum generation process follows 8 stages with progress tracking:
 ### Prerequisites
 
 Ensure you have:
+
 - **Node.js 18+** and **npm 9+**
 - **MongoDB Atlas account** (free M0 tier works for basic testing, M10+ required for vector search)
 - **Redis** (local or cloud service like Upstash)
@@ -331,6 +357,7 @@ npm run dev
 ```
 
 You should see:
+
 ```
 🔧 Using MOCK DATA (synthetic in-memory data)
 ✅ Synthetic data initialized
@@ -349,6 +376,7 @@ Server running on port 4000
 ```
 
 **Test the API:**
+
 ```bash
 # Get all programs
 curl http://localhost:4000/api/programs
@@ -371,6 +399,7 @@ npm install
 **See detailed guide:** `packages/backend/MONGODB_SETUP_START_HERE.md`
 
 **Quick steps:**
+
 1. Create MongoDB Atlas account at https://cloud.mongodb.com
 2. Create a cluster (M0 free tier for dev, M10+ for vector search)
 3. Configure Network Access → Add IP → Allow from Anywhere (0.0.0.0/0)
@@ -381,6 +410,7 @@ npm install
 #### Step 3: Set Up Redis
 
 **Option A: Local Redis (Recommended)**
+
 ```bash
 # macOS
 brew install redis
@@ -395,6 +425,7 @@ redis-cli ping  # Should return "PONG"
 ```
 
 **Option B: Cloud Redis (Upstash)**
+
 1. Sign up at https://upstash.com
 2. Create a new Redis database
 3. Copy the Redis URL
@@ -461,18 +492,21 @@ npm run create:indexes
 #### Step 6: Start Services
 
 **Terminal 1 - Backend API:**
+
 ```bash
 cd packages/backend
 npm run dev
 ```
 
 **Terminal 2 - Background Worker:**
+
 ```bash
 cd packages/backend
 npm run worker
 ```
 
 **Terminal 3 - Frontend:**
+
 ```bash
 cd packages/frontend
 
@@ -489,6 +523,7 @@ npm run dev
 ### Verify Installation
 
 **Check services:**
+
 ```bash
 # Backend health
 curl http://localhost:4000/health
@@ -533,6 +568,7 @@ make test
 The project uses **MongoDB Atlas** (cloud) with the following collections:
 
 #### Collections
+
 - `programs` - Program information
 - `modules` - Module/unit information
 - `learningoutcomes` - Learning outcomes
@@ -545,6 +581,7 @@ The project uses **MongoDB Atlas** (cloud) with the following collections:
 - `auditlogs` - Audit trail
 
 #### Indexes Created
+
 ✅ Performance indexes on all frequently queried fields
 ✅ Composite indexes for complex queries
 ✅ Full-text search index on knowledge base
@@ -557,6 +594,7 @@ For RAG functionality, you need to manually create a vector search index in Mong
 **Name:** `knowledge_base_vector_index`
 **Collection:** `knowledgebases`
 **Configuration:**
+
 ```json
 {
   "mappings": {
@@ -607,11 +645,13 @@ npm run test:vector-search
 ### Redis Setup
 
 Redis is used for:
+
 - **Session management**
 - **Caching** (API responses, embeddings, LLM responses)
 - **Job queue** (Bull queue for background jobs)
 
 **Cache TTLs:**
+
 - API responses: 5 minutes
 - Knowledge base queries: 1 hour
 - Generated content: 24 hours
@@ -656,6 +696,7 @@ npm run test:watch
 ### Test API Endpoints
 
 **Manual API Testing:**
+
 ```bash
 # Health check
 curl http://localhost:4000/health
@@ -685,6 +726,7 @@ curl -X POST http://localhost:4000/api/knowledge-base/search \
 ```
 
 **Using test script:**
+
 ```bash
 npm run test:api
 ```
@@ -692,17 +734,20 @@ npm run test:api
 ### Testing Background Jobs
 
 1. Start the worker in one terminal:
+
 ```bash
 cd packages/backend
 npm run worker
 ```
 
 2. Trigger a job in another terminal:
+
 ```bash
 curl -X POST http://localhost:4000/api/curriculum/generate/{programId}
 ```
 
 3. Monitor job progress:
+
 ```bash
 curl http://localhost:4000/api/curriculum/status/{jobId}
 ```
@@ -710,6 +755,7 @@ curl http://localhost:4000/api/curriculum/status/{jobId}
 ### Load Testing
 
 For performance testing:
+
 ```bash
 # Install k6
 brew install k6  # macOS
@@ -737,6 +783,7 @@ k6 run packages/backend/__tests__/performance/load.test.ts
 The project includes a `render.yaml` blueprint for one-click deployment:
 
 **Services that will be created:**
+
 - `curriculum-frontend` - Next.js web service
 - `curriculum-api` - Express API web service
 - `curriculum-worker` - Background worker
@@ -745,6 +792,7 @@ The project includes a `render.yaml` blueprint for one-click deployment:
 **Steps:**
 
 1. **Push code to GitHub**
+
 ```bash
 git add .
 git commit -m "Ready for deployment"
@@ -778,6 +826,7 @@ git push origin main
    - Monitor logs in Render dashboard
 
 5. **Verify Deployment**
+
 ```bash
 # Test API health
 curl https://curriculum-api.onrender.com/health
@@ -789,6 +838,7 @@ open https://curriculum-frontend.onrender.com
 ### Deployment Costs (Estimate)
 
 **Development/Testing:**
+
 - Frontend: Starter ($7/month)
 - API: Standard ($25/month)
 - Worker: Starter ($7/month)
@@ -796,6 +846,7 @@ open https://curriculum-frontend.onrender.com
 - **Total: ~$46/month**
 
 **Production:**
+
 - Frontend: Standard ($25/month)
 - API: Pro ($85/month)
 - Worker: Standard ($25/month)
@@ -803,6 +854,7 @@ open https://curriculum-frontend.onrender.com
 - **Total: ~$160/month**
 
 **Plus MongoDB Atlas:**
+
 - M10 cluster: ~$57/month (required for vector search)
 - M0 (Free): $0/month (no vector search)
 
@@ -901,6 +953,7 @@ Auto-deploy is enabled - every push to `main` branch will trigger deployment.
 ### Key Documentation Files
 
 **Must Read:**
+
 - `README.md` - Main project overview
 - `QUICKSTART.md` - Quick start guide
 - `packages/backend/QUICKSTART.md` - Backend quick start (with mock data)
@@ -908,15 +961,18 @@ Auto-deploy is enabled - every push to `main` branch will trigger deployment.
 - `packages/backend/MONGODB_SETUP_START_HERE.md` - MongoDB setup
 
 **MongoDB Setup:**
+
 - `packages/backend/MONGODB_ATLAS_QUICKSTART.md` - Quick MongoDB setup
 - `packages/backend/MONGODB_ATLAS_SETUP.md` - Detailed MongoDB setup
 - `packages/backend/MONGODB_MIGRATION_STATUS.md` - Migration progress
 
 **Deployment:**
+
 - `RENDER_DEPLOYMENT_GUIDE.md` - Complete Render deployment guide
 - `DEPLOYMENT.md` - General deployment documentation
 
 **Features:**
+
 - `packages/backend/API_ENDPOINTS.md` - API documentation
 - `packages/backend/CURRICULUM_GENERATION.md` - Generation system docs
 - `packages/backend/RAG_ENGINE_IMPLEMENTATION.md` - RAG documentation
@@ -924,11 +980,13 @@ Auto-deploy is enabled - every push to `main` branch will trigger deployment.
 - `WORKFLOW.md` - Application workflows
 
 **Development:**
+
 - `CONTRIBUTING.md` - Contribution guidelines
 - `TESTING_GUIDE.md` - Testing documentation
 - `packages/backend/API_TESTING_GUIDE.md` - API testing guide
 
 **Tasks & Progress:**
+
 - `packages/backend/TASK_19_IMPLEMENTATION_SUMMARY.md` - Caching implementation
 - `packages/backend/TASK_20_IMPLEMENTATION_SUMMARY.md` - Monitoring implementation
 - `packages/backend/TASK_21_SECURITY_IMPLEMENTATION.md` - Security features
@@ -994,18 +1052,21 @@ Auto-deploy is enabled - every push to `main` branch will trigger deployment.
 ## 📊 Project Health & Metrics
 
 ### Code Statistics
+
 - **Total Lines**: ~50,000+ (estimated)
 - **Languages**: TypeScript (primary), JavaScript, Markdown
 - **Packages**: 3 (frontend, backend, shared-types)
 - **Dependencies**: ~100+
 
 ### Test Coverage
+
 - Unit tests: Implemented for core services
 - Integration tests: Partially implemented
 - E2E tests: Basic implementation
 - Load tests: Available
 
 ### Documentation
+
 - **Extremely well documented** with 50+ markdown files
 - Architecture diagrams
 - Step-by-step guides
@@ -1019,6 +1080,7 @@ Auto-deploy is enabled - every push to `main` branch will trigger deployment.
 ### Common Issues
 
 **"Cannot connect to MongoDB"**
+
 ```bash
 # Solution 1: Check your connection string
 cat packages/backend/.env | grep MONGODB_URI
@@ -1032,6 +1094,7 @@ npm run test:mongodb
 ```
 
 **"Redis connection refused"**
+
 ```bash
 # Check if Redis is running
 redis-cli ping
@@ -1044,6 +1107,7 @@ sudo systemctl start redis-server
 ```
 
 **"OpenAI API error"**
+
 ```bash
 # Check if API key is set
 cat packages/backend/.env | grep OPENAI_API_KEY
@@ -1052,11 +1116,13 @@ cat packages/backend/.env | grep OPENAI_API_KEY
 ```
 
 **"Vector search not working"**
+
 - Requires MongoDB Atlas M10+ tier (not M0)
 - Vector search index must be created manually in Atlas UI
 - See `packages/backend/MONGODB_ATLAS_SETUP.md` step 8
 
 **"Build errors"**
+
 ```bash
 # Clean and reinstall
 make clean
@@ -1072,12 +1138,14 @@ npm install
 ## 📞 Support & Resources
 
 ### Documentation
+
 - **Main README**: `README.md`
 - **Quick Start**: `QUICKSTART.md`
 - **Backend Docs**: `packages/backend/*.md` (50+ files)
 - **Architecture**: `ARCHITECTURE.md`
 
 ### External Resources
+
 - MongoDB Atlas: https://cloud.mongodb.com
 - Render Docs: https://render.com/docs
 - OpenAI API: https://platform.openai.com/docs
@@ -1112,13 +1180,15 @@ make deploy-production     # Deploy to production
 
 ## ✨ Conclusion
 
-You have a **well-architected, feature-rich, and extensively documented** curriculum generator application. The project is in active development with the MongoDB migration in progress. 
+You have a **well-architected, feature-rich, and extensively documented** curriculum generator application. The project is in active development with the MongoDB migration in progress.
 
 **To get started immediately:**
+
 1. Run with mock data: Follow the "Quick Start (With Mock Data)" section
 2. For full functionality: Complete the MongoDB and Redis setup
 
 **Current state:** ~70% complete
+
 - ✅ Infrastructure and architecture
 - ✅ Frontend admin dashboard
 - ✅ Backend API structure
@@ -1133,4 +1203,3 @@ The documentation is exceptional, making it easy to understand and work with the
 **Last Updated:** October 28, 2025
 **Version:** 1.0.0
 **Status:** Development (MongoDB Migration Phase)
-

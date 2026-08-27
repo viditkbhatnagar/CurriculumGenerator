@@ -34,6 +34,7 @@ cd ../..
 ### Option A: Local MongoDB Installation
 
 **macOS (using Homebrew):**
+
 ```bash
 brew tap mongodb/brew
 brew install mongodb-community@6.0
@@ -41,6 +42,7 @@ brew services start mongodb-community@6.0
 ```
 
 **Ubuntu/Debian:**
+
 ```bash
 wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
 echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
@@ -67,12 +69,14 @@ Download and install from [MongoDB Download Center](https://www.mongodb.com/try/
 ### Option A: Local Redis Installation
 
 **macOS (using Homebrew):**
+
 ```bash
 brew install redis
 brew services start redis
 ```
 
 **Ubuntu/Debian:**
+
 ```bash
 sudo apt-get update
 sudo apt-get install redis-server
@@ -250,22 +254,26 @@ The frontend will start on http://localhost:3000
 ### MongoDB Connection Issues
 
 **Error: "MongoServerError: Authentication failed"**
+
 - Verify your username and password in the connection string
 - Ensure the database user has proper permissions
 
 **Error: "MongooseServerSelectionError: connect ECONNREFUSED"**
+
 - Ensure MongoDB is running: `brew services list` (macOS) or `sudo systemctl status mongod` (Linux)
 - Check if MongoDB is listening on the correct port (default: 27017)
 
 ### Redis Connection Issues
 
 **Error: "Error: connect ECONNREFUSED 127.0.0.1:6379"**
+
 - Ensure Redis is running: `brew services list` (macOS) or `sudo systemctl status redis` (Linux)
 - Test Redis connection: `redis-cli ping` (should return "PONG")
 
 ### OpenAI API Issues
 
 **Error: "OpenAI API key is invalid"**
+
 - Verify your API key is correct in .env
 - Check your OpenAI account has available credits
 - Ensure there are no extra spaces in the API key
@@ -273,6 +281,7 @@ The frontend will start on http://localhost:3000
 ### Port Already in Use
 
 **Error: "EADDRINUSE: address already in use :::4000"**
+
 - Another process is using port 4000
 - Find and kill the process: `lsof -ti:4000 | xargs kill -9` (macOS/Linux)
 - Or change the PORT in your .env file
@@ -280,6 +289,7 @@ The frontend will start on http://localhost:3000
 ### Auth0 Configuration Issues
 
 **Error: "Invalid state"**
+
 - Clear browser cookies and local storage
 - Verify callback URLs in Auth0 dashboard match your local URLs
 - Ensure Auth0 domain and client ID are correct

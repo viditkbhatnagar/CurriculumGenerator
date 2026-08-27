@@ -5,6 +5,7 @@ Get the Curriculum Generator App running in 5 minutes.
 ## Prerequisites
 
 Ensure you have installed:
+
 - Node.js 18+ and npm 9+
 - MongoDB 6.0+ (local or MongoDB Atlas account)
 - Redis 7+ (local or cloud Redis)
@@ -18,6 +19,7 @@ make setup
 ```
 
 This will:
+
 - Install all Node.js dependencies
 - Copy environment file templates
 - Check for MongoDB and Redis installation
@@ -60,6 +62,7 @@ Edit the following files with your API keys and configuration:
 3. `packages/ai-service/.env` - AI service configuration
 
 **Required for basic functionality:**
+
 - `OPENAI_API_KEY` - Get from https://platform.openai.com/api-keys
 
 ## Start Development
@@ -73,6 +76,7 @@ npm run dev
 ```
 
 This starts:
+
 - Frontend at http://localhost:3000
 - Backend API at http://localhost:4000
 

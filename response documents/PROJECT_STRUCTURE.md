@@ -67,39 +67,46 @@ curriculum-generator-app/
 ## Package Descriptions
 
 ### Frontend (`packages/frontend`)
+
 - **Technology**: Next.js 14 with App Router, React 18, TypeScript
 - **Styling**: Tailwind CSS
 - **State Management**: React Query (server state), Zustand (client state)
 - **Purpose**: Admin dashboard and student-facing interfaces
 
 ### Backend (`packages/backend`)
+
 - **Technology**: Node.js, Express, TypeScript
 - **Database**: PostgreSQL with pg driver
 - **Cache**: Redis with Bull for job queues
 - **Purpose**: REST API, authentication, business logic orchestration
 
 ### AI Service (`packages/ai-service`)
+
 - **Technology**: Python 3.11+, FastAPI
 - **AI/ML**: LangChain, OpenAI, Sentence-Transformers
 - **Vector DB**: Pinecone client
 - **Purpose**: RAG engine, content generation, embeddings
 
 ### Shared Types (`packages/shared-types`)
+
 - **Technology**: TypeScript
 - **Purpose**: Common type definitions used across packages
 
 ## Infrastructure Services
 
 ### PostgreSQL
+
 - **Port**: 5432
 - **Purpose**: Primary relational database
 - **Extensions**: uuid-ossp, pgvector
 
 ### Redis
+
 - **Port**: 6379
 - **Purpose**: Caching, session management, job queues
 
 ### Pinecone Mock
+
 - **Port**: 8080
 - **Purpose**: Local development mock for vector database
 

@@ -1317,10 +1317,13 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     // any student takes 180. Printing 276 would misstate the award.
     const step4Modules: any[] = step4?.modules || [];
     const programmeCredits = Number(step1Credits?.credits) || 0;
+    // "180 credits, delivered across 46 modules" reads as though a student takes all 46. They
+    // do not: 46 modules totalling 276 credits are on offer and a student's pathway is 180 of
+    // them. The reviewer asked for wording that does not imply the whole catalogue is taken.
     const creditSummary = programmeCredits
-      ? `${programmeCredits} credits, delivered across ${step4Modules.length} module(s)`
+      ? `${programmeCredits}-credit student pathway selected from ${step4Modules.length} available programme modules`
       : step4Modules.length
-        ? `${step4Modules.length} module(s)`
+        ? `selected from ${step4Modules.length} available programme modules`
         : '';
 
     // One renderer for both purposes. The graded apparatus — marks, weighting, the
@@ -1582,7 +1585,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                   ? step7.summativeAssessments?.length
                     ? 'Carried entirely by the programme-level assessment below.'
                     : 'No graded assessment is defined for this programme.'
-                  : `Built from the module results, weighted by credit${creditSummary ? ` (${creditSummary})` : ''}.`
+                  : `Built from the module results, weighted by credit${creditSummary ? ` — ${creditSummary}` : ''}.`
               ),
             ],
           }),
