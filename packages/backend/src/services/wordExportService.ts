@@ -1303,6 +1303,17 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     const formativeActivities = allModuleAssessments.filter(isFormativeActivity);
     const moduleSummatives = allModuleAssessments.filter((a) => !isFormativeActivity(a));
 
+    // The programme result is credit-weighted, so say what the credits are. Both credit
+    // keys appear in stored step4 data depending on which path wrote the module.
+    const step4Modules: any[] = step4?.modules || [];
+    const totalCredits = step4Modules.reduce(
+      (sum: number, m: any) => sum + (Number(m?.credits ?? m?.creditValue) || 0),
+      0
+    );
+    const creditSummary = step4Modules.length
+      ? `${step4Modules.length} modules${totalCredits ? `, ${totalCredits} credits in total` : ''}`
+      : '';
+
     // One renderer for both purposes. The graded apparatus — marks, weighting, the
     // marking guide and the rubric — is printed only where it exists, so an ungraded
     // activity no longer reports "Max Marks: N/A | Weighting: not set" as though
@@ -1539,24 +1550,24 @@ If the content is better as bullets, put it in bullets array and leave paragraph
               this.createTableCell(String(userPrefs.assessmentBalance || 'Blended mix')),
             ],
           }),
-          // The table used to print "Formative Weight 30% / Summative Weight 70%" above 92
-          // items each stamped "Weighting: 50%". Both numbers were real; neither described
-          // the other. The split is between the module assessments and the final, and
-          // formative activity is ungraded, so it is stated as such rather than given a
-          // share it cannot hold.
+          // The grading model, in the reviewer's own terms. A previous version presented
+          // the configured 30/70 as "module assessments carry 30% of the programme mark,
+          // the final carries 70%", and she rejected that reading outright: each
+          // credit-bearing module has its own grade, and the programme result is built from
+          // the module results — not from a pool a single final assessment mostly owns.
           new TableRow({
             children: [
-              this.createTableCell('Module assessments (graded)'),
+              this.createTableCell('Grading model'),
               this.createTableCell(
-                `${userPrefs.weightages?.formative || 0}% of the programme mark, shared across ${moduleSummatives.length} module assessment(s)`
+                'Each module is graded independently. Formative activities are ungraded; the module summative assessment carries the module grade.'
               ),
             ],
           }),
           new TableRow({
             children: [
-              this.createTableCell('Final summative (graded)'),
+              this.createTableCell('Programme result'),
               this.createTableCell(
-                `${userPrefs.weightages?.summative || 0}% of the programme mark`
+                `Built from the module results, weighted by credit${creditSummary ? ` (${creditSummary})` : ''}.`
               ),
             ],
           }),
@@ -1570,9 +1581,17 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           }),
           new TableRow({
             children: [
-              this.createTableCell('Total graded assessments'),
+              this.createTableCell('Module summative assessments'),
+              this.createTableCell(String(moduleSummatives.length)),
+            ],
+          }),
+          new TableRow({
+            children: [
+              this.createTableCell('Programme-level assessment'),
               this.createTableCell(
-                String(moduleSummatives.length + (step7.summativeAssessments?.length || 0))
+                step7.summativeAssessments?.length
+                  ? `${step7.summativeAssessments.length} (${step7.summativeAssessments[0]?.format || 'format not stated'}) — applies only where the university requires an overall assessment in addition to the module grades`
+                  : 'None'
               ),
             ],
           }),
@@ -1647,7 +1666,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         new Paragraph({
           children: [
             new TextRun({
-              text: 'Used at the end of the programme to evaluate achievement against the programme learning outcomes.',
+              text: 'Used at the end of the programme to evaluate achievement against the programme learning outcomes, where the university requires an overall assessment in addition to the module grades. Each module retains its own grade.',
               size: FONT_SIZES.BODY,
               font: FONT_FAMILY,
               italics: true,

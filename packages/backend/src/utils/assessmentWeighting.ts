@@ -139,24 +139,6 @@ export function applyAssessmentWeightings(
   return totals;
 }
 
-/**
- * The programme-level split the author configured, stated as a sentence the export can print.
- *
- * Kept separate from per-assessment weighting because they answer different questions: what
- * share of the programme the module work carries, versus what share of a module each of its
- * assessments carries. Printing only the first while stamping the second on every item is
- * what made the document contradict itself.
- */
-export function programmeSplit(weightages: WeightageSplit | undefined): {
-  moduleAssessments: number;
-  finalSummative: number;
-} {
-  return {
-    moduleAssessments: weightages?.formative ?? 30,
-    finalSummative: weightages?.summative ?? 70,
-  };
-}
-
 export function weightingsAreComplete(totals: { total: number }[]): boolean {
   return totals.length > 0 && totals.every((t) => Math.abs(t.total - 100) < 0.05);
 }

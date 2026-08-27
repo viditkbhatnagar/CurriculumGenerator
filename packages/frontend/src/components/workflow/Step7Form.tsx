@@ -1248,76 +1248,27 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
                 </div>
               )}
 
-              {/* Weightages */}
+              {/* Grading model */}
               {formData.assessmentStructure === 'both_formative_and_summative' && (
                 <div>
-                  <h4 className="text-teal-800 font-medium mb-3">Assessment Weightages</h4>
+                  <h4 className="text-teal-800 font-medium mb-3">Grading Model</h4>
                   {/*
-                    Relabelled from "Formative/Summative Weight". The split is between the
-                    module assessments and the final, not between graded and ungraded work:
-                    formative activity is ungraded by definition and cannot carry a share.
+                    Replaces the "Formative / Summative Weight" inputs. The reviewer rejected
+                    the split those inputs described — all module assessments together worth
+                    30% of the programme and one final worth 70% — and stated the model she
+                    expects: each credit-bearing module carries its own grade, and the
+                    programme result is built from the module results.
                   */}
-                  <p className="text-xs text-teal-600 mb-3">
-                    How the programme mark is split. Formative activities are ungraded and carry no
-                    weight.
-                  </p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-teal-600 mb-2">
-                        Module assessments (% of programme)
-                      </label>
-                      <input
-                        type="number"
-                        min={10}
-                        max={50}
-                        value={formData.weightages.formative || 30}
-                        onChange={(e) => {
-                          const formative = parseInt(e.target.value) || 30;
-                          setFormData((prev) => ({
-                            ...prev,
-                            weightages: {
-                              ...prev.weightages,
-                              formative,
-                              summative: 100 - formative,
-                            },
-                          }));
-                        }}
-                        className="w-full px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-teal-600 mb-2">
-                        Final summative (% of programme)
-                      </label>
-                      <input
-                        type="number"
-                        min={50}
-                        max={90}
-                        value={formData.weightages.summative || 70}
-                        onChange={(e) => {
-                          const summative = parseInt(e.target.value) || 70;
-                          setFormData((prev) => ({
-                            ...prev,
-                            weightages: {
-                              ...prev.weightages,
-                              summative,
-                              formative: 100 - summative,
-                            },
-                          }));
-                        }}
-                        className="w-full px-4 py-2 bg-white border border-teal-200 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
-                      />
-                    </div>
+                  <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 space-y-2">
+                    <p className="text-sm text-teal-800">
+                      Each module is graded independently: formative activities are ungraded
+                      (feedback only), and the module&apos;s summative assessment carries the module
+                      grade.
+                    </p>
+                    <p className="text-sm text-teal-800">
+                      The programme result is built from the module results, weighted by credit.
+                    </p>
                   </div>
-                  <p className="text-xs text-teal-500 mt-2">
-                    Total:{' '}
-                    {(formData.weightages.formative || 0) + (formData.weightages.summative || 0)}%
-                    {Math.abs(
-                      (formData.weightages.formative || 0) +
-                        (formData.weightages.summative || 0) -
-                        100
-                    ) > 0.1 && <span className="text-red-400 ml-2">⚠ Must sum to 100%</span>}
-                  </p>
                 </div>
               )}
             </div>

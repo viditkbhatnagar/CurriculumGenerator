@@ -12,7 +12,6 @@
 import {
   applyAssessmentWeightings,
   isUngraded,
-  programmeSplit,
   weightingsAreComplete,
   type WeightableAssessment,
 } from '../utils/assessmentWeighting';
@@ -90,15 +89,5 @@ describe('applyAssessmentWeightings', () => {
     );
     expect(totals).toEqual([{ moduleId: 'M9', total: 0 }]);
     expect(weightingsAreComplete(totals)).toBe(false);
-  });
-});
-
-describe('programmeSplit', () => {
-  it('reads the configured split, defaulting to 30/70', () => {
-    expect(programmeSplit({ formative: 40, summative: 60 })).toEqual({
-      moduleAssessments: 40,
-      finalSummative: 60,
-    });
-    expect(programmeSplit(undefined)).toEqual({ moduleAssessments: 30, finalSummative: 70 });
   });
 });
