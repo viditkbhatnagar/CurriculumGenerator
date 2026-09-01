@@ -8730,19 +8730,34 @@ router.get(
         overallStatus = 'completed';
       }
 
-      // A step that is still writing must not be reported as finished.
+      // A step that is still writing must not be reported as finished — but a step whose run
+      // has died must not be reported as still running either.
       //
-      // Bull job records expire, and once one is gone the check above falls back to "there
-      // is data, therefore it is done". Steps 7, 8 and 9 build up their output module by
-      // module over the better part of an hour, so partial data is the normal state for
-      // most of a run — and reporting it complete told an author their assessments were
-      // ready when 21 of 46 modules had been written. She reviewed that document and
-      // reported the missing modules as a defect, which is a fair reading of what she was
-      // shown. stepProgress is the record of whether the step actually finished, so it
-      // wins over the presence of data.
+      // Bull job records expire, and once one is gone the check above falls back to "there is
+      // data, therefore it is done". Steps 7, 8 and 9 build up their output module by module
+      // over the better part of an hour, so partial data is the normal state for most of a
+      // run — and reporting it complete told an author her assessments were ready when 21 of
+      // 46 modules had been written.
+      //
+      // The first version of this fix then let `in_progress` override everything, which
+      // created the opposite failure: when a run died — a deploy, a restart, a crash — the
+      // step was pinned to "processing" with no job and no data, and the screen showed
+      // "Generating..." indefinitely. The author sat watching that for a day and hard-
+      // refreshed, which cannot help, because the staleness is in this response.
+      //
+      // Bull evicts only FINISHED jobs (removeOnComplete/removeOnFail); an active job always
+      // has a record. So with the queue enabled, no job means the step is genuinely not
+      // running, and no time heuristic is needed to say so. Without the queue, steps run
+      // in-process with no job to find, so the benefit of the doubt goes to "processing".
       const progress = (workflow.stepProgress || []).find((p: any) => p.step === step);
+      let stalled = false;
       if (progress?.status === 'in_progress' && !progress?.completedAt) {
-        overallStatus = 'processing';
+        if (jobStatus || !stepQueue) {
+          overallStatus = 'processing';
+        } else {
+          overallStatus = 'failed';
+          stalled = true;
+        }
       }
 
       res.json({
@@ -8752,6 +8767,12 @@ router.get(
           stepNumber: step,
           status: overallStatus,
           hasData,
+          // Set when the step was left marked in-progress by a run that is no longer
+          // running. The work has to be started again; nothing will advance it on its own.
+          stalled,
+          stalledReason: stalled
+            ? `Step ${step} was left mid-run — its generation stopped without finishing, which usually means the service restarted. ${hasData ? 'Some output was saved.' : 'No output was saved.'} Run the step again to continue.`
+            : undefined,
           job: jobStatus
             ? {
                 jobId: jobStatus.jobId,

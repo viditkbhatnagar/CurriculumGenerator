@@ -3903,7 +3903,19 @@ CRITICAL VALIDATION:
     const assessmentReadyCount = casesByType.assessment_ready?.length || 0;
 
     // Validation report per workflow v2.2
+    const modulesNeedingCases = (modules || []).map((m: any) => String(m?.id)).filter(Boolean);
+    const modulesWithoutCases = modulesNeedingCases.filter(
+      (id: string) => !moduleCoverage[id]?.length
+    );
     const validationReport = {
+      // Every other check below is `caseStudies.every(...)`, and `.every()` over an empty
+      // array is true — so a run that produced nothing at all passed every one of them and
+      // reported `isValid: true`. This is the check that cannot pass vacuously.
+      hasCaseStudies: caseStudies.length > 0,
+      // And whether the programme is actually covered. Case studies were generated for the
+      // first four modules only, and a 46-module programme reported itself valid with four
+      // of them served, because nothing compared the coverage against the module list.
+      allModulesCovered: modulesNeedingCases.length > 0 && modulesWithoutCases.length === 0,
       allMappedToModule: caseStudies.every(
         (cs: any) => cs.moduleId || cs.linkedModules?.length > 0
       ),
@@ -3924,6 +3936,12 @@ CRITICAL VALIDATION:
     };
 
     const validationIssues: string[] = [];
+    if (!validationReport.hasCaseStudies)
+      validationIssues.push('No case studies were generated for this programme');
+    if (!validationReport.allModulesCovered)
+      validationIssues.push(
+        `${modulesWithoutCases.length} of ${modulesNeedingCases.length} modules have no case study: ${modulesWithoutCases.slice(0, 8).join(', ')}${modulesWithoutCases.length > 8 ? '…' : ''}`
+      );
     if (!validationReport.allMappedToModule)
       validationIssues.push('Some cases not mapped to modules');
     if (!validationReport.allMappedToMLO) validationIssues.push('Some cases not mapped to MLOs');
@@ -3947,6 +3965,7 @@ CRITICAL VALIDATION:
       practiceCount,
       discussionCount,
       assessmentReadyCount,
+      modulesWithoutCases,
       validationReport,
       isValid,
       validationIssues,
@@ -7524,72 +7543,88 @@ CRITICAL REQUIREMENTS:
       ['practice', 'discussion'],
     ];
 
-    // Generate case studies for ALL modules in PARALLEL (2 per module)
-    const modulePromises: Promise<any[]>[] = modules
-      .slice(0, 4)
-      .map(async (mod: any, i: number) => {
-        const modReadings = coreReadings.filter((r: any) => r.moduleId === mod.id);
-        const [caseType1, caseType2] = caseTypePairs[i % caseTypePairs.length];
+    // Case studies for ALL modules, a few modules at a time.
+    //
+    // The comment here said "ALL modules in PARALLEL" over a `.slice(0, 4)`, and the slice
+    // was what actually ran: a 46-module programme received case studies for four of them,
+    // and the step still reported itself valid. The slice was a throttle, not a design —
+    // `Promise.all` over every module would open two model calls per module at once, 92 of
+    // them on this programme, which is what it was there to prevent.
+    //
+    // Bounded concurrency keeps the same peak load — four modules, eight calls in flight —
+    // while covering the whole programme.
+    const CASE_STUDY_MODULE_CONCURRENCY = 4;
+    const buildModuleCases = async (mod: any, i: number): Promise<any[]> => {
+      const modReadings = coreReadings.filter((r: any) => r.moduleId === mod.id);
+      const [caseType1, caseType2] = caseTypePairs[i % caseTypePairs.length];
 
-        loggingService.info(
-          `Step 8: Starting 2 case studies for module ${i + 1}/${Math.min(modules.length, 4)}`,
-          {
-            moduleId: mod.id,
-            moduleTitle: mod.title,
-            caseTypes: [caseType1, caseType2],
-          }
-        );
-
-        // Generate both case studies for this module in parallel
-        const [case1, case2] = await Promise.all([
-          this.generateCaseStudyForModule({
-            module: mod,
-            moduleIndex: i,
-            caseNumber: 1,
-            coreReadings: modReadings.slice(0, 3).map((r: any) => r.title),
-            caseType: caseType1,
-            tierInfo,
-            programTitle,
-            academicLevel,
-            industrySector,
-            targetLearner,
-            competencies,
-          }).catch((err) => {
-            loggingService.error(`Step 8: Error generating case 1 for module ${mod.id}`, {
-              error: err.message,
-            });
-            return null;
-          }),
-          this.generateCaseStudyForModule({
-            module: mod,
-            moduleIndex: i,
-            caseNumber: 2,
-            coreReadings: modReadings.slice(0, 3).map((r: any) => r.title),
-            caseType: caseType2,
-            tierInfo,
-            programTitle,
-            academicLevel,
-            industrySector,
-            targetLearner,
-            competencies,
-          }).catch((err) => {
-            loggingService.error(`Step 8: Error generating case 2 for module ${mod.id}`, {
-              error: err.message,
-            });
-            return null;
-          }),
-        ]);
-
-        loggingService.info(`Step 8: Module ${mod.id} case studies complete`, {
-          case1Type: case1?.caseType,
-          case2Type: case2?.caseType,
-        });
-
-        return [case1, case2].filter(Boolean);
+      loggingService.info(`Step 8: Starting 2 case studies for module ${i + 1}/${modules.length}`, {
+        moduleId: mod.id,
+        moduleTitle: mod.title,
+        caseTypes: [caseType1, caseType2],
       });
 
-    // Wait for ALL modules' case studies in parallel
-    const results = await Promise.all(modulePromises);
+      // Generate both case studies for this module in parallel
+      const [case1, case2] = await Promise.all([
+        this.generateCaseStudyForModule({
+          module: mod,
+          moduleIndex: i,
+          caseNumber: 1,
+          coreReadings: modReadings.slice(0, 3).map((r: any) => r.title),
+          caseType: caseType1,
+          tierInfo,
+          programTitle,
+          academicLevel,
+          industrySector,
+          targetLearner,
+          competencies,
+        }).catch((err) => {
+          loggingService.error(`Step 8: Error generating case 1 for module ${mod.id}`, {
+            error: err.message,
+          });
+          return null;
+        }),
+        this.generateCaseStudyForModule({
+          module: mod,
+          moduleIndex: i,
+          caseNumber: 2,
+          coreReadings: modReadings.slice(0, 3).map((r: any) => r.title),
+          caseType: caseType2,
+          tierInfo,
+          programTitle,
+          academicLevel,
+          industrySector,
+          targetLearner,
+          competencies,
+        }).catch((err) => {
+          loggingService.error(`Step 8: Error generating case 2 for module ${mod.id}`, {
+            error: err.message,
+          });
+          return null;
+        }),
+      ]);
+
+      loggingService.info(`Step 8: Module ${mod.id} case studies complete`, {
+        case1Type: case1?.caseType,
+        case2Type: case2?.caseType,
+      });
+
+      return [case1, case2].filter(Boolean);
+    };
+
+    const results: any[][] = [];
+    for (let start = 0; start < modules.length; start += CASE_STUDY_MODULE_CONCURRENCY) {
+      const batch = modules.slice(start, start + CASE_STUDY_MODULE_CONCURRENCY);
+      loggingService.info('Step 8: generating case studies for a batch of modules', {
+        from: start + 1,
+        to: Math.min(start + CASE_STUDY_MODULE_CONCURRENCY, modules.length),
+        of: modules.length,
+      });
+      const batchResults = await Promise.all(
+        batch.map((mod: any, j: number) => buildModuleCases(mod, start + j))
+      );
+      results.push(...batchResults);
+    }
 
     // Flatten and filter nulls
     const caseStudies = results.flat().filter((cs): cs is NonNullable<typeof cs> => cs !== null);
