@@ -3847,7 +3847,10 @@ CRITICAL VALIDATION:
    * Per workflow v2.2: Generate realistic, industry-relevant scenarios with
    * assessment hooks (NOT assessment questions)
    */
-  async processStep8(workflowId: string): Promise<ICurriculumWorkflow> {
+  async processStep8(
+    workflowId: string,
+    onProgress?: (pct: number) => void
+  ): Promise<ICurriculumWorkflow> {
     const workflow = await CurriculumWorkflow.findById(workflowId);
     if (!workflow || !workflow.step7) {
       throw new Error('Workflow not found or Step 7 not complete');
@@ -7553,7 +7556,15 @@ CRITICAL REQUIREMENTS:
     //
     // Bounded concurrency keeps the same peak load — four modules, eight calls in flight —
     // while covering the whole programme.
-    const CASE_STUDY_MODULE_CONCURRENCY = 4;
+    // Ten modules at a time — twenty calls in flight. Four was inherited from the version
+    // that only ever ran one batch, and at four this step took ninety minutes for a
+    // 46-module programme: twenty calls per minute of wall-clock is not the model being
+    // slow, it is twelve batches queued behind each other. Each call genuinely produces
+    // ~15,600 tokens (a full narrative, exhibits, 10-15 key facts, 5-8 misconceptions,
+    // terminology, a teaching note), so the work per case is real and cutting the output
+    // would mean giving the author less material rather than making the step efficient.
+    // Concurrency is the lever that costs nothing.
+    const CASE_STUDY_MODULE_CONCURRENCY = config.openai.step8ModuleConcurrency;
     const buildModuleCases = async (mod: any, i: number): Promise<any[]> => {
       const modReadings = coreReadings.filter((r: any) => r.moduleId === mod.id);
       const [caseType1, caseType2] = caseTypePairs[i % caseTypePairs.length];
@@ -7624,6 +7635,37 @@ CRITICAL REQUIREMENTS:
         batch.map((mod: any, j: number) => buildModuleCases(mod, start + j))
       );
       results.push(...batchResults);
+
+      // Say how far along it is, and keep what has been produced.
+      //
+      // This step reported no progress at all and wrote nothing until the very end, so an
+      // author watched "Generating Case Studies..." for an hour and a half with no way to
+      // tell whether it was working — and a crash at minute eighty would have thrown away
+      // every case study generated. Both are avoidable: the batch boundary is a natural
+      // checkpoint.
+      const modulesDone = Math.min(start + CASE_STUDY_MODULE_CONCURRENCY, modules.length);
+      onProgress?.(Math.round((modulesDone / modules.length) * 100));
+      try {
+        const partial = await CurriculumWorkflow.findById(workflowId);
+        if (partial) {
+          (partial as any).step8 = {
+            ...((partial as any).step8 || {}),
+            stage: 'generating',
+            caseStudies: results.flat().filter(Boolean),
+            modulesGenerated: modulesDone,
+            modulesTotal: modules.length,
+          };
+          partial.markModified('step8');
+          await partial.save();
+        }
+      } catch (err) {
+        // A checkpoint that fails must not take the run down with it.
+        loggingService.warn('Step 8: could not save partial case studies', {
+          workflowId,
+          modulesDone,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     // Flatten and filter nulls

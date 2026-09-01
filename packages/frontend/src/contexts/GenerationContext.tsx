@@ -57,7 +57,12 @@ export const STEP_ESTIMATED_DURATIONS: Record<number, number> = {
   5: 360, // Topic-Level Sources — needs research
   6: 450, // Reading Lists
   7: 1800, // Assessments — streams, many questions
-  8: 360, // Case Studies
+  // Case studies are two model calls per module, each producing a full narrative plus
+  // exhibits, key facts, misconceptions, terminology and a teaching note. 360s was the
+  // figure from when the step covered four modules regardless of programme size; a
+  // 46-module programme took ninety minutes and the author watched a six-minute estimate
+  // the whole time. ~20 minutes reflects the step now covering every module, ten at a time.
+  8: 1200, // Case Studies
   9: 210, // Glossary
   10: 240, // Lesson Plans — per module, chains across modules
   11: 120, // PPT Decks — per module

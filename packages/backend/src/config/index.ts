@@ -19,6 +19,7 @@ interface Config {
     embeddingModel: string;
     chatModel: string;
     reasoningEffort?: 'low' | 'medium' | 'high';
+    step8ModuleConcurrency: number;
     /** OpenAI-compatible gateway base URL (e.g. OpenRouter); undefined = OpenAI direct. */
     baseURL?: string;
   };
@@ -87,6 +88,14 @@ const config: Config = {
     chatModel: process.env.OPENAI_CHAT_MODEL || 'gpt-4o',
     reasoningEffort:
       (process.env.OPENAI_REASONING_EFFORT as 'low' | 'medium' | 'high') || undefined,
+    /**
+     * How many modules Step 8 generates case studies for at once (2 calls each).
+     *
+     * Tunable without a deploy, because the right value depends on the OpenAI account's
+     * rate limits rather than on anything in this code: too high and calls start being
+     * retried after 429s, which makes the step slower, not faster.
+     */
+    step8ModuleConcurrency: Number(process.env.STEP8_MODULE_CONCURRENCY) || 10,
     // Optional OpenAI-compatible gateway. Set OPENAI_BASE_URL to
     // https://openrouter.ai/api/v1 (with an sk-or-… key) to route the same
     // OpenAI models through OpenRouter; leave unset for OpenAI direct.
