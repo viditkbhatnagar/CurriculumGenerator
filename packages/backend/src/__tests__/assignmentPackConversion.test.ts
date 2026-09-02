@@ -19,6 +19,7 @@ jest.mock('../services/loggingService', () => ({
 }));
 
 import { AssignmentPackService } from '../services/assignmentPackService';
+import { scenarioProfileFor } from '../services/scenarioContext';
 
 const svc = new AssignmentPackService() as any;
 
@@ -122,5 +123,40 @@ describe('buildAssignmentPrompt without an approved summative', () => {
     expect(prompt).not.toContain('convert THIS, do not invent a new one');
     expect(prompt).not.toContain('MUST be exactly these outcome ids');
     expect(prompt).toContain('Business Intelligence & Data Visualisation');
+  });
+});
+
+describe('the pack is set where its assessment is set', () => {
+  it('uses the module index, so Step 12 matches Steps 7 and 8', () => {
+    // Deriving the setting from the module CODE put them in different countries: "M31"
+    // yields 31, but that module sits at index 30 — so the pack was set in a different
+    // region, with a different company, from the assessment it converts. And a module with
+    // no code at all (imported programmes carry empty codes) fell back to 0, giving every
+    // one of them the same organisation.
+    const atIndex30 = scenarioProfileFor(30);
+
+    const prompt: string = svc.buildAssignmentPrompt(
+      { ...moduleBase, moduleCode: 'M31', moduleIndex: 30 },
+      context,
+      'in_person'
+    );
+    expect(prompt).toContain(atIndex30.organisation);
+    expect(prompt).not.toContain(scenarioProfileFor(31).organisation);
+  });
+
+  it('does not collapse every code-less module onto the same organisation', () => {
+    const a: string = svc.buildAssignmentPrompt(
+      { ...moduleBase, moduleCode: '', moduleIndex: 3 },
+      context,
+      'in_person'
+    );
+    const b: string = svc.buildAssignmentPrompt(
+      { ...moduleBase, moduleCode: '', moduleIndex: 9 },
+      context,
+      'in_person'
+    );
+    expect(a).toContain(scenarioProfileFor(3).organisation);
+    expect(b).toContain(scenarioProfileFor(9).organisation);
+    expect(scenarioProfileFor(3).organisation).not.toBe(scenarioProfileFor(9).organisation);
   });
 });

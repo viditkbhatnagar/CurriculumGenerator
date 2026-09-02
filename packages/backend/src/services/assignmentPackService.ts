@@ -36,6 +36,14 @@ interface ModuleContext {
   totalHours: number;
   contactHours: number;
   independentHours: number;
+  /**
+   * The module's position in the programme's module list.
+   *
+   * The same index Steps 7 and 8 use, so a pack is set in the same place, with the same
+   * organisation, as the assessment it converts. Deriving it from the module CODE instead
+   * put them in different countries: "M31" gives 31, but that module sits at index 30.
+   */
+  moduleIndex?: number;
   /** The module summative approved in Step 7 — the pack is its learner-facing form. */
   approvedSummative?: {
     title?: string;
@@ -248,7 +256,7 @@ Binding constraints, which override the general guidance below:
     // continue into the later assignment packs" — so the same per-module profile Steps 7 and 8
     // use is applied here, keyed on the module's own sequence so a pack is set in the same
     // place as the assessment it converts.
-    const packProfile = scenarioProfileFor(Number(module.moduleCode?.replace(/\D/g, '')) || 0);
+    const packProfile = scenarioProfileFor(module.moduleIndex ?? 0);
 
     return `Generate a COMPLETE ASSIGNMENT PACK for the following module, tailored for ${variantLabel} delivery.
 ${scenarioDirective(packProfile, module.moduleTitle)}

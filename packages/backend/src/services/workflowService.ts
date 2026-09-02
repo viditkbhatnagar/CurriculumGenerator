@@ -5015,6 +5015,7 @@ CRITICAL VALIDATION:
         // step4.modules[] uses `code`; some legacy/intermediate shapes use `moduleCode`.
         // Fall back across both so assignmentId never resolves to "undefined-<variant>".
         moduleCode: mod.moduleCode || mod.code,
+        moduleIndex: modules.indexOf(mod),
         moduleTitle: mod.title,
         mlos: (mod.mlos || []).map((mlo: any) => ({
           id: mlo.id,
@@ -5160,6 +5161,7 @@ CRITICAL VALIDATION:
     const moduleContext = {
       moduleId: moduleToProcess.id,
       moduleCode: resolvedModuleCode,
+      moduleIndex: expectedModuleIndex,
       moduleTitle: moduleToProcess.title,
       mlos: (moduleToProcess.mlos || []).map((mlo: any) => ({
         id: mlo.id,
