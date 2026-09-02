@@ -19,6 +19,7 @@ import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
 import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
 import { approvedSummativeFor, step7SpecifiesExam } from './step7Authority';
+import { scenarioProfileFor, scenarioDirective } from './scenarioContext';
 import {
   gatherModuleSources,
   deriveSubjectFields,
@@ -7869,6 +7870,8 @@ Generate ONE ${caseType.replace('_', ' ').toUpperCase()} case study for this mod
 
 **GENERATE THE FOLLOWING:**
 
+${scenarioDirective(scenarioProfileFor(moduleIndex), mod.title)}
+
 1. **CASE IDENTIFICATION:**
    - id: "case-${mod.id}-${caseNumber}"
    - moduleId: "${mod.id}"
@@ -7908,7 +7911,9 @@ Generate ONE ${caseType.replace('_', ' ').toUpperCase()} case study for this mod
 
 5. **INDUSTRY CONTEXT:**
    - industryContext: Specific industry setting within ${industrySector}
-   - brandName: Fictitious organisation name (NEVER real companies)
+   - brandName: use EXACTLY the organisation named in the setting block above (it is
+     fictitious). Do not invent a different one — ninety-two independent calls each inventing
+     a company produced the same name fifty-nine times.
    - isRealBrand: false (ALWAYS)
    - protagonistName: Realistic name for main character
    - protagonistRole: Job title matching Tier ${tierInfo.tier} (${tierInfo.protagonist})

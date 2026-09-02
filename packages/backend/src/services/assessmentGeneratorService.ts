@@ -35,6 +35,7 @@ import {
   PracticalSampleTask,
 } from '../types/assessmentGenerator';
 import { balanceMcqPositions } from '../utils/mcqBalance';
+import { scenarioProfileFor, scenarioDirective } from './scenarioContext';
 import { derivePloAlignment } from '../utils/ploAlignment';
 import {
   normaliseBloom,
@@ -155,7 +156,14 @@ export class AssessmentGeneratorService {
    */
   private spellingDirective(request: AssessmentGenerationRequest): string {
     const market = request.userPreferences?.targetMarket?.trim();
-    if (!market) return 'Use UK English spelling throughout.';
+    if (!market) {
+      // This used to return "Use UK English spelling throughout." on its own, and that one
+      // line is where the programme's UK bias came from: a model told "UK English" supplies
+      // UK companies, UK cities, GBP and the FCA to match. Across this programme's Step 7 and
+      // Step 8 that produced 7,328 UK markers and no reference to the UAE at all, on a Dubai
+      // programme. Spelling is a house style; it is not a jurisdiction.
+      return 'Use UK English spelling throughout ("organisation", "analyse", "programme"). This is a SPELLING convention only — it does not mean the scenario is set in the UK, and must not lead to UK companies, UK cities, GBP or UK regulators. The setting is specified separately below.';
+    }
     return `Localise this assessment to the ${market} context: use the English spelling, examples, brand/organisation names, currency and regulatory references appropriate to ${market}. Do NOT use UK-specific brands, currency (£/GBP) or regulators unless ${market} explicitly is the UK.`;
   }
 
@@ -659,6 +667,8 @@ ${(module.topics || []).map((t: any) => `- ${t.title || t}`).join('\n')}
       plan.formats.filter((_, i) => i !== slot).join(', ') || 'none'
     } — do not duplicate their coverage)
 - THE LEVEL THIS ASSESSMENT MUST REACH: ${slotBloom.toUpperCase()}
+
+${scenarioDirective(scenarioProfileFor(moduleIndex), module.title)}
 
 **HOW MANY TASKS, AND OF WHAT KIND, AT ${slotBloom.toUpperCase()} LEVEL**
 Produce ${questionPlan.min}-${questionPlan.max} questions/tasks — ${questionPlan.guidance}.

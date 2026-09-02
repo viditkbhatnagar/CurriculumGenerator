@@ -15,6 +15,7 @@
 
 import { openaiService } from './openaiService';
 import { loggingService } from './loggingService';
+import { scenarioProfileFor, scenarioDirective } from './scenarioContext';
 import {
   ICurriculumWorkflow,
   AssignmentDeliveryVariant,
@@ -243,7 +244,14 @@ Binding constraints, which override the general guidance below:
 `
       : '';
 
+    // The reviewer asked for the setting rules "preferably upstream so the same issue does not
+    // continue into the later assignment packs" — so the same per-module profile Steps 7 and 8
+    // use is applied here, keyed on the module's own sequence so a pack is set in the same
+    // place as the assessment it converts.
+    const packProfile = scenarioProfileFor(Number(module.moduleCode?.replace(/\D/g, '')) || 0);
+
     return `Generate a COMPLETE ASSIGNMENT PACK for the following module, tailored for ${variantLabel} delivery.
+${scenarioDirective(packProfile, module.moduleTitle)}
 ${approvedBlock}
 **PROGRAM CONTEXT:**
 Program: ${context.programTitle}
