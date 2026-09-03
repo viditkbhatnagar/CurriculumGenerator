@@ -20,7 +20,7 @@ import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundi
 import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
 import { approvedSummativeFor, step7SpecifiesExam } from './step7Authority';
 import config from '../config';
-import { scenarioProfileFor, scenarioDirective } from './scenarioContext';
+import { scenarioProfileFor, scenarioDirective, ukLawInNonUkCases } from './scenarioContext';
 import {
   gatherModuleSources,
   deriveSubjectFields,
@@ -3908,6 +3908,15 @@ CRITICAL VALIDATION:
     const assessmentReadyCount = casesByType.assessment_ready?.length || 0;
 
     // Validation report per workflow v2.2
+    // Cases citing UK law while set elsewhere. The prompt forbids this by name and the model
+    // still does it, so it is measured and reported rather than assumed away.
+    const moduleOrder = new Map<string, number>(
+      (modules || []).map((m: any, idx: number) => [String(m?.id), idx])
+    );
+    const ukLawLeaks = ukLawInNonUkCases(caseStudies, scenarioProfileFor, (id: string) =>
+      moduleOrder.has(id) ? (moduleOrder.get(id) as number) : -1
+    );
+
     const modulesNeedingCases = (modules || []).map((m: any) => String(m?.id)).filter(Boolean);
     const modulesWithoutCases = modulesNeedingCases.filter(
       (id: string) => !moduleCoverage[id]?.length
@@ -3921,6 +3930,9 @@ CRITICAL VALIDATION:
       // first four modules only, and a 46-module programme reported itself valid with four
       // of them served, because nothing compared the coverage against the module list.
       allModulesCovered: modulesNeedingCases.length > 0 && modulesWithoutCases.length === 0,
+      // A scenario set in Milan citing the UK Bribery Act. The prompt forbids it by name and
+      // the model does it anyway, so the outcome is measured rather than trusted.
+      noUkLawOutsideUk: ukLawLeaks.length === 0,
       // Coverage alone hid a module holding one case where every other module had two: the
       // reviewer spotted it because the document jumped from one company straight to the next.
       allModulesHaveBothCases:
@@ -3950,6 +3962,14 @@ CRITICAL VALIDATION:
     );
 
     const validationIssues: string[] = [];
+    if (ukLawLeaks.length > 0) {
+      validationIssues.push(
+        `${ukLawLeaks.length} case(s) set outside the UK cite UK legislation: ${ukLawLeaks
+          .slice(0, 5)
+          .map((l) => `${l.organisation} (${l.markers.join(', ')})`)
+          .join('; ')}${ukLawLeaks.length > 5 ? '…' : ''}`
+      );
+    }
     if (modulesWithOneCase.length > 0) {
       validationIssues.push(
         `${modulesWithOneCase.length} module(s) have only one case study instead of two: ${modulesWithOneCase.join(', ')}`
@@ -3986,6 +4006,7 @@ CRITICAL VALIDATION:
       assessmentReadyCount,
       modulesWithoutCases,
       modulesWithOneCase,
+      ukLawLeaks,
       validationReport,
       isValid,
       validationIssues,

@@ -32,8 +32,14 @@ export interface ScenarioProfile {
   region: string;
   /** Currency appropriate to that region. */
   currency: string;
-  /** Two or three plausible cities, so the model does not reach for London by default. */
-  cities: string;
+  /**
+   * The ONE city this company is based in.
+   *
+   * A list let each of a module's two independent calls pick differently: Vallonia Health was
+   * in Milan in one case and Amsterdam in its pair. Same defect as the headcount drift — a
+   * standing fact about a company cannot be left to a per-call choice.
+   */
+  city: string;
   /** Sector for the organisation, varied independently of region. */
   industry: string;
   /** Rough size, so the programme is not entirely large corporates. */
@@ -69,7 +75,7 @@ interface Organisation {
 interface Region {
   region: string;
   currency: string;
-  cities: string;
+  cities: string[];
   /**
    * Organisations plausible for THIS region.
    *
@@ -91,7 +97,7 @@ const REGIONS: Region[] = [
   {
     region: 'UAE / GCC',
     currency: 'AED',
-    cities: 'Dubai, Abu Dhabi, Sharjah, Riyadh, Doha',
+    cities: ['Dubai', 'Abu Dhabi', 'Sharjah', 'Riyadh', 'Doha'],
     organisations: [
       { name: 'Al Noor Trading', industry: 'logistics and freight forwarding' },
       { name: 'Zayed Industrial Group', industry: 'industrial manufacturing' },
@@ -105,7 +111,7 @@ const REGIONS: Region[] = [
   {
     region: 'Europe (EU)',
     currency: 'EUR',
-    cities: 'Amsterdam, Berlin, Madrid, Warsaw, Milan',
+    cities: ['Amsterdam', 'Berlin', 'Madrid', 'Warsaw', 'Milan'],
     organisations: [
       { name: 'Nordwind Energie', industry: 'renewable energy' },
       { name: 'Vallonia Health', industry: 'healthcare services' },
@@ -119,7 +125,7 @@ const REGIONS: Region[] = [
   {
     region: 'Asia-Pacific',
     currency: 'SGD or INR',
-    cities: 'Singapore, Bengaluru, Kuala Lumpur, Tokyo',
+    cities: ['Singapore', 'Bengaluru', 'Kuala Lumpur', 'Tokyo'],
     organisations: [
       { name: 'Sunda Pacific Freight', industry: 'logistics and freight forwarding' },
       { name: 'Kavitha Agritech', industry: 'agriculture and agri-tech' },
@@ -134,7 +140,7 @@ const REGIONS: Region[] = [
     region:
       'jurisdiction-neutral (do not name a country; use generic settings and a neutral currency reference)',
     currency: 'a neutral unit — write "USD" or simply "currency units"',
-    cities: 'unnamed — refer to "the head office", "the regional hub"',
+    cities: ['unnamed — refer to "the head office"', '"the regional hub"'],
     organisations: [
       { name: 'Orbit Learning', industry: 'education technology' },
       { name: 'Waypoint Consulting', industry: 'professional and consulting services' },
@@ -148,7 +154,7 @@ const REGIONS: Region[] = [
   {
     region: 'United Kingdom',
     currency: 'GBP',
-    cities: 'Manchester, Bristol, Leeds, Glasgow',
+    cities: ['Manchester', 'Bristol', 'Leeds', 'Glasgow'],
     organisations: [
       { name: 'Northgate Manufacturing', industry: 'industrial manufacturing' },
       { name: 'Thames Valley Care', industry: 'healthcare services' },
@@ -162,7 +168,7 @@ const REGIONS: Region[] = [
   {
     region: 'Africa / Middle East (non-GCC)',
     currency: 'USD or local currency',
-    cities: 'Nairobi, Cairo, Casablanca, Johannesburg',
+    cities: ['Nairobi', 'Cairo', 'Casablanca', 'Johannesburg'],
     organisations: [
       { name: 'Serengeti Fresh', industry: 'agriculture and agri-tech' },
       { name: 'Nile Delta Logistics', industry: 'logistics and freight forwarding' },
@@ -176,7 +182,7 @@ const REGIONS: Region[] = [
   {
     region: 'North America',
     currency: 'USD or CAD',
-    cities: 'Toronto, Chicago, Austin, Vancouver',
+    cities: ['Toronto', 'Chicago', 'Austin', 'Vancouver'],
     organisations: [
       { name: 'Cascadia Outfitters', industry: 'retail and e-commerce' },
       { name: 'Great Lakes Robotics', industry: 'industrial automation' },
@@ -223,7 +229,8 @@ export function scenarioProfileFor(index: number): ScenarioProfile {
   return {
     region: region.region,
     currency: region.currency,
-    cities: region.cities,
+    // One city, chosen deterministically, so both of a module's cases agree on it.
+    city: region.cities[(i * 2 + lap) % region.cities.length],
     // The industry comes from the company, not from a parallel rotation. Rotating it
     // separately produced "Broadleaf Utilities, a fashion and apparel scale-up".
     industry: org.industry,
@@ -247,7 +254,7 @@ export function scenarioDirective(profile: ScenarioProfile, moduleTitle?: string
 Organisation: ${profile.organisation} — ${profile.size}, in ${profile.industry}.
 Region: ${profile.region}
 Currency: ${profile.currency}
-Plausible locations: ${profile.cities}
+Based in: ${profile.city}
 
 RULES ON SETTING — these are requirements, not suggestions:
 - Use ${profile.organisation} as the organisation in this module's scenarios. Do NOT invent a
@@ -258,6 +265,7 @@ RULES ON SETTING — these are requirements, not suggestions:
   figures, because another case study is being written about the same company and the two
   must agree:
     * Headcount: approximately ${profile.headcount} employees. Use this number, not another.
+    * Head office: ${profile.city}. Do not relocate the company to another city.
     * Size and character: ${profile.size}
     * Sector: ${profile.industry}
   Any other baseline figure you introduce (sites, volumes, revenue) should be presented as
@@ -285,3 +293,46 @@ UK and jurisdiction-neutral contexts rather than defaulting to any one of them. 
 spelling is the house style and does not imply a UK setting. Cite a country's laws or
 regulators only where the subject matter makes that jurisdiction genuinely relevant.
 `.trim();
+
+/** UK statutes and regulators that kept appearing in scenarios set elsewhere. */
+const UK_LEGAL_MARKERS = [
+  'Bribery Act',
+  'Equality Act',
+  'UK GDPR',
+  'Companies House',
+  'HMRC',
+  'Financial Conduct Authority',
+];
+
+/**
+ * Case studies that cite UK law while being set outside the UK.
+ *
+ * The prompt forbids this by name, and the model does it anyway — a Nairobi construction firm
+ * and a Gulf food producer both "aligned to UK Bribery Act principles", and an Italian
+ * healthcare SME did the same on the very next run after the rule was tightened. An
+ * instruction the model can quietly ignore is not a guarantee, so the result is measured
+ * rather than assumed, and the author is told which cases to look at.
+ */
+export function ukLawInNonUkCases(
+  caseStudies: any[],
+  profileFor: (index: number) => ScenarioProfile,
+  moduleIndexOf: (moduleId: string) => number
+): { moduleId: string; organisation: string; markers: string[] }[] {
+  const out: { moduleId: string; organisation: string; markers: string[] }[] = [];
+  for (const cs of caseStudies || []) {
+    const idx = moduleIndexOf(String(cs?.moduleId || ''));
+    if (idx < 0) continue;
+    const profile = profileFor(idx);
+    if (profile.region.startsWith('United Kingdom')) continue;
+    const text = JSON.stringify(cs ?? {});
+    const markers = UK_LEGAL_MARKERS.filter((m) => text.includes(m));
+    if (markers.length > 0) {
+      out.push({
+        moduleId: String(cs.moduleId),
+        organisation: String(cs.brandName || cs.organizationName || profile.organisation),
+        markers,
+      });
+    }
+  }
+  return out;
+}
