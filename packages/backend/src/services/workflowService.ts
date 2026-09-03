@@ -3921,6 +3921,11 @@ CRITICAL VALIDATION:
       // first four modules only, and a 46-module programme reported itself valid with four
       // of them served, because nothing compared the coverage against the module list.
       allModulesCovered: modulesNeedingCases.length > 0 && modulesWithoutCases.length === 0,
+      // Coverage alone hid a module holding one case where every other module had two: the
+      // reviewer spotted it because the document jumped from one company straight to the next.
+      allModulesHaveBothCases:
+        modulesNeedingCases.length > 0 &&
+        modulesNeedingCases.every((id: string) => (moduleCoverage[id]?.length || 0) >= 2),
       allMappedToModule: caseStudies.every(
         (cs: any) => cs.moduleId || cs.linkedModules?.length > 0
       ),
@@ -3940,7 +3945,16 @@ CRITICAL VALIDATION:
       noAssessmentQuestions: true, // Hooks only, no MCQs
     };
 
+    const modulesWithOneCase = modulesNeedingCases.filter(
+      (id: string) => (moduleCoverage[id]?.length || 0) === 1
+    );
+
     const validationIssues: string[] = [];
+    if (modulesWithOneCase.length > 0) {
+      validationIssues.push(
+        `${modulesWithOneCase.length} module(s) have only one case study instead of two: ${modulesWithOneCase.join(', ')}`
+      );
+    }
     if (!validationReport.hasCaseStudies)
       validationIssues.push('No case studies were generated for this programme');
     if (!validationReport.allModulesCovered)
@@ -3971,6 +3985,7 @@ CRITICAL VALIDATION:
       discussionCount,
       assessmentReadyCount,
       modulesWithoutCases,
+      modulesWithOneCase,
       validationReport,
       isValid,
       validationIssues,
@@ -7614,11 +7629,33 @@ CRITICAL REQUIREMENTS:
           industrySector,
           targetLearner,
           competencies,
-        }).catch((err) => {
-          loggingService.error(`Step 8: Error generating case 2 for module ${mod.id}`, {
+        }).catch(async (err) => {
+          // One retry, then record it. A swallowed failure left M38 with a single case study
+          // in a programme where every other module had two, and nothing reported it — the
+          // reviewer found it by noticing the document jumped straight to the next company.
+          loggingService.warn(`Step 8: retrying case 2 for module ${mod.id}`, {
             error: err.message,
           });
-          return null;
+          try {
+            return await this.generateCaseStudyForModule({
+              module: mod,
+              moduleIndex: i,
+              caseNumber: 2,
+              coreReadings: modReadings.slice(0, 3).map((r: any) => r.title),
+              caseType: caseType2,
+              tierInfo,
+              programTitle,
+              academicLevel,
+              industrySector,
+              targetLearner,
+              competencies,
+            });
+          } catch (retryErr) {
+            loggingService.error(`Step 8: gave up on case 2 for module ${mod.id}`, {
+              error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+            });
+            return null;
+          }
         }),
       ]);
 

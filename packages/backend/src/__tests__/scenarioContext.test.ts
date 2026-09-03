@@ -95,3 +95,60 @@ describe('INTERNATIONAL_BALANCE_RULE', () => {
     expect(INTERNATIONAL_BALANCE_RULE).toMatch(/jurisdiction-neutral/);
   });
 });
+
+describe("the reviewer's second round of scenario defects", () => {
+  it('gives a company an industry that fits its name', () => {
+    // She found four: "Broadleaf Utilities is a fashion and apparel scale-up", "Cortado
+    // Foods... construction and real estate", "Vantage Rail is a healthcare services SME",
+    // "Kilimanjaro Telecom... education technology". Industry used to be rotated separately
+    // from the name and simply collided with it.
+    const expected = {
+      'Broadleaf Utilities': 'utilities',
+      'Cortado Foods': 'food',
+      'Vantage Rail': 'rail',
+      'Kilimanjaro Telecom': 'telecommunications',
+      'Silverbirch Publishing': 'publishing',
+      'Khaleej Renewables': 'renewable',
+      'Straits Clinics': 'healthcare',
+      'Atlas Coast Construction': 'construction',
+    };
+    const seen = {};
+    for (let i = 0; i < 46; i += 1) {
+      const p = scenarioProfileFor(i);
+      seen[p.organisation] = p.industry;
+    }
+    for (const [org, mustContain] of Object.entries(expected)) {
+      if (seen[org]) expect(seen[org]).toContain(mustContain);
+    }
+  });
+
+  it('pins one headcount per company so its two cases cannot disagree', () => {
+    // Khaleej Renewables had 6,500 employees in one case and 7,800 in its pair; the two
+    // cases are separate model calls that never see each other.
+    const p = scenarioProfileFor(5);
+    expect(typeof p.headcount).toBe('number');
+    expect(p.headcount).toBeGreaterThan(0);
+    const text = scenarioDirective(p, 'Any module');
+    expect(text).toContain('approximately ' + p.headcount + ' employees');
+    expect(text).toMatch(/must use these exact/i);
+  });
+
+  it('forbids UK statutes outside the UK, and permits them inside it', () => {
+    // A Nairobi construction case aligned its compliance to the UK Bribery Act, and a Gulf
+    // food producer did the same.
+    const all = Array.from({ length: 46 }, (_, i) => scenarioProfileFor(i));
+    const uk = all.find((p) => p.region.startsWith('United Kingdom'));
+    const nonUk = all.find((p) => p.region.startsWith('Africa'));
+    expect(scenarioDirective(uk, 'M')).toContain('This scenario IS set in the UK');
+    const other = scenarioDirective(nonUk, 'M');
+    expect(other).toContain('Do NOT cite the UK Bribery Act');
+    expect(other).toContain('aligned with');
+  });
+
+  it('states the sector as a requirement, not a suggestion', () => {
+    const p = scenarioProfileFor(3);
+    const text = scenarioDirective(p, 'M');
+    expect(text).toContain('operates in ' + p.industry);
+    expect(text).toMatch(/do not describe it as being in any other industry/i);
+  });
+});

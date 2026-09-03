@@ -44,7 +44,7 @@ import { loggingService } from './loggingService';
 //     guide and rubric as three separate artefacts.
 // v10: Step 7 renders Bloom levels — per assessment and per question — which were stored
 //      but shown only for PLOs, MLOs and lessons.
-const EXPORT_FORMAT_VERSION = 'v17';
+const EXPORT_FORMAT_VERSION = 'v18';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {

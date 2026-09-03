@@ -38,8 +38,32 @@ export interface ScenarioProfile {
   industry: string;
   /** Rough size, so the programme is not entirely large corporates. */
   size: string;
+  /**
+   * The company's fixed baseline figures.
+   *
+   * A module's two case studies are separate model calls that never see each other, so each
+   * invented its own numbers for the same company: Khaleej Renewables had 6,500 employees in
+   * one case and 7,800 in its pair, and Silverbirch Publishing moved from 2,500 shipments a
+   * month to 400. Stating the figures once, and requiring both cases to use them, is the only
+   * way two independent calls can agree.
+   */
+  headcount: number;
   /** The fictitious organisation this module's scenarios are about. */
   organisation: string;
+}
+
+interface Organisation {
+  name: string;
+  /**
+   * The sector this company is in — carried WITH the name, not chosen separately.
+   *
+   * Industry used to be a separate rotation indexed off the module number, so it collided
+   * with names that already imply a sector: "Broadleaf Utilities is a fashion and apparel
+   * scale-up", "Cortado Foods... construction and real estate", "Vantage Rail is a healthcare
+   * services SME", "Kilimanjaro Telecom... education technology". The reviewer caught all
+   * four. A name and its industry are one fact, so they are stored as one.
+   */
+  industry: string;
 }
 
 interface Region {
@@ -47,13 +71,13 @@ interface Region {
   currency: string;
   cities: string;
   /**
-   * Organisation names plausible for THIS region.
+   * Organisations plausible for THIS region.
    *
    * Kept per-region rather than in one pool: a flat list indexed independently of the region
    * produced "Nordwind Energie" as a UK company and "Zayed Logistics Group" as an EU one,
    * which an academic reviewer would notice immediately.
    */
-  organisations: string[];
+  organisations: Organisation[];
 }
 
 /**
@@ -69,13 +93,13 @@ const REGIONS: Region[] = [
     currency: 'AED',
     cities: 'Dubai, Abu Dhabi, Sharjah, Riyadh, Doha',
     organisations: [
-      'Al Noor Trading',
-      'Zayed Logistics Group',
-      'Falcon Bay Hospitality',
-      'Sahara Foods',
-      'Gulf Meridian Health',
-      'Khaleej Renewables',
-      'Marina Heights Property',
+      { name: 'Al Noor Trading', industry: 'logistics and freight forwarding' },
+      { name: 'Zayed Industrial Group', industry: 'industrial manufacturing' },
+      { name: 'Falcon Bay Hospitality', industry: 'hospitality and tourism' },
+      { name: 'Sahara Foods', industry: 'food and beverage manufacturing' },
+      { name: 'Gulf Meridian Health', industry: 'healthcare services' },
+      { name: 'Khaleej Renewables', industry: 'renewable energy' },
+      { name: 'Marina Heights Property', industry: 'construction and real estate' },
     ],
   },
   {
@@ -83,13 +107,13 @@ const REGIONS: Region[] = [
     currency: 'EUR',
     cities: 'Amsterdam, Berlin, Madrid, Warsaw, Milan',
     organisations: [
-      'Nordwind Energie',
-      'Vallonia Health',
-      'Brava Mobility',
-      'Lindgren Textiles',
-      'Cortado Foods',
-      'Alpenblick Logistik',
-      'Delfland Analytics',
+      { name: 'Nordwind Energie', industry: 'renewable energy' },
+      { name: 'Vallonia Health', industry: 'healthcare services' },
+      { name: 'Brava Mobility', industry: 'automotive and mobility' },
+      { name: 'Lindgren Textiles', industry: 'fashion and apparel' },
+      { name: 'Cortado Foods', industry: 'food and beverage manufacturing' },
+      { name: 'Alpenblick Logistik', industry: 'logistics and freight forwarding' },
+      { name: 'Delfland Analytics', industry: 'professional and consulting services' },
     ],
   },
   {
@@ -97,13 +121,13 @@ const REGIONS: Region[] = [
     currency: 'SGD or INR',
     cities: 'Singapore, Bengaluru, Kuala Lumpur, Tokyo',
     organisations: [
-      'Sunda Pacific Freight',
-      'Kavitha Agritech',
-      'Marina Bay Analytics',
-      'Sakura Home Goods',
-      'Rangoli Apparel',
-      'Straits Clinics',
-      'Himalaya Learning',
+      { name: 'Sunda Pacific Freight', industry: 'logistics and freight forwarding' },
+      { name: 'Kavitha Agritech', industry: 'agriculture and agri-tech' },
+      { name: 'Marina Bay Analytics', industry: 'professional and consulting services' },
+      { name: 'Sakura Home Goods', industry: 'retail and e-commerce' },
+      { name: 'Rangoli Apparel', industry: 'fashion and apparel' },
+      { name: 'Straits Clinics', industry: 'healthcare services' },
+      { name: 'Himalaya Learning', industry: 'education technology' },
     ],
   },
   {
@@ -112,13 +136,13 @@ const REGIONS: Region[] = [
     currency: 'a neutral unit — write "USD" or simply "currency units"',
     cities: 'unnamed — refer to "the head office", "the regional hub"',
     organisations: [
-      'Orbit Learning',
-      'Waypoint Consulting',
-      'Solstice Renewables',
-      'Lumen Diagnostics',
-      'Anchor Point Shipping',
-      'Vantage Rail',
-      'Talos Engineering',
+      { name: 'Orbit Learning', industry: 'education technology' },
+      { name: 'Waypoint Consulting', industry: 'professional and consulting services' },
+      { name: 'Solstice Renewables', industry: 'renewable energy' },
+      { name: 'Lumen Diagnostics', industry: 'healthcare services' },
+      { name: 'Anchor Point Shipping', industry: 'logistics and freight forwarding' },
+      { name: 'Vantage Rail', industry: 'rail transport and infrastructure' },
+      { name: 'Talos Engineering', industry: 'industrial manufacturing' },
     ],
   },
   {
@@ -126,13 +150,13 @@ const REGIONS: Region[] = [
     currency: 'GBP',
     cities: 'Manchester, Bristol, Leeds, Glasgow',
     organisations: [
-      'Northgate Manufacturing',
-      'Thames Valley Care',
-      'Kestrel Media',
-      'Broadleaf Utilities',
-      'Silverbirch Publishing',
-      'Harbour & Fields',
-      'Highfield Dairy',
+      { name: 'Northgate Manufacturing', industry: 'industrial manufacturing' },
+      { name: 'Thames Valley Care', industry: 'healthcare services' },
+      { name: 'Kestrel Media', industry: 'media and entertainment' },
+      { name: 'Broadleaf Utilities', industry: 'utilities and energy networks' },
+      { name: 'Silverbirch Publishing', industry: 'publishing and media' },
+      { name: 'Harbour & Fields', industry: 'retail and e-commerce' },
+      { name: 'Highfield Dairy', industry: 'food and beverage manufacturing' },
     ],
   },
   {
@@ -140,13 +164,13 @@ const REGIONS: Region[] = [
     currency: 'USD or local currency',
     cities: 'Nairobi, Cairo, Casablanca, Johannesburg',
     organisations: [
-      'Serengeti Fresh',
-      'Nile Delta Logistics',
-      'Atlas Coast Construction',
-      'Baobab Financial',
-      'Rift Valley Agri',
-      'Kilimanjaro Telecom',
-      'Sahel Solar',
+      { name: 'Serengeti Fresh', industry: 'agriculture and agri-tech' },
+      { name: 'Nile Delta Logistics', industry: 'logistics and freight forwarding' },
+      { name: 'Atlas Coast Construction', industry: 'construction and real estate' },
+      { name: 'Baobab Financial', industry: 'financial services' },
+      { name: 'Rift Valley Agri', industry: 'agriculture and agri-tech' },
+      { name: 'Kilimanjaro Telecom', industry: 'telecommunications' },
+      { name: 'Sahel Solar', industry: 'renewable energy' },
     ],
   },
   {
@@ -154,35 +178,19 @@ const REGIONS: Region[] = [
     currency: 'USD or CAD',
     cities: 'Toronto, Chicago, Austin, Vancouver',
     organisations: [
-      'Cascadia Outfitters',
-      'Great Lakes Robotics',
-      'Sierra Foods',
-      'Copperline Telecom',
-      'Ironwood Property',
-      'Peregrine Insurance',
-      'Verdant Grocers',
+      { name: 'Cascadia Outfitters', industry: 'retail and e-commerce' },
+      { name: 'Great Lakes Robotics', industry: 'industrial automation' },
+      { name: 'Sierra Foods', industry: 'food and beverage manufacturing' },
+      { name: 'Copperline Telecom', industry: 'telecommunications' },
+      { name: 'Ironwood Property', industry: 'construction and real estate' },
+      { name: 'Peregrine Insurance', industry: 'financial services' },
+      { name: 'Verdant Grocers', industry: 'retail and e-commerce' },
     ],
   },
 ];
 
-const INDUSTRIES = [
-  'retail and e-commerce',
-  'logistics and freight forwarding',
-  'hospitality and tourism',
-  'healthcare services',
-  'financial services',
-  'renewable energy',
-  'food and beverage manufacturing',
-  'professional and consulting services',
-  'construction and real estate',
-  'education technology',
-  'telecommunications',
-  'agriculture and agri-tech',
-  'fashion and apparel',
-  'automotive and mobility',
-  'media and entertainment',
-  'public sector and non-profit',
-];
+/** Headcount for each size band, in the same order — one fact, stated once. */
+const SIZE_HEADCOUNT = [40, 200, 800, 4200, 25, 300];
 
 const SIZES = [
   'a family-owned SME of about 40 staff',
@@ -207,13 +215,21 @@ export function scenarioProfileFor(index: number): ScenarioProfile {
   // Which time round the rotation this is, so consecutive visits to the same region get
   // different companies rather than the same one every seventh module.
   const lap = Math.floor(i / REGIONS.length);
+  const org = region.organisations[lap % region.organisations.length];
+  // Derived from the size band so the headcount and the description cannot contradict
+  // each other, and deterministic so a regenerated module keeps the same company.
+  const sizeIndex = (i * 5 + 2) % SIZES.length;
+  const headcount = SIZE_HEADCOUNT[sizeIndex];
   return {
     region: region.region,
     currency: region.currency,
     cities: region.cities,
-    industry: INDUSTRIES[(i * 3 + 1) % INDUSTRIES.length],
-    size: SIZES[(i * 5 + 2) % SIZES.length],
-    organisation: region.organisations[lap % region.organisations.length],
+    // The industry comes from the company, not from a parallel rotation. Rotating it
+    // separately produced "Broadleaf Utilities, a fashion and apparel scale-up".
+    industry: org.industry,
+    size: SIZES[sizeIndex],
+    headcount,
+    organisation: org.name,
   };
 }
 
@@ -236,14 +252,27 @@ Plausible locations: ${profile.cities}
 RULES ON SETTING — these are requirements, not suggestions:
 - Use ${profile.organisation} as the organisation in this module's scenarios. Do NOT invent a
   different company, and do NOT reuse a company from another module.
+- ${profile.organisation} operates in ${profile.industry}. Everything about it must fit that
+  sector — do not describe it as being in any other industry.
+- FIXED FACTS about this company. Every case study for this module must use these exact
+  figures, because another case study is being written about the same company and the two
+  must agree:
+    * Headcount: approximately ${profile.headcount} employees. Use this number, not another.
+    * Size and character: ${profile.size}
+    * Sector: ${profile.industry}
+  Any other baseline figure you introduce (sites, volumes, revenue) should be presented as
+  specific to THIS case's situation, not as a standing fact about the company.
 - Set the scenario in ${profile.region}. Use ${profile.currency} for all monetary figures.
 - UK English SPELLING is the house style ("organisation", "analyse", "programme") and applies
   everywhere. It is a spelling convention only: it does NOT mean the scenario is British, and
   it must not lead to UK companies, UK cities, GBP, or UK regulators.
+- LAW AND REGULATORS. ${
+    profile.region.startsWith('United Kingdom')
+      ? 'This scenario IS set in the UK, so UK statutes are appropriate where the module covers them.'
+      : `This scenario is NOT set in the UK. Do NOT cite the UK Bribery Act, the Equality Act, UK GDPR, the FCA, HMRC or Companies House — not as examples, not as benchmarks, and not as "aligned with" or "consistent with" a UK standard. A reviewer found a Nairobi construction case aligning its compliance to the UK Bribery Act and a Gulf food producer doing the same; both read as the UK slipping back in by habit. Where the module genuinely covers regulation, either name an instrument that applies in ${profile.region}, or state the underlying principle (for example "anti-bribery controls covering facilitation payments and third-party due diligence") without attaching it to any country.`
+  }
 - Name a country's laws or regulators ONLY where the module's own topics or outcomes make
-  that specific jurisdiction relevant. Do not reach for the UK Bribery Act, the Equality Act,
-  UK GDPR or the FCA as generic examples. Where a legal or regulatory point is general, state
-  the principle rather than a national statute.
+  that jurisdiction relevant. Where a legal point is general, state the principle.
 `.trim();
 }
 

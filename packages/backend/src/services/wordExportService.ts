@@ -1768,7 +1768,11 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   /**
    * Generate Step 8 (Case Studies) section
    */
-  private async generateStep8Section(step8: any, contentChildren: any[]): Promise<void> {
+  private async generateStep8Section(
+    step8: any,
+    contentChildren: any[],
+    step4?: any
+  ): Promise<void> {
     if (!step8?.caseStudies?.length) return;
 
     contentChildren.push(
@@ -1776,64 +1780,105 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       this.createH1('8. Case Studies')
     );
 
-    for (const caseStudy of step8.caseStudies) {
-      contentChildren.push(this.createH3(caseStudy.title || 'Untitled Case Study'));
-
-      if (caseStudy.scenario || caseStudy.description) {
-        const formatted = await this.formatTextIntelligently(
-          caseStudy.scenario || caseStudy.description,
-          'Case Study Scenario'
-        );
-        if (formatted.paragraphs.length > 0) {
-          contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
-        }
+    // Grouped under a module heading, the way Step 7 already does it.
+    //
+    // The section ran straight from one company's cases into the next with nothing naming
+    // the module, so the reviewer could only infer where a module's pair ended — which is how
+    // she noticed one module had a single case: the document simply moved on. Step 7 prints
+    // "Module: M38: Employee Experience & Performance Management" and is auditable; this was
+    // not.
+    const moduleLabels = this.buildModuleLabels(step4);
+    const order: string[] = [];
+    const grouped = new Map<string, any[]>();
+    for (const cs of step8.caseStudies) {
+      const key = String(cs.moduleId || 'unassigned');
+      if (!grouped.has(key)) {
+        grouped.set(key, []);
+        order.push(key);
       }
+      grouped.get(key)!.push(cs);
+    }
 
-      // Learning objectives
-      if (caseStudy.learningObjectives?.length) {
-        contentChildren.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: 'Learning Objectives:',
-                bold: true,
-                size: FONT_SIZES.BODY,
-                font: FONT_FAMILY,
-              }),
-            ],
-            spacing: { before: 100, after: 50, line: LINE_SPACING },
-          })
-        );
-        contentChildren.push(
-          ...this.createFormattedParagraphs(caseStudy.learningObjectives, { isBullet: true })
-        );
-      }
-
-      // Questions/prompts
-      if (caseStudy.questions?.length || caseStudy.prompts?.length) {
-        const questions = caseStudy.questions || caseStudy.prompts;
-        contentChildren.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: 'Discussion Questions:',
-                bold: true,
-                size: FONT_SIZES.BODY,
-                font: FONT_FAMILY,
-              }),
-            ],
-            spacing: { before: 100, after: 50, line: LINE_SPACING },
-          })
-        );
-        contentChildren.push(...this.createFormattedParagraphs(questions, { isNumbered: true }));
-      }
-
+    for (const moduleId of order) {
+      const cases = grouped.get(moduleId) || [];
       contentChildren.push(
+        this.createH2(`Module: ${moduleLabels.get(moduleId) || moduleId}`),
         new Paragraph({
-          children: [],
-          spacing: { after: 300 },
+          children: [
+            new TextRun({
+              text:
+                cases.length === 1
+                  ? '1 case study — this module is short of the usual pair.'
+                  : `${cases.length} case studies: ${cases.map((c: any) => c.caseType || 'case').join(', ')}`,
+              size: FONT_SIZES.BODY,
+              font: FONT_FAMILY,
+              italics: true,
+              color: cases.length === 1 ? 'b45309' : '4a5568',
+            }),
+          ],
+          spacing: { after: 120 },
         })
       );
+
+      for (const caseStudy of cases) {
+        contentChildren.push(this.createH3(caseStudy.title || 'Untitled Case Study'));
+
+        if (caseStudy.scenario || caseStudy.description) {
+          const formatted = await this.formatTextIntelligently(
+            caseStudy.scenario || caseStudy.description,
+            'Case Study Scenario'
+          );
+          if (formatted.paragraphs.length > 0) {
+            contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
+          }
+        }
+
+        // Learning objectives
+        if (caseStudy.learningObjectives?.length) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Learning Objectives:',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { before: 100, after: 50, line: LINE_SPACING },
+            })
+          );
+          contentChildren.push(
+            ...this.createFormattedParagraphs(caseStudy.learningObjectives, { isBullet: true })
+          );
+        }
+
+        // Questions/prompts
+        if (caseStudy.questions?.length || caseStudy.prompts?.length) {
+          const questions = caseStudy.questions || caseStudy.prompts;
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Discussion Questions:',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { before: 100, after: 50, line: LINE_SPACING },
+            })
+          );
+          contentChildren.push(...this.createFormattedParagraphs(questions, { isNumbered: true }));
+        }
+
+        contentChildren.push(
+          new Paragraph({
+            children: [],
+            spacing: { after: 300 },
+          })
+        );
+      }
     }
   }
 
@@ -3864,7 +3909,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       );
     }
     if (workflow.step8?.caseStudies?.length) {
-      addSection(8, (out) => this.generateStep8Section(workflow.step8, out));
+      addSection(8, (out) => this.generateStep8Section(workflow.step8, out, workflow.step4));
     }
     if (workflow.step9?.terms?.length || workflow.step9?.glossaryTerms?.length) {
       addSection(9, (out) => this.generateStep9Section(workflow.step9, out));
@@ -4103,7 +4148,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         );
         break;
       case 8:
-        await this.generateStep8Section(stepData, contentChildren);
+        await this.generateStep8Section(stepData, contentChildren, workflow.step4);
         break;
       case 9:
         await this.generateStep9Section(stepData, contentChildren);
