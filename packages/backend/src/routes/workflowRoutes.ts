@@ -49,7 +49,13 @@ import { curriculumImportService } from '../services/curriculumImportService';
 import { step10ImportService } from '../services/step10ImportService';
 import multer from 'multer';
 import { llmService } from '../services/llmService';
-import { addStepJob, getStepJobStatus, stepQueue, removeStepJob } from '../queues/stepQueue';
+import {
+  addStepJob,
+  getStepJobStatus,
+  stepQueue,
+  removeStepJob,
+  isStepJobAbandoned,
+} from '../queues/stepQueue';
 import { createAuditLog } from '../services/auditService';
 import { sanitizeActivityArray } from '../services/activitySanitizer';
 import { isStepDone } from '../services/stepGating';
@@ -1122,7 +1128,15 @@ router.post('/:id/step1', validateJWT, loadUser, async (req: Request, res: Respo
 
     if (stepQueue) {
       const existingStatus = await getStepJobStatus(1, id);
-      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+      // A job whose worker died — a deploy, a restart — stays "active" in Bull until the
+      // stalled sweep notices, which can take twenty minutes. Until then this guard told the
+      // author the step was already running and the Regenerate button did nothing at all.
+      const abandoned = await isStepJobAbandoned(1, id);
+      if (
+        !abandoned &&
+        existingStatus &&
+        ['waiting', 'active', 'delayed'].includes(existingStatus.state)
+      ) {
         return res.status(202).json({
           success: true,
           data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 1 },
@@ -1274,7 +1288,15 @@ router.post('/:id/step2', validateJWT, loadUser, async (req: Request, res: Respo
 
     if (stepQueue) {
       const existingStatus = await getStepJobStatus(2, id);
-      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+      // A job whose worker died — a deploy, a restart — stays "active" in Bull until the
+      // stalled sweep notices, which can take twenty minutes. Until then this guard told the
+      // author the step was already running and the Regenerate button did nothing at all.
+      const abandoned = await isStepJobAbandoned(2, id);
+      if (
+        !abandoned &&
+        existingStatus &&
+        ['waiting', 'active', 'delayed'].includes(existingStatus.state)
+      ) {
         return res.status(202).json({
           success: true,
           data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 2 },
@@ -1508,7 +1530,15 @@ router.post('/:id/step3', validateJWT, loadUser, async (req: Request, res: Respo
 
     if (stepQueue) {
       const existingStatus = await getStepJobStatus(3, id);
-      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+      // A job whose worker died — a deploy, a restart — stays "active" in Bull until the
+      // stalled sweep notices, which can take twenty minutes. Until then this guard told the
+      // author the step was already running and the Regenerate button did nothing at all.
+      const abandoned = await isStepJobAbandoned(3, id);
+      if (
+        !abandoned &&
+        existingStatus &&
+        ['waiting', 'active', 'delayed'].includes(existingStatus.state)
+      ) {
         return res.status(202).json({
           success: true,
           data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 3 },
@@ -1961,7 +1991,15 @@ router.post('/:id/step4', validateJWT, loadUser, async (req: Request, res: Respo
 
     if (stepQueue) {
       const existingStatus = await getStepJobStatus(4, id);
-      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+      // A job whose worker died — a deploy, a restart — stays "active" in Bull until the
+      // stalled sweep notices, which can take twenty minutes. Until then this guard told the
+      // author the step was already running and the Regenerate button did nothing at all.
+      const abandoned = await isStepJobAbandoned(4, id);
+      if (
+        !abandoned &&
+        existingStatus &&
+        ['waiting', 'active', 'delayed'].includes(existingStatus.state)
+      ) {
         return res.status(202).json({
           success: true,
           data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 4 },
@@ -2675,7 +2713,15 @@ router.post('/:id/step5', validateJWT, loadUser, async (req: Request, res: Respo
 
     if (stepQueue) {
       const existingStatus = await getStepJobStatus(5, id);
-      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+      // A job whose worker died — a deploy, a restart — stays "active" in Bull until the
+      // stalled sweep notices, which can take twenty minutes. Until then this guard told the
+      // author the step was already running and the Regenerate button did nothing at all.
+      const abandoned = await isStepJobAbandoned(5, id);
+      if (
+        !abandoned &&
+        existingStatus &&
+        ['waiting', 'active', 'delayed'].includes(existingStatus.state)
+      ) {
         return res.status(202).json({
           success: true,
           data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 5 },
@@ -3099,7 +3145,15 @@ router.post('/:id/step6', validateJWT, loadUser, async (req: Request, res: Respo
 
     if (stepQueue) {
       const existingStatus = await getStepJobStatus(6, id);
-      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+      // A job whose worker died — a deploy, a restart — stays "active" in Bull until the
+      // stalled sweep notices, which can take twenty minutes. Until then this guard told the
+      // author the step was already running and the Regenerate button did nothing at all.
+      const abandoned = await isStepJobAbandoned(6, id);
+      if (
+        !abandoned &&
+        existingStatus &&
+        ['waiting', 'active', 'delayed'].includes(existingStatus.state)
+      ) {
         return res.status(202).json({
           success: true,
           data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 6 },
@@ -3718,7 +3772,15 @@ router.post('/:id/step7', validateJWT, loadUser, async (req: Request, res: Respo
 
     if (stepQueue) {
       const existingStatus = await getStepJobStatus(7, id);
-      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+      // A job whose worker died — a deploy, a restart — stays "active" in Bull until the
+      // stalled sweep notices, which can take twenty minutes. Until then this guard told the
+      // author the step was already running and the Regenerate button did nothing at all.
+      const abandoned = await isStepJobAbandoned(7, id);
+      if (
+        !abandoned &&
+        existingStatus &&
+        ['waiting', 'active', 'delayed'].includes(existingStatus.state)
+      ) {
         return res.status(202).json({
           success: true,
           data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 7 },
@@ -4120,7 +4182,15 @@ router.post('/:id/step8', validateJWT, loadUser, async (req: Request, res: Respo
 
     if (stepQueue) {
       const existingStatus = await getStepJobStatus(8, id);
-      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+      // A job whose worker died — a deploy, a restart — stays "active" in Bull until the
+      // stalled sweep notices, which can take twenty minutes. Until then this guard told the
+      // author the step was already running and the Regenerate button did nothing at all.
+      const abandoned = await isStepJobAbandoned(8, id);
+      if (
+        !abandoned &&
+        existingStatus &&
+        ['waiting', 'active', 'delayed'].includes(existingStatus.state)
+      ) {
         return res.status(202).json({
           success: true,
           data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 8 },
@@ -4302,7 +4372,15 @@ router.post('/:id/step9', validateJWT, loadUser, async (req: Request, res: Respo
     if (stepQueue) {
       // Check for already-running job
       const existingStatus = await getStepJobStatus(9, id);
-      if (existingStatus && ['waiting', 'active', 'delayed'].includes(existingStatus.state)) {
+      // A job whose worker died — a deploy, a restart — stays "active" in Bull until the
+      // stalled sweep notices, which can take twenty minutes. Until then this guard told the
+      // author the step was already running and the Regenerate button did nothing at all.
+      const abandoned = await isStepJobAbandoned(9, id);
+      if (
+        !abandoned &&
+        existingStatus &&
+        ['waiting', 'active', 'delayed'].includes(existingStatus.state)
+      ) {
         return res.status(202).json({
           success: true,
           data: { jobId: existingStatus.jobId, status: existingStatus.state, stepNumber: 9 },

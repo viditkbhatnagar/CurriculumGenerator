@@ -324,6 +324,35 @@ export async function getStepJobStatus(stepNumber: number, workflowId: string) {
 }
 
 // Helper function to remove a completed/failed job so it can be re-submitted
+/**
+ * Whether an "active" job has actually been abandoned.
+ *
+ * Bull marks a job active while a worker holds its lock. When the process dies mid-run — a
+ * deploy, a restart, an OOM — nothing releases that lock; the job stays "active" until the
+ * stalled sweep notices, which runs on `stalledInterval` (ten minutes) and only after the
+ * lock has expired (another ten). So for up to twenty minutes after a deploy a step reports
+ * "already in progress", the Regenerate button silently does nothing, and the author is left
+ * looking at a screen that will never change. That happened to this programme's reviewer
+ * twice in one afternoon.
+ *
+ * A job whose worker started it longer ago than the lock could possibly survive, and which
+ * has not finished, has no live worker behind it.
+ */
+export async function isStepJobAbandoned(stepNumber: number, workflowId: string): Promise<boolean> {
+  if (!stepQueue) return false;
+  const job = await stepQueue.getJob(`step${stepNumber}-${workflowId}`);
+  if (!job) return false;
+
+  const state = await job.getState();
+  if (state !== 'active') return false;
+  if (!job.processedOn || job.finishedOn) return false;
+
+  // Twice the lock duration: a live worker renews its lock every lockDuration/2, so anything
+  // older than two full periods has certainly stopped renewing.
+  const LOCK_DURATION_MS = 600000;
+  return Date.now() - job.processedOn > LOCK_DURATION_MS * 2;
+}
+
 export async function removeStepJob(stepNumber: number, workflowId: string): Promise<boolean> {
   if (!stepQueue) {
     return false;
