@@ -19,6 +19,7 @@ import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
 import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
 import { approvedSummativeFor, step7SpecifiesExam } from './step7Authority';
+import config from '../config';
 import { scenarioProfileFor, scenarioDirective } from './scenarioContext';
 import {
   gatherModuleSources,

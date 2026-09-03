@@ -2,3 +2,8 @@
 . "$(dirname -- "$0")/_/husky.sh"
 
 npx lint-staged
+
+# eslint and prettier do not resolve identifiers across modules, so a missing import
+# committed cleanly and only failed at runtime — costing a reviewer 45 minutes on a
+# regeneration that ended in "config is not defined". This is the check that catches it.
+node scripts/typecheck-ratchet.js
