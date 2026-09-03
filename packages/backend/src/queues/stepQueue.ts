@@ -379,7 +379,37 @@ export async function removeStepJob(stepNumber: number, workflowId: string): Pro
     return true;
   }
 
-  return false; // Job is still active
+  // An active job whose worker died still holds its lock, so it cannot be removed the normal
+  // way — and because Bull keys jobs by id, `addStepJob` then returns THAT job rather than
+  // creating one. The route answers "queued", nothing runs, and the author waits on a job
+  // that died twenty minutes ago. Releasing the dead lock is the only way to replace it.
+  if (state === 'active' && (await isStepJobAbandoned(stepNumber, workflowId))) {
+    try {
+      await job.moveToFailed({ message: 'Abandoned: worker died before finishing' }, true);
+    } catch (err) {
+      loggingService.warn('Could not fail an abandoned step job; trying removal anyway', {
+        jobId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    try {
+      await job.remove();
+      loggingService.info('Abandoned step job removed for re-submission', {
+        jobId,
+        stepNumber,
+        workflowId,
+      });
+      return true;
+    } catch (err) {
+      loggingService.error('Failed to remove abandoned step job', {
+        jobId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    }
+  }
+
+  return false; // Job is genuinely still running
 }
 
 // Graceful shutdown
