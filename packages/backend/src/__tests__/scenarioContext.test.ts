@@ -10,6 +10,8 @@ import {
   scenarioProfileFor,
   scenarioDirective,
   INTERNATIONAL_BALANCE_RULE,
+  ukLawInNonUkCases,
+  ukLawRepairNote,
 } from '../services/scenarioContext';
 
 describe('scenarioProfileFor', () => {
@@ -150,5 +152,64 @@ describe("the reviewer's second round of scenario defects", () => {
     const text = scenarioDirective(p, 'M');
     expect(text).toContain('operates in ' + p.industry);
     expect(text).toMatch(/do not describe it as being in any other industry/i);
+  });
+});
+
+describe('ukLawInNonUkCases', () => {
+  const modules = [{ id: 'M1' }, { id: 'M2' }, { id: 'M3' }, { id: 'M4' }, { id: 'M5' }];
+  const indexOf = (id) => modules.findIndex((m) => m.id === id);
+
+  it('flags a UK statute in a scenario set elsewhere', () => {
+    // Six cases did this on the last run: Vallonia Health in the EU, Atlas Coast in Kenya,
+    // Sahara Foods in the Gulf — all "aligned to UK Bribery Act principles".
+    const nonUkIdx = [0, 1, 2, 3, 4].find(
+      (i) => !scenarioProfileFor(i).region.startsWith('United Kingdom')
+    );
+    const cases = [
+      {
+        moduleId: modules[nonUkIdx].id,
+        brandName: 'Vallonia Health',
+        scenario: 'aligned to the UK Bribery Act',
+      },
+    ];
+    const leaks = ukLawInNonUkCases(cases, scenarioProfileFor, indexOf);
+    expect(leaks).toHaveLength(1);
+    expect(leaks[0].markers).toContain('Bribery Act');
+  });
+
+  it('permits UK statutes in a scenario that IS set in the UK', () => {
+    const ukIdx = Array.from({ length: 46 }, (_, i) => i).find((i) =>
+      scenarioProfileFor(i).region.startsWith('United Kingdom')
+    );
+    const cases = [{ moduleId: 'UKMOD', scenario: 'complies with the UK Bribery Act' }];
+    const leaks = ukLawInNonUkCases(cases, scenarioProfileFor, () => ukIdx);
+    expect(leaks).toHaveLength(0);
+  });
+
+  it('passes clean cases', () => {
+    const cases = [{ moduleId: 'M1', scenario: 'anti-bribery controls and due diligence' }];
+    expect(ukLawInNonUkCases(cases, scenarioProfileFor, indexOf)).toHaveLength(0);
+  });
+
+  it('ignores a case whose module cannot be resolved rather than guessing', () => {
+    const cases = [{ moduleId: 'UNKNOWN', scenario: 'UK Bribery Act' }];
+    expect(ukLawInNonUkCases(cases, scenarioProfileFor, () => -1)).toHaveLength(0);
+  });
+});
+
+describe('ukLawRepairNote', () => {
+  it('quotes the violation back rather than restating the rule', () => {
+    // The standing rule already forbids these by name and was ignored three runs running.
+    const note = ukLawRepairNote(['Bribery Act'], 'Africa / Middle East (non-GCC)');
+    expect(note).toContain('THIS CASE WAS REJECTED');
+    expect(note).toContain('Bribery Act');
+    expect(note).toContain('Africa / Middle East (non-GCC)');
+  });
+
+  it('says what to write instead, and what to preserve', () => {
+    const note = ukLawRepairNote(['UK GDPR'], 'Asia-Pacific');
+    expect(note).toMatch(/names an instrument or regulator that genuinely applies/);
+    expect(note).toMatch(/states the underlying principle/);
+    expect(note).toMatch(/Keep everything else about the case/);
   });
 });

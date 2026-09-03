@@ -336,3 +336,30 @@ export function ukLawInNonUkCases(
   }
   return out;
 }
+
+/**
+ * The extra instruction given when regenerating a case that cited UK law it should not have.
+ *
+ * Quoting the violation back is the part that works. The standing rule already forbids these
+ * statutes by name, and the model still produced them three runs running — the Bribery Act
+ * is simply the canonical anti-bribery reference and it surfaces whenever a scenario touches
+ * compliance. Naming what it actually wrote, and what to write instead, is a different
+ * instruction from a rule it has already demonstrated it will not follow unprompted.
+ */
+export function ukLawRepairNote(markers: string[], region: string): string {
+  return [
+    `!! THIS CASE WAS REJECTED. Your previous version cited ${markers.join(' and ')}.`,
+    `This scenario is set in ${region}, NOT the United Kingdom. UK legislation and UK`,
+    'regulators must not appear at all — not as law, not as an example, not as a benchmark,',
+    'and not as something the organisation is "aligned with" or "consistent with".',
+    '',
+    'Rewrite the compliance and regulatory content so that it either:',
+    `  (a) names an instrument or regulator that genuinely applies in ${region}, or`,
+    '  (b) states the underlying principle without attaching it to any country — for example',
+    '      "anti-bribery controls covering facilitation payments, gifts and hospitality, and',
+    '      third-party due diligence" rather than naming a national statute.',
+    '',
+    'Keep everything else about the case — the organisation, its sector, its headcount, its',
+    'city, the scenario and the teaching intent — exactly as it was.',
+  ].join('\n');
+}

@@ -20,7 +20,12 @@ import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundi
 import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
 import { approvedSummativeFor, step7SpecifiesExam } from './step7Authority';
 import config from '../config';
-import { scenarioProfileFor, scenarioDirective, ukLawInNonUkCases } from './scenarioContext';
+import {
+  scenarioProfileFor,
+  scenarioDirective,
+  ukLawInNonUkCases,
+  ukLawRepairNote,
+} from './scenarioContext';
 import {
   gatherModuleSources,
   deriveSubjectFields,
@@ -7736,6 +7741,92 @@ CRITICAL REQUIREMENTS:
     // Flatten and filter nulls
     const caseStudies = results.flat().filter((cs): cs is NonNullable<typeof cs> => cs !== null);
 
+    // Regenerate any case that cited UK law while set elsewhere.
+    //
+    // The prompt has forbidden this by name across three runs and the model kept doing it:
+    // eleven cases, then six, always the Bribery Act, always in a compliance scenario. An
+    // instruction it has already shown it will not follow is not going to start working on
+    // the fourth wording, so the output is checked and the offending cases are rewritten with
+    // the violation quoted back — the same detect-and-regenerate approach that fixed
+    // assessments sitting below their Bloom level.
+    //
+    // Two passes. One is usually enough; the second exists because "usually" is what the
+    // author has been asked to accept twice already.
+    const moduleIndexOf = (moduleId: string) =>
+      (modules || []).findIndex((m: any) => String(m?.id) === String(moduleId));
+
+    for (let pass = 1; pass <= 2; pass += 1) {
+      const leaks = ukLawInNonUkCases(caseStudies, scenarioProfileFor, moduleIndexOf);
+      if (leaks.length === 0) break;
+
+      loggingService.warn('Step 8: rewriting cases that cited UK law outside the UK', {
+        pass,
+        count: leaks.length,
+        organisations: leaks.map((l) => l.organisation),
+      });
+
+      const repaired = await Promise.all(
+        leaks.map(async (leak) => {
+          const original = caseStudies.find(
+            (c: any) =>
+              String(c.moduleId) === leak.moduleId &&
+              String(c.brandName || c.organizationName || '') === leak.organisation
+          );
+          if (!original) return null;
+
+          const idx = moduleIndexOf(leak.moduleId);
+          const mod = (modules || [])[idx];
+          if (!mod) return null;
+          const profile = scenarioProfileFor(idx);
+
+          try {
+            const fresh = await this.generateCaseStudyForModule({
+              module: mod,
+              moduleIndex: idx,
+              caseNumber: (original as any).caseNumber || 1,
+              coreReadings: [],
+              caseType: (original as any).caseType || 'discussion',
+              tierInfo,
+              programTitle,
+              academicLevel,
+              industrySector,
+              targetLearner,
+              competencies,
+              repairNote: ukLawRepairNote(leak.markers, profile.region),
+            });
+            return fresh ? { originalId: (original as any).id, fresh } : null;
+          } catch (err) {
+            loggingService.warn('Step 8: could not rewrite a case citing UK law', {
+              organisation: leak.organisation,
+              error: err instanceof Error ? err.message : String(err),
+            });
+            return null;
+          }
+        })
+      );
+
+      let swapped = 0;
+      for (const r of repaired) {
+        if (!r) continue;
+        // Only accept the rewrite if it is actually clean — a replacement that still cites
+        // UK law is not an improvement, and keeping the original at least preserves a case
+        // that was otherwise fine.
+        const stillLeaks = ukLawInNonUkCases([r.fresh], scenarioProfileFor, moduleIndexOf);
+        if (stillLeaks.length > 0) continue;
+        const at = caseStudies.findIndex((c: any) => c.id === r.originalId);
+        if (at >= 0) {
+          caseStudies[at] = { ...r.fresh, id: r.originalId };
+          swapped += 1;
+        }
+      }
+      loggingService.info('Step 8: UK-law rewrite pass complete', {
+        pass,
+        attempted: leaks.length,
+        replaced: swapped,
+      });
+      if (swapped === 0) break; // no progress — a third pass would not help either
+    }
+
     loggingService.info('Step 8: PARALLEL generation complete', {
       totalCaseStudies: caseStudies.length,
       types: caseStudies.map((cs) => cs.caseType),
@@ -7760,6 +7851,12 @@ CRITICAL REQUIREMENTS:
     industrySector: string;
     targetLearner: any;
     competencies: string[];
+    /**
+     * Set when this case is being rewritten because it broke a rule — the violation is
+     * quoted back rather than the standing rule simply repeated, which is the difference
+     * between an instruction the model has already ignored and one it acts on.
+     */
+    repairNote?: string;
   }): Promise<any> {
     const {
       module: mod,
@@ -7773,6 +7870,7 @@ CRITICAL REQUIREMENTS:
       industrySector,
       targetLearner,
       competencies,
+      repairNote,
     } = params;
 
     const systemPrompt = `You are an expert Instructional Designer who has written 3,000+ teaching cases for Harvard Business School, MIT Sloan, INSEAD, Wharton, London Business School, Stanford GSB, and every major certification body worldwide (PMI, APICS/ASCM, SHRM, Google, CFA Institute, NEBOSH, Six Sigma, CIPD, CMI, ILM, etc.).
@@ -7934,6 +8032,7 @@ Generate ONE ${caseType.replace('_', ' ').toUpperCase()} case study for this mod
 
 **GENERATE THE FOLLOWING:**
 
+${repairNote ? `\n${repairNote}\n` : ''}
 ${scenarioDirective(scenarioProfileFor(moduleIndex), mod.title)}
 
 1. **CASE IDENTIFICATION:**
