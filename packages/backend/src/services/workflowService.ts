@@ -3860,7 +3860,7 @@ CRITICAL VALIDATION:
 
     loggingService.info('Processing Step 8: Case Studies', { workflowId });
 
-    const caseStudyContent = await this.generateStep8Content(workflow);
+    const caseStudyContent = await this.generateStep8Content(workflow, onProgress);
 
     // Process case studies
     const caseStudies = caseStudyContent.caseStudies || [];
@@ -7480,7 +7480,10 @@ CRITICAL REQUIREMENTS:
    * Generate Step 8 content using PARALLEL case study generation
    * Each module gets its own case study generated in parallel
    */
-  private async generateStep8Content(workflow: ICurriculumWorkflow): Promise<any> {
+  private async generateStep8Content(
+    workflow: ICurriculumWorkflow,
+    onProgress?: (pct: number) => void
+  ): Promise<any> {
     const modules = workflow.step4?.modules || [];
     const industrySector = workflow.step1?.targetLearner?.industrySector || 'general business';
     const programTitle = workflow.step1?.programTitle || 'Program';
@@ -7650,7 +7653,7 @@ CRITICAL REQUIREMENTS:
       const modulesDone = Math.min(start + CASE_STUDY_MODULE_CONCURRENCY, modules.length);
       onProgress?.(Math.round((modulesDone / modules.length) * 100));
       try {
-        const partial = await CurriculumWorkflow.findById(workflowId);
+        const partial = await CurriculumWorkflow.findById(workflow._id);
         if (partial) {
           (partial as any).step8 = {
             ...((partial as any).step8 || {}),
@@ -7665,7 +7668,7 @@ CRITICAL REQUIREMENTS:
       } catch (err) {
         // A checkpoint that fails must not take the run down with it.
         loggingService.warn('Step 8: could not save partial case studies', {
-          workflowId,
+          workflowId: String(workflow._id),
           modulesDone,
           error: err instanceof Error ? err.message : String(err),
         });

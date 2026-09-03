@@ -1,5 +1,5 @@
 {
-  "count": 258,
+  "count": 255,
   "signatures": [
     "src/data/mockRepository.ts|TS2339|Property 'createdAt' does not exist on type 'T'.",
     "src/data/mockRepository.ts|TS2352|Conversion of type 'Omit<T, \"createdAt\" | \"updatedAt\" | \"_id\"> & { _id: string; createdAt: Date; updatedAt: Date; }' to type 'T' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.",
@@ -216,9 +216,6 @@
     "src/services/tutorBotService.ts|TS2339|Property 'db' does not exist on type 'TutorBotService'.",
     "src/services/tutorBotService.ts|TS2339|Property 'db' does not exist on type 'TutorBotService'.",
     "src/services/tutorBotService.ts|TS2554|Expected 0 arguments, but got 1.",
-    "src/services/workflowService.ts|TS18004|No value exists in scope for the shorthand property 'workflowId'. Either declare one or provide an initializer.",
-    "src/services/workflowService.ts|TS2304|Cannot find name 'onProgress'.",
-    "src/services/workflowService.ts|TS2304|Cannot find name 'workflowId'.",
     "src/services/workflowService.ts|TS2339|Property 'code' does not exist on type '{ id: string; moduleCode: string; title: string; sequenceOrder: number; totalHours: number; contactHours: number; independentHours: number; isCore: boolean; prerequisites: string[]; mlos: { id: string; ... 4 more ...; competencyLinks: string[]; }[]; contactActivities?: string[]; independentActivities?: string[]; }'.",
     "src/services/workflowService.ts|TS2339|Property 'competencyItems' does not exist on type '{ benchmarkPrograms: { programName: string; institution: string; url?: string; accreditationStatus?: string; publicationYear?: number; }[]; industryFrameworks?: string[]; institutionalFrameworks?: string[]; ... 8 more ...; approvedBy?: ObjectId; }'.",
     "src/services/workflowService.ts|TS2339|Property 'competencyItems' does not exist on type '{ benchmarkPrograms: { programName: string; institution: string; url?: string; accreditationStatus?: string; publicationYear?: number; }[]; industryFrameworks?: string[]; institutionalFrameworks?: string[]; ... 8 more ...; approvedBy?: ObjectId; }'.",
@@ -259,5 +256,18 @@
     "src/services/workflowService.ts|TS2554|Expected 0-2 arguments, but got 3.",
     "src/services/workflowService.ts|TS2554|Expected 0-2 arguments, but got 3.",
     "src/services/workflowService.ts|TS2739|Type '{ earlyModulesValid: boolean; middleModulesValid: boolean; lateModulesValid: boolean; }' is missing the following properties from type '{ earlyModulesLowerLevel: boolean; laterModulesHigherLevel: boolean; }': earlyModulesLowerLevel, laterModulesHigherLevel"
+  ],
+  "referenceErrors": [
+    "src/routes/benchmarks.ts|TS2304|Cannot find name 'db'.",
+    "src/routes/benchmarks.ts|TS2304|Cannot find name 'db'.",
+    "src/routes/benchmarks.ts|TS2304|Cannot find name 'db'.",
+    "src/routes/benchmarks.ts|TS2304|Cannot find name 'db'.",
+    "src/routes/benchmarks.ts|TS2304|Cannot find name 'db'.",
+    "src/routes/benchmarks.ts|TS2304|Cannot find name 'db'.",
+    "src/routes/benchmarks.ts|TS2304|Cannot find name 'db'.",
+    "src/routes/benchmarks.ts|TS2304|Cannot find name 'db'.",
+    "src/routes/curriculum.ts|TS2304|Cannot find name 'jobQueueService'.",
+    "src/services/contentGenerationService.ts|TS2304|Cannot find name 'Pool'.",
+    "src/services/tutorBotService.ts|TS2304|Cannot find name 'Pool'."
   ]
 }
