@@ -324,8 +324,31 @@ export function ukLawInNonUkCases(
     if (idx < 0) continue;
     const profile = profileFor(idx);
     if (profile.region.startsWith('United Kingdom')) continue;
-    const text = JSON.stringify(cs ?? {});
-    const markers = UK_LEGAL_MARKERS.filter((m) => text.includes(m));
+    // Only the prose this step WROTE. `linkedTopics`, `linkedMLOs` and `linkedModules` are
+    // copied from the approved Step 4 curriculum, and two of this programme's module topics
+    // are literally "UK Bribery Act and anti-corruption" and "Ethics, compliance and conduct
+    // (including UK Bribery Act)". Scanning the whole record flagged those back at the author
+    // as defects and sent the repair pass off to rewrite correct content — when her own rule
+    // is that national law belongs wherever "explicitly relevant to the approved module
+    // topics or MLOs", which is precisely what those are.
+    const narrative = [
+      cs?.title,
+      cs?.scenario,
+      cs?.organizationalContext,
+      cs?.backgroundInformation,
+      cs?.challengeDescription,
+      cs?.suggestedApproach,
+      cs?.sampleSolution,
+      cs?.teachingNote,
+      cs?.usageGuidance,
+      ...(Array.isArray(cs?.discussionPrompts) ? cs.discussionPrompts : []),
+      ...(Array.isArray(cs?.exhibitList)
+        ? cs.exhibitList.map((e: any) => `${e?.title ?? ''} ${e?.description ?? ''}`)
+        : []),
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const markers = UK_LEGAL_MARKERS.filter((m) => narrative.includes(m));
     if (markers.length > 0) {
       out.push({
         moduleId: String(cs.moduleId),
