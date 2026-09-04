@@ -6756,7 +6756,12 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
     // independent activities, hours and the MLO alignment map, and 5 and 6 to head each
     // group with the module's code and title rather than its raw document id. Without it
     // those headings silently fall back to "mod-m35".
-    if ([5, 6, 7, 10].includes(stepNumber)) workflowData.step4 = workflow.step4;
+    // 8 belongs here too: its case studies are now grouped under a module heading, and
+    // without step4 the heading falls back to the raw id — "Module: mod-m01" instead of
+    // "Module: M01: Introduction to Management & Organisations". That is the same fallback
+    // that made Steps 5 and 6 print "mod-m35", and the reviewer asked for Step 7's format
+    // precisely because it is auditable.
+    if ([5, 6, 7, 8, 10].includes(stepNumber)) workflowData.step4 = workflow.step4;
 
     const STEP_SLUGS: Record<number, string> = {
       1: 'Program-Foundation',

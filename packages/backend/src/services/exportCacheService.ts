@@ -44,7 +44,7 @@ import { loggingService } from './loggingService';
 //     guide and rubric as three separate artefacts.
 // v10: Step 7 renders Bloom levels — per assessment and per question — which were stored
 //      but shown only for PLOs, MLOs and lessons.
-const EXPORT_FORMAT_VERSION = 'v18';
+const EXPORT_FORMAT_VERSION = 'v19';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {
@@ -214,7 +214,7 @@ export function stepExportContentHash(
     // module-level independent activities, hours and MLO alignment, 5 and 6 to name each
     // module in its heading — so their caches must invalidate when step4 changes, and
     // including it here also busts copies cached before each of those was added.
-    aux: [5, 6, 7, 10].includes(stepNumber) ? workflow.step4 : undefined,
+    aux: [5, 6, 7, 8, 10].includes(stepNumber) ? workflow.step4 : undefined,
   });
 }
 
