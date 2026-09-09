@@ -24,7 +24,12 @@ import mongoose from 'mongoose';
 import config from '../config';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { ModuleLessonPlan } from '../models/ModuleLessonPlan';
-import { expectedLessonCount, moduleStub, lessonsHeld } from '../services/step10Completion';
+import {
+  expectedLessonCount,
+  moduleStub,
+  lessonsHeld,
+  looksTruncated,
+} from '../services/step10Completion';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const explicitId = process.argv.slice(2).find((a) => !a.startsWith('--'));
@@ -70,9 +75,15 @@ async function main(): Promise<void> {
       // A module truncated by the very failure this migration exists to fix keeps the count
       // it was GENERATED to hold, not the count it managed to save — otherwise the partial
       // module is recorded as its own target and never resumes.
-      const planned =
-        plan.plannedLessonCount ||
-        (module ? expectedLessonCount(module, wf.step10?.plannedLessonCounts) : held);
+      //
+      // A module whose lessons DO add up to its contact hours is finished, however few they
+      // are: an SME can agree a module of eight long lessons, and deriving a target from
+      // contact hours would declare it incomplete and regenerate work nobody asked to change.
+      const truncated = looksTruncated(plan, module);
+      const planned = truncated
+        ? plan.plannedLessonCount ||
+          (module ? expectedLessonCount(module, wf.step10?.plannedLessonCounts) : held)
+        : held;
 
       const existing = await ModuleLessonPlan.findOne({
         workflowId: _id,
@@ -83,7 +94,10 @@ async function main(): Promise<void> {
       if (existing && (existing as any).totalLessons >= held) continue;
 
       if (DRY_RUN) {
-        console.log(`    would move ${plan.moduleCode} — ${held}/${planned} lessons`);
+        console.log(
+          `    ${plan.moduleCode || plan.moduleId} — ${held}/${planned} lessons` +
+            (truncated ? '  (TRUNCATED, will resume)' : '')
+        );
         continue;
       }
 
@@ -109,10 +123,11 @@ async function main(): Promise<void> {
 
     const stubs = plans.map((p) => {
       const module = modules.find((m: any) => m.id === p.moduleId);
-      const planned =
-        p.plannedLessonCount ||
-        (module ? expectedLessonCount(module, wf.step10?.plannedLessonCounts) : lessonsHeld(p));
-      return moduleStub({ ...p, plannedLessonCount: planned });
+      const planned = looksTruncated(p, module)
+        ? p.plannedLessonCount ||
+          (module ? expectedLessonCount(module, wf.step10?.plannedLessonCounts) : lessonsHeld(p))
+        : lessonsHeld(p);
+      return moduleStub({ ...p, plannedLessonCount: planned }, module);
     });
 
     await CurriculumWorkflow.updateOne({ _id }, { $set: { 'step10.moduleLessonPlans': stubs } });

@@ -319,3 +319,26 @@ export function validationFromStubs(
     assessmentsIntegrated: formativeChecks > 0,
   };
 }
+
+/**
+ * Whether a stored module looks like it lost lessons rather than having fewer by design.
+ *
+ * A finished module's lessons always add up to its contact hours: the generator distributes
+ * the module's minutes across however many lessons it was asked for, so a module curated to
+ * eight lessons has eight longer ones, not a shortfall. A module whose lessons fall well
+ * short of its contact hours therefore stopped early.
+ *
+ * This distinguishes the two cases that look identical from a lesson count alone — the
+ * modules truncated by failed writes, and the modules an SME deliberately gave fewer lessons
+ * — so healing existing data does not regenerate work that was never damaged.
+ */
+export function looksTruncated(plan: LessonPlanLike, module?: CountableModule): boolean {
+  const lessons = (plan?.lessons || []) as { duration?: number }[];
+  if (lessons.length === 0) return true;
+
+  const contactHours = module?.contactHours ?? plan?.totalContactHours ?? 0;
+  if (contactHours <= 0) return false;
+
+  const lessonMinutes = lessons.reduce((sum, l) => sum + (l?.duration || 0), 0);
+  return lessonMinutes < contactHours * 60 - MIN_TOLERANCE_MINUTES;
+}
