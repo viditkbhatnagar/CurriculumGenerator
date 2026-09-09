@@ -206,6 +206,13 @@ if (step10Queue) {
 
       await job.progress(100);
 
+      // A finished module is the moment a worker slot frees, so it is also the moment to
+      // reclaim anything a dead worker is still holding. Without this, orphans are only swept
+      // at startup and when generation is requested — so a programme that loses jobs to a
+      // mid-run restart finishes short and reports no error, because re-queueing a module
+      // whose job id is still marked active is a silent no-op.
+      await recoverAbandonedStep10Jobs(workflowId);
+
       // Every remaining module is queued up front, so this is a safety net rather than the
       // mechanism: it picks up a module whose job was lost, and adding a job whose id is
       // already waiting is a no-op.
