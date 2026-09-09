@@ -283,6 +283,38 @@ if (step10Queue) {
   });
 }
 
+/**
+ * Sweep abandoned jobs once, shortly after this process starts.
+ *
+ * A deploy or restart is the ordinary way jobs get orphaned, and the process that comes back
+ * is the one able to notice: any job still marked active whose lock nobody holds belongs to
+ * the process that just went away. Without this the modules that were mid-generation at the
+ * moment of a deploy are simply never picked up again, and the programme quietly stops short.
+ *
+ * Delayed so the queue's own connection and processor are up first, and lock-guarded, so a
+ * second instance's live jobs are left alone.
+ */
+async function sweepAbandonedOnStartup(): Promise<void> {
+  if (!step10Queue) return;
+  try {
+    const active = await step10Queue.getJobs(['active']);
+    const workflowIds = [...new Set(active.map((j) => j?.data?.workflowId).filter(Boolean))];
+    for (const workflowId of workflowIds) {
+      await recoverAbandonedStep10Jobs(workflowId as string);
+    }
+  } catch (error) {
+    loggingService.warn('Startup sweep for abandoned Step 10 jobs failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+if (step10Queue) {
+  setTimeout(() => {
+    void sweepAbandonedOnStartup();
+  }, 30000).unref?.();
+}
+
 // Helper function to add a job
 export async function addStep10Job(
   workflowId: string,
@@ -336,6 +368,65 @@ export async function addStep10Job(
   return job;
 }
 
+/**
+ * Return jobs whose worker died to the queue.
+ *
+ * A job marked "active" whose worker process has gone stays active for ever: Bull's own
+ * stalled sweep did not reclaim these in practice, and the module list then has an entry
+ * nothing will ever process. Because a job id is reused per module, re-queueing that module
+ * is a silent no-op — so a module orphaned this way is skipped permanently, which is exactly
+ * the invisible stall this whole change exists to remove. A restart mid-generation is
+ * ordinary: deploys happen.
+ *
+ * Whether a worker is alive is decided by the lock, not by elapsed time. A module may
+ * legitimately run for 90 minutes, so any "older than N minutes" rule would eventually kill
+ * live jobs; a live worker renews its lock every five minutes, so if this process can TAKE
+ * the lock, nobody is holding it and the job is genuinely abandoned.
+ *
+ * Requeued rather than resumed in place: generation continues from the lessons already
+ * stored, so an orphaned module picks up where it stopped.
+ */
+export async function recoverAbandonedStep10Jobs(workflowId: string): Promise<number> {
+  if (!step10Queue) return 0;
+
+  const active = await step10Queue.getJobs(['active']);
+  let recovered = 0;
+
+  for (const job of active) {
+    if (!job || job.data?.workflowId !== workflowId) continue;
+
+    let lockIsFree = false;
+    try {
+      lockIsFree = !!(await (job as unknown as { takeLock: () => Promise<unknown> }).takeLock());
+    } catch {
+      lockIsFree = false;
+    }
+    if (!lockIsFree) continue; // a worker holds it — this module is genuinely running
+
+    const { moduleIndex, userId } = job.data;
+    try {
+      await job.moveToFailed({ message: 'Worker ended before the module finished' }, true);
+      await job.remove();
+    } catch (error) {
+      loggingService.warn('Could not clear an abandoned Step 10 job', {
+        workflowId,
+        moduleIndex,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      continue;
+    }
+
+    await addStep10Job(workflowId, moduleIndex, userId);
+    recovered += 1;
+    loggingService.info('Requeued an abandoned Step 10 module', { workflowId, moduleIndex });
+  }
+
+  if (recovered > 0) {
+    loggingService.info('Recovered abandoned Step 10 jobs', { workflowId, recovered });
+  }
+  return recovered;
+}
+
 // Helper function to queue all remaining modules
 export async function queueAllRemainingModules(
   workflowId: string,
@@ -348,16 +439,8 @@ export async function queueAllRemainingModules(
     return [];
   }
 
-  // Check if there are already active or waiting jobs for this workflow
-  // Prevents double-queueing when user clicks generate while auto-chaining is active
-  const existingJobs = await step10Queue.getJobs(['active', 'waiting', 'delayed']);
-  const hasActiveJob = existingJobs.some((j) => j.data.workflowId === workflowId);
-  if (hasActiveJob) {
-    loggingService.info('Step 10 job already active/waiting for this workflow, skipping', {
-      workflowId,
-    });
-    return [];
-  }
+  // Reclaim anything a dead worker left behind before deciding what still needs queueing.
+  await recoverAbandonedStep10Jobs(workflowId);
 
   const workflow = await CurriculumWorkflow.findById(workflowId);
   if (!workflow) {
@@ -373,6 +456,10 @@ export async function queueAllRemainingModules(
   // Every module that still needs work, each as its own job carrying its own module index.
   // Queueing only the next one and chaining from it meant the programme could never generate
   // more than one module at a time, however much capacity there was.
+  //
+  // Safe to call repeatedly: Bull ignores a job whose id is already queued, so this adds only
+  // what is missing. There is deliberately no "a job is already running, do nothing" guard —
+  // that guard is what stopped a half-queued programme from ever being completed.
   for (let i = 0; i < modules.length; i++) {
     const module = modules[i];
     if (!module?.id || done.has(module.id)) continue;
