@@ -73,10 +73,19 @@ if (redisUrl && redisUrl.length > 0) {
         removeOnFail: 200, // Keep last 200 failed jobs
       },
       settings: {
-        // Longer than the job can run, so a module in progress is never declared stalled and
-        // handed to a second worker that would generate the same lessons again.
-        lockDuration: 5400000,
-        stalledInterval: 5400000,
+        /**
+         * The lock is renewed every 5 minutes while a module generates, so it does not need
+         * to outlast the 40 minutes a module takes — a running job keeps its own lock alive.
+         *
+         * What this figure really sets is how long a CRASHED job stays unreachable. Making it
+         * longer than the job (to be sure no second worker picks it up) would mean a deploy
+         * or restart mid-module left that module stuck for an hour and a half before anything
+         * retried it, which is precisely the kind of silent wait this whole change is meant
+         * to remove. Fifteen minutes is comfortably above the renewal interval and short
+         * enough that a restart costs minutes.
+         */
+        lockDuration: 900000,
+        stalledInterval: 900000,
         lockRenewTime: 300000,
       },
     });
