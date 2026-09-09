@@ -281,3 +281,24 @@ describe('validationFromStubs', () => {
     expect(validationFromStubs(modules, step10).allModulesHaveLessonPlans).toBe(true);
   });
 });
+
+describe('moduleStats hoursMatch', () => {
+  it('measures lessons against the module, not against their own total', () => {
+    // A part-generated module: 22 lessons of 90 minutes, in a module of 45 contact hours.
+    // The stored plan's own totalContactHours is derived from those same lessons (33h), so
+    // comparing against it would report that the hours add up when a third is missing.
+    const plan = {
+      totalContactHours: 33,
+      lessons: Array.from({ length: 22 }, () => ({ duration: 90, linkedMLOs: [] })),
+    };
+    expect(moduleStats(plan, { id: 'mod-m07', contactHours: 45 }).hoursMatch).toBe(false);
+  });
+
+  it('reports the hours matching once every lesson is there', () => {
+    const plan = {
+      totalContactHours: 45,
+      lessons: Array.from({ length: 30 }, () => ({ duration: 90, linkedMLOs: [] })),
+    };
+    expect(moduleStats(plan, { id: 'mod-m07', contactHours: 45 }).hoursMatch).toBe(true);
+  });
+});

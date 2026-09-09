@@ -213,7 +213,13 @@ const MIN_TOLERANCE_MINUTES = 5;
  */
 export function moduleStats(plan: LessonPlanLike, module?: CountableModule): ModuleStats {
   const lessons = (plan?.lessons || []) as LessonLike[];
-  const contactHours = plan?.totalContactHours || module?.contactHours || 0;
+  // The MODULE's declared contact hours, not the plan's own figure.
+  //
+  // A stored plan's `totalContactHours` is the sum of the lessons it holds, so checking the
+  // lessons against it compares them with themselves and `hoursMatch` is true however few
+  // lessons there are — a module with 22 of its 30 lessons reported that its hours added up.
+  // The module's declared hours are the standard the lessons are supposed to meet.
+  const contactHours = module?.contactHours ?? plan?.totalContactHours ?? 0;
   const lessonMinutes = lessons.reduce((sum, l) => sum + (l?.duration || 0), 0);
 
   const covered = new Set<string>();
