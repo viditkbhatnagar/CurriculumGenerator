@@ -29,7 +29,14 @@ import mongoose from 'mongoose';
 import { ModuleLessonPlan } from '../models/ModuleLessonPlan';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { loggingService } from './loggingService';
-import { CountableModule, LessonPlanLike, moduleStub, lessonsHeld } from './step10Completion';
+import {
+  CountableModule,
+  LessonPlanLike,
+  moduleStub,
+  lessonsHeld,
+  summariseFromStubs,
+  validationFromStubs,
+} from './step10Completion';
 
 const toObjectId = (workflowId: string | mongoose.Types.ObjectId) =>
   typeof workflowId === 'string' ? new mongoose.Types.ObjectId(workflowId) : workflowId;
@@ -205,4 +212,113 @@ export async function syncStubs(workflowId: string): Promise<boolean> {
     modules: stubs.length,
   });
   return true;
+}
+
+/**
+ * The module plan that owns a given lesson.
+ *
+ * Lessons are edited by id from the screen, which knows nothing about which module holds
+ * them, so the lookup is by content rather than by key.
+ */
+export async function findPlanByLessonId(
+  workflowId: string,
+  lessonId: string
+): Promise<LessonPlanLike | null> {
+  const row = await ModuleLessonPlan.findOne({
+    workflowId: toObjectId(workflowId),
+    'lessons.lessonId': lessonId,
+  }).lean();
+  return row ? rowToPlan(row) : null;
+}
+
+/**
+ * Recompute the Step 10 summary and validation on the workflow from its stubs.
+ *
+ * Called after anything changes a module's lessons. Both figures are derived from the
+ * per-module stats the stubs carry, so this touches no lesson bodies.
+ */
+export async function refreshAggregates(workflowId: string): Promise<void> {
+  const workflow = await CurriculumWorkflow.findById(workflowId).select('step10 step4.modules');
+  if (!workflow || !(workflow as any).step10) return;
+
+  const step10: any = (workflow as any).step10;
+  const modules: CountableModule[] = (workflow as any).step4?.modules || [];
+
+  await CurriculumWorkflow.updateOne(
+    { _id: workflowId },
+    {
+      $set: {
+        'step10.summary': summariseFromStubs(step10.moduleLessonPlans || []),
+        'step10.validation': validationFromStubs(modules, step10),
+      },
+    }
+  );
+}
+
+/**
+ * Put a Step 10 snapshot back, splitting it the way generation does.
+ *
+ * A snapshot holds whole lesson plans. Writing it into the workflow document as-is would
+ * restore the very 16MB overflow this store exists to prevent, so the bodies go to their own
+ * rows and only stubs are set on the document.
+ *
+ * Modules the snapshot does not mention are removed, so a restore returns Step 10 to exactly
+ * what it held rather than merging the old state into the new one.
+ */
+export async function restoreStep10Snapshot(workflowId: string, snapshot: any): Promise<any> {
+  const plans: LessonPlanLike[] = snapshot?.moduleLessonPlans || [];
+
+  const keep = new Set(plans.map((p) => p.moduleId).filter(Boolean) as string[]);
+  await ModuleLessonPlan.deleteMany({
+    workflowId: toObjectId(workflowId),
+    moduleId: { $nin: [...keep] },
+  });
+
+  for (const plan of plans) {
+    if (!plan?.moduleId) continue;
+    await ModuleLessonPlan.updateOne(
+      { workflowId: toObjectId(workflowId), moduleId: plan.moduleId },
+      {
+        $set: {
+          moduleCode: plan.moduleCode || '',
+          moduleTitle: plan.moduleTitle || '',
+          moduleDescription: plan.moduleDescription || '',
+          totalContactHours: plan.totalContactHours || 0,
+          totalLessons: lessonsHeld(plan),
+          plannedLessonCount: plan.plannedLessonCount || lessonsHeld(plan),
+          lessons: plan.lessons || [],
+          pptDecks: plan.pptDecks || [],
+        },
+      },
+      { upsert: true }
+    );
+  }
+
+  return { ...snapshot, moduleLessonPlans: plans.map((p) => moduleStub(p)) };
+}
+
+/**
+ * Keep a stored module's title in step with a Step 4 rename.
+ *
+ * The row holds its own `moduleTitle`, and the export reads the row rather than the stub, so
+ * without this a renamed module keeps its old title in every generated document.
+ */
+export async function renameStoredModule(
+  workflowId: string,
+  moduleId: string,
+  oldTitle: string,
+  newTitle: string
+): Promise<void> {
+  await ModuleLessonPlan.updateOne(
+    {
+      workflowId: toObjectId(workflowId),
+      $or: [{ moduleId }, { moduleTitle: oldTitle }],
+    },
+    { $set: { moduleTitle: newTitle } }
+  );
+}
+
+/** Remove every stored lesson plan for a workflow, for when the workflow itself is deleted. */
+export async function deleteWorkflowLessonPlans(workflowId: string): Promise<void> {
+  await ModuleLessonPlan.deleteMany({ workflowId: toObjectId(workflowId) });
 }

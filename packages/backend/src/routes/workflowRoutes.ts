@@ -47,6 +47,22 @@ import { syllabusExportService } from '../services/syllabusExportService';
 import { courseSpecificationExportService } from '../services/courseSpecificationExportService';
 import { curriculumImportService } from '../services/curriculumImportService';
 import { step10ImportService } from '../services/step10ImportService';
+import {
+  completedModuleIds as step10CompletedModuleIds,
+  summariseFromStubs,
+} from '../services/step10Completion';
+import {
+  withLessons,
+  saveModulePlan,
+  loadModulePlan,
+  loadModulePlans,
+  findPlanByLessonId,
+  refreshAggregates,
+  deleteModulePlan,
+  restoreStep10Snapshot,
+  renameStoredModule,
+  deleteWorkflowLessonPlans,
+} from '../services/step10Store';
 import multer from 'multer';
 import { llmService } from '../services/llmService';
 import {
@@ -93,41 +109,38 @@ function normalizeStep3PloCodes(step3: any): boolean {
 }
 
 /**
- * Recompute step10.summary from the lesson plans actually present. The summary
- * is written once at generation and goes stale after modules are regenerated,
- * which made the screen show a different lesson count from the exported doc.
- * Returns true if any figure changed.
+ * Recompute step10.summary from the lesson plans actually present.
+ *
+ * The summary is written once at generation and goes stale after modules are regenerated,
+ * which made the screen show a different lesson count from the exported document.
+ *
+ * The figures come from the per-module stats carried on each stub, because the lesson bodies
+ * are no longer in the document. Adding them up from `lessons` here would report zero case
+ * studies and zero formative checks for every programme and then write that over the real
+ * summary. Returns true if any figure changed.
  */
 function recomputeStep10Summary(step10: any): boolean {
   if (!step10 || !Array.isArray(step10.moduleLessonPlans)) return false;
-  const plans = step10.moduleLessonPlans;
-  const allLessons = plans.flatMap((p: any) => (Array.isArray(p.lessons) ? p.lessons : []));
-  const totalLessons =
-    allLessons.length || plans.reduce((s: number, p: any) => s + (p.totalLessons || 0), 0);
-  const totalContactHours =
-    Math.round(plans.reduce((s: number, p: any) => s + (p.totalContactHours || 0), 0) * 100) / 100;
-  const caseStudiesIncluded = allLessons.filter((l: any) => l.caseStudyActivity).length;
-  const formativeChecksIncluded = allLessons.reduce(
-    (s: number, l: any) => s + (Array.isArray(l.formativeChecks) ? l.formativeChecks.length : 0),
-    0
-  );
-  const averageLessonDuration =
-    totalLessons > 0 ? Math.round((totalContactHours * 60) / totalLessons) : 0;
+
+  const next = summariseFromStubs(step10.moduleLessonPlans);
+  const totalContactHours = Math.round(next.totalContactHours * 100) / 100;
+  const averageLessonDuration = Math.round(next.averageLessonDuration);
+
   const prev = step10.summary || {};
   if (
-    prev.totalLessons === totalLessons &&
+    prev.totalLessons === next.totalLessons &&
     prev.totalContactHours === totalContactHours &&
-    prev.caseStudiesIncluded === caseStudiesIncluded &&
-    prev.formativeChecksIncluded === formativeChecksIncluded
+    prev.caseStudiesIncluded === next.caseStudiesIncluded &&
+    prev.formativeChecksIncluded === next.formativeChecksIncluded
   ) {
     return false;
   }
   step10.summary = {
     ...prev,
-    totalLessons,
+    totalLessons: next.totalLessons,
     totalContactHours,
-    caseStudiesIncluded,
-    formativeChecksIncluded,
+    caseStudiesIncluded: next.caseStudiesIncluded,
+    formativeChecksIncluded: next.formativeChecksIncluded,
     averageLessonDuration,
   };
   return true;
@@ -410,7 +423,7 @@ const extendTimeout = (timeoutMs: number = 600000) => {
  * Propagate module title changes to all steps that store module info
  * This ensures data consistency across the entire workflow
  */
-function propagateModuleTitleChange(
+async function propagateModuleTitleChange(
   workflow: any,
   moduleId: string,
   oldTitle: string,
@@ -479,6 +492,10 @@ function propagateModuleTitleChange(
         stepsToUpdate.push('step10');
       }
     });
+    // The stored row carries its own copy of the title and is what the export reads, so a
+    // rename that only touched the stub would show the new title on screen and the old one
+    // in the document.
+    await renameStoredModule(String(workflow._id), moduleId, oldTitle, newTitle);
   }
 
   // Mark all affected steps as modified
@@ -668,6 +685,17 @@ function refreshStep3Coverage(step3: any, step2: any): void {
 }
 
 /**
+ * The modules whose lesson plans are actually finished.
+ *
+ * Every one of these call sites used to build `new Set(plans.map(p => p.moduleId))` — which
+ * counts a module as generated the moment it has an entry, and it gets its entry after its
+ * first lesson. See step10Completion for what that cost.
+ */
+function step10CompletedIds(workflow: any): Set<string> {
+  return step10CompletedModuleIds(workflow?.step4?.modules || [], workflow?.step10);
+}
+
+/**
  * Remove existing lesson plan entries for the given moduleIds and queue a Step 10 job
  * so the worker (or sync fallback) regenerates them with the latest module data.
  *
@@ -692,10 +720,14 @@ async function regenerateStep10Modules(
   const plannedLessonCounts: Record<string, number> = {
     ...(wf.step10.plannedLessonCounts || {}),
   };
+  //
+  // Taken from the stub's recorded target rather than from the lessons it holds. A module
+  // truncated by a failed write holds fewer lessons than it was meant to, and reading the
+  // count off it would lock the regeneration to the truncated size.
   for (const mp of wf.step10.moduleLessonPlans as any[]) {
-    if (uniqueIds.includes(mp.moduleId) && mp.lessons?.length) {
-      plannedLessonCounts[mp.moduleId] = mp.lessons.length;
-    }
+    if (!uniqueIds.includes(mp.moduleId)) continue;
+    const target = mp.plannedLessonCount || mp.totalLessons || (mp.lessons || []).length;
+    if (target) plannedLessonCounts[mp.moduleId] = target;
   }
 
   const before = wf.step10.moduleLessonPlans.length;
@@ -707,18 +739,15 @@ async function regenerateStep10Modules(
 
   wf.step10.plannedLessonCounts = plannedLessonCounts;
 
-  // Refresh summary so the UI reflects the in-progress state
-  const allLessons = wf.step10.moduleLessonPlans.flatMap((m: any) => m.lessons || []);
-  if (wf.step10.summary) {
-    wf.step10.summary.totalLessons = allLessons.length;
-    wf.step10.summary.totalContactHours = wf.step10.moduleLessonPlans.reduce(
-      (sum: number, m: any) => sum + (m.totalContactHours || 0),
-      0
-    );
-  }
-
   wf.markModified('step10');
   await wf.save();
+
+  // Drop the stored lessons too. Leaving them behind would let the module resume from the
+  // very content the regeneration is meant to replace.
+  for (const moduleId of uniqueIds) {
+    await deleteModulePlan(workflowId, moduleId);
+  }
+  await refreshAggregates(workflowId);
 
   loggingService.info('Cleared lesson plans for regeneration', {
     workflowId,
@@ -900,10 +929,16 @@ router.post(
         return res.status(404).json({ success: false, error: 'Version snapshot not found' });
       }
 
-      const snapshot = (await loadSnapshot(fileId)) as any;
+      let snapshot = (await loadSnapshot(fileId)) as any;
 
       // Snapshot the current version first — restoring is itself undoable.
       await snapshotStep(id, stepNumber);
+
+      // Step 10's lesson bodies belong in their own collection; writing the snapshot whole
+      // would put 26MB of lessons back into a 16MB document.
+      if (stepNumber === 10) {
+        snapshot = await restoreStep10Snapshot(id, snapshot);
+      }
 
       await CurriculumWorkflow.updateOne(
         { _id: id },
@@ -2128,7 +2163,7 @@ router.put(
       // If title changed, propagate to all downstream steps that snapshotted it
       const titleChanged = moduleUpdates.title !== undefined && moduleUpdates.title !== oldTitle;
       if (titleChanged) {
-        propagateModuleTitleChange(workflow, moduleId, oldTitle, moduleUpdates.title);
+        await propagateModuleTitleChange(workflow, moduleId, oldTitle, moduleUpdates.title);
       }
 
       // Detect whether downstream lesson plans (step 10) have been generated for this
@@ -4595,10 +4630,7 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
         workflowId: id,
       });
 
-      const step10CompletedIds = new Set(
-        (existingWorkflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
-      );
-      const existingModules = step10CompletedIds.size;
+      const existingModules = step10CompletedIds(existingWorkflow).size;
       const totalModules = new Set((existingWorkflow.step4?.modules || []).map((m: any) => m.id))
         .size;
 
@@ -4624,9 +4656,7 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
         .then((result) => {
           loggingService.info('Step 10 module generation completed successfully', {
             workflowId: id,
-            modulesGenerated: new Set(
-              (result.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
-            ).size,
+            modulesGenerated: step10CompletedIds(result).size,
             totalModules,
             moduleJustCompleted: existingModules + 1,
           });
@@ -4668,9 +4698,7 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
         data: {
           message: 'Generation already in progress',
           jobsQueued: activeJobs.length,
-          modulesGenerated: new Set(
-            (existingWorkflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
-          ).size,
+          modulesGenerated: step10CompletedIds(existingWorkflow).size,
           totalModules: new Set((existingWorkflow.step4?.modules || []).map((m: any) => m.id)).size,
         },
         message: 'Step 10 generation is already in progress. Check status for updates.',
@@ -4680,9 +4708,7 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
     // Queue the remaining modules
     const jobs = await queueAllRemainingModules(id, userId);
 
-    const modulesGenerated = new Set(
-      (existingWorkflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
-    ).size;
+    const modulesGenerated = step10CompletedIds(existingWorkflow).size;
     const totalModules = new Set((existingWorkflow.step4?.modules || []).map((m: any) => m.id))
       .size;
 
@@ -4749,9 +4775,7 @@ router.post(
       }
 
       // Check how many modules are already generated
-      const nmCompletedIds = new Set(
-        (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
-      );
+      const nmCompletedIds = step10CompletedIds(workflow);
       const existingModules = nmCompletedIds.size;
       const totalModules = new Set((workflow.step4?.modules || []).map((m: any) => m.id)).size;
 
@@ -4777,9 +4801,7 @@ router.post(
       // Generate the next module
       const updatedWorkflow = await workflowService.processStep10NextModule(id);
 
-      const newModulesCount = new Set(
-        (updatedWorkflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
-      ).size;
+      const newModulesCount = step10CompletedIds(updatedWorkflow).size;
       const allComplete = newModulesCount >= totalModules;
 
       loggingService.info('Next module generation complete', {
@@ -4856,9 +4878,7 @@ router.get('/:id/step10/status', validateJWT, loadUser, async (req: Request, res
       })
     );
 
-    const modulesGenerated = new Set(
-      (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
-    ).size;
+    const modulesGenerated = step10CompletedIds(workflow).size;
     const totalModules = new Set((workflow.step4?.modules || []).map((m: any) => m.id)).size;
     const allComplete = modulesGenerated >= totalModules;
 
@@ -4946,6 +4966,47 @@ router.get('/:id/step10', validateJWT, loadUser, async (req: Request, res: Respo
 });
 
 /**
+ * GET /api/v3/workflow/:id/step10/module/:moduleId
+ *
+ * One module's lesson plans, with the lesson bodies.
+ *
+ * The workflow response carries per-module stubs only — counts, titles and hours. A
+ * 46-module programme holds around 26MB of teaching content, which is more than the document
+ * it used to live in could hold and more than the screen has any reason to download to show
+ * one module. The module list renders from the stubs; this fills in the module being read.
+ */
+router.get(
+  '/:id/step10/module/:moduleId',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const { id, moduleId } = req.params;
+
+      const plan = await loadModulePlan(id, moduleId);
+      if (!plan) {
+        return res.status(404).json({
+          success: false,
+          error: 'No lesson plans stored for that module',
+        });
+      }
+
+      res.json({ success: true, data: plan });
+    } catch (error) {
+      loggingService.error('Error retrieving module lesson plans', {
+        error,
+        workflowId: req.params.id,
+        moduleId: req.params.moduleId,
+      });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to retrieve module lesson plans',
+      });
+    }
+  }
+);
+
+/**
  * POST /api/v3/workflow/:id/step10/approve
  * Approve Step 10 (Lesson Plans) and advance to Step 11 (PPT Generation)
  */
@@ -4972,8 +5033,9 @@ router.post('/:id/step10/approve', validateJWT, loadUser, async (req: Request, r
     }
 
     const totalModules = new Set((workflow.step4?.modules || []).map((m: any) => m.id)).size;
-    const completedModules = new Set(workflow.step10.moduleLessonPlans.map((m: any) => m.moduleId))
-      .size;
+    // Complete means holding every planned lesson. Counting entries would let a programme be
+    // approved with modules holding one lesson of thirty.
+    const completedModules = step10CompletedIds(workflow).size;
 
     if (completedModules < totalModules) {
       return res.status(400).json({
@@ -5555,9 +5617,9 @@ router.post('/:id/step11/approve', validateJWT, loadUser, async (req: Request, r
       });
     }
 
-    const totalModules = new Set(
-      (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
-    ).size;
+    // Step 11 builds a deck per module that has lesson plans, so the target is the number of
+    // modules whose plans are finished — a half-written module has no full deck to make.
+    const totalModules = step10CompletedIds(workflow).size;
     const completedModules = new Set(workflow.step11.modulePPTDecks.map((m: any) => m.moduleId))
       .size;
 
@@ -6548,12 +6610,28 @@ router.post('/:id/complete', validateJWT, loadUser, async (req: Request, res: Re
 // ============================================================================
 
 /**
+ * Load a workflow for export, with Step 10 lesson bodies filled in.
+ *
+ * The document keeps only stubs for lesson plans (see step10Store), so an export built
+ * straight from `findById` would list every module and print no lessons under any of them.
+ *
+ * Hydrating BEFORE the content hash is computed also keeps the export cache honest: the hash
+ * has to see the lesson content, or a regenerated module that happens to hold the same number
+ * of lessons would hash identically and serve the previous document.
+ */
+async function loadWorkflowForExport(id: string): Promise<any | null> {
+  const workflow = await CurriculumWorkflow.findById(id);
+  if (!workflow) return null;
+  return withLessons(workflow);
+}
+
+/**
  * GET /api/v3/workflow/:id/export
  * Export complete curriculum package
  */
 router.get('/:id/export', async (req: Request, res: Response) => {
   try {
-    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    const workflow = await loadWorkflowForExport(req.params.id);
 
     if (!workflow) {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
@@ -6612,7 +6690,7 @@ router.get('/:id/export', async (req: Request, res: Response) => {
  */
 router.get('/:id/export/word', async (req: Request, res: Response) => {
   try {
-    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    const workflow = await loadWorkflowForExport(req.params.id);
 
     if (!workflow) {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
@@ -6726,7 +6804,7 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
       return res.status(400).json({ success: false, error: 'Invalid step number (1-13)' });
     }
 
-    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    const workflow = await loadWorkflowForExport(req.params.id);
     if (!workflow) {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
@@ -6822,7 +6900,7 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
  */
 router.get('/:id/export/pdf', async (req: Request, res: Response) => {
   try {
-    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    const workflow = await loadWorkflowForExport(req.params.id);
 
     if (!workflow) {
       return res.status(404).json({
@@ -6926,7 +7004,7 @@ router.get('/:id/export/pdf', async (req: Request, res: Response) => {
  */
 router.post('/:id/export/scorm', async (req: Request, res: Response) => {
   try {
-    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    const workflow = await loadWorkflowForExport(req.params.id);
 
     if (!workflow) {
       return res.status(404).json({
@@ -7124,55 +7202,34 @@ router.delete(
   async (req: Request, res: Response) => {
     try {
       const { id, lessonId } = req.params;
-      const workflow = await CurriculumWorkflow.findById(id);
-      if (!workflow || !workflow.step10) {
-        return res.status(404).json({ success: false, error: 'Workflow or Step 10 not found' });
-      }
 
-      // Locate the module that owns this lesson.
-      let foundModule: any = null;
-      for (const module of workflow.step10.moduleLessonPlans || []) {
-        if (module.lessons?.some((l: any) => l.lessonId === lessonId)) {
-          foundModule = module;
-          break;
-        }
-      }
+      // Lessons live in their own collection, so the module that owns this one is found by
+      // query rather than by walking the workflow document.
+      const foundModule = await findPlanByLessonId(id, lessonId);
       if (!foundModule) {
         return res.status(404).json({ success: false, error: 'Lesson not found' });
       }
 
       // Remove the lesson, then renumber the rest so there are no gaps.
-      foundModule.lessons = foundModule.lessons.filter((l: any) => l.lessonId !== lessonId);
-      foundModule.lessons.forEach((l: any, idx: number) => {
+      foundModule.lessons = (foundModule.lessons as any[]).filter(
+        (l: any) => l.lessonId !== lessonId
+      );
+      (foundModule.lessons as any[]).forEach((l: any, idx: number) => {
         l.lessonNumber = idx + 1;
       });
 
       // Recompute module totals.
       foundModule.totalLessons = foundModule.lessons.length;
-      foundModule.totalContactHours = foundModule.lessons.reduce(
+      foundModule.totalContactHours = (foundModule.lessons as any[]).reduce(
         (sum: number, l: any) => sum + (l.duration || 0) / 60,
         0
       );
+      // Deleting a lesson lowers what this module is expected to hold. Without this the
+      // module would read as incomplete for ever and Step 10 would keep regenerating it.
+      foundModule.plannedLessonCount = foundModule.lessons.length;
 
-      // Recompute the step-10 summary.
-      const allLessons = (workflow.step10.moduleLessonPlans || []).flatMap(
-        (m: any) => m.lessons || []
-      );
-      if (workflow.step10.summary) {
-        workflow.step10.summary.totalLessons = allLessons.length;
-        workflow.step10.summary.totalContactHours = (
-          workflow.step10.moduleLessonPlans || []
-        ).reduce((sum: number, m: any) => sum + (m.totalContactHours || 0), 0);
-        workflow.step10.summary.averageLessonDuration = allLessons.length
-          ? Math.round(
-              allLessons.reduce((sum: number, l: any) => sum + (l.duration || 0), 0) /
-                allLessons.length
-            )
-          : 0;
-      }
-
-      workflow.markModified('step10');
-      await workflow.save();
+      await saveModulePlan(id, foundModule as any);
+      await refreshAggregates(id);
 
       loggingService.info('Lesson plan deleted', { workflowId: id, lessonId });
       res.json({
@@ -7210,25 +7267,12 @@ router.put(
 
       loggingService.info('Updating lesson plan', { workflowId: id, lessonId, lessonTitle });
 
-      const workflow = await CurriculumWorkflow.findById(id);
-      if (!workflow || !workflow.step10) {
-        return res.status(404).json({ success: false, error: 'Workflow or Step 10 not found' });
-      }
+      const foundModule = await findPlanByLessonId(id, lessonId);
+      const foundLesson: any = (foundModule?.lessons as any[])?.find(
+        (l: any) => l.lessonId === lessonId
+      );
 
-      // Find the lesson in the moduleLessonPlans
-      let foundLesson: any = null;
-      let foundModule: any = null;
-
-      for (const module of workflow.step10.moduleLessonPlans || []) {
-        const lesson = module.lessons?.find((l: any) => l.lessonId === lessonId);
-        if (lesson) {
-          foundLesson = lesson;
-          foundModule = module;
-          break;
-        }
-      }
-
-      if (!foundLesson) {
+      if (!foundModule || !foundLesson) {
         return res.status(404).json({ success: false, error: 'Lesson not found' });
       }
 
@@ -7242,24 +7286,15 @@ router.put(
       if (formativeChecks !== undefined) foundLesson.formativeChecks = formativeChecks;
 
       // Recalculate module totals if duration changed
-      if (duration !== undefined && foundModule) {
-        foundModule.totalContactHours = foundModule.lessons.reduce(
-          (sum: number, l: any) => sum + l.duration / 60,
+      if (duration !== undefined) {
+        foundModule.totalContactHours = (foundModule.lessons as any[]).reduce(
+          (sum: number, l: any) => sum + (l.duration || 0) / 60,
           0
         );
       }
 
-      // Recalculate summary if needed
-      if (workflow.step10.summary && duration !== undefined) {
-        workflow.step10.summary.totalContactHours = workflow.step10.moduleLessonPlans.reduce(
-          (sum: number, m: any) => sum + m.totalContactHours,
-          0
-        );
-      }
-
-      // Mark as modified and save
-      workflow.markModified('step10');
-      await workflow.save();
+      await saveModulePlan(id, foundModule as any);
+      if (duration !== undefined) await refreshAggregates(id);
 
       loggingService.info('Lesson plan updated successfully', { lessonId, foundLesson });
 
@@ -7298,9 +7333,11 @@ router.post(
         return res.status(404).json({ success: false, error: 'Workflow or Step 10 not found' });
       }
 
-      const module = (workflow.step10.moduleLessonPlans || []).find(
+      // The stub in the document says which module this is; the lessons come from the store.
+      const stub = (workflow.step10.moduleLessonPlans || []).find(
         (m: any) => m.moduleId === moduleId || m.moduleCode === moduleId
       );
+      const module = stub ? await loadModulePlan(id, (stub as any).moduleId) : null;
       if (!module) {
         return res.status(404).json({ success: false, error: 'Module not found in Step 10' });
       }
@@ -7321,26 +7358,18 @@ router.post(
               .filter(Boolean)
           : [];
 
-      module.lessons.push(newLesson);
+      (module.lessons as any[]).push(newLesson);
       module.totalLessons = module.lessons.length;
-      module.totalContactHours = module.lessons.reduce(
+      module.totalContactHours = (module.lessons as any[]).reduce(
         (sum: number, l: any) => sum + (l.duration || 0) / 60,
         0
       );
+      // A hand-written lesson raises the module's target too, so adding one to a full module
+      // does not leave it looking one short and due for regeneration.
+      module.plannedLessonCount = Math.max(module.plannedLessonCount || 0, module.lessons.length);
 
-      // Keep the step-10 summary in step with the new lesson.
-      const allLessons = (workflow.step10.moduleLessonPlans || []).flatMap(
-        (m: any) => m.lessons || []
-      );
-      if (workflow.step10.summary) {
-        workflow.step10.summary.totalLessons = allLessons.length;
-        workflow.step10.summary.totalContactHours = (
-          workflow.step10.moduleLessonPlans || []
-        ).reduce((sum: number, m: any) => sum + (m.totalContactHours || 0), 0);
-      }
-
-      workflow.markModified('step10');
-      await workflow.save();
+      await saveModulePlan(id, module as any);
+      await refreshAggregates(id);
 
       loggingService.info('Lesson added', {
         workflowId: id,
@@ -7412,7 +7441,11 @@ router.post('/:id/step10/import', validateJWT, loadUser, (req: Request, res: Res
       await snapshotStep(id, 10);
 
       const norm = (s: string) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-      const livePlans: any[] = workflow.step10.moduleLessonPlans || [];
+      // The import edits lesson bodies, which live in their own collection — the workflow
+      // document holds counts only. Matching against the stubs would find every module and
+      // no lessons inside any of them, so the whole file would read as unmatched.
+      const livePlans: any[] = await loadModulePlans(id);
+      const touched = new Set<any>();
       const liveByCode = new Map<string, any>();
       const liveByTitle = new Map<string, any>();
       const seenCodes = new Set<string>();
@@ -7500,6 +7533,7 @@ router.post('/:id/step10/import', validateJWT, loadUser, (req: Request, res: Res
         }
 
         summary.modulesMatched += 1;
+        touched.add(liveMod);
         if (!Array.isArray(liveMod.lessons)) liveMod.lessons = [];
         // Match lessons by title FIRST, then by number. Title is stable across
         // a Word edit that deletes/reorders lessons (which shifts numbers), so
@@ -7582,22 +7616,14 @@ router.post('/:id/step10/import', validateJWT, loadUser, (req: Request, res: Res
         );
       }
 
-      // Recompute the step-10 summary.
-      const allLessons = livePlans.flatMap((m: any) => m.lessons || []);
-      if (!workflow.step10.summary) (workflow.step10 as any).summary = {};
-      workflow.step10.summary.totalLessons = allLessons.length;
-      workflow.step10.summary.totalContactHours = livePlans.reduce(
-        (s: number, m: any) => s + (m.totalContactHours || 0),
-        0
-      );
-      workflow.step10.summary.averageLessonDuration = allLessons.length
-        ? Math.round(
-            allLessons.reduce((s: number, l: any) => s + (l.duration || 0), 0) / allLessons.length
-          )
-        : 0;
-
-      workflow.markModified('step10');
-      await workflow.save();
+      // Store every module the import touched, then recompute the summary from the stubs.
+      for (const plan of touched) {
+        // An imported module's lesson count is what the file says it is, so the module is
+        // not left looking short of a target derived from its contact hours.
+        plan.plannedLessonCount = (plan.lessons || []).length;
+        await saveModulePlan(id, plan);
+      }
+      await refreshAggregates(id);
 
       loggingService.info('Step 10 re-import applied', { workflowId: id, summary });
       res.json({ success: true, data: summary });
@@ -7735,6 +7761,10 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     // Delete the workflow
     await CurriculumWorkflow.findByIdAndDelete(workflowId);
+
+    // Lesson plans live in their own collection, so deleting the workflow no longer takes
+    // them with it. Left behind they are unreachable rows that nothing will ever clean up.
+    await deleteWorkflowLessonPlans(workflowId);
 
     loggingService.info('Workflow deleted', {
       workflowId,
@@ -8540,7 +8570,9 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
     if (newContent.moduleTitleUpdates && Array.isArray(newContent.moduleTitleUpdates)) {
       const step4Data = (workflow as any).step4;
       if (step4Data?.modules) {
-        newContent.moduleTitleUpdates.forEach((update: any) => {
+        // A for-of rather than forEach: propagation now awaits a write to the lesson-plan
+        // store, and forEach would leave that promise unhandled.
+        for (const update of newContent.moduleTitleUpdates) {
           const moduleIdx = step4Data.modules.findIndex(
             (m: any) =>
               m.id === update.moduleId ||
@@ -8556,7 +8588,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
               step4Data.modules[moduleIdx].description = update.newDescription;
 
             // PROPAGATE TITLE CHANGE TO ALL STEPS
-            propagateModuleTitleChange(workflow, moduleId, oldTitle, update.newTitle);
+            await propagateModuleTitleChange(workflow, moduleId, oldTitle, update.newTitle);
 
             loggingService.info('Module title updated and propagated', {
               moduleId,
@@ -8564,7 +8596,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
               newTitle: update.newTitle,
             });
           }
-        });
+        }
         workflow.markModified('step4');
       }
     }
@@ -8602,7 +8634,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
 
             if (module) {
               const oldTitle = Object.values(update.match)[0] as string;
-              propagateModuleTitleChange(workflow, module.id, oldTitle, update.changes.title);
+              await propagateModuleTitleChange(workflow, module.id, oldTitle, update.changes.title);
             }
           }
         }

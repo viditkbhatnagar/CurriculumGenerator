@@ -33,9 +33,18 @@ export async function snapshotStep(workflowId: string, stepNumber: number): Prom
     );
     if (!workflow) return;
 
-    const stepData = workflow[`step${stepNumber}`];
+    let stepData = workflow[`step${stepNumber}`];
     if (!stepData || (typeof stepData === 'object' && Object.keys(stepData).length === 0)) {
       return; // nothing generated yet — nothing to snapshot
+    }
+
+    // Step 10 keeps its lesson bodies in their own collection and only stubs in the document,
+    // so a snapshot taken straight from the document would record module names and no
+    // lessons — and restoring it would quietly wipe the work it was meant to protect.
+    if (stepNumber === 10) {
+      const { loadModulePlans } = await import('./step10Store');
+      const plans = await loadModulePlans(workflowId);
+      if (plans.length > 0) stepData = { ...stepData, moduleLessonPlans: plans };
     }
 
     const buffer = Buffer.from(JSON.stringify(stepData), 'utf-8');

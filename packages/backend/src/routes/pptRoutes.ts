@@ -1,10 +1,17 @@
 import express, { Request, Response } from 'express';
 import { pptGenerationService } from '../services/pptGenerationService';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
+import { withLessons } from '../services/step10Store';
 import { loggingService } from '../services/loggingService';
 import { validateJWT, loadUser } from '../middleware/auth';
 import JSZip from 'jszip';
 import { moduleCodeOf, moduleFileSlugOf } from '../utils/moduleIdentity';
+
+/** Load a workflow with Step 10 lesson bodies attached, or null when there is no such workflow. */
+async function loadWorkflowWithLessons(workflowId: string): Promise<any | null> {
+  const workflow = await CurriculumWorkflow.findById(workflowId);
+  return workflow ? withLessons(workflow) : null;
+}
 
 const router = express.Router();
 
@@ -30,7 +37,9 @@ router.get('/validate/:workflowId', async (req: Request, res: Response) => {
   try {
     const { workflowId } = req.params;
 
-    const workflow = await CurriculumWorkflow.findById(workflowId);
+    // Slides are built from the lesson bodies, which live in their own collection — the
+    // workflow document carries only per-module stubs. See step10Store.
+    const workflow = await loadWorkflowWithLessons(workflowId);
 
     if (!workflow) {
       return res.status(404).json({
@@ -84,7 +93,9 @@ router.post('/generate/module/:workflowId/:moduleId', async (req: Request, res: 
   try {
     const { workflowId, moduleId } = req.params;
 
-    const workflow = await CurriculumWorkflow.findById(workflowId);
+    // Slides are built from the lesson bodies, which live in their own collection — the
+    // workflow document carries only per-module stubs. See step10Store.
+    const workflow = await loadWorkflowWithLessons(workflowId);
 
     if (!workflow) {
       return res.status(404).json({
@@ -172,7 +183,9 @@ router.post('/generate/all/:workflowId', async (req: Request, res: Response) => 
   try {
     const { workflowId } = req.params;
 
-    const workflow = await CurriculumWorkflow.findById(workflowId);
+    // Slides are built from the lesson bodies, which live in their own collection — the
+    // workflow document carries only per-module stubs. See step10Store.
+    const workflow = await loadWorkflowWithLessons(workflowId);
 
     if (!workflow) {
       return res.status(404).json({
@@ -285,7 +298,9 @@ router.post('/download/module/:workflowId/:moduleIndex', async (req: Request, re
     const { workflowId, moduleIndex } = req.params;
     const moduleIdx = parseInt(moduleIndex, 10);
 
-    const workflow = await CurriculumWorkflow.findById(workflowId);
+    // Slides are built from the lesson bodies, which live in their own collection — the
+    // workflow document carries only per-module stubs. See step10Store.
+    const workflow = await loadWorkflowWithLessons(workflowId);
 
     if (!workflow) {
       return res.status(404).json({
@@ -396,7 +411,9 @@ router.post('/generate/all-async/:workflowId', async (req: Request, res: Respons
   try {
     const { workflowId } = req.params;
 
-    const workflow = await CurriculumWorkflow.findById(workflowId);
+    // Slides are built from the lesson bodies, which live in their own collection — the
+    // workflow document carries only per-module stubs. See step10Store.
+    const workflow = await loadWorkflowWithLessons(workflowId);
 
     if (!workflow) {
       return res.status(404).json({

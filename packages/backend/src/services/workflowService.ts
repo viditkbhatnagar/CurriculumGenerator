@@ -27,7 +27,7 @@ import {
   summariseFromStubs,
   validationFromStubs,
 } from './step10Completion';
-import { saveModulePlan, loadModulePlan } from './step10Store';
+import { saveModulePlan, loadModulePlan, withLessons } from './step10Store';
 import {
   scenarioProfileFor,
   scenarioDirective,
@@ -4571,8 +4571,11 @@ CRITICAL VALIDATION:
       throw new Error('Workflow not found or Step 10 not complete');
     }
 
-    // Get lesson plans from Step 10
-    const lessonPlans = workflow.step10.moduleLessonPlans || [];
+    // Slides are built from the lesson bodies, which live outside the document — the stubs
+    // in `workflow.step10` carry counts only. Reading them directly would build a deck per
+    // module out of nothing.
+    const hydrated = await withLessons(workflow);
+    const lessonPlans = (hydrated.step10?.moduleLessonPlans || []) as any[];
     const totalModules = new Set(lessonPlans.map((m) => m.moduleId)).size;
 
     if (totalModules === 0) {
@@ -4868,7 +4871,9 @@ CRITICAL VALIDATION:
    * @returns Step11PPTGeneration object
    */
   private async generateStep11Content(workflow: ICurriculumWorkflow): Promise<any> {
-    const lessonPlans = workflow.step10?.moduleLessonPlans || [];
+    // Lesson bodies come from the store; the workflow document holds stubs only.
+    const hydrated = await withLessons(workflow);
+    const lessonPlans = (hydrated.step10?.moduleLessonPlans || []) as any[];
 
     if (lessonPlans.length === 0) {
       throw new Error('No lesson plans found in Step 10');
