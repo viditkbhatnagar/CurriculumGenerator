@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSubmitStep10, useApproveStep10 } from '@/hooks/useWorkflow';
 import { useStep10Status } from '@/hooks/useStep10Status';
+import { useQueryClient } from '@tanstack/react-query';
+import { useStep10Module } from '@/hooks/useStep10Module';
+import { isModuleComplete } from '@/lib/step10Completion';
 import { api } from '@/lib/api';
 import { CurriculumWorkflow, LessonPlan } from '@/types/workflow';
 import { isStepDone } from '@/lib/stepGating';
@@ -514,6 +517,14 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   const [editingLesson, setEditingLesson] = useState<LessonPlan | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
+  // Lessons are cached per module, so refetching the workflow alone would leave an edited or
+  // regenerated module showing the version fetched before the change.
+  const queryClient = useQueryClient();
+  const refreshLessons = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['workflow', workflow._id, 'step10'] }),
+    [queryClient, workflow._id]
+  );
+
   // Track if we've already shown completion notification
   const hasShownCompletionRef = useRef(false);
 
@@ -560,6 +571,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
       // Refresh workflow data after each individual module completes
       // Clear generating state so UI unlocks the next module
       setGeneratingModuleId(null);
+      await refreshLessons();
       await onRefresh();
     },
     onFailed: (errorMsg) => {
@@ -648,15 +660,20 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   // Legacy handleGenerate for the main button — find the first ungenerated module
   const handleGenerate = useCallback(async () => {
     const modules = workflow.step4?.modules || [];
-    const existingIds = new Set(
-      (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
+    const plans = workflow.step10?.moduleLessonPlans || [];
+    const byId = new Map(plans.map((m: any) => [m.moduleId, m]));
+    const byCode = new Map(
+      plans.filter((m: any) => m.moduleCode).map((m: any) => [m.moduleCode, m])
     );
-    const existingCodes = new Set(
-      (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleCode).filter(Boolean)
-    );
-    // Find the first module that doesn't have a lesson plan yet
+    // The first module that is not FINISHED, so a module left half-written by an interruption
+    // is returned to rather than skipped for ever.
     const nextModuleIndex = modules.findIndex(
-      (m) => !existingIds.has(m.id) && !existingCodes.has(m.code)
+      (m) =>
+        !isModuleComplete(
+          m,
+          byId.get(m.id) || byCode.get(m.code),
+          workflow.step10?.plannedLessonCounts
+        )
     );
 
     if (nextModuleIndex === -1) {
@@ -694,6 +711,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
       );
       setAddLessonFor(null);
       toast.success('Lesson added', 'You can now open the module to edit its details.');
+      await refreshLessons();
       await onRefresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to add lesson';
@@ -739,6 +757,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
 
       // Force refresh the workflow data
       console.log('[Step10] Refreshing workflow data...');
+      await refreshLessons();
       await onRefresh();
       console.log('[Step10] ✅ Refresh complete');
     } catch (err) {
@@ -770,6 +789,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
     try {
       await api.delete(`/api/v3/workflow/${workflow._id}/step10/lesson/${lesson.lessonId}`);
       toast.success('Lesson deleted', 'The lesson has been removed.');
+      await refreshLessons();
       await onRefresh();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete lesson';
@@ -809,6 +829,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
       setGeneratingModuleId(moduleId);
       hasShownCompletionRef.current = false;
       startPolling();
+      await refreshLessons();
       await onRefresh();
     } catch (err: any) {
       const message = err?.response?.data?.error || err?.message || 'Failed to regenerate module';
@@ -845,15 +866,23 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   // matching by moduleId OR moduleCode (fallback for ID mismatches)
   const completedModuleSet = new Set<string>();
   const completedByCode = new Map<string, any>();
+  const planByModuleId = new Map<string, any>();
   (workflow.step10?.moduleLessonPlans || []).forEach((mp: any) => {
-    if (mp.moduleId) completedModuleSet.add(mp.moduleId);
+    if (mp.moduleId) {
+      completedModuleSet.add(mp.moduleId);
+      planByModuleId.set(mp.moduleId, mp);
+    }
     if (mp.moduleCode) completedByCode.set(mp.moduleCode, mp);
   });
 
   const totalModules = workflow.step4?.modules?.length || 0;
   // Count unique modules that match a step4 module (by id or code)
-  const completedFromWorkflow = (workflow.step4?.modules || []).filter(
-    (m) => completedModuleSet.has(m.id) || completedByCode.has(m.code)
+  const completedFromWorkflow = (workflow.step4?.modules || []).filter((m) =>
+    isModuleComplete(
+      m,
+      planByModuleId.get(m.id) || completedByCode.get(m.code),
+      workflow.step10?.plannedLessonCounts
+    )
   ).length;
   // Use the higher of workflow state vs polling status to avoid stale-state locking
   const completedModules = Math.max(completedFromWorkflow, step10Status?.modulesGenerated ?? 0);
@@ -874,9 +903,19 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
     }
   }, [hasStep10Data, selectedModule, workflow.step10]);
 
-  const currentModule = workflow.step10?.moduleLessonPlans?.find(
+  // The workflow response carries stubs — module name, hours, lesson count — so the lessons
+  // for whichever module is open are fetched on their own. Loading all 46 modules' lessons to
+  // show one of them is 26MB the reader never looks at.
+  const { data: loadedModule, isLoading: isLoadingModule } = useStep10Module(
+    workflow._id,
+    selectedModule
+  );
+
+  const currentModuleStub = workflow.step10?.moduleLessonPlans?.find(
     (m) => m.moduleId === selectedModule
   );
+  // The stub keeps the card headings visible while the lessons are still arriving.
+  const currentModule = loadedModule || currentModuleStub;
 
   const currentLesson = currentModule?.lessons?.find((l) => l.lessonId === selectedLesson);
 
@@ -1091,7 +1130,14 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                 // middle module (e.g. an un-generated MOD103) as complete, which
                 // hid that it needs generating and pointed its download/view at a
                 // neighbouring module's plan.
-                const isComplete = !!modulePlan;
+                // ...and only when it holds every lesson it was planned to hold. Presence
+                // alone put a tick over modules holding one lesson of thirty, which is how
+                // six truncated modules passed as generated. See lib/step10Completion.
+                const isComplete = isModuleComplete(
+                  module,
+                  modulePlan,
+                  workflow.step10?.plannedLessonCounts
+                );
                 const isThisModuleGenerating =
                   generatingModuleId === module.id ||
                   step10Status?.jobs?.details?.some(
@@ -1613,104 +1659,114 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
               {/* Lesson List */}
               <div className="bg-teal-50/50 rounded-lg p-5 border border-teal-200">
                 <h4 className="text-teal-800 font-medium mb-4">Lessons</h4>
-                <div className="space-y-3">
-                  {currentModule.lessons.map((lesson) => (
-                    <div
-                      key={lesson.lessonId}
-                      className={`w-full p-4 rounded-lg border transition-all ${
-                        selectedLesson === lesson.lessonId
-                          ? 'bg-teal-500/20 border-teal-500'
-                          : 'bg-white border-teal-200 hover:border-slate-600'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <button
-                          onClick={() => setSelectedLesson(lesson.lessonId)}
-                          className="flex-1 text-left"
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-teal-800 font-medium">
-                              Lesson {lesson.lessonNumber}: {lesson.lessonTitle}
-                            </span>
-                            <span className="text-xs px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded">
-                              {lesson.bloomLevel}
-                            </span>
-                          </div>
-                          <div className="text-sm text-teal-600 mb-2">
-                            {lesson.duration} minutes • {lesson.activities?.length || 0} activities
-                          </div>
-                          <div className="flex flex-wrap gap-2 text-xs">
-                            {lesson.linkedMLOs?.map((mlo) => (
-                              <span
-                                key={mlo}
-                                className="px-2 py-0.5 bg-teal-100 rounded text-teal-700"
-                              >
-                                {mlo}
+                {/* The lessons for this module are fetched on their own, so the pane says so
+                    instead of showing an empty module while they are on their way. */}
+                {isLoadingModule && (currentModule.lessons?.length ?? 0) === 0 ? (
+                  <div className="flex items-center gap-3 py-6 text-sm text-teal-600">
+                    <div className="w-4 h-4 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+                    Loading lessons...
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(currentModule.lessons || []).map((lesson) => (
+                      <div
+                        key={lesson.lessonId}
+                        className={`w-full p-4 rounded-lg border transition-all ${
+                          selectedLesson === lesson.lessonId
+                            ? 'bg-teal-500/20 border-teal-500'
+                            : 'bg-white border-teal-200 hover:border-slate-600'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <button
+                            onClick={() => setSelectedLesson(lesson.lessonId)}
+                            className="flex-1 text-left"
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-teal-800 font-medium">
+                                Lesson {lesson.lessonNumber}: {lesson.lessonTitle}
                               </span>
-                            ))}
+                              <span className="text-xs px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded">
+                                {lesson.bloomLevel}
+                              </span>
+                            </div>
+                            <div className="text-sm text-teal-600 mb-2">
+                              {lesson.duration} minutes • {lesson.activities?.length || 0}{' '}
+                              activities
+                            </div>
+                            <div className="flex flex-wrap gap-2 text-xs">
+                              {lesson.linkedMLOs?.map((mlo) => (
+                                <span
+                                  key={mlo}
+                                  className="px-2 py-0.5 bg-teal-100 rounded text-teal-700"
+                                >
+                                  {mlo}
+                                </span>
+                              ))}
+                            </div>
+                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleEditLesson(lesson)}
+                              className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-600 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
+                              title="Edit lesson"
+                            >
+                              <svg
+                                className="w-3 h-3"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                />
+                              </svg>
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteLesson(lesson)}
+                              className="px-3 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
+                              title="Delete lesson"
+                            >
+                              <svg
+                                className="w-3 h-3"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                              Delete
+                            </button>
+                            <svg
+                              className={`w-5 h-5 text-teal-600 transition-transform ${
+                                selectedLesson === lesson.lessonId ? 'rotate-90' : ''
+                              }`}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 5l7 7-7 7"
+                              />
+                            </svg>
                           </div>
-                        </button>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleEditLesson(lesson)}
-                            className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-600 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
-                            title="Edit lesson"
-                          >
-                            <svg
-                              className="w-3 h-3"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                              />
-                            </svg>
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteLesson(lesson)}
-                            className="px-3 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 rounded-lg transition-colors text-sm font-medium flex items-center gap-1"
-                            title="Delete lesson"
-                          >
-                            <svg
-                              className="w-3 h-3"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                              />
-                            </svg>
-                            Delete
-                          </button>
-                          <svg
-                            className={`w-5 h-5 text-teal-600 transition-transform ${
-                              selectedLesson === lesson.lessonId ? 'rotate-90' : ''
-                            }`}
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 5l7 7-7 7"
-                            />
-                          </svg>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* PowerPoint Decks for Module */}

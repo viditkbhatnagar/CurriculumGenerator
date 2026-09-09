@@ -1446,14 +1446,31 @@ export interface ModuleLessonPlan {
   moduleId: string;
   moduleCode: string;
   moduleTitle: string;
+  moduleDescription?: string;
   totalContactHours: number;
   totalLessons: number;
+  /**
+   * How many lessons this module is generated to hold.
+   *
+   * `totalLessons` is what it currently has, which is smaller while the module is still
+   * generating. Complete means the two agree — see lib/step10Completion.
+   */
+  plannedLessonCount?: number;
+  /**
+   * Empty in the workflow response, which carries per-module stubs only.
+   *
+   * A 46-module programme is around 26MB of teaching content, so lessons are fetched one
+   * module at a time by `useStep10Module` when the reader opens that module.
+   */
   lessons: LessonPlan[];
   pptDecks: PPTDeckReference[];
 }
 
 export interface Step10LessonPlans {
   moduleLessonPlans: ModuleLessonPlan[];
+
+  /** How many lessons each module was curated to hold, keyed by moduleId. */
+  plannedLessonCounts?: Record<string, number>;
 
   validation: {
     allModulesHaveLessonPlans: boolean;

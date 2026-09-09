@@ -62,6 +62,7 @@ import {
   restoreStep10Snapshot,
   renameStoredModule,
   deleteWorkflowLessonPlans,
+  loadLessonIndex,
 } from '../services/step10Store';
 import multer from 'multer';
 import { llmService } from '../services/llmService';
@@ -4966,6 +4967,33 @@ router.get('/:id/step10', validateJWT, loadUser, async (req: Request, res: Respo
 });
 
 /**
+ * GET /api/v3/workflow/:id/step10/lesson-index
+ *
+ * Every lesson's number and title, without the teaching content.
+ *
+ * The canvas panel lists the whole programme's lessons so a reader can point at one, which
+ * is a few hundred short strings. The lesson bodies behind them are around 26MB, and are
+ * fetched a module at a time by whatever actually needs to read them.
+ */
+router.get(
+  '/:id/step10/lesson-index',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const index = await loadLessonIndex(req.params.id);
+      res.json({ success: true, data: index });
+    } catch (error) {
+      loggingService.error('Error retrieving Step 10 lesson index', {
+        error,
+        workflowId: req.params.id,
+      });
+      res.status(500).json({ success: false, error: 'Failed to retrieve lesson index' });
+    }
+  }
+);
+
+/**
  * GET /api/v3/workflow/:id/step10/module/:moduleId
  *
  * One module's lesson plans, with the lesson bodies.
@@ -8201,6 +8229,12 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
 
     // Process the new "updates" array format for flexible editing
     if (newContent.updates && Array.isArray(newContent.updates)) {
+      // Step 10's lesson bodies live in their own collection. They are loaded once for the
+      // whole batch and written back after it: reloading per update would discard the edits
+      // made by the updates before it.
+      let step10Plans: any[] | null = null;
+      const editedPlans = new Set<any>();
+
       for (const update of newContent.updates) {
         const targetStep = update.step || stepNumber;
         const targetStepKey = `step${targetStep}`;
@@ -8222,7 +8256,10 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
         // and support flat lookup across modules via globalLessonNumber
         // =====================================================
         if (targetStep === 10) {
-          const moduleLessonPlans: any[] = targetStepData.moduleLessonPlans || [];
+          // Matching against the stubs on the workflow would find no lesson to edit and
+          // report every change as unmatched.
+          if (step10Plans === null) step10Plans = await loadModulePlans(id);
+          const moduleLessonPlans: any[] = step10Plans;
 
           // Action: regenerate one module's lesson plans
           if (update.action === 'regenerate' && update.match?.moduleId) {
@@ -8278,7 +8315,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
               );
               if (hit) {
                 Object.assign(hit.lesson, update.changes || {});
-                workflow.markModified('step10');
+                editedPlans.add(hit.module);
                 noteApplied();
                 loggingService.info('Step 10 lesson updated via canvas', {
                   moduleId: hit.module.moduleId,
@@ -8308,7 +8345,8 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
                     (sum: number, l: any) => sum + (l.duration || 0) / 60,
                     0
                   );
-                  workflow.markModified('step10');
+                  m.plannedLessonCount = m.lessons.length;
+                  editedPlans.add(m);
                   deleted = true;
                   break;
                 }
@@ -8326,7 +8364,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
             );
             if (mod) {
               Object.assign(mod, update.changes || {});
-              workflow.markModified('step10');
+              editedPlans.add(mod);
               noteApplied();
             } else {
               noteRejected(update, 'no Step 10 module matched the supplied criteria');
@@ -8542,6 +8580,13 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
           loggingService.info('Object updated', { step: targetStep, path: update.path });
         }
       }
+
+      // Write back every Step 10 module the batch touched, then bring the summary and
+      // validation on the workflow back in step with them.
+      for (const plan of editedPlans) {
+        await saveModulePlan(id, plan);
+      }
+      if (editedPlans.size > 0) await refreshAggregates(id);
     }
 
     // =====================================================

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useStep10LessonIndex } from '@/hooks/useStep10Module';
 import { CurriculumWorkflow } from '@/types/workflow';
 import { api } from '@/lib/api';
 import { formatAuthorList } from '@/lib/citation';
@@ -65,6 +66,9 @@ function StepDataViewer({
   onSelectItem: (item: SelectedItem | null) => void;
 }) {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+
+  // Only Step 10 lists lessons, so the index is fetched only when that step is on screen.
+  const { data: lessonIndex } = useStep10LessonIndex(workflow._id, stepNumber === 10);
 
   const toggleItem = (id: string) => {
     setExpandedItems((prev) => {
@@ -412,6 +416,16 @@ function StepDataViewer({
       return <p className="text-teal-500 text-sm">No lesson plans generated yet.</p>;
     }
 
+    // Lesson titles come from the index endpoint: the workflow response carries per-module
+    // stubs, so reading `mp.lessons` here would draw every module heading with nothing
+    // underneath it.
+    const lessonsByModule = new Map<string, any[]>();
+    for (const entry of lessonIndex || []) {
+      const list = lessonsByModule.get(entry.moduleId) || [];
+      list.push(entry);
+      lessonsByModule.set(entry.moduleId, list);
+    }
+
     // Build flat global numbering so a chat reference like "lesson 11" matches the
     // numbering the AI receives in its system prompt.
     let globalLessonNumber = 0;
@@ -429,22 +443,25 @@ function StepDataViewer({
               {mp.totalLessons} lessons • {mp.totalContactHours}h
             </p>
             <div className="space-y-1">
-              {(mp.lessons || []).map((lesson: any) => {
-                globalLessonNumber += 1;
-                return (
-                  <div
-                    key={lesson.lessonId}
-                    className="flex items-baseline gap-2 text-xs text-teal-700"
-                  >
-                    <span className="font-mono text-teal-500 w-6 text-right">
-                      #{globalLessonNumber}
-                    </span>
-                    <span className="line-clamp-1">
-                      L{lesson.lessonNumber}: {lesson.lessonTitle}
-                    </span>
-                  </div>
-                );
-              })}
+              {(lessonsByModule.get(mp.moduleId) || [])
+                .slice()
+                .sort((a: any, b: any) => (a.lessonNumber || 0) - (b.lessonNumber || 0))
+                .map((lesson: any) => {
+                  globalLessonNumber += 1;
+                  return (
+                    <div
+                      key={lesson.lessonId}
+                      className="flex items-baseline gap-2 text-xs text-teal-700"
+                    >
+                      <span className="font-mono text-teal-500 w-6 text-right">
+                        #{globalLessonNumber}
+                      </span>
+                      <span className="line-clamp-1">
+                        L{lesson.lessonNumber}: {lesson.lessonTitle}
+                      </span>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         ))}

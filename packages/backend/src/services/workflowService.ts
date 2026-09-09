@@ -27,7 +27,7 @@ import {
   summariseFromStubs,
   validationFromStubs,
 } from './step10Completion';
-import { saveModulePlan, loadModulePlan, withLessons } from './step10Store';
+import { saveModulePlan, loadModulePlan, withLessons, loadLessonIndex } from './step10Store';
 import {
   scenarioProfileFor,
   scenarioDirective,
@@ -8972,9 +8972,24 @@ Return ONLY valid JSON:
         lessonTitle: string;
         moduleCode: string;
       }> = [];
+      // The lesson titles come from the store, projected to just the identifying fields —
+      // the workflow document carries per-module stubs and no lessons, so building this
+      // from `mp.lessons` would hand the assistant an empty index and it would report that
+      // no lesson matches whatever the reader asked about.
       let globalLessonNumber = 0;
+      const byModule = new Map<string, any[]>();
+      for (const entry of await loadLessonIndex(workflowId)) {
+        const list = byModule.get(entry.moduleId) || [];
+        list.push(entry);
+        byModule.set(entry.moduleId, list);
+      }
+      // Numbered in Step 4 module order, so "lesson 11" means the same lesson here as it
+      // does on the screen and in the export.
       (s10.moduleLessonPlans || []).forEach((mp: any) => {
-        (mp.lessons || []).forEach((l: any) => {
+        const lessons = (byModule.get(mp.moduleId) || []).sort(
+          (a, b) => (a.lessonNumber || 0) - (b.lessonNumber || 0)
+        );
+        for (const l of lessons) {
           globalLessonNumber += 1;
           flatLessons.push({
             globalLessonNumber,
@@ -8983,7 +8998,7 @@ Return ONLY valid JSON:
             lessonTitle: l.lessonTitle,
             moduleCode: mp.moduleCode,
           });
-        });
+        }
       });
 
       fullWorkflowData.step10 = {

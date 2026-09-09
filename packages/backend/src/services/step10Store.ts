@@ -322,3 +322,39 @@ export async function renameStoredModule(
 export async function deleteWorkflowLessonPlans(workflowId: string): Promise<void> {
   await ModuleLessonPlan.deleteMany({ workflowId: toObjectId(workflowId) });
 }
+
+/** One lesson, reduced to what a chat assistant needs to find and name it. */
+export interface LessonIndexEntry {
+  moduleId: string;
+  moduleCode: string;
+  lessonId: string;
+  lessonNumber: number;
+  lessonTitle: string;
+}
+
+/**
+ * A flat index of every lesson in a workflow: id, number, title and owning module.
+ *
+ * Projected in the database rather than loaded and mapped, because the canvas assistant needs
+ * this on every message and the bodies behind it are around 26MB for a full programme. The
+ * assistant works from titles and asks for a specific lesson when it needs the content.
+ */
+export async function loadLessonIndex(workflowId: string): Promise<LessonIndexEntry[]> {
+  const rows = await ModuleLessonPlan.find({ workflowId: toObjectId(workflowId) })
+    .select('moduleId moduleCode lessons.lessonId lessons.lessonNumber lessons.lessonTitle')
+    .lean();
+
+  const index: LessonIndexEntry[] = [];
+  for (const row of rows as any[]) {
+    for (const lesson of row.lessons || []) {
+      index.push({
+        moduleId: row.moduleId,
+        moduleCode: row.moduleCode,
+        lessonId: lesson.lessonId,
+        lessonNumber: lesson.lessonNumber,
+        lessonTitle: lesson.lessonTitle,
+      });
+    }
+  }
+  return index;
+}
