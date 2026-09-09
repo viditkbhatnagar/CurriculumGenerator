@@ -21,6 +21,14 @@ import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/asses
 import { approvedSummativeFor, step7SpecifiesExam } from './step7Authority';
 import config from '../config';
 import {
+  nextIncompleteModuleIndex,
+  completedModuleIds as step10CompletedModuleIds,
+  expectedLessonCount,
+  summariseFromStubs,
+  validationFromStubs,
+} from './step10Completion';
+import { saveModulePlan, loadModulePlan } from './step10Store';
+import {
   scenarioProfileFor,
   scenarioDirective,
   ukLawInNonUkCases,
@@ -4258,14 +4266,15 @@ CRITICAL VALIDATION:
     const modules = workflow.step4?.modules || [];
     const totalModules = new Set(modules.map((m: any) => m.id)).size;
 
-    // Use unique moduleId set for counting
-    const completedModuleIds = new Set(
-      (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
-    );
-    const existingModules = completedModuleIds.size;
+    // A module counts as done when it holds every lesson it was planned to hold — not merely
+    // when it has an entry. It gets its entry after its FIRST lesson, so under the old test
+    // any module interrupted partway through was skipped for ever, and the programme filled
+    // up with modules showing a green tick over five lessons of thirty.
+    const completedIds = step10CompletedModuleIds(modules, workflow.step10 as any);
+    const existingModules = completedIds.size;
 
-    // Find the actual next ungenerated module
-    const expectedModuleIndex = modules.findIndex((m: any) => !completedModuleIds.has(m.id));
+    // Resumes a half-finished module before starting an untouched one.
+    const expectedModuleIndex = nextIncompleteModuleIndex(modules, workflow.step10 as any);
 
     loggingService.info('Processing Step 10: Next Module - Initial Check', {
       workflowId,
@@ -4293,123 +4302,79 @@ CRITICAL VALIDATION:
     const { LessonPlanService } = await import('./lessonPlanService');
     const { PPTGenerationService } = await import('./pptGenerationService');
 
-    // Create progress callback to save after each lesson
-    // CRITICAL: Uses atomic MongoDB operations to avoid overwriting other modules' data.
-    // The closure's `workflow` object is stale during the 2-5 min generation window.
+    // Save after each lesson, so an interruption costs one lesson rather than a module.
+    //
+    // The lesson bodies go to their own collection; only a small stub lands in the workflow
+    // document. This callback used to write the whole plan into the document, which is what
+    // pushed it to 16,776,571 of the 16,777,216 bytes MongoDB allows.
+    const moduleForStats = modules[expectedModuleIndex];
+    let lastSaveError: Error | null = null;
     const lessonProgressCallback = async (progress: any) => {
+      // Write the progress bar's figures first and separately: it is a nicety, and its
+      // failure must not stop a module whose lessons are saving perfectly well.
       try {
-        loggingService.info('Saving lesson progress', {
-          workflowId,
-          moduleId: progress.moduleId,
-          lessonsGenerated: progress.lessonsGenerated,
-          totalLessons: progress.totalLessons,
-        });
-
-        // Write generationProgress for frontend progress bar
-        try {
-          await CurriculumWorkflow.updateOne(
-            { _id: workflowId },
-            {
-              $set: {
-                'step10.generationProgress': {
-                  moduleIndex: expectedModuleIndex,
-                  moduleCode: progress.moduleCode,
-                  moduleTitle: progress.moduleTitle,
-                  completedLessons: progress.lessonsGenerated,
-                  totalLessons: progress.totalLessons,
-                  currentLesson:
-                    progress.lessonsGenerated < progress.totalLessons
-                      ? `Lesson ${progress.lessonsGenerated + 1}`
-                      : null,
-                  startedAt: new Date(),
-                },
-              },
-            }
-          );
-        } catch (_e) {
-          // Non-critical
-        }
-
-        const modulePlanData = {
-          moduleId: progress.moduleId,
-          moduleCode: progress.moduleCode,
-          moduleTitle: progress.moduleTitle,
-          totalContactHours: progress.lessons.reduce(
-            (sum: number, l: any) => sum + l.duration / 60,
-            0
-          ),
-          totalLessons: progress.lessons.length,
-          lessons: progress.lessons,
-          pptDecks: [] as any[],
-        };
-
-        // Atomic upsert: update this module's data without touching other modules
-        // First, try to update existing module entry
-        const updateResult = await CurriculumWorkflow.updateOne(
-          {
-            _id: workflowId,
-            'step10.moduleLessonPlans.moduleId': progress.moduleId,
-          },
+        await CurriculumWorkflow.updateOne(
+          { _id: workflowId },
           {
             $set: {
-              'step10.moduleLessonPlans.$': modulePlanData,
+              'step10.generationProgress': {
+                moduleIndex: expectedModuleIndex,
+                moduleCode: progress.moduleCode,
+                moduleTitle: progress.moduleTitle,
+                completedLessons: progress.lessonsGenerated,
+                totalLessons: progress.totalLessons,
+                currentLesson:
+                  progress.lessonsGenerated < progress.totalLessons
+                    ? `Lesson ${progress.lessonsGenerated + 1}`
+                    : null,
+                startedAt: new Date(),
+              },
             },
           }
         );
+      } catch (_e) {
+        // Non-critical
+      }
 
-        // If no existing entry found, push a new one (and init step10 if needed)
-        if (updateResult.matchedCount === 0) {
-          await CurriculumWorkflow.updateOne(
-            { _id: workflowId, step10: { $exists: false } },
-            {
-              $set: {
-                step10: {
-                  moduleLessonPlans: [],
-                  validation: {
-                    allModulesHaveLessonPlans: false,
-                    allLessonDurationsValid: false,
-                    totalHoursMatch: false,
-                    allMLOsCovered: false,
-                    caseStudiesIntegrated: false,
-                    assessmentsIntegrated: false,
-                  },
-                  summary: {
-                    totalLessons: 0,
-                    totalContactHours: 0,
-                    averageLessonDuration: 0,
-                    caseStudiesIncluded: 0,
-                    formativeChecksIncluded: 0,
-                  },
-                  generatedAt: new Date(),
-                },
-              },
-            }
-          );
-
-          await CurriculumWorkflow.updateOne(
-            {
-              _id: workflowId,
-              'step10.moduleLessonPlans.moduleId': { $ne: progress.moduleId },
-            },
-            {
-              $push: {
-                'step10.moduleLessonPlans': modulePlanData,
-              } as any,
-            }
-          );
-        }
-
-        loggingService.info('Lesson progress saved atomically', {
+      try {
+        await saveModulePlan(
+          workflowId,
+          {
+            moduleId: progress.moduleId,
+            moduleCode: progress.moduleCode,
+            moduleTitle: progress.moduleTitle,
+            moduleDescription: (moduleForStats as any)?.description || '',
+            totalContactHours: progress.lessons.reduce(
+              (sum: number, l: any) => sum + l.duration / 60,
+              0
+            ),
+            totalLessons: progress.lessons.length,
+            plannedLessonCount: progress.plannedLessonCount || progress.totalLessons,
+            lessons: progress.lessons,
+            pptDecks: [],
+          },
+          moduleForStats
+        );
+        lastSaveError = null;
+        loggingService.info('Lesson progress saved', {
           workflowId,
           moduleId: progress.moduleId,
-          lessonsInDB: progress.lessons.length,
+          lessonsStored: progress.lessons.length,
+          ofPlanned: progress.totalLessons,
         });
       } catch (err) {
-        loggingService.error('Failed to save lesson progress', {
+        // Rethrow. The previous version logged and continued, so a module whose lessons
+        // could not be stored still ran every remaining OpenAI call and still reported
+        // itself generated afterwards. Forty minutes of generation, nothing saved, and a
+        // green tick over an empty module.
+        lastSaveError = err instanceof Error ? err : new Error(String(err));
+        loggingService.error('Failed to store lesson plans — stopping module', {
           workflowId,
-          error: err instanceof Error ? err.message : String(err),
+          moduleId: progress.moduleId,
+          lessonsGenerated: progress.lessons.length,
+          error: lastSaveError.message,
         });
-        // Don't throw - let generation continue
+        throw lastSaveError;
       }
     };
 
@@ -4456,18 +4421,24 @@ CRITICAL VALIDATION:
     // A per-module regenerate deletes the plan before queueing the job, so the
     // count it was curated to is read back from the record left behind by
     // regenerateStep10Modules.
-    const existingPlan = (workflow.step10?.moduleLessonPlans || []).find(
-      (p: any) => p.moduleId === module.id
-    );
+    //
+    // Deliberately NOT the number of lessons currently stored. That was the previous rule,
+    // and it turns a module truncated by a failed write into its own target: a module holding
+    // five lessons of thirty would be "regenerated" to five lessons, for ever.
+    const storedPlan = await loadModulePlan(workflowId, module.id);
     const plannedLessonCount =
-      existingPlan?.lessons?.length ||
       (workflow.step10 as any)?.plannedLessonCounts?.[module.id] ||
+      storedPlan?.plannedLessonCount ||
       undefined;
+
+    // Carry on from whatever is already stored for this module rather than starting again.
+    const existingLessons = (storedPlan?.lessons || []) as any[];
 
     // Generate lesson plans for this module (PPTs are generated automatically per lesson)
     const startTime = Date.now();
     const modulePlan = await lessonPlanService.generateModuleLessonPlans(module, context, {
       plannedLessonCount,
+      existingLessons,
     });
     const duration = Date.now() - startTime;
 
@@ -4480,103 +4451,38 @@ CRITICAL VALIDATION:
       durationMin: Math.round(duration / 60000),
     });
 
-    // Note: step10 initialization is handled atomically in the progress callback above.
-    // This legacy block is kept as a fallback for the stale workflow object only.
-    if (!workflow.step10) {
-      workflow.step10 = {
-        moduleLessonPlans: [],
-        validation: {
-          allModulesHaveLessonPlans: false,
-          allLessonDurationsValid: false,
-          totalHoursMatch: false,
-          allMLOsCovered: false,
-          caseStudiesIntegrated: false,
-          assessmentsIntegrated: false,
-        },
-        summary: {
-          totalLessons: 0,
-          totalContactHours: 0,
-          averageLessonDuration: 0,
-          caseStudiesIncluded: 0,
-          formativeChecksIncluded: 0,
-        },
-        generatedAt: new Date(),
-      };
-    }
+    // Store the finished module. The lessons go to their own collection and only the stub
+    // is mirrored into the workflow, so this write stays a few hundred bytes however many
+    // lessons the module holds.
+    await saveModulePlan(workflowId, modulePlan as any, module as any);
 
-    // Re-fetch workflow FRESH from DB to avoid overwriting other modules' data
-    // The in-memory `workflow` object is stale after a 2-5 min generation
+    // Re-read AFTER storing, so this holds both the stub just written and any module that
+    // finished elsewhere during the forty minutes this one took. The copy loaded before
+    // generation began is stale by now.
     const freshWorkflow = await CurriculumWorkflow.findById(workflowId);
     if (!freshWorkflow) {
       throw new Error('Workflow not found after generation');
     }
-
-    // Initialize step10 on fresh workflow if needed
     if (!freshWorkflow.step10) {
-      freshWorkflow.step10 = {
-        moduleLessonPlans: [],
-        validation: {
-          allModulesHaveLessonPlans: false,
-          allLessonDurationsValid: false,
-          totalHoursMatch: false,
-          allMLOsCovered: false,
-          caseStudiesIntegrated: false,
-          assessmentsIntegrated: false,
-        },
-        summary: {
-          totalLessons: 0,
-          totalContactHours: 0,
-          averageLessonDuration: 0,
-          caseStudiesIncluded: 0,
-          formativeChecksIncluded: 0,
-        },
-        generatedAt: new Date(),
-      };
-    }
-
-    // Add or replace the module in the FRESH workflow
-    const existingIdx = freshWorkflow.step10.moduleLessonPlans.findIndex(
-      (m: any) => m.moduleId === modulePlan.moduleId
-    );
-    if (existingIdx >= 0) {
-      freshWorkflow.step10.moduleLessonPlans[existingIdx] = modulePlan;
-    } else {
-      freshWorkflow.step10.moduleLessonPlans.push(modulePlan);
+      throw new Error('Step 10 was not initialised by the lesson store');
     }
 
     // Clear generation progress — module is done
     freshWorkflow.step10.generationProgress = undefined;
 
-    // Update summary from fresh data
-    const allLessons = freshWorkflow.step10.moduleLessonPlans.flatMap((m) => m.lessons);
-    freshWorkflow.step10.summary = {
-      totalLessons: allLessons.length,
-      totalContactHours: freshWorkflow.step10.moduleLessonPlans.reduce(
-        (sum, m) => sum + m.totalContactHours,
-        0
-      ),
-      averageLessonDuration:
-        allLessons.length > 0
-          ? allLessons.reduce((sum, l) => sum + l.duration, 0) / allLessons.length
-          : 0,
-      caseStudiesIncluded: allLessons.filter((l) => l.caseStudyActivity).length,
-      formativeChecksIncluded: allLessons.reduce(
-        (sum, l) => sum + (l.formativeChecks?.length || 0),
-        0
-      ),
-    };
-
-    // Update validation
-    const lessonPlanService2 = new LessonPlanService();
-    freshWorkflow.step10.validation = (lessonPlanService2 as any).validateLessonPlans(
-      freshWorkflow.step10.moduleLessonPlans,
-      context.modules
+    // Summary and validation are added up from the stubs, which carry each module's figures.
+    // Reading them from the lesson bodies would mean loading the whole programme's teaching
+    // content — some 26MB — every time one module finishes.
+    freshWorkflow.step10.summary = summariseFromStubs(
+      freshWorkflow.step10.moduleLessonPlans as any
+    );
+    freshWorkflow.step10.validation = validationFromStubs(
+      context.modules as any,
+      freshWorkflow.step10 as any
     );
 
     // Update workflow status if all modules are complete
-    const newModulesCount = new Set(
-      freshWorkflow.step10.moduleLessonPlans.map((m: any) => m.moduleId)
-    ).size;
+    const newModulesCount = step10CompletedModuleIds(modules, freshWorkflow.step10 as any).size;
     if (newModulesCount >= totalModules) {
       freshWorkflow.currentStep = 10;
       freshWorkflow.status = 'step10_complete';

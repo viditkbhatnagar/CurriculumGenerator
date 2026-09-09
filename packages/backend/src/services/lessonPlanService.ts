@@ -15,6 +15,7 @@
 
 import { OpenAIService, openaiService } from './openaiService';
 import { loggingService } from './loggingService';
+import { plannedLessonCountFor } from './step10Completion';
 import {
   LessonPlan,
   LessonActivity,
@@ -284,16 +285,27 @@ export class LessonPlanService {
    * @param context - Full workflow context
    * @returns ModuleLessonPlan with all lessons for the module
    */
+  /**
+   * Generate (or finish generating) one module's lessons.
+   *
+   * `existingLessons` are lessons already stored for this module, and generation picks up
+   * after them. A 30-lesson module takes some 40 minutes, which is longer than a job timeout
+   * and far longer than the gap between deploys, so without this every interruption threw
+   * away everything and started at lesson one — which is what the reviewer saw as generation
+   * reaching 90% and returning to "Generate".
+   */
   async generateModuleLessonPlans(
     module: ModuleData,
     context: WorkflowContext,
-    options: { plannedLessonCount?: number } = {}
+    options: { plannedLessonCount?: number; existingLessons?: LessonPlan[] } = {}
   ): Promise<ModuleLessonPlan> {
+    const existingLessons = options.existingLessons || [];
     loggingService.info('📝 Generating lesson plans for module', {
       moduleCode: module.moduleCode,
       contactHours: module.contactHours,
       mloCount: module.mlos.length,
       plannedLessonCount: options.plannedLessonCount,
+      resumingFromLesson: existingLessons.length || undefined,
     });
 
     // Step 1: Calculate lesson blocks based on contact hours
@@ -325,8 +337,19 @@ export class LessonPlanService {
       moduleCode: module.moduleCode,
       lessonCount: orderedBlocks.length,
     });
-    const lessons: LessonPlan[] = [];
-    for (let i = 0; i < orderedBlocks.length; i++) {
+    // Lessons already stored for this module are kept as they are. They cost roughly a
+    // minute each of model time, and regenerating them would also change teaching content a
+    // reviewer may already have read.
+    const lessons: LessonPlan[] = [...existingLessons];
+    const resumeFrom = Math.min(existingLessons.length, orderedBlocks.length);
+    if (resumeFrom > 0) {
+      loggingService.info('  ↻ Resuming module from stored lessons', {
+        moduleCode: module.moduleCode,
+        alreadyGenerated: resumeFrom,
+        remaining: orderedBlocks.length - resumeFrom,
+      });
+    }
+    for (let i = resumeFrom; i < orderedBlocks.length; i++) {
       const block = orderedBlocks[i];
       loggingService.info(`    → Generating lesson ${i + 1}/${orderedBlocks.length}`, {
         moduleCode: module.moduleCode,
@@ -359,15 +382,25 @@ export class LessonPlanService {
             moduleId: module.id,
             moduleCode: module.moduleCode,
             moduleTitle: module.title,
-            lessonsGenerated: i + 1,
+            lessonsGenerated: lessons.length,
             totalLessons: orderedBlocks.length,
+            plannedLessonCount: orderedBlocks.length,
             currentLesson: lesson,
             lessons: [...lessons], // Send all lessons generated so far
           });
         } catch (err) {
-          loggingService.warn('Progress callback failed, continuing generation', {
+          // Let it stop the module. This used to warn and carry on, which meant a module
+          // whose lessons could not be saved still ran every remaining OpenAI call — forty
+          // minutes of generation discarded, and the module reported as complete at the end
+          // of it. A callback that cannot store a lesson has nothing to gain from the next
+          // twenty-nine.
+          loggingService.error('Could not save a generated lesson — abandoning module', {
+            moduleCode: module.moduleCode,
+            lessonNumber: i + 1,
+            ofPlanned: orderedBlocks.length,
             error: err instanceof Error ? err.message : String(err),
           });
+          throw err;
         }
       }
     }
@@ -440,26 +473,16 @@ export class LessonPlanService {
     const MIN_DURATION = 60;
     const MAX_DURATION = 180;
 
-    let numLessons: number;
+    // The count comes from step10Completion, which is also what decides whether a module is
+    // finished. Two copies of this arithmetic would be two chances for "how many to
+    // generate" and "how many mean done" to disagree — and they disagree silently, by
+    // leaving a module one lesson short of complete for ever.
+    const numLessons = plannedLessonCountFor(contactHours, plannedLessonCount);
     let maxDuration = MAX_DURATION;
-
     if (plannedLessonCount && plannedLessonCount > 0) {
-      numLessons = plannedLessonCount;
       // Honour the agreed lesson count even where that makes lessons longer
       // than a normal block — a fixed plan's sessions are what they are.
       maxDuration = Math.max(MAX_DURATION, Math.ceil(totalMinutes / numLessons));
-    } else {
-      // Prefer 90-120 minute lessons as a good balance
-      const preferredDuration = 90;
-      numLessons = Math.max(1, Math.round(totalMinutes / preferredDuration));
-
-      // Adjust if average duration would be out of bounds
-      const avgDuration = totalMinutes / numLessons;
-      if (avgDuration > MAX_DURATION) {
-        numLessons = Math.ceil(totalMinutes / MAX_DURATION);
-      } else if (avgDuration < MIN_DURATION) {
-        numLessons = Math.max(1, Math.floor(totalMinutes / MIN_DURATION));
-      }
     }
 
     // Distribute minutes across lessons
