@@ -15,6 +15,7 @@ import { loggingService } from '../services/loggingService';
 import { workflowService } from '../services/workflowService';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import config from '../config';
+import { completedModuleIds, nextIncompleteModuleIndex } from '../services/step10Completion';
 
 // Job data interface
 export interface Step10JobData {
@@ -37,20 +38,33 @@ export interface Step10JobResult {
 // Create the queue only if Redis is configured
 let step10Queue: Queue<Step10JobData> | null = null;
 
-if (config.redis.host && config.redis.port) {
+/**
+ * Redis is configured by URL, as it is for every other queue.
+ *
+ * This file asked for `config.redis.host` and `config.redis.port`, which have never existed
+ * on the config object — it carries `url`, `tls`, `maxRetries` and `retryDelay`. Both read
+ * `undefined`, the guard was always false, and so this queue has never once been created.
+ * Everything below it — the retries, the auto-chaining from one module to the next, the
+ * survival of a restart — has been dead code, and Step 10 has instead been running
+ * fire-and-forget inside the API web process from the route's fallback branch.
+ *
+ * That is why the reviewer had to click "Generate" for each module in turn and wait forty
+ * minutes in front of it, and why any deploy in that window silently lost the work.
+ */
+const redisUrl = config.redis?.url;
+
+if (redisUrl && redisUrl.length > 0) {
   try {
-    step10Queue = new Bull('step10-generation', {
-      redis: {
-        host: config.redis.host,
-        port: config.redis.port,
-        password: config.redis.password,
-        maxRetriesPerRequest: 3, // Reduce retries to fail faster
-        enableReadyCheck: false,
-        connectTimeout: 10000,
-      },
+    step10Queue = new Bull('step10-generation', redisUrl, {
       defaultJobOptions: {
         attempts: 3, // Retry up to 3 times on failure
-        timeout: 1200000, // 20 min per module — GPT-5.2 thinking takes longer
+        /**
+         * A 45-hour module is 30 lessons at roughly a minute and a half each, so a module
+         * runs for about 40 minutes and the old 20-minute timeout could not have completed
+         * one. Generation resumes from the lessons already stored, so a job that does hit
+         * this ceiling picks up where it stopped instead of starting again.
+         */
+        timeout: 5400000, // 90 min per module
         backoff: {
           type: 'exponential',
           delay: 60000, // Start with 1 minute delay
@@ -59,8 +73,10 @@ if (config.redis.host && config.redis.port) {
         removeOnFail: 200, // Keep last 200 failed jobs
       },
       settings: {
-        lockDuration: 600000, // 10 min — long-running LLM calls need extended locks
-        stalledInterval: 600000,
+        // Longer than the job can run, so a module in progress is never declared stalled and
+        // handed to a second worker that would generate the same lessons again.
+        lockDuration: 5400000,
+        stalledInterval: 5400000,
         lockRenewTime: 300000,
       },
     });
@@ -103,14 +119,10 @@ if (step10Queue) {
       const modules = workflow.step4?.modules || [];
       const totalModules = new Set(modules.map((m: any) => m.id)).size;
 
-      // Use unique moduleId set for counting
-      const completedModuleIds = new Set(
-        (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
-      );
-      const existingModules = completedModuleIds.size;
-
-      // Find the actual next ungenerated module
-      const nextModuleIndex = modules.findIndex((m: any) => !completedModuleIds.has(m.id));
+      // Complete means holding every planned lesson, not merely having an entry — see
+      // step10Completion. A partially generated module comes back here to be finished.
+      const existingModules = completedModuleIds(modules, workflow.step10 as any).size;
+      const nextModuleIndex = nextIncompleteModuleIndex(modules, workflow.step10 as any);
 
       // Check if all modules are already generated
       if (nextModuleIndex === -1) {
@@ -145,9 +157,7 @@ if (step10Queue) {
 
       await job.progress(90);
 
-      const newCompletedIds = new Set(
-        (updatedWorkflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
-      );
+      const newCompletedIds = completedModuleIds(modules, updatedWorkflow.step10 as any);
       const newModulesCount = newCompletedIds.size;
       const allComplete = newModulesCount >= totalModules;
 
@@ -164,7 +174,7 @@ if (step10Queue) {
 
       // If not all complete, find and queue the next ungenerated module
       if (!allComplete) {
-        const nextUngenIndex = modules.findIndex((m: any) => !newCompletedIds.has(m.id));
+        const nextUngenIndex = nextIncompleteModuleIndex(modules, updatedWorkflow.step10 as any);
         if (nextUngenIndex !== -1) {
           await addStep10Job(workflowId, nextUngenIndex, job.data.userId);
           loggingService.info('Queued next module for lesson plans', {
@@ -320,10 +330,7 @@ export async function queueAllRemainingModules(
 
   // Find the first ungenerated module by scanning step4 modules
   const modules = workflow.step4?.modules || [];
-  const completedModuleIds = new Set(
-    (workflow.step10?.moduleLessonPlans || []).map((m: any) => m.moduleId)
-  );
-  const nextModuleIndex = modules.findIndex((m: any) => !completedModuleIds.has(m.id));
+  const nextModuleIndex = nextIncompleteModuleIndex(modules, workflow.step10 as any);
 
   const jobs: Job<Step10JobData>[] = [];
 
