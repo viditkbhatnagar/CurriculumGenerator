@@ -46,7 +46,11 @@ export function useWorkflow(id: string) {
   return useQuery<CurriculumWorkflow>({
     queryKey: ['workflow', id],
     queryFn: async () => {
-      const response = await fetchAPI(`${WORKFLOW_BASE}/${id}`);
+      // `lessons=stubs` leaves out Step 10's lesson bodies, which are around 26MB for a
+      // 46-module programme and are not needed to draw the module list. A module's lessons
+      // are fetched by `useStep10Module` when the reader opens it. The endpoint includes them
+      // by default because the India Learns LMS imports through it and reads them.
+      const response = await fetchAPI(`${WORKFLOW_BASE}/${id}?lessons=stubs`);
       return response.data;
     },
     enabled: !!id,

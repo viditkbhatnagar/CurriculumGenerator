@@ -1034,9 +1034,22 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
       }
     }
 
+    /**
+     * Step 10 lesson bodies are included unless the caller asks for stubs.
+     *
+     * The India Learns LMS imports curricula through this endpoint and reads
+     * `step10.moduleLessonPlans[].lessons`, so it has to keep getting them — see the import
+     * contract. It is not code this repo can change, so the default stays what it always was.
+     *
+     * This application's own screens pass `?lessons=stubs`, because a finished 46-module
+     * programme carries around 26MB of teaching content and the module list needs none of it.
+     * They fetch a module's lessons from /step10/module/:moduleId when one is opened.
+     */
+    const body = req.query.lessons === 'stubs' ? workflow : await withLessons(workflow);
+
     res.json({
       success: true,
-      data: workflow,
+      data: body,
     });
   } catch (error) {
     loggingService.error('Error fetching workflow', { error, workflowId: req.params.id });
