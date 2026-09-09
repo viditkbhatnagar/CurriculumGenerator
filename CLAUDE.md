@@ -111,7 +111,11 @@ Steps 1-9 and 13 use a generic Bull queue (`packages/backend/src/queues/stepQueu
 
 - Redis config uses `config.redis.url` (NOT host/port) — see `packages/backend/src/config/index.ts`
 - Bull queues must use URL-based initialization: `new Bull('name', redisUrl, { ... })`
-- `step10Queue.ts` uses an older host/port pattern (legacy, works at runtime)
+- All queues initialise from `config.redis.url`. `step10Queue.ts` used to read
+  `config.redis.host`/`.port`, which have never existed on that object, so its guard was
+  always false and the queue was never created — Step 10 silently ran fire-and-forget in
+  the web process instead. This file previously recorded that pattern as "legacy, works at
+  runtime"; it did not work, and saying so is what kept it unexamined. Fixed 2026-09-09.
 - TLS is auto-enabled for `rediss://` protocol
 - Render's Redis uses self-signed certs → `rejectUnauthorized: false` in cacheService
 
