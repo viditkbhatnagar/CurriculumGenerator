@@ -4256,7 +4256,20 @@ CRITICAL VALIDATION:
    * @param workflowId - Workflow ID
    * @returns Updated workflow with the new module added to step10
    */
-  async processStep10NextModule(workflowId: string): Promise<ICurriculumWorkflow> {
+  /**
+   * Generate one module's lesson plans.
+   *
+   * `moduleIndex` names the module to work on, so several modules can be generated at once
+   * without two workers choosing the same one. Without it every worker asks for "the next
+   * incomplete module" and they all get the same answer.
+   *
+   * Omitted, or naming a module that is already finished, it falls back to the next
+   * incomplete module — which is what the single-worker path and the auto-chain rely on.
+   */
+  async processStep10NextModule(
+    workflowId: string,
+    moduleIndex?: number
+  ): Promise<ICurriculumWorkflow> {
     // Always fetch fresh workflow data to avoid stale state
     const workflow = await CurriculumWorkflow.findById(workflowId);
     if (!workflow || !workflow.step9) {
@@ -4274,7 +4287,13 @@ CRITICAL VALIDATION:
     const existingModules = completedIds.size;
 
     // Resumes a half-finished module before starting an untouched one.
-    const expectedModuleIndex = nextIncompleteModuleIndex(modules, workflow.step10 as any);
+    const nextIncomplete = nextIncompleteModuleIndex(modules, workflow.step10 as any);
+    const claimed =
+      typeof moduleIndex === 'number' &&
+      moduleIndex >= 0 &&
+      moduleIndex < modules.length &&
+      !completedIds.has(modules[moduleIndex]?.id);
+    const expectedModuleIndex = claimed ? moduleIndex : nextIncomplete;
 
     loggingService.info('Processing Step 10: Next Module - Initial Check', {
       workflowId,
@@ -4467,23 +4486,31 @@ CRITICAL VALIDATION:
       throw new Error('Step 10 was not initialised by the lesson store');
     }
 
-    // Clear generation progress — module is done
-    freshWorkflow.step10.generationProgress = undefined;
-
     // Summary and validation are added up from the stubs, which carry each module's figures.
     // Reading them from the lesson bodies would mean loading the whole programme's teaching
     // content — some 26MB — every time one module finishes.
-    freshWorkflow.step10.summary = summariseFromStubs(
-      freshWorkflow.step10.moduleLessonPlans as any
-    );
-    freshWorkflow.step10.validation = validationFromStubs(
-      context.modules as any,
-      freshWorkflow.step10 as any
-    );
+    const summary = summariseFromStubs(freshWorkflow.step10.moduleLessonPlans as any);
+    const validation = validationFromStubs(context.modules as any, freshWorkflow.step10 as any);
+    freshWorkflow.step10.summary = summary;
+    freshWorkflow.step10.validation = validation;
+    freshWorkflow.step10.generationProgress = undefined;
 
-    // Update workflow status if all modules are complete
+    // Written field by field rather than with `save()`.
+    //
+    // `save()` on a Mongoose document rewrites the whole `step10` object, so two modules
+    // finishing at once would each write the module list as it stood when they loaded it, and
+    // whichever landed second would erase the other's entry. The lessons would survive in
+    // their own collection but the module would vanish from the screen and the export. The
+    // module list itself is only ever written by the store's targeted updates.
     const newModulesCount = step10CompletedModuleIds(modules, freshWorkflow.step10 as any).size;
+    const set: Record<string, unknown> = {
+      'step10.summary': summary,
+      'step10.validation': validation,
+      'step10.generationProgress': null,
+    };
     if (newModulesCount >= totalModules) {
+      set.currentStep = 10;
+      set.status = 'step10_complete';
       freshWorkflow.currentStep = 10;
       freshWorkflow.status = 'step10_complete';
 
@@ -4492,12 +4519,10 @@ CRITICAL VALIDATION:
         step10Progress.status = 'completed';
         step10Progress.startedAt = step10Progress.startedAt || new Date();
         step10Progress.completedAt = new Date();
+        set.stepProgress = freshWorkflow.stepProgress;
       }
     }
-
-    // Save fresh workflow
-    freshWorkflow.markModified('step10');
-    await freshWorkflow.save();
+    await CurriculumWorkflow.updateOne({ _id: workflowId }, { $set: set });
 
     loggingService.info('Next module saved to workflow', {
       workflowId,

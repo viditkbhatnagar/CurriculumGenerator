@@ -95,8 +95,22 @@ if (redisUrl && redisUrl.length > 0) {
 export { step10Queue };
 
 // Process jobs only if queue is available
+/**
+ * How many modules generate at once.
+ *
+ * A 45-hour module is 30 lessons generated in sequence — each one is shown the lessons before
+ * it so it does not repeat them — so a module takes around 40 minutes and cannot be made
+ * faster from inside. Modules are independent of each other, though, and 46 of them one after
+ * another is over a day of waiting.
+ *
+ * Tunable without a deploy because the ceiling is the OpenAI account's rate limit rather than
+ * anything here: too high and calls come back 429 and get retried, which makes the step
+ * slower rather than faster.
+ */
+const STEP10_MODULE_CONCURRENCY = Number(process.env.STEP10_MODULE_CONCURRENCY) || 5;
+
 if (step10Queue) {
-  step10Queue.process(async (job: Job<Step10JobData>) => {
+  step10Queue.process(STEP10_MODULE_CONCURRENCY, async (job: Job<Step10JobData>) => {
     const { workflowId, moduleIndex } = job.data;
 
     loggingService.info('Processing Step 10 job', {
@@ -121,8 +135,16 @@ if (step10Queue) {
 
       // Complete means holding every planned lesson, not merely having an entry — see
       // step10Completion. A partially generated module comes back here to be finished.
-      const existingModules = completedModuleIds(modules, workflow.step10 as any).size;
-      const nextModuleIndex = nextIncompleteModuleIndex(modules, workflow.step10 as any);
+      const done = completedModuleIds(modules, workflow.step10 as any);
+      const existingModules = done.size;
+
+      // This job's own module, so several can run at once without two of them picking the
+      // same one. Falls back to the next incomplete module when this job's is already done.
+      const claimIsOpen =
+        moduleIndex >= 0 && moduleIndex < modules.length && !done.has(modules[moduleIndex]?.id);
+      const nextModuleIndex = claimIsOpen
+        ? moduleIndex
+        : nextIncompleteModuleIndex(modules, workflow.step10 as any);
 
       // Check if all modules are already generated
       if (nextModuleIndex === -1) {
@@ -153,7 +175,10 @@ if (step10Queue) {
         totalModules,
       });
 
-      const updatedWorkflow = await workflowService.processStep10NextModule(workflowId);
+      const updatedWorkflow = await workflowService.processStep10NextModule(
+        workflowId,
+        nextModuleIndex
+      );
 
       await job.progress(90);
 
@@ -172,7 +197,9 @@ if (step10Queue) {
 
       await job.progress(100);
 
-      // If not all complete, find and queue the next ungenerated module
+      // Every remaining module is queued up front, so this is a safety net rather than the
+      // mechanism: it picks up a module whose job was lost, and adding a job whose id is
+      // already waiting is a no-op.
       if (!allComplete) {
         const nextUngenIndex = nextIncompleteModuleIndex(modules, updatedWorkflow.step10 as any);
         if (nextUngenIndex !== -1) {
@@ -330,16 +357,18 @@ export async function queueAllRemainingModules(
 
   // Find the first ungenerated module by scanning step4 modules
   const modules = workflow.step4?.modules || [];
-  const nextModuleIndex = nextIncompleteModuleIndex(modules, workflow.step10 as any);
+  const done = completedModuleIds(modules, workflow.step10 as any);
 
   const jobs: Job<Step10JobData>[] = [];
 
-  // Queue only the next ungenerated module (auto-chaining handles the rest)
-  if (nextModuleIndex !== -1) {
-    const job = await addStep10Job(workflowId, nextModuleIndex, userId);
-    if (job) {
-      jobs.push(job);
-    }
+  // Every module that still needs work, each as its own job carrying its own module index.
+  // Queueing only the next one and chaining from it meant the programme could never generate
+  // more than one module at a time, however much capacity there was.
+  for (let i = 0; i < modules.length; i++) {
+    const module = modules[i];
+    if (!module?.id || done.has(module.id)) continue;
+    const job = await addStep10Job(workflowId, i, userId);
+    if (job) jobs.push(job);
   }
 
   return jobs;
