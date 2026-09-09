@@ -302,3 +302,19 @@ describe('moduleStats hoursMatch', () => {
     expect(moduleStats(plan, { id: 'mod-m07', contactHours: 45 }).hoursMatch).toBe(true);
   });
 });
+
+describe('modules with nothing to teach', () => {
+  it('does not stall the programme on a module with no contact hours', () => {
+    // Such a module generates no lessons, so an empty plan can never satisfy isPlanComplete
+    // and it would be picked as "next incomplete" for ever.
+    const modules = [
+      { id: 'a', contactHours: 45 },
+      { id: 'b', contactHours: 0 },
+    ];
+    const step10 = {
+      moduleLessonPlans: [{ moduleId: 'a', lessons: [], totalLessons: 30, plannedLessonCount: 30 }],
+    };
+    expect([...completedModuleIds(modules, step10)].sort()).toEqual(['a', 'b']);
+    expect(nextIncompleteModuleIndex(modules, step10)).toBe(-1);
+  });
+});

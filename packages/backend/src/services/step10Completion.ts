@@ -148,8 +148,16 @@ export function completedModuleIds(
   const done = new Set<string>();
   for (const module of modules || []) {
     if (!module?.id) continue;
-    const plan = byId.get(module.id);
-    if (isPlanComplete(plan, expectedLessonCount(module, step10?.plannedLessonCounts))) {
+    const expected = expectedLessonCount(module, step10?.plannedLessonCounts);
+    // A module with no contact hours has no lessons to generate, so it is finished by
+    // definition. Without this it can never satisfy `isPlanComplete` — generation produces no
+    // lessons for it, an empty plan is never complete, and the module is chosen as "next
+    // incomplete" for ever, stalling the whole programme on a module with nothing to teach.
+    if (expected <= 0) {
+      done.add(module.id);
+      continue;
+    }
+    if (isPlanComplete(byId.get(module.id), expected)) {
       done.add(module.id);
     }
   }

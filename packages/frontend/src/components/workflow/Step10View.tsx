@@ -5,7 +5,7 @@ import { useSubmitStep10, useApproveStep10 } from '@/hooks/useWorkflow';
 import { useStep10Status } from '@/hooks/useStep10Status';
 import { useQueryClient } from '@tanstack/react-query';
 import { useStep10Module } from '@/hooks/useStep10Module';
-import { isModuleComplete } from '@/lib/step10Completion';
+import { isModuleComplete, lessonsHeld } from '@/lib/step10Completion';
 import { api } from '@/lib/api';
 import { CurriculumWorkflow, LessonPlan } from '@/types/workflow';
 import { isStepDone } from '@/lib/stepGating';
@@ -1225,8 +1225,11 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                                 ? Math.round((modulePlan.totalContactHours || 0) * 10) / 10
                                 : 0;
                               const remaining = Math.round((expected - generated) * 10) / 10;
-                              const liveLessons =
-                                modulePlan?.lessons?.length ?? modulePlan?.totalLessons ?? 0;
+                              // `lessonsHeld`, not `lessons?.length ?? totalLessons`. An empty
+                              // array's length is 0, which is not nullish, so `??` never falls
+                              // through — and the workflow is now fetched with ?lessons=stubs,
+                              // so `lessons` is ALWAYS empty. Every module card read "0 lessons".
+                              const liveLessons = lessonsHeld(modulePlan);
                               return (
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                                   <span className="text-teal-600">

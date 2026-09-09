@@ -50,6 +50,7 @@ import { step10ImportService } from '../services/step10ImportService';
 import {
   completedModuleIds as step10CompletedModuleIds,
   summariseFromStubs,
+  lessonsHeld,
 } from '../services/step10Completion';
 import {
   withLessons,
@@ -5085,9 +5086,14 @@ router.post('/:id/step10/approve', validateJWT, loadUser, async (req: Request, r
       });
     }
 
-    // Check if all modules have lessons
+    // Counted from the stub's recorded total, NOT from `m.lessons`.
+    //
+    // The workflow document holds per-module stubs whose `lessons` array is empty by
+    // construction (see moduleStub), so testing `m.lessons.length === 0` matched every module
+    // on every workflow and Step 10 could never be approved — which silently made Steps 11,
+    // 12 and 13 unreachable, since nothing else sets step10.approvedAt.
     const modulesWithoutLessons = workflow.step10.moduleLessonPlans.filter(
-      (m: any) => !m.lessons || m.lessons.length === 0
+      (m: any) => lessonsHeld(m) === 0
     );
     if (modulesWithoutLessons.length > 0) {
       return res.status(400).json({
@@ -6814,7 +6820,10 @@ router.get(
       if (isNaN(stepNumber) || stepNumber < 1 || stepNumber > 13) {
         return res.status(400).json({ success: false, error: 'Invalid step number (1-13)' });
       }
-      const workflow = await CurriculumWorkflow.findById(req.params.id);
+      // Hydrated, because the download hashes a hydrated workflow. Hashing stubs here and
+      // lesson bodies there produces two hashes that can never agree, so Step 10 would always
+      // report its cached copy stale and the saved-copy option would never appear.
+      const workflow = await loadWorkflowForExport(req.params.id);
       if (!workflow) {
         return res.status(404).json({ success: false, error: 'Workflow not found' });
       }

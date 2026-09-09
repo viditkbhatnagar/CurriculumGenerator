@@ -55,6 +55,13 @@ export async function saveModulePlan(
 ): Promise<void> {
   const held = lessonsHeld(plan);
 
+  // The Step 4 module is what `hoursMatch` and `mlosCovered` are measured against. Every
+  // caller outside generation — the lesson edit, delete, add, import and canvas paths — omits
+  // it, and without it `moduleStats` falls back to the plan's own contact hours (the sum of
+  // the very lessons being checked) and to an empty MLO list, so both flags become
+  // structurally true. Editing one lesson would have turned a module's warnings green.
+  const step4Module = module || (await findStep4Module(workflowId, plan.moduleId));
+
   await ModuleLessonPlan.updateOne(
     { workflowId: toObjectId(workflowId), moduleId: plan.moduleId },
     {
@@ -72,7 +79,26 @@ export async function saveModulePlan(
     { upsert: true }
   );
 
-  await writeStub(workflowId, moduleStub({ ...plan, totalLessons: held }, module));
+  await writeStub(workflowId, moduleStub({ ...plan, totalLessons: held }, step4Module));
+}
+
+/**
+ * The Step 4 module a plan belongs to.
+ *
+ * Looked up only when the caller did not supply it, so generation — which saves once per
+ * lesson and already holds the module — never pays for this.
+ */
+async function findStep4Module(
+  workflowId: string,
+  moduleId: string
+): Promise<CountableModule | undefined> {
+  try {
+    const workflow = await CurriculumWorkflow.findById(workflowId).select('step4.modules').lean();
+    const modules: CountableModule[] = (workflow as any)?.step4?.modules || [];
+    return modules.find((m) => m.id === moduleId);
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -165,16 +191,34 @@ export async function withLessons(workflow: any): Promise<any> {
   if (plans.length === 0) return plain;
 
   const byId = new Map(plans.map((p) => [p.moduleId, p]));
-  const order: string[] = (plain.step4?.modules || []).map((m: any) => m.id);
   const stubs: LessonPlanLike[] = plain.step10.moduleLessonPlans || [];
 
-  const ordered = order.length > 0 ? order : stubs.map((s) => s.moduleId || '');
-  const merged = ordered.map((id) => byId.get(id)).filter((p): p is LessonPlanLike => !!p);
+  /**
+   * The document's own module order is preserved, and each entry is REPLACED by its stored
+   * row only where one exists.
+   *
+   * Two things depend on this and both broke when the array was rebuilt from the rows and
+   * re-sorted into Step 4 order:
+   *
+   * A module whose lessons are still embedded in the document and has no row yet — a workflow
+   * the migration has not reached, or one interrupted part-way — was dropped entirely, so an
+   * export or an LMS import silently lost every module except the ones already moved.
+   *
+   * And the per-module downloads address a module by its POSITION in this array. The screen
+   * reads the document order (via ?lessons=stubs) while the export read the re-sorted one, so
+   * the same integer named two different modules and the SME downloaded the wrong module's
+   * lesson plans.
+   */
+  const merged: LessonPlanLike[] = stubs.map((stub) => {
+    const row = stub.moduleId ? byId.get(stub.moduleId) : undefined;
+    return row || stub;
+  });
 
-  // Anything stored under a module id Step 4 no longer lists still belongs to the workflow;
-  // dropping it here would make an export quietly shorter than the data behind it.
+  // A row whose module the document does not list still belongs to the workflow; leaving it
+  // out would make an export quietly shorter than the data behind it.
+  const known = new Set(stubs.map((s) => s.moduleId).filter(Boolean));
   for (const plan of plans) {
-    if (!ordered.includes(plan.moduleId || '')) merged.push(plan);
+    if (!known.has(plan.moduleId)) merged.push(plan);
   }
 
   plain.step10 = { ...plain.step10, moduleLessonPlans: merged };
@@ -191,9 +235,19 @@ export async function syncStubs(workflowId: string): Promise<boolean> {
   const plans = await loadModulePlans(workflowId);
   if (plans.length === 0) return false;
 
-  const workflow = await CurriculumWorkflow.findById(workflowId).select('step10.moduleLessonPlans');
+  const workflow = await CurriculumWorkflow.findById(workflowId).select(
+    'step10.moduleLessonPlans step4.modules'
+  );
   const existing: LessonPlanLike[] = (workflow as any)?.step10?.moduleLessonPlans || [];
-  const stubs = plans.map((p) => moduleStub(p));
+  // Stats need the Step 4 module; without it the rebuilt stubs would carry the vacuous
+  // always-true flags described on saveModulePlan.
+  const modules: CountableModule[] = (workflow as any)?.step4?.modules || [];
+  const stubs = plans.map((p) =>
+    moduleStub(
+      p,
+      modules.find((m) => m.id === p.moduleId)
+    )
+  );
 
   const same =
     existing.length === stubs.length &&
@@ -294,7 +348,17 @@ export async function restoreStep10Snapshot(workflowId: string, snapshot: any): 
     );
   }
 
-  return { ...snapshot, moduleLessonPlans: plans.map((p) => moduleStub(p)) };
+  const workflow = await CurriculumWorkflow.findById(workflowId).select('step4.modules').lean();
+  const modules: CountableModule[] = (workflow as any)?.step4?.modules || [];
+  return {
+    ...snapshot,
+    moduleLessonPlans: plans.map((p) =>
+      moduleStub(
+        p,
+        modules.find((m) => m.id === p.moduleId)
+      )
+    ),
+  };
 }
 
 /**
