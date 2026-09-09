@@ -291,17 +291,13 @@ if (step10Queue) {
 }
 
 /**
- * Sweep abandoned jobs once, shortly after this process starts.
+ * Sweep abandoned jobs for every workflow that has any.
  *
  * A deploy or restart is the ordinary way jobs get orphaned, and the process that comes back
- * is the one able to notice: any job still marked active whose lock nobody holds belongs to
- * the process that just went away. Without this the modules that were mid-generation at the
- * moment of a deploy are simply never picked up again, and the programme quietly stops short.
- *
- * Delayed so the queue's own connection and processor are up first, and lock-guarded, so a
- * second instance's live jobs are left alone.
+ * is the one able to notice: a job still marked active whose lock nobody holds belongs to the
+ * process that went away.
  */
-async function sweepAbandonedOnStartup(): Promise<void> {
+async function sweepAbandonedJobs(): Promise<void> {
   if (!step10Queue) return;
   try {
     const active = await step10Queue.getJobs(['active']);
@@ -310,16 +306,45 @@ async function sweepAbandonedOnStartup(): Promise<void> {
       await recoverAbandonedStep10Jobs(workflowId as string);
     }
   } catch (error) {
-    loggingService.warn('Startup sweep for abandoned Step 10 jobs failed', {
+    loggingService.warn('Sweep for abandoned Step 10 jobs failed', {
       error: error instanceof Error ? error.message : String(error),
     });
   }
 }
 
+/**
+ * How often to look for modules whose worker died.
+ *
+ * This runs on a timer rather than only on events, because every event-driven trigger can
+ * fail to arrive in exactly the situation that needs it. Recovery used to run at startup, on
+ * request, and when a module finished — and near the end of a run, when the last few modules
+ * are all in flight and none are waiting, a restart orphans all of them: nothing finishes, so
+ * nothing sweeps, and the programme stops with no error and no worker. That state was reached
+ * for real on a 46-module run, with five modules idle for ten minutes until a request
+ * happened to clear them.
+ *
+ * Three minutes is safe against stealing a live job. A worker renews its lock every 5 minutes
+ * against a 15-minute duration, and Bull's takeLock is `SET NX` — it can only succeed when no
+ * lock exists at all, so a running module is never reclaimed however often this runs.
+ */
+const ABANDONED_SWEEP_INTERVAL_MS = 180000;
+
 if (step10Queue) {
-  setTimeout(() => {
-    void sweepAbandonedOnStartup();
-  }, 30000).unref?.();
+  let sweeping = false;
+  const sweep = async () => {
+    if (sweeping) return; // a slow sweep must not overlap itself
+    sweeping = true;
+    try {
+      await sweepAbandonedJobs();
+    } finally {
+      sweeping = false;
+    }
+  };
+
+  // An early pass first: a restart is the most common way jobs are orphaned, and the modules
+  // lost to it should not wait a full interval.
+  setTimeout(() => void sweep(), 30000).unref?.();
+  setInterval(() => void sweep(), ABANDONED_SWEEP_INTERVAL_MS).unref?.();
 }
 
 // Helper function to add a job
