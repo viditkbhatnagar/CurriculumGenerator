@@ -422,3 +422,29 @@ export async function loadLessonIndex(workflowId: string): Promise<LessonIndexEn
   }
   return index;
 }
+
+/**
+ * A cheap fingerprint of every stored lesson plan, for the export cache.
+ *
+ * The whole-step Step 10 download is built from the rows rather than from the workflow
+ * document, so hashing the document would miss lesson content entirely and serve a stale
+ * archive for ever. Each row's `updatedAt` moves whenever its lessons change, and a lesson
+ * count on its own would not: a regenerated module with the same number of lessons is
+ * different content and must produce a different hash.
+ *
+ * Projected, so this costs a few hundred bytes rather than the 27MB the lessons weigh.
+ */
+export async function lessonPlansSignature(
+  workflowId: string
+): Promise<{ moduleId: string; totalLessons: number; updatedAt: string }[]> {
+  const rows = await ModuleLessonPlan.find({ workflowId: toObjectId(workflowId) })
+    .select('moduleId totalLessons updatedAt')
+    .lean();
+  return (rows as any[])
+    .map((r) => ({
+      moduleId: r.moduleId,
+      totalLessons: r.totalLessons || 0,
+      updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : '',
+    }))
+    .sort((a, b) => a.moduleId.localeCompare(b.moduleId));
+}

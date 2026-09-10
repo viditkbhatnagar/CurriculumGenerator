@@ -76,12 +76,21 @@ export default function StepDownloadButton({
     if (!disabled && variant === 'full') refreshCacheStatus();
   }, [disabled, variant, refreshCacheStatus]);
 
+  /**
+   * The whole-programme Step 10 export is a zip of one Word document per module.
+   *
+   * Built as a single document it needs about 1.9GB of peak memory against the 2GB the API
+   * container has, so it exhausted the container and restarted the backend rather than
+   * downloading. Per-module downloads are unaffected and stay .docx.
+   */
+  const isArchive = stepNumber === 10 && !moduleCode;
+
   const handleDownload = async () => {
     setDownloading(true);
     try {
       const programSlug = programName.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum';
       const moduleSlug = moduleCode ? `-${moduleCode}` : '';
-      const filename = `${programSlug}-Step${stepNumber}${moduleSlug}.docx`;
+      const filename = `${programSlug}-Step${stepNumber}${moduleSlug}.${isArchive ? 'zip' : 'docx'}`;
       // 10 min — the first render calls OpenAI; cached repeats are instant.
       await downloadFile(exportPath, filename, { timeout: 600000 });
       // It is now cached — reveal the "saved copy" actions.
@@ -220,13 +229,17 @@ export default function StepDownloadButton({
             ) : (
               <>
                 {downloadIcon}
-                {moduleCode ? `Download ${moduleCode}` : 'Download Word'}
+                {moduleCode
+                  ? `Download ${moduleCode}`
+                  : isArchive
+                    ? 'Download all modules (ZIP)'
+                    : 'Download Word'}
               </>
             )}
           </button>
 
           {/* Extra option — only shown once a current cached export exists. */}
-          {hasSavedCopy && !downloading && (
+          {hasSavedCopy && !downloading && !isArchive && (
             <button
               onClick={() => setPreviewOpen(true)}
               title="Preview the saved copy in the app"

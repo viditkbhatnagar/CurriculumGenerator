@@ -64,7 +64,9 @@ import {
   renameStoredModule,
   deleteWorkflowLessonPlans,
   loadLessonIndex,
+  lessonPlansSignature,
 } from '../services/step10Store';
+import { generateStep10Zip } from '../services/stepZipExportService';
 import multer from 'multer';
 import { llmService } from '../services/llmService';
 import {
@@ -6854,6 +6856,57 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
       return res.status(400).json({ success: false, error: 'Invalid step number (1-13)' });
     }
 
+    const moduleIndex =
+      req.query.module !== undefined ? parseInt(req.query.module as string, 10) : undefined;
+
+    /**
+     * A whole-programme Step 10 download is an ARCHIVE of one document per module.
+     *
+     * Built as a single Word file it needs about 1.9GB of peak memory for this programme,
+     * against the 2GB the container has in total — so it did not fail, it exhausted the
+     * container and restarted the backend under everyone. Building a module at a time keeps
+     * the peak at one module's document and still exports every lesson.
+     *
+     * Loaded WITHOUT hydration on purpose: the archive fetches each module's lessons as it
+     * writes that module, so the programme's 27MB of teaching content is never resident.
+     */
+    if (stepNumber === 10 && moduleIndex === undefined) {
+      const stubWorkflow: any = await CurriculumWorkflow.findById(req.params.id);
+      if (!stubWorkflow) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+      if (!stubWorkflow.step10) {
+        return res.status(400).json({ success: false, error: 'Step 10 has no data yet' });
+      }
+
+      const programSlugZip =
+        stubWorkflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum';
+      const dateSlugZip = new Date().toISOString().split('T')[0];
+
+      await serveCachedExport(res, {
+        workflowId: String(stubWorkflow._id),
+        artifact: 'step-10-lesson-plans.zip',
+        // Hashed from the stored rows, not the document: the document holds only counts, so
+        // a regenerated module with the same number of lessons would otherwise hash the same
+        // and the reviewer would keep downloading the previous archive.
+        contentHash: hashExportInput({
+          step: 10,
+          step1: stubWorkflow.step1,
+          step4: stubWorkflow.step4,
+          plans: await lessonPlansSignature(String(stubWorkflow._id)),
+        }),
+        contentType: 'application/zip',
+        filename: `${programSlugZip}-Lesson-Plans-${dateSlugZip}.zip`,
+        generate: () => generateStep10Zip(String(stubWorkflow._id), stubWorkflow),
+      });
+
+      loggingService.info('Step 10 archive export served', {
+        workflowId: stubWorkflow._id,
+        modules: (stubWorkflow.step10.moduleLessonPlans || []).length,
+      });
+      return;
+    }
+
     const workflow = await loadWorkflowForExport(req.params.id);
     if (!workflow) {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
@@ -6863,9 +6916,6 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
     if (!workflow[stepKey]) {
       return res.status(400).json({ success: false, error: `Step ${stepNumber} has no data yet` });
     }
-
-    const moduleIndex =
-      req.query.module !== undefined ? parseInt(req.query.module as string, 10) : undefined;
 
     if (moduleIndex !== undefined && ![10, 11, 12].includes(stepNumber)) {
       return res
