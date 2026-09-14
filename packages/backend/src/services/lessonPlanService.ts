@@ -52,6 +52,12 @@ export interface ModuleData {
   moduleCode: string;
   title: string;
   sequenceOrder: number;
+  /** Where the module sits, e.g. "Year 1 – Level 4". What stops Level 6 content in a Level 4 module. */
+  group?: string;
+  phase?: string;
+  description?: string;
+  /** The agreed syllabus. Lessons are planned against this rather than invented around the MLOs. */
+  topics?: string[];
   totalHours: number;
   contactHours: number;
   independentHours: number;
@@ -77,6 +83,14 @@ export interface LessonBlock {
   duration: number; // minutes (60-180)
   assignedMLOs: MLO[];
   bloomLevel: string;
+  /**
+   * How many lessons the module holds in total.
+   *
+   * Carried on the block so a lesson knows its position in the module, which is what lets the
+   * module's agreed topics be shared out across its lessons rather than one topic swallowing
+   * the whole module.
+   */
+  totalLessonsInModule?: number;
 }
 
 /**
@@ -507,6 +521,7 @@ export class LessonPlanService {
         duration: lessonDurations[i],
         assignedMLOs,
         bloomLevel,
+        totalLessonsInModule: numLessons,
       });
     }
 
@@ -899,6 +914,78 @@ export class LessonPlanService {
    * @param context - Full workflow context from steps 1-9
    * @returns AI-generated lesson content
    */
+  /**
+   * What the module's academic level allows, stated plainly enough to constrain the model.
+   *
+   * Levels are the UK framework the programme is built on: 4 is first year, 6 is final year.
+   * The bands name the kind of technique that is reasonable rather than listing every one, so
+   * this does not need editing each time a new method appears.
+   */
+  private buildLevelGuidance(module: ModuleData): string {
+    const group = String(module.group || '');
+    const match = group.match(/level\s*([456])/i) || group.match(/year\s*([123])/i);
+    if (!match) return '';
+    const level = /level/i.test(match[0]) ? Number(match[1]) : Number(match[1]) + 3;
+
+    const BANDS: Record<number, string> = {
+      4:
+        'FIRST YEAR (Level 4), an introductory module. Teach foundations, definitions, simple ' +
+        'worked examples and basic tools. Do NOT use postgraduate or specialist techniques: no ' +
+        'hypothesis testing, no NPV/IRR/MIRR or equivalent annual annuity, no bond pricing, no ' +
+        'regression, no simulation, no segmentation analytics. Arithmetic, percentages, simple ' +
+        'ratios and descriptive interpretation are the right level.',
+      5:
+        'SECOND YEAR (Level 5), an intermediate module. Applied analysis and standard ' +
+        'professional methods are appropriate. Avoid advanced modelling: no Monte Carlo, no ' +
+        'Bayesian methods, no causal-inference designs, no adjusted present value or real ' +
+        'options, no machine-learning algorithms.',
+      6:
+        'FINAL YEAR (Level 6), an advanced module. Sophisticated methods are appropriate where ' +
+        "the module's own topics call for them. This is still a BUSINESS degree: keep the " +
+        'emphasis on managerial judgement and interpretation rather than on specialist data ' +
+        'science or engineering technique for its own sake.',
+    };
+
+    return `ACADEMIC LEVEL — THIS IS A CONSTRAINT, NOT A SUGGESTION:
+This module is ${group}. That means ${BANDS[level] || BANDS[5]}
+Anything you write that a student at this level could not reasonably be taught is wrong, however
+impressive it looks.
+
+`;
+  }
+
+  /**
+   * The approved topic this lesson covers, chosen by position in the module.
+   *
+   * Topics are allocated across the module's lessons in order, so a syllabus of eight topics
+   * over thirty lessons gives each topic its share instead of letting one take the module over.
+   * The reviewer's complaint that a single approved topic — "UK Bribery Act and anti-corruption",
+   * one of eight in Business Ethics — produced 398 mentions across the module is exactly what
+   * an unallocated topic list does.
+   */
+  private buildTopicGuidance(block: LessonBlock, module: ModuleData): string {
+    const topics = (module.topics || []).filter((t) => typeof t === 'string' && t.trim());
+    if (topics.length === 0) return '';
+
+    const total = Math.max(1, block.totalLessonsInModule || topics.length);
+    const index = Math.min(
+      topics.length - 1,
+      Math.floor((((block.lessonNumber || 1) - 1) / total) * topics.length)
+    );
+    const assigned = topics[index];
+
+    return `MODULE SYLLABUS — THE AGREED SCOPE OF THIS MODULE:
+${topics.map((t, i) => `  ${i + 1}. ${t}`).join('\n')}
+
+THIS LESSON COVERS TOPIC ${index + 1}: "${assigned}"
+Teach that topic. Every other topic belongs to its own lessons, and anything not on this list is
+outside the module's agreed scope — do not introduce it. In particular, do not reach for building
+dashboards, drafting compliance registers or writing stakeholder communication plans unless the
+topic above is actually about that; those belong to the modules that own them.
+
+`;
+  }
+
   private async generateAIEnhancedContent(
     block: LessonBlock,
     module: ModuleData,
@@ -948,8 +1035,33 @@ export class LessonPlanService {
               )}\nWhen lessons share a learning outcome, split it into NON-OVERLAPPING subtopics — each lesson teaches a different facet with its own distinct practical activity. Never reuse a subtopic or activity listed above.\n`
           : '';
 
+      /**
+       * The module's academic level, and what that means for how hard the content may be.
+       *
+       * Step 4 records this as "Year 1 - Level 4" and it was dropped before it reached here, so
+       * the generator had never been told what year ANY module belonged to. A first-year
+       * mathematics module came back with t-tests, MIRR, equivalent annual annuity and bond
+       * pricing; a marketing module came back with difference-in-differences and CUPED. The
+       * model was not being unreasonable — nothing had told it the level.
+       */
+      const levelGuidance = this.buildLevelGuidance(module);
+
+      /**
+       * The one approved topic this lesson is for, and the full syllabus around it.
+       *
+       * `module.topics` is the syllabus the reviewer signed off at Step 4, and the generator
+       * never saw it: lessons were planned from the MLOs alone and the model invented its own
+       * subtopics. Free-running, it converged on whatever is most concrete to write about —
+       * building a dashboard, drafting a compliance register, writing a communication plan —
+       * so the same few activities filled the back half of almost every module regardless of
+       * subject, and single topics swallowed whole modules. Anchoring each lesson to one
+       * approved topic is what keeps a module teaching its own syllabus.
+       */
+      const topicGuidance = this.buildTopicGuidance(block, module);
+
       const prompt = `You are an expert curriculum designer creating a detailed lesson plan.
 
+${levelGuidance}${topicGuidance}
 CONTEXT FROM PREVIOUS STEPS:
 ${contextSummary}
 

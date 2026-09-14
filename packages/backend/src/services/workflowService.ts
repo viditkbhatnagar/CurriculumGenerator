@@ -8432,6 +8432,15 @@ Begin output now.`;
         moduleCode: mod.moduleCode || mod.code || `M${idx + 1}`,
         title: mod.title,
         sequenceOrder: mod.sequenceOrder,
+        // The module's academic level and its agreed syllabus, both of which were dropped here
+        // and so never reached the lesson generator. A first-year mathematics module was
+        // written with t-tests, MIRR and bond pricing because nothing ever told the generator
+        // it was first-year, and lessons drifted to dashboards and compliance registers
+        // because nothing ever told it what the module was supposed to cover.
+        group: mod.group,
+        phase: mod.phase,
+        description: mod.description,
+        topics: mod.topics || [],
         totalHours: mod.totalHours,
         contactHours: mod.contactHours,
         independentHours: mod.independentHours,
