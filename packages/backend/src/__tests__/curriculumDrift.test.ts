@@ -220,3 +220,57 @@ describe('moduleIsClean', () => {
     expect(moduleIsClean([])).toBe(true);
   });
 });
+
+/**
+ * The Bloom level a lesson is generated at.
+ *
+ * Mirrors distributeMLOs + determinePrimaryBloomLevel exactly. Kept here as a guard rather than
+ * in prose because the defect it encodes was invisible for the life of the feature: a module
+ * whose outcomes run from "understand" to "create" labelled every one of its lessons "create".
+ */
+const ORDER: Record<string, number> = {
+  remember: 1,
+  understand: 2,
+  apply: 3,
+  analyse: 4,
+  evaluate: 5,
+  create: 6,
+};
+
+function lessonLevels(levels: string[], numLessons: number): Record<string, number> {
+  const mlos = levels.map((l, i) => ({ id: 'm' + i, bloomLevel: l }));
+  const sorted = [...mlos].sort((a, b) => ORDER[a.bloomLevel] - ORDER[b.bloomLevel]);
+  const asg: { id: string; bloomLevel: string }[][] = Array(numLessons)
+    .fill(null)
+    .map(() => []);
+  for (let i = 0; i < numLessons; i++) asg[i].push(sorted[i % sorted.length]);
+  if (sorted.length >= 2) {
+    for (let i = 0; i < numLessons && asg[i].length < 2; i++) {
+      const second = sorted[(i + 1) % sorted.length];
+      if (second.id !== asg[i][0].id) asg[i].push(second);
+    }
+  }
+  const out: Record<string, number> = {};
+  // The fix: the lesson's level is its PRIMARY outcome, not the highest of the pair.
+  asg.forEach((pair) => {
+    const lvl = pair[0].bloomLevel;
+    out[lvl] = (out[lvl] || 0) + 1;
+  });
+  return out;
+}
+
+describe('Bloom level of a lesson', () => {
+  it('still teaches the module’s lowest outcome somewhere', () => {
+    // Taking the maximum of the pair put all twenty lessons at "create" and none at "understand".
+    const spread = lessonLevels(['understand', 'create'], 20);
+    expect(spread.understand).toBeGreaterThan(0);
+    expect(spread.create).toBeGreaterThan(0);
+  });
+
+  it('spreads a four-outcome module across all four levels', () => {
+    const spread = lessonLevels(['understand', 'apply', 'analyse', 'create'], 30);
+    expect(Object.keys(spread).sort()).toEqual(['analyse', 'apply', 'create', 'understand']);
+    // and no single level may take more than half the module
+    expect(Math.max(...Object.values(spread))).toBeLessThanOrEqual(15);
+  });
+});

@@ -679,7 +679,28 @@ export class LessonPlanService {
   private determinePrimaryBloomLevel(mlos: MLO[]): string {
     if (mlos.length === 0) return 'understand';
 
-    // Use the highest Bloom level among assigned MLOs
+    /**
+     * The PRIMARY outcome's level, not the highest of the pair.
+     *
+     * Taking the maximum ratcheted every module upward. `distributeMLOs` sorts the outcomes
+     * ascending, gives lesson i the outcome at `i % n`, then adds the one at `(i + 1) % n` to
+     * EVERY lesson — the `length < 2` guard is always true on entry — so each lesson held a
+     * pair (level i, level i+1) and the maximum was always the higher of the two. The module's
+     * lowest outcome could therefore never be any lesson's level.
+     *
+     * Simulated against the real algorithm: a module with outcomes at "understand" and "create"
+     * labelled ALL TWENTY of its lessons "create", and a four-outcome module put 14 of 30
+     * lessons at "create" and none at "understand". The prompt then states that level twice and
+     * asks for activities to match it, which is a large part of why the reviewer found content
+     * pitched above the level of the module.
+     *
+     * The first assigned outcome cycles through all of them evenly, so reading the level from it
+     * restores the full spread the module was designed with. The second outcome stays attached
+     * to the lesson; it just no longer dictates how hard the lesson is.
+     */
+    const primary = mlos[0];
+    if (primary?.bloomLevel) return primary.bloomLevel;
+
     let maxLevel = 0;
     let primaryLevel = 'understand';
 

@@ -5955,7 +5955,7 @@ Before including ANY source, verify it meets ONE of these criteria:
 - Per module: Mix of academic AND practical/applied sources
 - At least 2 open access academic sources
 - At least 1 industry/practitioner source (HBR, McKinsey, etc.)
-- At least 1 professional body resource
+- At most 1 professional body resource, and only from a body whose discipline matches the module
 - Maximum 1 textbook (since these require purchase)
 
 Use UK English spelling throughout.`;
@@ -5988,7 +5988,14 @@ ${moduleInfo.topics.length > 0 ? moduleInfo.topics.map((t) => `  - ${t}`).join('
 Generate EXACTLY 5-6 sources with this MANDATORY distribution:
 - **2-3 Open Access academic sources** (SSRN, PubMed Central, DOAJ, ResearchGate, ERIC)
 - **1-2 Industry/Practitioner sources** (McKinsey, HBR, Deloitte, BCG, PwC)
-- **1 Professional Body resource** (SHRM, CIPD, PMI, ACAS, Gov.uk)
+- **1 Professional Body resource — ONLY where a professional body genuinely covers this
+  module's subject.** Choose the body for THIS discipline: CIPD or SHRM for people, HR and
+  employment; CFA, ACCA or CIMA for finance and accounting; CIM for marketing; ASCM or CIPS
+  for operations and supply chain; PMI for project management; BCS for computing; RSS for
+  statistics; an equivalent body for any other field. If no professional body genuinely
+  covers this module, generate a third open-access academic source instead — do NOT reach
+  for an HR body to fill the slot. Prefer bodies with international standing over those
+  whose guidance applies to one country only.
 - **0-1 Reference textbook** (optional, mark as "requires_purchase")
 
 === VERIFIED FREE SOURCE DOMAINS ===
@@ -6113,16 +6120,16 @@ Return ONLY valid JSON:
     },
     {
       "id": "src-${moduleInfo.moduleId}-3",
-      "title": "Performance Management Factsheet",
-      "authors": ["CIPD"],
+      "title": "[Guidance published by the professional body for ${moduleInfo.moduleTitle}]",
+      "authors": ["[the professional body whose discipline is ${moduleInfo.moduleTitle}]"],
       "year": ${moduleInfo.currentYear},
-      "publisher": "Chartered Institute of Personnel and Development",
-      "citation": "CIPD. (${moduleInfo.currentYear}). Performance management factsheet. Retrieved from https://www.cipd.org/knowledge/factsheets/performance-management-factsheet",
-      "url": "https://www.cipd.org/knowledge/factsheets/performance-management-factsheet",
+      "publisher": "[that body's full name]",
+      "citation": "[Body]. (${moduleInfo.currentYear}). [Title]. Retrieved from [url]",
+      "url": "[the body's own site]",
       "category": "professional_body",
       "type": "applied",
       "accessStatus": "free_access",
-      "accessNote": "Free factsheet, registration may be required",
+      "accessNote": "Free resource, registration may be required",
       "complianceBadges": {
         "freeAccess": true,
         "peerReviewed": false,
@@ -6130,7 +6137,7 @@ Return ONLY valid JSON:
       },
       "moduleId": "${moduleInfo.moduleId}",
       "linkedMLOs": ["${moduleInfo.mlos[1]?.id || 'M1-LO2'}"],
-      "relevantTopics": ["Performance Management"],
+      "relevantTopics": ["[a topic of THIS module]"],
       "complexityLevel": "introductory",
       "estimatedReadingHours": 0.5
     }
@@ -6142,7 +6149,8 @@ Return ONLY valid JSON:
 ✓ ALL URLs must lead to FREE content (test by clicking - no paywall!)
 ✓ Use ONLY the verified domains listed above for free sources
 ✓ Include at least 2 industry/practitioner sources (McKinsey, HBR, Deloitte, etc.)
-✓ Include at least 1 professional body resource (CIPD, SHRM, ACAS, PMI)
+✓ Include a professional body resource ONLY if one genuinely covers this module's discipline;
+  otherwise substitute a third open-access academic source
 ✓ Mark any textbooks clearly as "requires_purchase" in accessStatus
 ✓ Proper APA 7th formatting for all citations
 ✓ All sources must directly support the MLOs for ${moduleInfo.moduleTitle}
