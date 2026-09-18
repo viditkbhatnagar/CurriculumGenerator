@@ -743,6 +743,15 @@ async function regenerateStep10Modules(
 
   wf.step10.plannedLessonCounts = plannedLessonCounts;
 
+  // Stamp the request so a run already in flight for this module knows it has been superseded
+  // and stops, instead of finishing against the context it captured before the change and
+  // overwriting the fresh run. See processStep10NextModule.
+  const requested: Record<string, string> = {
+    ...((wf.step10 as any).regenerationRequestedAt || {}),
+  };
+  for (const moduleId of uniqueIds) requested[moduleId] = new Date().toISOString();
+  (wf.step10 as any).regenerationRequestedAt = requested;
+
   wf.markModified('step10');
   await wf.save();
 

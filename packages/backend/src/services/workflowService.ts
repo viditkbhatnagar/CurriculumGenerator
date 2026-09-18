@@ -4355,6 +4355,25 @@ CRITICAL VALIDATION:
         // Non-critical
       }
 
+      // A newer regeneration request supersedes this run. Checked on every lesson so an
+      // abandoned run stops within a lesson or two rather than finishing and overwriting the
+      // work the new request is doing.
+      const current = await CurriculumWorkflow.findOne(
+        { _id: workflowId },
+        { [`step10.regenerationRequestedAt.${module.id}`]: 1 }
+      ).lean();
+      const latest = (current as any)?.step10?.regenerationRequestedAt?.[module.id] || '';
+      if (String(latest) !== String(runToken)) {
+        loggingService.info('Abandoning module generation — a newer regeneration was requested', {
+          workflowId,
+          moduleId: module.id,
+          lessonsGenerated: progress.lessons.length,
+        });
+        throw new Error(
+          `Regeneration of ${module.moduleCode} superseded by a newer request; this run is abandoned`
+        );
+      }
+
       try {
         await saveModulePlan(
           workflowId,
@@ -4452,6 +4471,19 @@ CRITICAL VALIDATION:
 
     // Carry on from whatever is already stored for this module rather than starting again.
     const existingLessons = (storedPlan?.lessons || []) as any[];
+
+    /**
+     * When this run was asked for, so a later request can overrule it.
+     *
+     * A job builds its whole context — topics, outcomes, sources, readings — once, here, and
+     * then generates for forty minutes against that snapshot. Asking to regenerate the module
+     * during those forty minutes used to do nothing at all: the request deleted the stored
+     * plan and queued a job, while the RUNNING job carried on writing lessons from its stale
+     * context and simply recreated the row that had just been deleted. The reviewer's scope
+     * change was applied, the module was regenerated, and the lessons still cited the sources
+     * she had removed — with nothing anywhere reporting a problem.
+     */
+    const runToken = (workflow.step10 as any)?.regenerationRequestedAt?.[module.id] || '';
 
     // Generate lesson plans for this module (PPTs are generated automatically per lesson)
     const startTime = Date.now();
