@@ -6951,7 +6951,12 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
     if ([5, 6, 7, 8, 10].includes(stepNumber)) workflowData.step4 = workflow.step4;
     // Step 10 also needs the programme outcomes, so the lesson plan can print what "PLO5"
     // means instead of leaving a lecturer to open Step 3 to find out.
-    if (stepNumber === 10) workflowData.step3 = workflow.step3;
+    if (stepNumber === 10) {
+      workflowData.step3 = workflow.step3;
+      // Step 8 supplies the case study titles, so a lesson names its case instead of citing
+      // an identifier a reader cannot resolve.
+      workflowData.step8 = workflow.step8;
+    }
 
     const STEP_SLUGS: Record<number, string> = {
       1: 'Program-Foundation',

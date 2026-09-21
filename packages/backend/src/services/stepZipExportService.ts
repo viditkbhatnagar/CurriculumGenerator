@@ -97,6 +97,8 @@ export async function generateStep10Zip(workflowId: string, workflow: any): Prom
         // on its own rather than sending the reader to another step for what a code means.
         step3: workflow.step3,
         step4: workflow.step4,
+        // Case study titles, so each module's document names its cases rather than citing ids.
+        step8: workflow.step8,
         step10: { ...workflow.step10, moduleLessonPlans: [plan] },
       };
 

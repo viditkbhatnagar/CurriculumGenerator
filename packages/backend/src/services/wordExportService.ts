@@ -2010,7 +2010,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     // competencies. Without them the document can only print codes, which is what made it
     // unusable on its own.
     step3?: any,
-    step2?: any
+    step2?: any,
+    // Step 8 carries the case study titles the lesson materials reference by id.
+    step8?: any
   ): Promise<void> {
     if (!step10) return;
 
@@ -2057,6 +2059,13 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         const key = String(item.id || item.code || '').trim();
         if (key && item.statement) kscText.set(key, String(item.statement));
       }
+    }
+
+    /** Case study titles, so a lesson can name its case instead of citing a slug. */
+    const caseStudyTitles = new Map<string, string>();
+    for (const cs of (step8 as any)?.caseStudies || []) {
+      const key = String(cs.id || '').trim();
+      if (key && cs.title) caseStudyTitles.set(key, String(cs.title));
     }
 
     /** "PLO5 — Evaluate…", or just the code when no wording is on file. */
@@ -2133,7 +2142,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         }),
         new TableRow({
           children: [
-            this.createTableCell('All MLOs Covered'),
+            this.createTableCell('All Module Learning Outcomes Covered'),
             this.createTableCell(step10.validation.allMLOsCovered ? '✓ Pass' : '✗ Fail'),
           ],
         }),
@@ -2635,10 +2644,19 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                   /^undefined-/,
                   `${modCode}-`
                 );
-                materials.push(`PPT Deck: ${deckRef}`);
+                // An asset identifier is not a material a lecturer can act on; say what it is
+                // and keep the reference in brackets for whoever has to find the file.
+                materials.push(`Slide deck for this lesson (reference ${deckRef})`);
               }
               if (lesson.materials.caseFiles?.length) {
-                materials.push(`Case Files: ${lesson.materials.caseFiles.join(', ')}`);
+                // Named, not referenced by slug. "Case Files: case-mod-m06-1" told a lecturer
+                // reading this document on its own precisely nothing, and the titles were
+                // sitting in Step 8 unused.
+                const named = lesson.materials.caseFiles.map((ref: any) => {
+                  const id = String(ref);
+                  return caseStudyTitles.get(id) || id;
+                });
+                materials.push(`Case study: ${named.join('; ')}`);
               }
               if (lesson.materials.readingReferences?.length) {
                 lesson.materials.readingReferences.forEach((ref: any) => {
@@ -3037,7 +3055,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         }),
         new TableRow({
           children: [
-            this.createTableCell('All MLOs Covered'),
+            this.createTableCell('All Module Learning Outcomes Covered'),
             this.createTableCell(step12.validation.allMLOsCovered ? '✓ Pass' : '✗ Fail'),
           ],
         }),
@@ -4308,7 +4326,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           contentChildren,
           workflow.step4,
           workflow.step3,
-          workflow.step2
+          workflow.step2,
+          workflow.step8
         );
         break;
       case 11:
