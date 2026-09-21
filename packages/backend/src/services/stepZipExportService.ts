@@ -93,6 +93,9 @@ export async function generateStep10Zip(workflowId: string, workflow: any): Prom
         projectName: workflow.projectName,
         step1: workflow.step1,
         step2: workflow.step2,
+        // Step 3 carries the programme outcome wording, so each module's document can stand
+        // on its own rather than sending the reader to another step for what a code means.
+        step3: workflow.step3,
         step4: workflow.step4,
         step10: { ...workflow.step10, moduleLessonPlans: [plan] },
       };

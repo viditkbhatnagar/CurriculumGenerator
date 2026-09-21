@@ -6949,6 +6949,9 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
     // that made Steps 5 and 6 print "mod-m35", and the reviewer asked for Step 7's format
     // precisely because it is auditable.
     if ([5, 6, 7, 8, 10].includes(stepNumber)) workflowData.step4 = workflow.step4;
+    // Step 10 also needs the programme outcomes, so the lesson plan can print what "PLO5"
+    // means instead of leaving a lecturer to open Step 3 to find out.
+    if (stepNumber === 10) workflowData.step3 = workflow.step3;
 
     const STEP_SLUGS: Record<number, string> = {
       1: 'Program-Foundation',

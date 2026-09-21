@@ -2005,7 +2005,12 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   private async generateStep10Section(
     step10: any,
     contentChildren: any[],
-    step4?: any
+    step4?: any,
+    // Step 3 carries the programme outcome wording and Step 2 the knowledge, skills and
+    // competencies. Without them the document can only print codes, which is what made it
+    // unusable on its own.
+    step3?: any,
+    step2?: any
   ): Promise<void> {
     if (!step10) return;
 
@@ -2025,6 +2030,41 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           .replace(/\s+/g, ' ')
           .trim()
       );
+
+    /**
+     * Full wording for every outcome code the lesson plans cite.
+     *
+     * The reviewer read this document on its own and could not use it: "the M06 lesson plan
+     * refers to codes such as M06-LO1, PLO5 and KSCs, but it does not provide the full wording
+     * or clearly explain these abbreviations. I must refer to Step 4 separately to understand
+     * what each module learning outcome means." A lesson plan is what a lecturer teaches from,
+     * so it has to stand on its own.
+     *
+     * Every statement already exists: module outcomes in Step 4, programme outcomes in Step 3,
+     * and the knowledge, skills and competencies in Step 2. None of them was ever rendered.
+     */
+    const ploText = new Map<string, string>();
+    for (const plo of (step3 as any)?.outcomes || []) {
+      const key = String(plo.code || plo.id || '').trim();
+      if (key && plo.statement) ploText.set(key, String(plo.statement));
+    }
+
+    const kscText = new Map<string, string>();
+    // Knowledge, skills and competencies, in that order. `attitudeItems` is deliberately not
+    // read: it is a mirror of competencyItems and overwrites edited entries.
+    for (const group of ['knowledgeItems', 'skillItems', 'competencyItems'] as const) {
+      for (const item of ((step2 as any)?.[group] || []) as any[]) {
+        const key = String(item.id || item.code || '').trim();
+        if (key && item.statement) kscText.set(key, String(item.statement));
+      }
+    }
+
+    /** "PLO5 — Evaluate…", or just the code when no wording is on file. */
+    const describe = (code: string, table: Map<string, string>): string => {
+      const key = String(code || '').trim();
+      const full = table.get(key);
+      return full ? `${key} — ${full}` : key;
+    };
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
@@ -2241,6 +2281,76 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           );
         }
 
+        /**
+         * The module's approved learning outcomes, in full, before any lesson.
+         *
+         * This is the table the rest of the module refers back to, so a lecturer never has to
+         * open Step 4 to find out what "M06-LO1" means. It is titled as the APPROVED module
+         * outcomes to separate it from the per-lesson objectives further down, which are a
+         * different thing and were previously easy to confuse.
+         */
+        if (s4mod?.mlos?.length) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Approved Module Learning Outcomes',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+              ],
+              spacing: { before: 120, after: 40, line: LINE_SPACING },
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text:
+                    'On completion of this module a learner will be able to do the following. ' +
+                    'Every lesson in this module is mapped to one or more of these outcomes.',
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                  italics: true,
+                  color: '4a5568',
+                }),
+              ],
+              spacing: { after: 60, line: LINE_SPACING },
+            })
+          );
+          const mloRows = [
+            new TableRow({
+              children: [
+                this.createTableCell('Reference', { bold: true, shading: 'e2e8f0', width: 14 }),
+                this.createTableCell('Module Learning Outcome', {
+                  bold: true,
+                  shading: 'e2e8f0',
+                  width: 72,
+                }),
+                this.createTableCell('Cognitive level', {
+                  bold: true,
+                  shading: 'e2e8f0',
+                  width: 14,
+                }),
+              ],
+            }),
+          ];
+          s4mod.mlos.forEach((mlo: any) => {
+            mloRows.push(
+              new TableRow({
+                children: [
+                  this.createTableCell(String(mlo.code || mlo.id || '-')),
+                  this.createTableCell(String(mlo.statement || '-')),
+                  this.createTableCell(String(mlo.bloomLevel || '-')),
+                ],
+              })
+            );
+          });
+          contentChildren.push(
+            new Table({ rows: mloRows, width: { size: 100, type: WidthType.PERCENTAGE } }),
+            new Paragraph({ children: [], spacing: { after: 120 } })
+          );
+        }
+
         // Module Alignment Map (MLO → Linked PLOs → Linked KSCs), from step4.
         if (s4mod?.mlos?.length) {
           contentChildren.push(
@@ -2259,19 +2369,36 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           const alignRows = [
             new TableRow({
               children: [
-                this.createTableCell('MLO', { bold: true, shading: 'e2e8f0', width: 18 }),
-                this.createTableCell('Linked PLOs', { bold: true, shading: 'e2e8f0', width: 41 }),
-                this.createTableCell('Linked KSCs', { bold: true, shading: 'e2e8f0', width: 41 }),
+                this.createTableCell('Module Learning Outcome', {
+                  bold: true,
+                  shading: 'e2e8f0',
+                  width: 14,
+                }),
+                this.createTableCell('Programme Learning Outcomes it serves', {
+                  bold: true,
+                  shading: 'e2e8f0',
+                  width: 43,
+                }),
+                this.createTableCell('Knowledge, Skills and Competencies it develops', {
+                  bold: true,
+                  shading: 'e2e8f0',
+                  width: 43,
+                }),
               ],
             }),
           ];
           s4mod.mlos.forEach((mlo: any) => {
-            const plos = Array.isArray(mlo.linkedPLOs) ? mlo.linkedPLOs.join(', ') : '';
-            const kscs = Array.isArray(mlo.competencyLinks)
-              ? mlo.competencyLinks.join(', ')
+            // Each code is printed with its own statement. A bare "PLO8 | S8, K5" told a
+            // lecturer nothing without two other documents open.
+            const plos = (Array.isArray(mlo.linkedPLOs) ? mlo.linkedPLOs : [])
+              .map((code: string) => describe(code, ploText))
+              .join('\n');
+            const kscSource = Array.isArray(mlo.competencyLinks)
+              ? mlo.competencyLinks
               : Array.isArray(mlo.linkedKSCs)
-                ? mlo.linkedKSCs.join(', ')
-                : '';
+                ? mlo.linkedKSCs
+                : [];
+            const kscs = kscSource.map((code: string) => describe(code, kscText)).join('\n');
             alignRows.push(
               new TableRow({
                 children: [
@@ -2324,16 +2451,28 @@ If the content is better as bullets, put it in bullets array and leave paragraph
               lesson.linkedPLOs?.length ||
               lesson.linkedKSCs?.length
             ) {
-              const mloText = lesson.linkedMLOs?.length
-                ? `MLOs: ${lesson.linkedMLOs.join(', ')}`
+              // Spelled out, and the module outcome carries its full statement. The reviewer
+              // could not tell from "MLOs: M06-LO1 | PLOs: PLO5" what the lesson was for.
+              const mloLine = lesson.linkedMLOs?.length
+                ? 'Module Learning Outcome(s) addressed: ' +
+                  lesson.linkedMLOs
+                    .map((code: string) => {
+                      const mlo = (s4mod?.mlos || []).find(
+                        (m: any) => String(m.code || m.id) === String(code)
+                      );
+                      return mlo?.statement ? `${code} — ${mlo.statement}` : String(code);
+                    })
+                    .join('\n')
                 : '';
-              const ploText = lesson.linkedPLOs?.length
-                ? `PLOs: ${lesson.linkedPLOs.join(', ')}`
+              const ploLine = lesson.linkedPLOs?.length
+                ? 'Programme Learning Outcome(s): ' +
+                  lesson.linkedPLOs.map((code: string) => describe(code, ploText)).join('\n')
                 : '';
-              const kscText = lesson.linkedKSCs?.length
-                ? `KSCs: ${lesson.linkedKSCs.join(', ')}`
+              const kscLine = lesson.linkedKSCs?.length
+                ? 'Knowledge, Skills and Competencies: ' +
+                  lesson.linkedKSCs.map((code: string) => describe(code, kscText)).join('\n')
                 : '';
-              const alignmentText = [mloText, ploText, kscText].filter(Boolean).join(' | ');
+              const alignmentText = [mloLine, ploLine, kscLine].filter(Boolean).join('\n');
 
               contentChildren.push(
                 new Paragraph({
@@ -2356,7 +2495,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
                 new Paragraph({
                   children: [
                     new TextRun({
-                      text: 'Learning Objectives:',
+                      // Named in full so it cannot be mistaken for the approved module
+                      // outcomes tabled at the head of the module.
+                      text: 'Lesson Learning Objectives (for this lesson only):',
                       bold: true,
                       size: FONT_SIZES.BODY,
                       font: FONT_FAMILY,
@@ -3915,7 +4056,15 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       addSection(9, (out) => this.generateStep9Section(workflow.step9, out));
     }
     if (workflow.step10) {
-      addSection(10, (out) => this.generateStep10Section(workflow.step10, out, workflow.step4));
+      addSection(10, (out) =>
+        this.generateStep10Section(
+          workflow.step10,
+          out,
+          workflow.step4,
+          workflow.step3,
+          workflow.step2
+        )
+      );
     }
     if (workflow.step11) {
       addSection(11, (out) => this.generateStep11Section(workflow.step11, out));
@@ -4154,7 +4303,13 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         await this.generateStep9Section(stepData, contentChildren);
         break;
       case 10:
-        await this.generateStep10Section(stepData, contentChildren, workflow.step4);
+        await this.generateStep10Section(
+          stepData,
+          contentChildren,
+          workflow.step4,
+          workflow.step3,
+          workflow.step2
+        );
         break;
       case 11:
         await this.generateStep11Section(stepData, contentChildren);
