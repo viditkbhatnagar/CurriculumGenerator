@@ -16,6 +16,7 @@
 import { OpenAIService, openaiService } from './openaiService';
 import { loggingService } from './loggingService';
 import { plannedLessonCountFor } from './step10Completion';
+import { assignMlosToLessons } from './mloAssignment';
 import {
   LessonPlan,
   LessonActivity,
@@ -330,7 +331,10 @@ export class LessonPlanService {
     const lessonBlocks = this.calculateLessonBlocks(
       module.contactHours,
       module.mlos,
-      options.plannedLessonCount
+      options.plannedLessonCount,
+      // The agreed syllabus, so each lesson can be matched to the outcome it actually delivers
+      // rather than handed one by position.
+      module.topics
     );
     loggingService.info('  ✓ Lesson blocks calculated', {
       moduleCode: module.moduleCode,
@@ -479,7 +483,8 @@ export class LessonPlanService {
   calculateLessonBlocks(
     contactHours: number,
     mlos: MLO[],
-    plannedLessonCount?: number
+    plannedLessonCount?: number,
+    moduleTopics?: string[]
   ): LessonBlock[] {
     const totalMinutes = contactHours * 60;
 
@@ -510,10 +515,38 @@ export class LessonPlanService {
     // Distribute MLOs across lessons (1-2 per lesson)
     const mloAssignments = this.distributeMLOs(mlos, numLessons);
 
+    /**
+     * Outcomes matched to what each lesson actually teaches, replacing the positional rotation.
+     *
+     * `distributeMLOs` hands lesson n the outcomes at ((n-1) mod N) and (n mod N) whatever the
+     * lesson is about, so the lesson on compound interest and annuities was mapped to "Use Excel
+     * to clean a small dataset" and the module's own interest outcome went unclaimed. Now that
+     * the document prints each outcome's wording beside its lesson, a lecturer sees that
+     * mismatch immediately. Matching is on the module's agreed topic for the lesson — the same
+     * topic the lesson is written to — so the two cannot disagree.
+     *
+     * Falls back to the positional spread when the module has no topics to match against.
+     */
+    const topics = (moduleTopics || []).filter((t) => typeof t === 'string' && t.trim());
+    // Sorted the same way distributeMLOs sorts, so an index means the same thing either way.
+    const orderedMLOs = [...mlos].sort(
+      (a, b) => getBloomLevelOrder(a.bloomLevel) - getBloomLevelOrder(b.bloomLevel)
+    );
+    let contentAssignments: number[][] | null = null;
+    if (topics.length > 0 && orderedMLOs.length > 1) {
+      const lessonTopics = Array.from(
+        { length: numLessons },
+        (_, i) => topics[Math.min(topics.length - 1, Math.floor((i / numLessons) * topics.length))]
+      );
+      contentAssignments = assignMlosToLessons(lessonTopics, orderedMLOs);
+    }
+
     // Create lesson blocks
     const blocks: LessonBlock[] = [];
     for (let i = 0; i < numLessons; i++) {
-      const assignedMLOs = mloAssignments[i] || [];
+      const assignedMLOs = contentAssignments
+        ? contentAssignments[i].map((idx) => orderedMLOs[idx]).filter(Boolean)
+        : mloAssignments[i] || [];
       const bloomLevel = this.determinePrimaryBloomLevel(assignedMLOs);
 
       blocks.push({
