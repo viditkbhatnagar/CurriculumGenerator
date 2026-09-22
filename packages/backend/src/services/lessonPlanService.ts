@@ -167,6 +167,35 @@ export function getBloomLevelOrder(level: string): number {
 // LESSON PLAN SERVICE CLASS
 // ============================================================================
 
+/**
+ * Whether an OpenAI error means the service is unusable for every subsequent call, rather than
+ * having failed this one call. Credentials, permissions and exhausted quota all persist for the
+ * whole run; a timeout or a malformed response does not.
+ */
+export function isAiUnavailable(error: unknown): boolean {
+  const status = (error as { status?: number; code?: string })?.status;
+  if (status === 401 || status === 403) return true;
+
+  const code = String((error as { code?: string })?.code || '').toLowerCase();
+  if (
+    code === 'invalid_api_key' ||
+    code === 'insufficient_quota' ||
+    code === 'account_deactivated'
+  ) {
+    return true;
+  }
+
+  const message = String((error as { message?: string })?.message || '').toLowerCase();
+  return (
+    message.includes('incorrect api key') ||
+    message.includes('invalid_api_key') ||
+    message.includes('insufficient_quota') ||
+    message.includes('exceeded your current quota') ||
+    message.includes('api key not configured') ||
+    message.includes('openai_api_key')
+  );
+}
+
 export class LessonPlanService {
   private openaiService: OpenAIService;
   private onProgressCallback?: (progress: any) => void;
@@ -432,6 +461,22 @@ export class LessonPlanService {
       context.formativeAssessments,
       module.id
     );
+
+    // A lesson with no activities is not a lesson, it is a heading. Check before returning, so a
+    // module can never be saved — and reported complete — in a state no lecturer could teach from.
+    // The queue's own signals cannot catch this: the jobs that wrote 510 empty lessons all
+    // finished cleanly and reported 100%.
+    const emptyLessons = finalLessons.filter((l) => !(l.activities || []).length);
+    if (emptyLessons.length) {
+      throw new Error(
+        `Refusing to save ${module.moduleCode}: ${emptyLessons.length} of ${finalLessons.length} ` +
+          `lessons have no activities (${emptyLessons
+            .slice(0, 5)
+            .map((l) => l.lessonId)
+            .join(', ')}${emptyLessons.length > 5 ? ', …' : ''}). ` +
+          'This usually means content generation failed for the whole module.'
+      );
+    }
 
     // Note: PPT generation is now handled separately in Step 11 to prevent timeouts
     loggingService.info('  ✅ Module lesson plans complete (PPT will be generated in Step 11)', {
@@ -843,17 +888,22 @@ export class LessonPlanService {
       priorLessons
     );
 
-    // Generate objectives from MLOs (Requirement 2.1)
-    const objectives =
-      aiEnhancedContent.objectives ||
-      block.assignedMLOs.map(
-        (mlo) =>
-          `By the end of this lesson, learners will be able to ${mlo.statement.toLowerCase()}`
-      );
+    // `x || fallback` does not fall through on an empty array — `[] || y` is `[]`, because an
+    // empty array is truthy. Every fallback below was written against a generator that returns
+    // `[]` when the AI call fails, so none of them had ever run: a failed call produced a lesson
+    // with no objectives and no activities, and the module still saved and reported success.
+    // Test emptiness explicitly so the fallbacks do what they say.
+    const objectives = aiEnhancedContent.objectives?.length
+      ? aiEnhancedContent.objectives
+      : block.assignedMLOs.map(
+          (mlo) =>
+            `By the end of this lesson, learners will be able to ${mlo.statement.toLowerCase()}`
+        );
 
     // Generate activity sequence with timings (Requirement 2.2)
-    const activities =
-      aiEnhancedContent.activities || this.generateActivitySequence(block, module, context);
+    const activities = aiEnhancedContent.activities?.length
+      ? aiEnhancedContent.activities
+      : this.generateActivitySequence(block, module, context);
 
     // Generate materials list (Requirement 2.4)
     const materials = this.generateMaterialsList(block, module, context);
@@ -868,11 +918,13 @@ export class LessonPlanService {
       pacingSuggestions:
         aiEnhancedContent.pacingSuggestions ||
         this.generatePacingSuggestions(block.duration, activities),
-      adaptationOptions:
-        aiEnhancedContent.adaptationOptions || this.generateAdaptationOptions(context.deliveryMode),
+      adaptationOptions: aiEnhancedContent.adaptationOptions?.length
+        ? aiEnhancedContent.adaptationOptions
+        : this.generateAdaptationOptions(context.deliveryMode),
       commonMisconceptions: aiEnhancedContent.commonMisconceptions || [],
-      discussionPrompts:
-        aiEnhancedContent.discussionPrompts || this.generateDiscussionPrompts(block.assignedMLOs),
+      discussionPrompts: aiEnhancedContent.discussionPrompts?.length
+        ? aiEnhancedContent.discussionPrompts
+        : this.generateDiscussionPrompts(block.assignedMLOs),
     };
 
     const lessonPlan: LessonPlan = {
@@ -1261,6 +1313,24 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
         independentActivity: parsed.independentActivity,
       };
     } catch (error) {
+      // An unusable API key is not a per-lesson hiccup, it is an outage: every remaining lesson
+      // will fail the same way, and degrading each one to a template would quietly replace a
+      // finished module with husks. That is exactly what happened on 21 Sep 2026 — the key stopped
+      // working, 17 modules regenerated in 45 seconds each, and all 510 lessons saved empty while
+      // the queue reported 100% and zero failures. Fail the lesson so the module fails, the job
+      // retries, and the existing plan is left alone.
+      if (isAiUnavailable(error)) {
+        loggingService.error(
+          '🛑 OpenAI is unavailable — failing the module rather than saving a degraded plan',
+          {
+            error: error instanceof Error ? error.message : String(error),
+            moduleCode: module.moduleCode,
+            lessonNumber: block.lessonNumber,
+          }
+        );
+        throw error;
+      }
+
       loggingService.error('❌ Failed to generate AI-enhanced content, using fallback', {
         error: error instanceof Error ? error.message : String(error),
         moduleCode: module.moduleCode,
