@@ -1505,6 +1505,11 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
     const mainContentTime = Math.floor(remainingTime * 0.65);
     const numMainActivities = Math.max(1, Math.floor(mainContentTime / 30));
     const timePerActivity = Math.floor(mainContentTime / numMainActivities);
+    // `timePerActivity` is floored, so N activities can account for less than `mainContentTime`
+    // while the full amount is still deducted below — a 180-minute lesson lost 2 minutes that
+    // never appeared in any activity. Give the remainder to the first activity so the sequence
+    // always adds up to the lesson's length.
+    const mainContentRemainder = mainContentTime - timePerActivity * numMainActivities;
 
     for (let i = 0; i < numMainActivities; i++) {
       const activityType = this.selectActivityType(block.bloomLevel, i, context.deliveryMode);
@@ -1514,7 +1519,7 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
         type: activityType,
         title: `Core Content ${i + 1}`,
         description: this.getActivityDescription(activityType, block.assignedMLOs),
-        duration: timePerActivity,
+        duration: timePerActivity + (i === 0 ? mainContentRemainder : 0),
         teachingMethod: this.getTeachingMethod(activityType, context.deliveryMode),
         resources: this.getActivityResources(activityType),
         instructorActions: this.getInstructorActions(activityType),
@@ -1685,6 +1690,7 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
       case_analysis: `Case study analysis focusing on ${mloFocus}`,
       group_work: `Collaborative group activity on ${mloFocus}`,
       assessment: `Formative assessment checking understanding of ${mloFocus}`,
+      ai_activity: `Supervised use of an AI tool to explore ${mloFocus}, with the output checked against the source material`,
       break: 'Short break for refreshment',
     };
     return descriptions[type] || `Activity focusing on ${mloFocus}`;
@@ -1700,6 +1706,7 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
       case_analysis: ['Case study document', 'Analysis framework'],
       group_work: ['Group activity sheet', 'Collaboration tools'],
       assessment: ['Quiz questions', 'Response system'],
+      ai_activity: ['AI platform access', 'Prompt sheet', 'Output verification checklist'],
       break: [],
     };
     return resources[type] || [];
@@ -1715,6 +1722,7 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
       case_analysis: ['Introduce case', 'Guide analysis', 'Facilitate discussion'],
       group_work: ['Form groups', 'Circulate', 'Support collaboration'],
       assessment: ['Administer assessment', 'Review answers', 'Provide feedback'],
+      ai_activity: ['Brief the tool and the task', 'Circulate', 'Challenge unverified output'],
       break: ['Monitor time'],
     };
     return actions[type] || [];
@@ -1730,6 +1738,11 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
       case_analysis: ['Read case', 'Analyze situation', 'Propose solutions'],
       group_work: ['Collaborate', 'Contribute ideas', 'Complete group task'],
       assessment: ['Complete assessment', 'Review feedback', 'Identify gaps'],
+      ai_activity: [
+        'Prompt the tool',
+        'Verify the output against the reading',
+        'Record what changed',
+      ],
       break: ['Rest', 'Refresh'],
     };
     return actions[type] || [];
