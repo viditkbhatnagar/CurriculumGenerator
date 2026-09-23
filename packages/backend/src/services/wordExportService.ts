@@ -2291,6 +2291,40 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         }
 
         /**
+         * A faculty delivery note: a module-level instruction from the reviewer that is not part
+         * of the syllabus itself — typically how to contextualise a framework for the country of
+         * delivery, where the formal curriculum is anchored elsewhere.
+         *
+         * Read live from Step 4 so it can be added or amended without regenerating any lesson,
+         * and labelled separately from the Module Description so a lecturer does not read it as
+         * part of the module's scope.
+         */
+        const deliveryNote =
+          (modulePlan as { deliveryNote?: string }).deliveryNote ||
+          (s4mod as { deliveryNote?: string } | undefined)?.deliveryNote;
+        if (deliveryNote) {
+          contentChildren.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Delivery Note (for faculty): ',
+                  bold: true,
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                }),
+                new TextRun({
+                  text: String(deliveryNote),
+                  size: FONT_SIZES.BODY,
+                  font: FONT_FAMILY,
+                  italics: true,
+                }),
+              ],
+              spacing: { after: 150, line: LINE_SPACING },
+            })
+          );
+        }
+
+        /**
          * The module's approved learning outcomes, in full, before any lesson.
          *
          * This is the table the rest of the module refers back to, so a lecturer never has to
