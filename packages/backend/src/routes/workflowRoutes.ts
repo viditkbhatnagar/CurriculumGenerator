@@ -4914,6 +4914,22 @@ router.get('/:id/step10/status', validateJWT, loadUser, async (req: Request, res
     const completedJobs = jobStatuses.filter((j) => j.state === 'completed');
     const failedJobs = jobStatuses.filter((j) => j.state === 'failed');
 
+    /**
+     * Whether each module's readings can actually reach its lessons.
+     *
+     * `allComplete` above counts modules, which is exactly the kind of signal that reported
+     * success while the reviewed programme had 240 unreachable readings and one outcome with no
+     * reading at all. Counts cannot see either, so report the coverage alongside them.
+     */
+    const { coverageReport } = await import('../services/readingCoverage');
+    const readingCoverage = coverageReport(
+      (workflow.step4?.modules || []).map((m: any) => ({
+        moduleCode: m.code || m.moduleCode || m.id,
+        outcomes: m.mlos || m.moduleLearningOutcomes || [],
+        readings: (workflow.step6 as any)?.moduleReadings?.[m.id || m.moduleId] || [],
+      }))
+    );
+
     res.json({
       success: true,
       data: {
@@ -4921,6 +4937,7 @@ router.get('/:id/step10/status', validateJWT, loadUser, async (req: Request, res
         modulesGenerated,
         totalModules,
         allComplete,
+        readingCoverage,
         totalLessons: workflow.step10?.summary?.totalLessons || 0,
         totalContactHours: workflow.step10?.summary?.totalContactHours || 0,
         jobs: {
