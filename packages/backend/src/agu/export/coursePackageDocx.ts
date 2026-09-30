@@ -10,11 +10,13 @@
  */
 import {
   Document,
+  ExternalHyperlink,
   HeadingLevel,
   Packer,
   Paragraph,
   Table,
   TableCell,
+  TableLayoutType,
   TableRow,
   TextRun,
   WidthType,
@@ -25,6 +27,8 @@ import { CourseDraft, Finding } from '../draft/types';
 
 const FONT = 'Arial';
 const BODY = 20;
+// The text width of the default A4 page with one-inch margins, in twentieths of a point.
+const TEXT_WIDTH_DXA = 11906 - 2 * 1440;
 
 export interface PackageInput {
   draft: CourseDraft;
@@ -52,16 +56,70 @@ const h = (text: string, level: (typeof HeadingLevel)[keyof typeof HeadingLevel]
   new Paragraph({ text, heading: level, spacing: { before: 240, after: 100 } });
 const bullet = (text: string) => new Paragraph({ children: [t(text)], bullet: { level: 0 } });
 
-function table(header: string[], rows: string[][]): Table {
-  const cell = (text: string, bold = false) =>
-    new TableCell({ children: [new Paragraph({ children: [t(text, { bold })] })] });
+type CellContent = string | Paragraph;
+
+/**
+ * A table with header row and, optionally, column widths in percent. Equal widths squeezed a
+ * six-column weekly plan into columns a few words wide, so a lecture's topics ran down the
+ * page one word per line.
+ */
+function table(header: string[], rows: CellContent[][], widths?: number[]): Table {
+  // Word and LibreOffice lay a table out from its column grid, not from per-cell percentages,
+  // so the widths are given as a fixed grid in twips.
+  const columns = widths?.map((pct) => Math.round((TEXT_WIDTH_DXA * pct) / 100));
+  const cell = (content: CellContent, column: number, bold = false) =>
+    new TableCell({
+      children: [
+        typeof content === 'string' ? new Paragraph({ children: [t(content, { bold })] }) : content,
+      ],
+      ...(columns?.[column] ? { width: { size: columns[column], type: WidthType.DXA } } : {}),
+    });
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
+    ...(columns ? { columnWidths: columns, layout: TableLayoutType.FIXED } : {}),
     rows: [
-      new TableRow({ tableHeader: true, children: header.map((x) => cell(x, true)) }),
-      ...rows.map((r) => new TableRow({ children: r.map((x) => cell(x)) })),
+      new TableRow({ tableHeader: true, children: header.map((x, i) => cell(x, i, true)) }),
+      ...rows.map((r) => new TableRow({ children: r.map((x, i) => cell(x, i)) })),
     ],
   });
+}
+
+/** A clickable link for http(s) addresses; anything else is printed as text, never linked. */
+function linkParagraph(url: string | undefined): Paragraph {
+  if (!url || !/^https?:\/\//i.test(url)) return new Paragraph({ children: [t(url || '—')] });
+  return new Paragraph({
+    children: [
+      new ExternalHyperlink({
+        link: url,
+        children: [
+          new TextRun({ text: url, font: FONT, size: BODY, color: '0563C1', underline: {} }),
+        ],
+      }),
+    ],
+  });
+}
+
+/**
+ * A brief that enumerates its deliverables inline, "(1) a one-page brief; (2) a data log...",
+ * printed as one paragraph is hard to check against a rubric. The enumeration becomes a list;
+ * anything before the first item stays as the lead-in. Fewer than two items: left as written.
+ */
+export function briefItems(brief: string): { lead: string; items: string[] } {
+  const parts = brief.split(/\s*\((\d{1,2})\)\s+/);
+  // A capturing split gives [lead, "1", item1, "2", item2, ...].
+  if (parts.length < 5) return { lead: brief.trim(), items: [] };
+  const items: string[] = [];
+  for (let i = 1; i + 1 < parts.length; i += 2) {
+    const item = parts[i + 1].trim().replace(/[;,]?\s*(and)?\s*$/i, '');
+    if (item) items.push(`(${parts[i]}) ${item}`);
+  }
+  return { lead: parts[0].trim(), items };
+}
+
+function briefParagraphs(brief: string | undefined): Paragraph[] {
+  if (!brief?.trim()) return [p('Task brief not drafted yet.')];
+  const { lead, items } = briefItems(brief);
+  return [...(lead ? [p(lead)] : []), ...items.map((item) => bullet(item))];
 }
 
 const sum = (xs: number[]) => Math.round(xs.reduce((n, x) => n + (x || 0), 0) * 100) / 100;
@@ -114,7 +172,8 @@ export function coursePackageDocument(input: PackageInput): Document {
           `v${catalogue.edition.version} (${catalogue.edition.approvalStatus.replace(/_/g, ' ')})`,
         ],
         ['Starting point', 'New design drafted from the catalogue description'],
-      ]
+      ],
+      [28, 72]
     )
   );
   children.push(
@@ -138,30 +197,27 @@ export function coursePackageDocument(input: PackageInput): Document {
   children.push(
     table(
       ['CLO', 'Outcome', 'Bloom level', 'Assessed by'],
-      outcomes.map((o) => [o.id, o.statement, o.bloomLevel, assessedBy(o.id)])
+      outcomes.map((o) => [o.id, o.statement, o.bloomLevel, assessedBy(o.id)]),
+      [10, 48, 12, 30]
     )
   );
+  // An overview only: each week's lecture topics and activities are set out in T03 and T04.
   children.push(h('4. Four-week structure', HeadingLevel.HEADING_2));
   children.push(
     table(
-      [
-        'Week',
-        'Theme',
-        'CLOs',
-        `Live lecture (${catalogue.courseShape.liveLectureHours.value}h)`,
-        'Monitored study',
-        'Independent study',
-      ],
+      ['Week', 'Theme', 'CLOs', 'Live lecture', 'Monitored (h)', 'Independent (h)'],
       draft.weeks.map((w) => [
         String(w.number),
         w.theme,
         w.outcomeIds.join(', '),
-        `${w.liveLecture.title}: ${w.liveLecture.topics.join('; ')}`,
-        w.monitoredStudy.map((m) => `${m.activity} (${m.hours}h)`).join('; '),
-        w.independentStudy.map((m) => `${m.activity} (${m.hours}h)`).join('; '),
-      ])
+        `${w.liveLecture.title} (${w.liveLecture.hours} h)`,
+        String(sum(w.monitoredStudy.map((m) => m.hours))),
+        String(sum(w.independentStudy.map((m) => m.hours))),
+      ]),
+      [10, 21, 12, 25, 16, 16]
     )
   );
+  children.push(p('Activities and hours for each week are set out in T03 and T04 below.'));
   children.push(h('5. Hours summary', HeadingLevel.HEADING_2));
   children.push(
     table(
@@ -172,7 +228,8 @@ export function coursePackageDocument(input: PackageInput): Document {
         ['Total contact', String(sum([live, monitored]))],
         ['Independent study', String(independent)],
         ['Total', String(sum([live, monitored, independent]))],
-      ]
+      ],
+      [70, 30]
     )
   );
   children.push(h('6. Assessment plan', HeadingLevel.HEADING_2));
@@ -184,7 +241,8 @@ export function coursePackageDocument(input: PackageInput): Document {
         `${a.weight}%`,
         String(a.weekDue),
         a.outcomeIds.join(', '),
-      ])
+      ]),
+      [46, 12, 14, 28]
     )
   );
   children.push(
@@ -213,7 +271,8 @@ export function coursePackageDocument(input: PackageInput): Document {
           'Instructor response time',
           'Within two business days (Mountain Time, excluding institutional holidays)',
         ],
-      ]
+      ],
+      [28, 72]
     )
   );
   children.push(
@@ -229,14 +288,16 @@ export function coursePackageDocument(input: PackageInput): Document {
         w.theme,
         w.liveLecture.title,
         w.gradedItemsDue.join('; ') || '—',
-      ])
+      ]),
+      [8, 34, 34, 24]
     )
   );
   children.push(h('Assessment and grading', HeadingLevel.HEADING_2));
   children.push(
     table(
       ['Component', 'Weight', 'Due'],
-      draft.assessments.map((a) => [a.title, `${a.weight}%`, `Week ${a.weekDue}`])
+      draft.assessments.map((a) => [a.title, `${a.weight}%`, `Week ${a.weekDue}`]),
+      [64, 16, 20]
     )
   );
   children.push(
@@ -269,37 +330,53 @@ export function coursePackageDocument(input: PackageInput): Document {
   children.push(h('T03 · Weekly Plan & Live Session Run Sheets', HeadingLevel.HEADING_1));
   for (const w of draft.weeks) {
     children.push(h(`Week ${w.number}: ${w.theme}`, HeadingLevel.HEADING_2));
+    children.push(p(`CLOs addressed: ${w.outcomeIds.join(', ') || 'none'}`, { bold: true }));
     children.push(
-      table(
-        ['Item', 'Plan'],
-        [
-          ['CLOs addressed', w.outcomeIds.join(', ')],
-          [
-            `Live lecture (${w.liveLecture.hours}h)`,
-            `${w.liveLecture.title}: ${w.liveLecture.topics.join('; ')}`,
-          ],
-          [
-            'Monitored-study activities (faculty role)',
-            w.monitoredStudy.map((m) => `${m.activity}: ${m.facultyRole}`).join('; ') || '—',
-          ],
-          ['Independent study', w.independentStudy.map((m) => m.activity).join('; ') || '—'],
-          ['Graded items due', w.gradedItemsDue.join('; ') || '—'],
-        ]
-      )
+      h(`Live lecture (${w.liveLecture.hours} h): ${w.liveLecture.title}`, HeadingLevel.HEADING_3),
+      ...w.liveLecture.topics.map((topic) => bullet(topic))
+    );
+    children.push(h('Run sheet', HeadingLevel.HEADING_3));
+    children.push(
+      w.liveLecture.runSheet.length
+        ? table(
+            ['Time (min)', 'Segment', 'Activity / method', 'Materials'],
+            w.liveLecture.runSheet.map((s) => [
+              `${s.startMinute}–${s.endMinute}`,
+              s.segment,
+              s.activity,
+              s.materials || '—',
+            ]),
+            [12, 18, 50, 20]
+          )
+        : p('No run sheet drafted for this lecture.')
+    );
+    children.push(h('Faculty-monitored study (contact)', HeadingLevel.HEADING_3));
+    children.push(
+      w.monitoredStudy.length
+        ? table(
+            ['Activity', 'Faculty role', 'Evidence logged', 'Hours'],
+            w.monitoredStudy.map((m) => [
+              m.activity,
+              m.facultyRole,
+              m.evidenceLogged,
+              String(m.hours),
+            ]),
+            [36, 30, 24, 10]
+          )
+        : p('No monitored study drafted for this week.')
+    );
+    children.push(h('Independent study', HeadingLevel.HEADING_3));
+    children.push(
+      w.independentStudy.length
+        ? table(
+            ['Activity', 'Hours'],
+            w.independentStudy.map((m) => [m.activity, String(m.hours)]),
+            [88, 12]
+          )
+        : p('No independent study drafted for this week.')
     );
     children.push(
-      h(`Lecture ${w.number} run sheet: ${w.liveLecture.title}`, HeadingLevel.HEADING_3)
-    );
-    children.push(
-      table(
-        ['Time (min)', 'Segment', 'Activity / method', 'Materials'],
-        w.liveLecture.runSheet.map((s) => [
-          `${s.startMinute}–${s.endMinute}`,
-          s.segment,
-          s.activity,
-          s.materials || '—',
-        ])
-      )
+      p(`Graded items due: ${w.gradedItemsDue.join('; ') || 'none this week'}`, { italics: true })
     );
   }
 
@@ -329,7 +406,8 @@ export function coursePackageDocument(input: PackageInput): Document {
               ])
             : [[String(w.number), String(w.liveLecture.hours), '—', '—', '—', '0']]
         )
-        .concat([['Total', String(live), '', '', '', String(sum([live, monitored]))]])
+        .concat([['Total', String(live), '', '', '', String(sum([live, monitored]))]]),
+      [10, 11, 27, 21, 21, 10]
     )
   );
   children.push(
@@ -339,7 +417,8 @@ export function coursePackageDocument(input: PackageInput): Document {
         .flatMap((w) =>
           w.independentStudy.map((m) => [String(w.number), m.activity, String(m.hours)])
         )
-        .concat([['Total', '', String(independent)]])
+        .concat([['Total', '', String(independent)]]),
+      [10, 78, 12]
     )
   );
 
@@ -360,8 +439,9 @@ export function coursePackageDocument(input: PackageInput): Document {
             r.citation,
             r.required ? 'Required' : 'Optional',
             r.access,
-            r.link || '—',
-          ])
+            linkParagraph(r.link),
+          ]),
+          [10, 44, 13, 11, 22]
         )
       : p('No verified readings: faculty must supply them.')
   );
@@ -377,7 +457,8 @@ export function coursePackageDocument(input: PackageInput): Document {
               ? 'Hypothetical teaching case (not a real company event)'
               : c.source,
             c.rights || '—',
-          ])
+          ]),
+          [10, 38, 26, 26]
         )
       : p('No cases drafted.')
   );
@@ -398,10 +479,11 @@ export function coursePackageDocument(input: PackageInput): Document {
             ['Due', `Week ${a.weekDue}`],
             ['CLOs assessed', a.outcomeIds.join(', ')],
             ['Use of AI tools', a.aiUse],
-          ]
+          ],
+          [28, 72]
         )
       );
-      children.push(p(a.brief || 'Task brief not drafted yet.'));
+      children.push(...briefParagraphs(a.brief));
     }
   } else {
     children.push(p('No applied assignment in this draft.'));
