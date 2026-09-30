@@ -861,10 +861,10 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
     }
   };
 
-  const handleApprove = async () => {
+  const handleApprove = async (notRequired = false) => {
     setError(null);
     try {
-      await approveStep8.mutateAsync(workflow._id);
+      await approveStep8.mutateAsync({ id: workflow._id, notRequired });
       onComplete();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to approve Step 8';
@@ -1232,7 +1232,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
             <div className="flex gap-3">
               {!isApproved && (
                 <button
-                  onClick={handleApprove}
+                  onClick={() => handleApprove()}
                   disabled={approveStep8.isPending}
                   className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
                 >
@@ -1262,11 +1262,38 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
             </div>
           </div>
 
-          {!workflow.step8?.isValid && !isApproved && (
-            <p className="text-xs text-amber-400 text-center">
-              All validation checks must pass before approval.
-            </p>
+          {/* The server refuses to approve a Step 8 with no case studies unless the author
+              records that the programme does not require them. */}
+          {!isApproved && (workflow.step8?.caseStudies?.length ?? 0) === 0 && (
+            <div className="text-center space-y-2">
+              <p className="text-xs text-amber-500">
+                No case studies exist yet, so Step 8 cannot be approved as complete. Generate them
+                again, or record that this programme does not require case studies.
+              </p>
+              <button
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Approve Step 8 with no case studies? This is recorded as "case studies not required" for this programme.'
+                    )
+                  ) {
+                    handleApprove(true);
+                  }
+                }}
+                disabled={approveStep8.isPending}
+                className="text-xs text-teal-600 underline hover:text-teal-700 disabled:opacity-50"
+              >
+                Case studies are not required for this programme
+              </button>
+            </div>
           )}
+          {!workflow.step8?.isValid &&
+            !isApproved &&
+            (workflow.step8?.caseStudies?.length ?? 0) > 0 && (
+              <p className="text-xs text-amber-400 text-center">
+                Some validation checks have not passed. Review them before approving.
+              </p>
+            )}
         </div>
       )}
 

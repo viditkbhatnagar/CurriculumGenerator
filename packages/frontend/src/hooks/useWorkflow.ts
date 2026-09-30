@@ -470,13 +470,16 @@ export function useApproveStep8() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    // `notRequired` records that the programme needs no case studies. Without it the server
+    // refuses to approve a Step 8 that holds none.
+    mutationFn: async ({ id, notRequired }: { id: string; notRequired?: boolean }) => {
       const response = await fetchAPI(`${WORKFLOW_BASE}/${id}/step8/approve`, {
         method: 'POST',
+        body: JSON.stringify({ notRequired: !!notRequired }),
       });
       return response;
     },
-    onSuccess: (_, id) => {
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['workflow', id] });
     },
   });
