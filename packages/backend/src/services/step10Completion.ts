@@ -384,6 +384,22 @@ export function validationFromPlans(
 }
 
 /**
+ * The modules a document actually holds plans for, in Step 4's order.
+ *
+ * A per-module document carries one module's plan beside the programme's full module list.
+ * Judging that one plan against every module reported the other modules' missing stats as
+ * failures, so each of the 46 files in the Step 10 archive printed six "Fail" rows above a
+ * complete, correct module. A module-scoped document is checked against its own modules.
+ */
+export function modulesInDocument(
+  modules: CountableModule[],
+  plans: LessonPlanLike[]
+): CountableModule[] {
+  const held = new Set((plans || []).map((p) => p?.moduleId).filter(Boolean));
+  return (modules || []).filter((m) => !!m?.id && held.has(m.id));
+}
+
+/**
  * Whether a stored module looks like it lost lessons rather than having fewer by design.
  *
  * A finished module's lessons always add up to its contact hours: the generator distributes

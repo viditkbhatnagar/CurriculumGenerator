@@ -10,6 +10,7 @@ import {
   summariseFromStubs,
   validationFromStubs,
   validationFromPlans,
+  modulesInDocument,
 } from '../services/step10Completion';
 
 const lessons = (n: number) => Array.from({ length: n }, (_, i) => ({ lessonNumber: i + 1 }));
@@ -428,6 +429,38 @@ describe('modules with nothing to teach', () => {
     };
     expect([...completedModuleIds(modules, step10)].sort()).toEqual(['a', 'b']);
     expect(nextIncompleteModuleIndex(modules, step10)).toBe(-1);
+  });
+});
+
+describe('checks on a document that holds some of the modules', () => {
+  const lesson = (extra: any = {}) => ({
+    duration: 90,
+    linkedMLOs: ['m1'],
+    caseStudyActivity: {},
+    formativeChecks: [1],
+    ...extra,
+  });
+  const programme = ['a', 'b', 'c'].map((id) => ({
+    id,
+    contactHours: 3,
+    mlos: [{ id: 'm1' }],
+  }));
+  const flawless = { moduleId: 'b', lessons: [lesson(), lesson()] };
+
+  // Each file in the Step 10 archive holds one module's plan beside the programme's whole
+  // module list. Judged against every module, a flawless module printed six "Fail" rows.
+  it('passes a flawless module judged against its own module', () => {
+    const v = validationFromPlans(modulesInDocument(programme, [flawless]), [flawless]);
+    expect(Object.values(v)).toEqual(Array(6).fill(true));
+  });
+
+  it('still fails the whole programme when that one module is all it holds', () => {
+    expect(validationFromPlans(programme, [flawless]).allModulesHaveLessonPlans).toBe(false);
+  });
+
+  it('keeps Step 4 order and ignores plans for modules Step 4 no longer lists', () => {
+    const plans = [{ moduleId: 'c' }, { moduleId: 'gone' }, { moduleId: 'a' }];
+    expect(modulesInDocument(programme, plans).map((m) => m.id)).toEqual(['a', 'c']);
   });
 });
 

@@ -7046,7 +7046,9 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
     // "Module: M01: Introduction to Management & Organisations". That is the same fallback
     // that made Steps 5 and 6 print "mod-m35", and the reviewer asked for Step 7's format
     // precisely because it is auditable.
-    if ([5, 6, 7, 8, 10].includes(stepNumber)) workflowData.step4 = workflow.step4;
+    // 12 checks every module's outcomes against its pack, so without step4 its validation
+    // table reported "no modules" and failed for every programme.
+    if ([5, 6, 7, 8, 10, 12].includes(stepNumber)) workflowData.step4 = workflow.step4;
     // Step 10 also needs the programme outcomes, so the lesson plan can print what "PLO5"
     // means instead of leaving a lecturer to open Step 3 to find out.
     if (stepNumber === 10) {
@@ -7054,6 +7056,8 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
       // Step 8 supplies the case study titles, so a lesson names its case instead of citing
       // an identifier a reader cannot resolve.
       workflowData.step8 = workflow.step8;
+      // Step 11 holds the decks actually generated; without it no lesson can list its deck.
+      workflowData.step11 = workflow.step11;
     }
 
     const STEP_SLUGS: Record<number, string> = {

@@ -116,7 +116,9 @@ export async function generateStep10Zip(workflowId: string, workflow: any): Prom
         step11: workflow.step11,
       };
 
-      const buf = await wordExportService.generateStepDocument(moduleWorkflow, 10);
+      const buf = await wordExportService.generateStepDocument(moduleWorkflow, 10, {
+        moduleScoped: true,
+      });
       archive.append(buf, { name: moduleFileName(10, i, stub, step4Module) });
     } catch (error) {
       // One unbuildable module must not cost the other forty-five. It is recorded and named

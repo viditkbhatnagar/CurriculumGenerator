@@ -14,7 +14,7 @@ import OpenAI from 'openai';
 import { loggingService } from './loggingService';
 import { moduleLabelOf } from '../utils/moduleIdentity';
 import { bloomIndex, statedBloom } from './assessmentGeneratorService';
-import { validationFromPlans } from './step10Completion';
+import { modulesInDocument, validationFromPlans } from './step10Completion';
 import { step12ValidationFromPacks } from './deliverableValidation';
 import { normaliseTopic } from '../utils/topicShape';
 
@@ -2049,9 +2049,13 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     step8?: any,
     // Step 11 holds the decks that were actually generated. Every lesson carries a
     // pptDeckRef from the moment it is planned, so the reference alone proves nothing.
-    step11?: any
+    step11?: any,
+    // A per-module document (the archive's files and `?module=N`) holds one module's plan
+    // beside the programme's whole module list, so its checks are the module's own.
+    options?: { moduleScoped?: boolean }
   ): Promise<void> {
     if (!step10) return;
+    const moduleScoped = !!options?.moduleScoped;
     const generatedDeckIds = new Set<string>();
     for (const mod of (step11 as any)?.modulePPTDecks || []) {
       for (const deck of mod?.pptDecks || []) {
@@ -2158,13 +2162,17 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     // written by the approve route, and printing those is how the Logistics export reported
     // case studies as integrated above a count of zero.
     const liveValidation = validationFromPlans(
-      step4?.modules || [],
+      moduleScoped ? modulesInDocument(step4?.modules || [], plans) : step4?.modules || [],
       plans,
       step10.plannedLessonCounts
     );
     const passFail = (ok: boolean) => (ok ? '✓ Pass' : '✗ Fail');
     if (plans.length) {
-      contentChildren.push(this.createH2('10.1 Validation Summary'));
+      contentChildren.push(
+        this.createH2(
+          moduleScoped ? '10.1 Validation Summary (this module)' : '10.1 Validation Summary'
+        )
+      );
 
       const validationRows = [
         new TableRow({
@@ -2175,7 +2183,11 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         }),
         new TableRow({
           children: [
-            this.createTableCell('All Modules Have Lesson Plans'),
+            this.createTableCell(
+              moduleScoped
+                ? 'Module Has Its Full Set of Lesson Plans'
+                : 'All Modules Have Lesson Plans'
+            ),
             this.createTableCell(passFail(liveValidation.allModulesHaveLessonPlans)),
           ],
         }),
@@ -3120,9 +3132,11 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   private async generateStep12Section(
     step12: any,
     contentChildren: any[],
-    step4?: any
+    step4?: any,
+    options?: { moduleScoped?: boolean }
   ): Promise<void> {
     if (!step12) return;
+    const moduleScoped = !!options?.moduleScoped;
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
@@ -3132,12 +3146,21 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     // Validation summary, computed from the packs in this document. Workflows generated
     // before 2026-09-30 store a constant `true` for outcome coverage and, on the per-module
     // path, rubric completeness.
+    const packs: any[] = step12.moduleAssignmentPacks || [];
+    const heldModuleIds = new Set(packs.map((p: any) => p?.moduleId));
     const step12Validation = step12ValidationFromPacks(
-      step12.moduleAssignmentPacks || [],
-      step4?.modules || []
+      packs,
+      // A per-module document is checked against its own module, not the whole programme.
+      moduleScoped
+        ? (step4?.modules || []).filter((m: any) => heldModuleIds.has(m?.id))
+        : step4?.modules || []
     );
-    if (step12.validation || (step12.moduleAssignmentPacks || []).length) {
-      contentChildren.push(this.createH2('12.1 Validation Summary'));
+    if (step12.validation || packs.length) {
+      contentChildren.push(
+        this.createH2(
+          moduleScoped ? '12.1 Validation Summary (this module)' : '12.1 Validation Summary'
+        )
+      );
 
       const validationRows = [
         new TableRow({
@@ -3148,7 +3171,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         }),
         new TableRow({
           children: [
-            this.createTableCell('All Modules Have Assignments'),
+            this.createTableCell(
+              moduleScoped ? 'Module Has Its Assignment Pack' : 'All Modules Have Assignments'
+            ),
             this.createTableCell(step12Validation.allModulesHaveAssignments ? '✓ Pass' : '✗ Fail'),
           ],
         }),
@@ -4261,7 +4286,10 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   async generateStepDocument(
     workflow: WorkflowData,
     stepNumber: number,
-    options?: { moduleIndex?: number }
+    // `moduleScoped` marks a document built from one module's data by the caller (the Step 10
+    // archive); `moduleIndex` filters to one module here. Either way its checks are the
+    // module's own.
+    options?: { moduleIndex?: number; moduleScoped?: boolean }
   ): Promise<Buffer> {
     const STEP_TITLES: Record<number, string> = {
       1: 'Program Foundation',
@@ -4380,6 +4408,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       return await Packer.toBuffer(doc);
     }
 
+    const moduleScoped = options?.moduleIndex !== undefined || !!options?.moduleScoped;
+
     // Filter for module-level exports (steps 10-12)
     if (options?.moduleIndex !== undefined) {
       const moduleArrayKeys: Record<number, string> = {
@@ -4435,14 +4465,17 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           workflow.step3,
           workflow.step2,
           workflow.step8,
-          workflow.step11
+          workflow.step11,
+          { moduleScoped }
         );
         break;
       case 11:
         await this.generateStep11Section(stepData, contentChildren);
         break;
       case 12:
-        await this.generateStep12Section(stepData, contentChildren, workflow.step4);
+        await this.generateStep12Section(stepData, contentChildren, workflow.step4, {
+          moduleScoped,
+        });
         break;
       case 13:
         await this.generateStep13Section(stepData, contentChildren);
