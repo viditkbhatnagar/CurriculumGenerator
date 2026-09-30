@@ -64,6 +64,19 @@ function briefParagraphs(brief: string | undefined): Paragraph[] {
 
 const disclosure = (id: string) => DISCLOSURES.find((d) => d.id === id)?.text || '';
 
+/**
+ * The disclosures the rule pack requires in one document (`requiredIn`), in the pack's order,
+ * under their heading. They used to be placed by hand, and the course specification (the
+ * document most often read on its own) carried neither the registration nor the accreditation
+ * statement, and the contact-hour map lacked the credit qualifier.
+ */
+const disclosuresFor = (document: string): Paragraph[] => {
+  const texts = DISCLOSURES.filter((d) => d.requiredIn.includes(document)).map((d) => d.text);
+  return texts.length
+    ? [h('Institutional disclosures', HeadingLevel.HEADING_2), ...texts.map((t) => p(t))]
+    : [];
+};
+
 export function coursePackageDocument(input: PackageInput): Document {
   // Office files are XML: a control character in model output makes the file corrupt.
   input = xmlSafeDeep(input);
@@ -194,7 +207,7 @@ export function coursePackageDocument(input: PackageInput): Document {
     h('7. Tools, data or sandboxes required', HeadingLevel.HEADING_2),
     p(input.tools || 'None stated.')
   );
-  children.push(p(disclosure('credit_qualifier'), { italics: true }));
+  children.push(...disclosuresFor('course_specification'));
 
   // T02 Syllabus
   children.push(h('T02 · Syllabus (student-facing)', HeadingLevel.HEADING_1));
@@ -265,11 +278,7 @@ export function coursePackageDocument(input: PackageInput): Document {
       'All work must be original and properly attributed. Summative submissions are screened by an originality / AI-writing check. Accommodation requests are handled under AGU’s accommodation policy.'
     )
   );
-  children.push(
-    h('Institutional disclosures', HeadingLevel.HEADING_2),
-    p(disclosure('registration')),
-    p(disclosure('programmatic_accreditation'))
-  );
+  children.push(...disclosuresFor('syllabus'));
 
   // T03 Weekly Plan & Live Session Run Sheet
   children.push(h('T03 · Weekly Plan & Live Session Run Sheets', HeadingLevel.HEADING_1));
@@ -366,6 +375,7 @@ export function coursePackageDocument(input: PackageInput): Document {
       [10, 78, 12]
     )
   );
+  children.push(...disclosuresFor('contact_hour_map'));
 
   // T05 Reading & Case List
   children.push(h('T05 · Reading & Case List', HeadingLevel.HEADING_1));
