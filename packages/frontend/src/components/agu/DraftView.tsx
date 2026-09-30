@@ -1,6 +1,7 @@
 'use client';
 
 import { AguDraft, AguFinding } from '@/lib/aguApi';
+import { downloadFile } from '@/lib/download';
 
 const STATUS_LABEL: Record<AguDraft['status'], { text: string; tone: string }> = {
   created: { text: 'Created', tone: 'bg-slate-100 text-slate-700' },
@@ -81,6 +82,19 @@ export default function DraftView({
         </span>
         <span className="text-sm text-slate-500">Version {draft.version}</span>
         <div className="ml-auto flex gap-2">
+          {content && (
+            <button
+              onClick={() =>
+                downloadFile(
+                  `/api/agu/drafts/${draft._id}/export`,
+                  `${draft.courseCode}-Course-Package-v${draft.version}.docx`
+                ).catch(() => undefined)
+              }
+              className="px-3 py-2 text-sm rounded-lg border border-teal-300 text-teal-700 hover:bg-teal-50"
+            >
+              Download course package (Word)
+            </button>
+          )}
           <button
             onClick={onRegenerate}
             disabled={busy || draft.status === 'generating' || draft.status === 'faculty_accepted'}
