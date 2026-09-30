@@ -34,6 +34,7 @@ import {
   isFreeAccess,
   MIN_SOURCES_PER_OUTCOME,
 } from './step5Validation';
+import { step11ValidationFromDecks, step12ValidationFromPacks } from './deliverableValidation';
 import {
   scenarioProfileFor,
   scenarioDirective,
@@ -4843,14 +4844,9 @@ CRITICAL VALIDATION:
     const allLessonsCount = lessonPlans.reduce((sum, m) => sum + m.lessons.length, 0);
     const pptDecksCount = allPPTDecks.length;
 
-    freshWorkflow.step11.validation = {
-      allLessonsHavePPTs: pptDecksCount >= allLessonsCount,
-      allSlideCountsValid: allPPTDecks.every(
-        (deck) => deck.slideCount >= 8 && deck.slideCount <= 15
-      ),
-      allMLOsCovered: true, // Simplified validation
-      allCitationsValid: true, // Simplified validation
-    };
+    // From each deck's own recorded checks. MLO coverage and citations used to be constant
+    // `true` ("Simplified validation"). See deliverableValidation.
+    freshWorkflow.step11.validation = step11ValidationFromDecks(allPPTDecks, allLessonsCount);
 
     // Update workflow status if all modules are complete
     if (newModulesCount >= totalModules) {
@@ -4952,13 +4948,10 @@ CRITICAL VALIDATION:
 
     return {
       modulePPTDecks,
-      validation: {
-        allLessonsHavePPTs:
-          totalPPTDecks === lessonPlans.reduce((sum, m) => sum + m.lessons.length, 0),
-        allSlideCountsValid: true,
-        allMLOsCovered: true,
-        allCitationsValid: true,
-      },
+      validation: step11ValidationFromDecks(
+        modulePPTDecks.flatMap((m) => m.pptDecks),
+        lessonPlans.reduce((sum, m) => sum + m.lessons.length, 0)
+      ),
       summary: {
         totalPPTDecks,
         totalSlides,
@@ -5035,14 +5028,7 @@ CRITICAL VALIDATION:
 
     workflow.step12 = {
       moduleAssignmentPacks,
-      validation: {
-        allModulesHaveAssignments: moduleAssignmentPacks.length === modules.length,
-        allVariantsGenerated: moduleAssignmentPacks.every(
-          (m: any) => m.variants.in_person && m.variants.self_study && m.variants.hybrid
-        ),
-        allMLOsCovered: true,
-        allRubricsComplete: totalCriteria > 0,
-      },
+      validation: step12ValidationFromPacks(moduleAssignmentPacks as any, modules as any),
       summary: {
         totalModules: moduleAssignmentPacks.length,
         totalAssignmentPacks: moduleAssignmentPacks.length * 3,
@@ -5287,14 +5273,11 @@ CRITICAL VALIDATION:
     };
 
     // Update validation
-    freshWorkflow.step12.validation = {
-      allModulesHaveAssignments: newModulesCount >= totalModules,
-      allVariantsGenerated: freshWorkflow.step12.moduleAssignmentPacks.every(
-        (m: any) => m.variants?.in_person && m.variants?.self_study && m.variants?.hybrid
-      ),
-      allMLOsCovered: true,
-      allRubricsComplete: true,
-    };
+    // Outcome coverage and rubric completeness used to be constant `true` here.
+    freshWorkflow.step12.validation = step12ValidationFromPacks(
+      freshWorkflow.step12.moduleAssignmentPacks as any,
+      ((freshWorkflow.step4 as any)?.modules || []) as any
+    );
 
     // Mark complete if all modules done
     if (newModulesCount >= totalModules) {

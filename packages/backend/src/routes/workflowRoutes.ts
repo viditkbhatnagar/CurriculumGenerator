@@ -53,6 +53,7 @@ import {
   lessonsHeld,
   validationFromStubs,
 } from '../services/step10Completion';
+import { step11ValidationFromDecks } from '../services/deliverableValidation';
 import {
   withLessons,
   saveModulePlan,
@@ -5707,13 +5708,11 @@ router.post('/:id/step11/approve', validateJWT, loadUser, async (req: Request, r
     // Mark Step 11 as approved
     workflow.step11.approvedAt = new Date();
 
-    // Update validation
-    workflow.step11.validation = {
-      allLessonsHavePPTs: true,
-      allSlideCountsValid: true,
-      allMLOsCovered: true,
-      allCitationsValid: true,
-    };
+    // Record what the decks hold. Approval used to overwrite these with four constants.
+    workflow.step11.validation = step11ValidationFromDecks(
+      workflow.step11.modulePPTDecks.flatMap((m: any) => m.pptDecks || []),
+      summariseFromStubs((workflow.step10 as any)?.moduleLessonPlans || []).totalLessons
+    );
 
     // Update workflow status — advance to Step 12
     workflow.currentStep = 12;
