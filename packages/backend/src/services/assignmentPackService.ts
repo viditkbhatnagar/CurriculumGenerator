@@ -15,6 +15,7 @@
 
 import { openaiService } from './openaiService';
 import { loggingService } from './loggingService';
+import { resolveOutcomeLabel } from './deliverableValidation';
 import { scenarioProfileFor, scenarioDirective } from './scenarioContext';
 import {
   ICurriculumWorkflow,
@@ -121,13 +122,23 @@ export class AssignmentPackService {
         });
 
         const parsed = JSON.parse(response);
+        // A positional "MLO 2" is still resolved to the stored id, for a model that numbers
+        // the outcomes anyway.
+        const outcomeIds = module.mlos.map((mlo) => mlo.id);
+        const toId = (label: string) => resolveOutcomeLabel(label, outcomeIds);
         result[variant] = {
           assignmentId: `${module.moduleCode}-${variant}`,
           deliveryVariant: variant,
           overview: parsed.overview || {},
-          assessedOutcomes: parsed.assessedOutcomes || [],
+          assessedOutcomes: (parsed.assessedOutcomes || []).map((o: any) => ({
+            ...o,
+            mloId: o?.mloId ? toId(o.mloId) : o?.mloId,
+          })),
           brief: parsed.brief || {},
-          rubric: parsed.rubric || [],
+          rubric: (parsed.rubric || []).map((c: any) => ({
+            ...c,
+            linkedMLOs: Array.isArray(c?.linkedMLOs) ? c.linkedMLOs.map(toId) : c?.linkedMLOs,
+          })),
           evidenceRequirements: parsed.evidenceRequirements || [],
           academicIntegrity: parsed.academicIntegrity || '',
           accessibilityOptions: parsed.accessibilityOptions || '',
@@ -211,10 +222,13 @@ Return ONLY valid JSON, no markdown formatting.`;
 
     const variantGuidance = this.getVariantGuidance(variant);
 
+    // Each outcome is listed under its stored id. Numbering them "MLO 1, MLO 2" and then asking
+    // for the "exact MLO ID" left the model nothing to copy but the number, so every pack named
+    // its outcomes by position and none matched the ids its coverage is checked against.
     const mlosList = module.mlos
       .map(
-        (mlo, idx) =>
-          `MLO ${idx + 1} [${mlo.bloomLevel}]: ${mlo.statement} (Linked PLOs: ${mlo.linkedPLOs.join(', ') || 'None'})`
+        (mlo) =>
+          `${mlo.id} [${mlo.bloomLevel}]: ${mlo.statement} (Linked PLOs: ${mlo.linkedPLOs.join(', ') || 'None'})`
       )
       .join('\n');
 

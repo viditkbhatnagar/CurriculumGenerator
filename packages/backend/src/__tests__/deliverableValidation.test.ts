@@ -1,6 +1,7 @@
 import {
   step11ValidationFromDecks,
   step12ValidationFromPacks,
+  resolveOutcomeLabel,
 } from '../services/deliverableValidation';
 
 describe('step11ValidationFromDecks', () => {
@@ -117,5 +118,30 @@ describe('step12ValidationFromPacks', () => {
     expect(step12ValidationFromPacks([pack(['a', 'b'])], two).allModulesHaveAssignments).toBe(
       false
     );
+  });
+});
+
+describe('positional outcome labels in assignment packs', () => {
+  // Every pack in the Air Cargo programme names its outcomes "MLO 1", "MLO 2"..., because the
+  // prompt listed them that way without their ids.
+  const modules = [{ id: 'm1', mlos: [{ id: 'M1-LO1' }, { id: 'M1-LO2' }] }];
+  const variant = { rubric: [{ linkedMLOs: ['MLO 1'] }], assessedOutcomes: [{ mloId: 'MLO 2' }] };
+  const pack = {
+    moduleId: 'm1',
+    variants: { in_person: variant, self_study: variant, hybrid: variant },
+  };
+
+  it('resolves "MLO n" to the module\'s nth outcome', () => {
+    expect(resolveOutcomeLabel('MLO 2', ['M1-LO1', 'M1-LO2'])).toBe('M1-LO2');
+    expect(resolveOutcomeLabel('LO1', ['M1-LO1', 'M1-LO2'])).toBe('M1-LO1');
+    expect(resolveOutcomeLabel('M1-LO2', ['M1-LO1', 'M1-LO2'])).toBe('M1-LO2');
+  });
+
+  it('leaves a label that names no outcome unmatched', () => {
+    expect(resolveOutcomeLabel('MLO 9', ['M1-LO1'])).toBe('MLO 9');
+  });
+
+  it('counts positionally labelled outcomes as covered', () => {
+    expect(step12ValidationFromPacks([pack], modules).allMLOsCovered).toBe(true);
   });
 });

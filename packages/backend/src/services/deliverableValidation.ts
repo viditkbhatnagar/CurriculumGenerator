@@ -108,6 +108,26 @@ export function isPlaceholderVariant(variant: PackVariantLike | undefined): bool
 const generated = (variant: PackVariantLike | undefined): variant is PackVariantLike =>
   !!variant && !isPlaceholderVariant(variant);
 
+/**
+ * The stored outcome id a pack's label refers to.
+ *
+ * The Step 12 prompt listed a module's outcomes as "MLO 1", "MLO 2"... without their ids and
+ * then asked for "exact MLO ID", so packs name outcomes by position. Every pack in a sampled
+ * eight-module programme did, and its coverage check failed although each outcome was
+ * assessed. A positional label resolves to the module's outcome in that position; an id
+ * passes through; anything else is returned unchanged and matches nothing.
+ */
+export function resolveOutcomeLabel(label: string, moduleOutcomeIds: string[]): string {
+  const text = String(label || '').trim();
+  if (moduleOutcomeIds.includes(text)) return text;
+  const positional = /^(?:MLO|LO|Outcome)\s*#?\s*(\d+)$/i.exec(text);
+  if (positional) {
+    const id = moduleOutcomeIds[Number(positional[1]) - 1];
+    if (id) return id;
+  }
+  return text;
+}
+
 /** Outcome ids a pack assesses: named in a rubric criterion or listed as an assessed outcome. */
 function outcomesAssessed(pack: PackLike): Set<string> {
   const ids = new Set<string>();
@@ -142,7 +162,9 @@ export function step12ValidationFromPacks(
         const pack = byModule.get(m.id);
         const mlos = (m.mlos || []).map((o) => o?.id).filter((id): id is string => !!id);
         if (!pack || mlos.length === 0) return false;
-        const assessed = outcomesAssessed(pack);
+        const assessed = new Set(
+          Array.from(outcomesAssessed(pack)).map((label) => resolveOutcomeLabel(label, mlos))
+        );
         return mlos.every((id) => assessed.has(id));
       }),
     allRubricsComplete: every((p) => variantsOf(p).every((v) => (v?.rubric || []).length > 0)),
