@@ -528,15 +528,15 @@ export interface Step5Sources {
   validationReport: {
     allSourcesApproved: boolean; // No prohibited sources
     recencyCompliance: boolean; // All ≤5 years OR justified seminal
-    minimumSourcesPerTopic: boolean; // 2-3 per topic
+    minimumSourcesPerTopic: boolean; // every outcome has ≥2 of its module's sources
     academicAppliedBalance: boolean; // Each topic has both
-    peerReviewRatio: boolean; // ≥50%
+    peerReviewRatio: boolean; // ≥30% peer-reviewed
     completeCitations: boolean; // All have required fields
-    apaAccuracy: boolean; // ≥95% validated
+    apaAccuracy: boolean | null; // null: not checked (no APA check exists yet)
     verifiedAccess: boolean; // All core sources accessible
     noPaywalled: boolean; // No unlicensed paywalled
     everyMLOSupported: boolean; // Each MLO has ≥1 source
-    traceabilityComplete: boolean; // Validation log complete
+    traceabilityComplete: boolean; // every source serves an outcome, every outcome has a source
   };
 
   agiCompliant: boolean;

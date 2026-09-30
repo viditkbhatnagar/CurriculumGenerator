@@ -1752,7 +1752,7 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
                     validation.minimumSourcesPerTopic ? 'text-emerald-400' : 'text-red-400'
                   }
                 >
-                  {validation.minimumSourcesPerTopic ? '✓' : '✗'} Min Sources
+                  {validation.minimumSourcesPerTopic ? '✓' : '✗'} ≥2 Sources per Outcome
                 </span>
                 <span
                   className={
@@ -1762,15 +1762,17 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
                   {validation.academicAppliedBalance ? '✓' : '✗'} Balance
                 </span>
                 <span className={validation.peerReviewRatio ? 'text-emerald-400' : 'text-red-400'}>
-                  {validation.peerReviewRatio ? '✓' : '✗'} Peer-Review ≥50%
+                  {validation.peerReviewRatio ? '✓' : '✗'} Peer-Review ≥30%
                 </span>
                 <span
                   className={validation.completeCitations ? 'text-emerald-400' : 'text-red-400'}
                 >
                   {validation.completeCitations ? '✓' : '✗'} Complete Citations
                 </span>
-                <span className={validation.apaAccuracy ? 'text-emerald-400' : 'text-red-400'}>
-                  {validation.apaAccuracy ? '✓' : '✗'} APA ≥95%
+                {/* No check compares citations with APA rules. Workflows generated before
+                    2026-09-30 store a constant `true` here, so the stored value is not shown. */}
+                <span className="text-teal-500" title="APA formatting is not checked yet">
+                  – APA not checked
                 </span>
                 <span
                   className={validation.everyMLOSupported ? 'text-emerald-400' : 'text-red-400'}
