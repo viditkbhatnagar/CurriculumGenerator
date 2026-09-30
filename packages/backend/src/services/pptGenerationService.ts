@@ -11,6 +11,7 @@ import {
 } from '../models/CurriculumWorkflow';
 import { moduleCodeOf } from '../utils/moduleIdentity';
 import { normaliseTopic } from '../utils/topicShape';
+import { citationsVerified, unmatchedCitations } from './citationMatch';
 
 /**
  * PPT Generation Service
@@ -1854,21 +1855,17 @@ Return ONLY valid JSON.`;
    * Validate citations against verified sources
    * Requirement 9.4: Verify citations match verified sources from Steps 5-6
    */
-  private validateCitations(lesson: LessonPlan, context: PPTContext): boolean {
-    // If no sources provided in context, assume valid
-    if (!context.sources || context.sources.length === 0) {
-      return true;
-    }
+  // null when no verified sources were supplied: not checked, never a pass. See citationMatch.
+  private validateCitations(lesson: LessonPlan, context: PPTContext): boolean | null {
+    return citationsVerified(this.lessonCitations(lesson), context.sources);
+  }
 
-    // Check that all citations in the lesson match sources from context
-    const allCitations = [
+  private lessonCitations(lesson: LessonPlan): string[] {
+    return [
       ...(lesson.materials?.readingReferences || []).map((r) => r.citation),
       ...(lesson.independentStudy?.coreReadings || []).map((r) => r.citation),
       ...(lesson.independentStudy?.supplementaryReadings || []).map((r) => r.citation),
     ];
-
-    // For now, return true if we have citations (full validation would require source matching)
-    return allCitations.length > 0;
   }
 
   /**
@@ -2311,7 +2308,8 @@ Return ONLY valid JSON.`;
       lessonPPTCorrespondence &&
       mlosCovered &&
       caseStudyPlacement &&
-      citationsValid &&
+      // null means not checked (no verified sources), which does not fail the deck.
+      citationsValid !== false &&
       slideCountValid &&
       glossaryTermsDefined;
 
@@ -2474,7 +2472,7 @@ Return ONLY valid JSON.`;
     context: PPTValidationContext,
     errors: string[],
     warnings: string[]
-  ): boolean {
+  ): boolean | null {
     // Find references slide
     const referencesSlide = deck.slides.find((s) => s.slideType === 'references');
 
@@ -2483,21 +2481,18 @@ Return ONLY valid JSON.`;
       return false;
     }
 
-    // If no sources provided in context, we can't validate but assume valid
+    // With no verified sources there is nothing to check the citations against: reported as
+    // null (not checked). It used to return true here ("assume valid").
     if (!context.sources || context.sources.length === 0) {
       warnings.push('No sources provided in context for citation validation');
-      return true;
+      return null;
     }
 
     // Extract citations from references slide
     const slideContent = JSON.stringify(referencesSlide.content);
 
     // Get all citations from lesson materials
-    const lessonCitations = [
-      ...(lesson.materials?.readingReferences || []).map((r) => r.citation),
-      ...(lesson.independentStudy?.coreReadings || []).map((r) => r.citation),
-      ...(lesson.independentStudy?.supplementaryReadings || []).map((r) => r.citation),
-    ];
+    const lessonCitations = this.lessonCitations(lesson);
 
     // Check if lesson citations appear in the references slide
     const missingCitations: string[] = [];
@@ -2518,14 +2513,19 @@ Return ONLY valid JSON.`;
       // This is a warning, not an error - references slide might have been condensed
     }
 
-    // Validate that citations reference verified sources from Steps 5-6
-    // This is a simplified check - full validation would require matching against source IDs
-    const hasValidSources = lessonCitations.length > 0;
-
-    if (!hasValidSources && context.sources.length > 0) {
+    // Every citation must match a verified Step 5 source. This returned true unconditionally
+    // ("a simplified check"), whatever the lesson cited.
+    if (lessonCitations.length === 0) {
       warnings.push('Lesson has no citations but sources are available in context');
+      return false;
     }
-
+    const unmatched = unmatchedCitations(lessonCitations, context.sources);
+    if (unmatched.length > 0) {
+      errors.push(
+        `${unmatched.length} of ${lessonCitations.length} citations match no verified source`
+      );
+      return false;
+    }
     return true;
   }
 

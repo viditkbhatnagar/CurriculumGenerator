@@ -20,14 +20,27 @@ export const MAX_SLIDES_PER_DECK = 15;
 export interface DeckLike {
   lessonId?: string;
   slideCount?: number;
-  validation?: { mlosCovered?: boolean; citationsValid?: boolean };
+  // citationsValid is null when the deck had no verified sources to check against.
+  validation?: { mlosCovered?: boolean; citationsValid?: boolean | null };
 }
 
 export interface Step11ValidationFlags {
   allLessonsHavePPTs: boolean;
   allSlideCountsValid: boolean;
   allMLOsCovered: boolean;
-  allCitationsValid: boolean;
+  /** null: no deck's citations could be checked, because no verified sources were supplied. */
+  allCitationsValid: boolean | null;
+}
+
+/**
+ * False if any deck failed or never recorded the check; null if none failed but some were not
+ * checked (no verified sources); true only when every deck was checked and passed.
+ */
+function citationsAcross(list: DeckLike[]): boolean | null {
+  if (list.length === 0) return false;
+  const results = list.map((d) => d.validation?.citationsValid);
+  if (results.some((r) => r === false || r === undefined)) return false;
+  return results.every((r) => r === true) ? true : null;
 }
 
 export function step11ValidationFromDecks(
@@ -46,7 +59,7 @@ export function step11ValidationFromDecks(
         (d.slideCount || 0) >= MIN_SLIDES_PER_DECK && (d.slideCount || 0) <= MAX_SLIDES_PER_DECK
     ),
     allMLOsCovered: every((d) => d.validation?.mlosCovered === true),
-    allCitationsValid: every((d) => d.validation?.citationsValid === true),
+    allCitationsValid: citationsAcross(list),
   };
 }
 

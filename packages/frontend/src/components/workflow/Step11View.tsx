@@ -1004,11 +1004,20 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                 <span className={validation.allMLOsCovered ? 'text-emerald-400' : 'text-red-400'}>
                   {validation.allMLOsCovered ? '✓' : '✗'} All MLOs Covered
                 </span>
-                <span
-                  className={validation.allCitationsValid ? 'text-emerald-400' : 'text-red-400'}
-                >
-                  {validation.allCitationsValid ? '✓' : '✗'} Citations Valid
-                </span>
+                {validation.allCitationsValid === null ? (
+                  <span
+                    className="text-slate-400"
+                    title="No verified Step 5 sources were supplied when these decks were generated, so their citations could not be checked."
+                  >
+                    — Citations not checked
+                  </span>
+                ) : (
+                  <span
+                    className={validation.allCitationsValid ? 'text-emerald-400' : 'text-red-400'}
+                  >
+                    {validation.allCitationsValid ? '✓' : '✗'} Citations Valid
+                  </span>
+                )}
               </div>
             </div>
           )}

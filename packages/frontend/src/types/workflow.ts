@@ -1549,7 +1549,8 @@ export interface PPTDeck {
   validation: {
     slideCountValid: boolean;
     mlosCovered: boolean;
-    citationsValid: boolean;
+    // null: not checked, because no verified Step 5 sources were supplied.
+    citationsValid: boolean | null;
     glossaryTermsDefined: boolean;
   };
 }
@@ -1569,7 +1570,8 @@ export interface Step11PPTGeneration {
     allLessonsHavePPTs: boolean;
     allSlideCountsValid: boolean;
     allMLOsCovered: boolean;
-    allCitationsValid: boolean;
+    // null: no deck's citations could be checked against verified sources.
+    allCitationsValid: boolean | null;
   };
 
   summary: {

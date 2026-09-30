@@ -35,6 +35,25 @@ describe('step11ValidationFromDecks', () => {
     expect(v.allLessonsHavePPTs).toBe(false);
   });
 
+  it('reports citations not checked, rather than valid, when decks had no sources', () => {
+    const v = step11ValidationFromDecks(
+      [deck({ validation: { mlosCovered: true, citationsValid: null } })],
+      1
+    );
+    expect(v.allCitationsValid).toBeNull();
+  });
+
+  it('fails citations when any deck failed, even beside unchecked ones', () => {
+    const v = step11ValidationFromDecks(
+      [
+        deck({ validation: { mlosCovered: true, citationsValid: null } }),
+        deck({ validation: { mlosCovered: true, citationsValid: false } }),
+      ],
+      2
+    );
+    expect(v.allCitationsValid).toBe(false);
+  });
+
   it('does not let two decks for one lesson stand in for a lesson with none', () => {
     const v = step11ValidationFromDecks([deck({ lessonId: 'L1' }), deck({ lessonId: 'L1' })], 2);
     expect(v.allLessonsHavePPTs).toBe(false);
