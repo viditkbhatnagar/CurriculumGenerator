@@ -112,6 +112,8 @@ export async function generateStep10Zip(workflowId: string, workflow: any): Prom
         // Case study titles, so each module's document names its cases rather than citing ids.
         step8: workflow.step8,
         step10: { ...workflow.step10, moduleLessonPlans: [plan] },
+        // The decks actually generated, so a lesson lists its slide deck only when one exists.
+        step11: workflow.step11,
       };
 
       const buf = await wordExportService.generateStepDocument(moduleWorkflow, 10);

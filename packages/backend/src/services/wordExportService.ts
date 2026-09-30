@@ -1958,13 +1958,24 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   private async generateStep11Section(step11: any, contentChildren: any[]): Promise<void> {
     if (!step11) return;
 
+    // Counted from the decks stored. This used to state that decks had been generated for
+    // every lesson whatever existed, and to fall back to the lesson count when a module had
+    // none; the inventory also read `step11.modules`, which is not where decks are stored.
+    const deckModules: any[] = step11.modulePPTDecks || step11.modules || [];
+    const totalDecks = deckModules.reduce(
+      (n: number, m: any) => n + (Array.isArray(m?.pptDecks) ? m.pptDecks.length : 0),
+      0
+    );
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
       this.createH1('11. PowerPoint Decks'),
       new Paragraph({
         children: [
           new TextRun({
-            text: 'PowerPoint presentation decks have been generated for each lesson across all modules. These are available as a separate download in ZIP format from the Final Review page.',
+            text:
+              totalDecks > 0
+                ? `${totalDecks} PowerPoint deck(s) have been generated across ${deckModules.length} module(s). They are a separate download in ZIP format from the Final Review page.`
+                : 'No PowerPoint decks have been generated.',
             font: FONT_FAMILY,
             size: FONT_SIZES.BODY,
             italics: true,
@@ -1974,15 +1985,14 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       })
     );
 
-    // Show PPT inventory if step11 has module data
-    if (step11.modules?.length) {
-      for (const mod of step11.modules) {
+    if (deckModules.length) {
+      for (const mod of deckModules) {
         contentChildren.push(
           this.createH3(`${mod.moduleCode || ''} — ${mod.moduleTitle || mod.moduleName || ''}`),
           new Paragraph({
             children: [
               new TextRun({
-                text: `${mod.pptDecks?.length || mod.lessons?.length || 0} PowerPoint deck(s) generated`,
+                text: `${Array.isArray(mod.pptDecks) ? mod.pptDecks.length : 0} PowerPoint deck(s) generated`,
                 font: FONT_FAMILY,
                 size: FONT_SIZES.BODY,
               }),
@@ -2036,9 +2046,19 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     step3?: any,
     step2?: any,
     // Step 8 carries the case study titles the lesson materials reference by id.
-    step8?: any
+    step8?: any,
+    // Step 11 holds the decks that were actually generated. Every lesson carries a
+    // pptDeckRef from the moment it is planned, so the reference alone proves nothing.
+    step11?: any
   ): Promise<void> {
     if (!step10) return;
+    const generatedDeckIds = new Set<string>();
+    for (const mod of (step11 as any)?.modulePPTDecks || []) {
+      for (const deck of mod?.pptDecks || []) {
+        if (deck?.deckId) generatedDeckIds.add(String(deck.deckId));
+        if (deck?.lessonId) generatedDeckIds.add(String(deck.lessonId));
+      }
+    }
 
     // Index step4 modules by id and normalised title so each lesson-plan
     // module can pull its independent activities / independent hours / MLOs.
@@ -2704,7 +2724,16 @@ If the content is better as bullets, put it in bullets array and leave paragraph
               );
 
               const materials: string[] = [];
-              if (lesson.materials.pptDeckRef) {
+              // Listed only when the deck exists. The review found decks "named but not
+              // actually provided": the reference is written at planning time, before Step 11.
+              const deckExists =
+                generatedDeckIds.has(String(lesson.materials.pptDeckRef)) ||
+                generatedDeckIds.has(String(lesson.lessonId)) ||
+                (modulePlan.pptDecks || []).some(
+                  (d: any) =>
+                    d?.lessonId === lesson.lessonId || d?.deckId === lesson.materials.pptDeckRef
+                );
+              if (lesson.materials.pptDeckRef && deckExists) {
                 const deckRef = String(lesson.materials.pptDeckRef).replace(
                   /^undefined-/,
                   `${modCode}-`
@@ -4151,7 +4180,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           out,
           workflow.step4,
           workflow.step3,
-          workflow.step2
+          workflow.step2,
+          workflow.step8,
+          workflow.step11
         )
       );
     }
@@ -4398,7 +4429,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           workflow.step4,
           workflow.step3,
           workflow.step2,
-          workflow.step8
+          workflow.step8,
+          workflow.step11
         );
         break;
       case 11:
