@@ -246,7 +246,9 @@ export function moduleStats(plan: LessonPlanLike, module?: CountableModule): Mod
       (l) => (l?.duration || 0) >= MIN_LESSON_MINUTES && (l?.duration || 0) <= MAX_LESSON_MINUTES
     ),
     hoursMatch: Math.abs(lessonMinutes - contactHours * 60) <= MIN_TOLERANCE_MINUTES,
-    mlosCovered: mlos.length === 0 || mlos.every((m) => !!m?.id && covered.has(m.id)),
+    // A module that declares no MLOs has nothing to cover, which is not the same as having
+    // covered it. Reporting true there passed modules whose outcomes were never loaded.
+    mlosCovered: mlos.length > 0 && mlos.every((m) => !!m?.id && covered.has(m.id)),
   };
 }
 
@@ -282,56 +284,87 @@ export function summariseFromStubs(stubs: LessonPlanLike[]): {
   };
 }
 
-/**
- * The Step 10 validation flags, combined from the stubs.
- *
- * `allModulesHaveLessonPlans` now means every module holds a FULL set of lessons, not merely
- * some. Under the old reading a programme of half-written modules reported that flag true,
- * which is how twelve truncated modules passed as generated.
- */
-export function validationFromStubs(
-  modules: CountableModule[],
-  step10:
-    | { moduleLessonPlans?: LessonPlanLike[]; plannedLessonCounts?: Record<string, number> }
-    | undefined
-): {
+/** The six Step 10 validation flags shown in the step view and the export. */
+export interface Step10ValidationFlags {
   allModulesHaveLessonPlans: boolean;
   allLessonDurationsValid: boolean;
   totalHoursMatch: boolean;
   allMLOsCovered: boolean;
   caseStudiesIntegrated: boolean;
   assessmentsIntegrated: boolean;
-} {
-  const stubs = step10?.moduleLessonPlans || [];
-  const byId = new Map(stubs.map((s) => [s.moduleId, s]));
-  const done = completedModuleIds(modules, step10);
+}
 
-  let allLessonDurationsValid = true;
-  let totalHoursMatch = true;
-  let allMLOsCovered = true;
-  let caseStudies = 0;
-  let formativeChecks = 0;
-
-  for (const module of modules || []) {
-    const stub = module?.id ? byId.get(module.id) : undefined;
-    if (!stub) continue;
-    const s = stub.stats;
-    if (!s) continue;
-    if (!s.durationsValid) allLessonDurationsValid = false;
-    if (!s.hoursMatch) totalHoursMatch = false;
-    if (!s.mlosCovered) allMLOsCovered = false;
-    caseStudies += s.caseStudiesIncluded;
-    formativeChecks += s.formativeChecksIncluded;
-  }
+/**
+ * Every flag is true only when every module earns it.
+ *
+ * The flags used to start true and be switched off by a failing module, so a module with no
+ * recorded figures, or a programme with no modules at all, passed everything. And "integrated"
+ * meant a count above zero across the whole programme, so one case study in one module stood
+ * for all of them. The 21 Sep 2026 Logistics export went further still: the approve route
+ * overwrote the flags with constants, and the document printed "case studies integrated"
+ * above a summary of zero case studies and zero formative checks.
+ */
+function combineModuleStats(
+  modules: CountableModule[],
+  statsFor: (moduleId: string | undefined) => ModuleStats | undefined,
+  completedIds: Set<string>
+): Step10ValidationFlags {
+  const list = modules || [];
+  const stats = list.map((m) => statsFor(m?.id));
+  const every = (test: (s: ModuleStats) => boolean) =>
+    stats.length > 0 && stats.every((s) => !!s && test(s));
 
   return {
-    allModulesHaveLessonPlans: (modules || []).length > 0 && done.size >= (modules || []).length,
-    allLessonDurationsValid,
-    totalHoursMatch,
-    allMLOsCovered,
-    caseStudiesIntegrated: caseStudies > 0,
-    assessmentsIntegrated: formativeChecks > 0,
+    allModulesHaveLessonPlans: list.length > 0 && completedIds.size >= list.length,
+    allLessonDurationsValid: every((s) => s.durationsValid),
+    totalHoursMatch: every((s) => s.hoursMatch),
+    allMLOsCovered: every((s) => s.mlosCovered),
+    caseStudiesIntegrated: every((s) => s.caseStudiesIncluded > 0),
+    assessmentsIntegrated: every((s) => s.formativeChecksIncluded > 0),
   };
+}
+
+/**
+ * The Step 10 validation flags, combined from the stubs.
+ *
+ * `allModulesHaveLessonPlans` means every module holds a FULL set of lessons, not merely some.
+ * Under the old reading a programme of half-written modules reported that flag true, which is
+ * how twelve truncated modules passed as generated.
+ */
+export function validationFromStubs(
+  modules: CountableModule[],
+  step10:
+    | { moduleLessonPlans?: LessonPlanLike[]; plannedLessonCounts?: Record<string, number> }
+    | undefined
+): Step10ValidationFlags {
+  const byId = new Map((step10?.moduleLessonPlans || []).map((s) => [s.moduleId, s]));
+  return combineModuleStats(
+    modules,
+    (id) => (id ? byId.get(id)?.stats : undefined),
+    completedModuleIds(modules, step10)
+  );
+}
+
+/**
+ * The same flags, computed from lesson plans whose lesson bodies are loaded.
+ *
+ * For the generation path, which holds full plans in memory before the stubs exist.
+ */
+export function validationFromPlans(
+  modules: CountableModule[],
+  plans: LessonPlanLike[],
+  plannedLessonCounts?: Record<string, number>
+): Step10ValidationFlags {
+  const byId = new Map((plans || []).map((p) => [p.moduleId, p]));
+  const moduleById = new Map((modules || []).map((m) => [m?.id, m]));
+  return combineModuleStats(
+    modules,
+    (id) => {
+      const plan = id ? byId.get(id) : undefined;
+      return plan ? moduleStats(plan, moduleById.get(id)) : undefined;
+    },
+    completedModuleIds(modules, { moduleLessonPlans: plans, plannedLessonCounts })
+  );
 }
 
 /**

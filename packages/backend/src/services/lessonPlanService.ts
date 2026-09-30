@@ -15,7 +15,7 @@
 
 import { OpenAIService, openaiService } from './openaiService';
 import { loggingService } from './loggingService';
-import { plannedLessonCountFor } from './step10Completion';
+import { plannedLessonCountFor, validationFromPlans } from './step10Completion';
 import { assignMlosToLessons } from './mloAssignment';
 import {
   LessonPlan,
@@ -2964,64 +2964,17 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
   // ==========================================================================
 
   /**
-   * Validate generated lesson plans
+   * Validate generated lesson plans.
+   *
+   * Delegates to step10Completion so the generation path, the approve route and the stubs all
+   * apply one rule. The previous copy declared `caseStudiesIntegrated` and
+   * `assessmentsIntegrated` as constants and never checked either.
    */
   validateLessonPlans(
     moduleLessonPlans: ModuleLessonPlan[],
     modules: ModuleData[]
   ): Step10LessonPlans['validation'] {
-    let allModulesHaveLessonPlans = true;
-    let allLessonDurationsValid = true;
-    let totalHoursMatch = true;
-    let allMLOsCovered = true;
-    const caseStudiesIntegrated = true;
-    const assessmentsIntegrated = true;
-
-    for (const module of modules) {
-      const modulePlan = moduleLessonPlans.find((mp) => mp.moduleId === module.id);
-
-      if (!modulePlan || modulePlan.lessons.length === 0) {
-        allModulesHaveLessonPlans = false;
-        continue;
-      }
-
-      // Check lesson durations (60-180 minutes)
-      for (const lesson of modulePlan.lessons) {
-        if (lesson.duration < 60 || lesson.duration > 180) {
-          allLessonDurationsValid = false;
-        }
-      }
-
-      // Check total hours match
-      const totalLessonMinutes = modulePlan.lessons.reduce((sum, l) => sum + l.duration, 0);
-      const expectedMinutes = module.contactHours * 60;
-      if (Math.abs(totalLessonMinutes - expectedMinutes) > 5) {
-        // Allow 5 min tolerance
-        totalHoursMatch = false;
-      }
-
-      // Check MLO coverage
-      const coveredMLOs = new Set<string>();
-      for (const lesson of modulePlan.lessons) {
-        for (const mloId of lesson.linkedMLOs) {
-          coveredMLOs.add(mloId);
-        }
-      }
-      for (const mlo of module.mlos) {
-        if (!coveredMLOs.has(mlo.id)) {
-          allMLOsCovered = false;
-        }
-      }
-    }
-
-    return {
-      allModulesHaveLessonPlans,
-      allLessonDurationsValid,
-      totalHoursMatch,
-      allMLOsCovered,
-      caseStudiesIntegrated,
-      assessmentsIntegrated,
-    };
+    return validationFromPlans(modules, moduleLessonPlans);
   }
 }
 

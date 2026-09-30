@@ -14,6 +14,7 @@ import OpenAI from 'openai';
 import { loggingService } from './loggingService';
 import { moduleLabelOf } from '../utils/moduleIdentity';
 import { bloomIndex, statedBloom } from './assessmentGeneratorService';
+import { validationFromPlans } from './step10Completion';
 
 interface WorkflowData {
   projectName: string;
@@ -2108,11 +2109,18 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     );
     const liveAvgDuration =
       liveLessonCount > 0 ? Math.round((liveContactHours * 60) / liveLessonCount) : 0;
-    const allHaveLessons =
-      plans.length > 0 && plans.every((p: any) => (p.lessons?.length || p.totalLessons || 0) > 0);
 
-    // Validation Summary
-    if (step10.validation) {
+    // Validation Summary, computed from the lessons in this document rather than read from
+    // step10.validation. Workflows approved before 2026-09-30 carry six constant `true` flags
+    // written by the approve route, and printing those is how the Logistics export reported
+    // case studies as integrated above a count of zero.
+    const liveValidation = validationFromPlans(
+      step4?.modules || [],
+      plans,
+      step10.plannedLessonCounts
+    );
+    const passFail = (ok: boolean) => (ok ? '✓ Pass' : '✗ Fail');
+    if (plans.length) {
       contentChildren.push(this.createH2('10.1 Validation Summary'));
 
       const validationRows = [
@@ -2125,37 +2133,37 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         new TableRow({
           children: [
             this.createTableCell('All Modules Have Lesson Plans'),
-            this.createTableCell(allHaveLessons ? '✓ Pass' : '✗ Fail'),
+            this.createTableCell(passFail(liveValidation.allModulesHaveLessonPlans)),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('All Lesson Durations Valid (60-180 min)'),
-            this.createTableCell(step10.validation.allLessonDurationsValid ? '✓ Pass' : '✗ Fail'),
+            this.createTableCell(passFail(liveValidation.allLessonDurationsValid)),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('Total Hours Match Module Contact Hours'),
-            this.createTableCell(step10.validation.totalHoursMatch ? '✓ Pass' : '✗ Fail'),
+            this.createTableCell(passFail(liveValidation.totalHoursMatch)),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('All Module Learning Outcomes Covered'),
-            this.createTableCell(step10.validation.allMLOsCovered ? '✓ Pass' : '✗ Fail'),
+            this.createTableCell(passFail(liveValidation.allMLOsCovered)),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('Case Studies Integrated'),
-            this.createTableCell(step10.validation.caseStudiesIntegrated ? '✓ Pass' : '✗ Fail'),
+            this.createTableCell(passFail(liveValidation.caseStudiesIntegrated)),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('Assessments Integrated'),
-            this.createTableCell(step10.validation.assessmentsIntegrated ? '✓ Pass' : '✗ Fail'),
+            this.createTableCell(passFail(liveValidation.assessmentsIntegrated)),
           ],
         }),
       ];

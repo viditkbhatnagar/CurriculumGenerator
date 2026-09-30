@@ -9,6 +9,7 @@ import {
   moduleStats,
   summariseFromStubs,
   validationFromStubs,
+  validationFromPlans,
 } from '../services/step10Completion';
 
 const lessons = (n: number) => Array.from({ length: n }, (_, i) => ({ lessonNumber: i + 1 }));
@@ -279,6 +280,100 @@ describe('validationFromStubs', () => {
       })),
     };
     expect(validationFromStubs(modules, step10).allModulesHaveLessonPlans).toBe(true);
+  });
+});
+
+describe('validation reports only what the lessons hold', () => {
+  const modules = [
+    { id: 'a', contactHours: 45 },
+    { id: 'b', contactHours: 45 },
+  ];
+  const stats = {
+    lessonCount: 30,
+    contactHours: 45,
+    lessonMinutes: 2700,
+    caseStudiesIncluded: 2,
+    formativeChecksIncluded: 30,
+    durationsValid: true,
+    hoursMatch: true,
+    mlosCovered: true,
+  };
+  const stub = (moduleId: string, s: any) => ({
+    moduleId,
+    lessons: [],
+    totalLessons: 30,
+    plannedLessonCount: 30,
+    stats: s,
+  });
+
+  // The 21 Sep 2026 Logistics export printed "case studies integrated" and "assessments
+  // integrated" as passed directly above a summary of zero case studies and zero formative
+  // checks. These are that shape.
+  it('fails case-study and assessment integration when no lesson holds either', () => {
+    const empty = { ...stats, caseStudiesIncluded: 0, formativeChecksIncluded: 0 };
+    const step10 = { moduleLessonPlans: modules.map((m) => stub(m.id, empty)) };
+    const v = validationFromStubs(modules, step10);
+    expect(v.caseStudiesIntegrated).toBe(false);
+    expect(v.assessmentsIntegrated).toBe(false);
+  });
+
+  it('fails case-study integration when one module has none, even if another has some', () => {
+    const step10 = {
+      moduleLessonPlans: [stub('a', stats), stub('b', { ...stats, caseStudiesIncluded: 0 })],
+    };
+    expect(validationFromStubs(modules, step10).caseStudiesIntegrated).toBe(false);
+  });
+
+  it('fails assessment integration when one module has no formative check', () => {
+    const step10 = {
+      moduleLessonPlans: [stub('a', stats), stub('b', { ...stats, formativeChecksIncluded: 0 })],
+    };
+    expect(validationFromStubs(modules, step10).assessmentsIntegrated).toBe(false);
+  });
+
+  it('passes nothing for a module whose stats were never recorded', () => {
+    const step10 = { moduleLessonPlans: [stub('a', stats), stub('b', undefined)] };
+    const v = validationFromStubs(modules, step10);
+    expect(v.allLessonDurationsValid).toBe(false);
+    expect(v.totalHoursMatch).toBe(false);
+    expect(v.allMLOsCovered).toBe(false);
+    expect(v.caseStudiesIntegrated).toBe(false);
+    expect(v.assessmentsIntegrated).toBe(false);
+  });
+
+  it('passes nothing for a programme with no modules', () => {
+    expect(Object.values(validationFromStubs([], { moduleLessonPlans: [] }))).toEqual(
+      Array(6).fill(false)
+    );
+  });
+
+  it('passes every check only when every module earns it', () => {
+    const step10 = { moduleLessonPlans: modules.map((m) => stub(m.id, stats)) };
+    expect(Object.values(validationFromStubs(modules, step10))).toEqual(Array(6).fill(true));
+  });
+
+  it('computes the same flags from full lesson plans', () => {
+    const lesson = (extra: any = {}) => ({ duration: 90, linkedMLOs: ['m1'], ...extra });
+    const withMlos = modules.map((m) => ({ ...m, contactHours: 3, mlos: [{ id: 'm1' }] }));
+    const plans = [
+      {
+        moduleId: 'a',
+        lessons: [lesson({ caseStudyActivity: {}, formativeChecks: [1] }), lesson()],
+      },
+      { moduleId: 'b', lessons: [lesson({ formativeChecks: [1] }), lesson()] },
+    ];
+    const v = validationFromPlans(withMlos, plans);
+    expect(v.allModulesHaveLessonPlans).toBe(true);
+    expect(v.totalHoursMatch).toBe(true);
+    expect(v.assessmentsIntegrated).toBe(true);
+    expect(v.caseStudiesIntegrated).toBe(false);
+  });
+});
+
+describe('moduleStats mlosCovered', () => {
+  it('does not claim coverage for a module that declares no MLOs', () => {
+    const plan = { lessons: [{ duration: 180, linkedMLOs: [] }] };
+    expect(moduleStats(plan, { id: 'm', contactHours: 3, mlos: [] }).mlosCovered).toBe(false);
   });
 });
 

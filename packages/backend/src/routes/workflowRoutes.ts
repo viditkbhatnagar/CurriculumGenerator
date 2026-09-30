@@ -51,6 +51,7 @@ import {
   completedModuleIds as step10CompletedModuleIds,
   summariseFromStubs,
   lessonsHeld,
+  validationFromStubs,
 } from '../services/step10Completion';
 import {
   withLessons,
@@ -5142,15 +5143,13 @@ router.post('/:id/step10/approve', validateJWT, loadUser, async (req: Request, r
     // Mark Step 10 as approved
     workflow.step10.approvedAt = new Date();
 
-    // Update validation
-    workflow.step10.validation = {
-      allModulesHaveLessonPlans: true,
-      allLessonDurationsValid: true,
-      totalHoursMatch: true,
-      allMLOsCovered: true,
-      caseStudiesIntegrated: true,
-      assessmentsIntegrated: true,
-    };
+    // Record what the lessons actually hold. This used to overwrite the flags with six
+    // constant `true` values, so every approved programme reported case studies and
+    // assessments as integrated, including the 21 Sep 2026 Logistics export that had none.
+    workflow.step10.validation = validationFromStubs(
+      (workflow.step4 as any)?.modules || [],
+      workflow.step10 as any
+    );
 
     // Update workflow status - advance to Step 11
     workflow.currentStep = 11;
