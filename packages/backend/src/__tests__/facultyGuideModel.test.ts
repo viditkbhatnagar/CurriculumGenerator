@@ -776,3 +776,29 @@ describe('every stored lesson field', () => {
     expect(text).toContain('Wrap-up (17 min)');
   });
 });
+
+describe('a case activity whose time is stored as text', () => {
+  // Step 8 stores estimatedDuration as text, and lessonPlanService passes it through: BBA M01
+  // lesson 1 holds this string. The guide kept numbers only, so the time was dropped.
+  const stored = fullLesson as Record<string, any>;
+  const timed = {
+    ...stored,
+    caseStudyActivity: {
+      ...stored.caseStudyActivity,
+      duration: 'Preparation 20–30 minutes; class/discussion 60–75 minutes.',
+    },
+  };
+
+  it('keeps the text as the activity time', () => {
+    const s = guideSession(timed, 0, context);
+    expect(s.caseActivity?.minutes).toBeUndefined();
+    expect(s.caseActivity?.time).toBe('Preparation 20–30 minutes; class/discussion 60–75 minutes.');
+  });
+
+  it('prints it in the session', async () => {
+    const text = await guideText(
+      guideModule({ code: 'M01', title: 'Management' }, [timed], context)
+    );
+    expect(text).toContain('Time: Preparation 20–30 minutes; class/discussion 60–75 minutes.');
+  });
+});

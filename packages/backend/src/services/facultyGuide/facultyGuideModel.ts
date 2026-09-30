@@ -116,6 +116,8 @@ export interface GuideCaseActivity {
   title: string;
   kind?: string;
   minutes?: number;
+  /** The time as stored when it is text, e.g. "Preparation 20–30 minutes; class 60–75 minutes". */
+  time?: string;
   purpose?: string;
   instructions: string[];
   expectedOutputs: string[];
@@ -423,6 +425,9 @@ function guideCaseActivity(raw: any, context: GuideContext): GuideCaseActivity |
     title: title || 'Case study',
     kind: type ? (CASE_ACTIVITY_LABELS.get(type) ?? humanise(type)) : undefined,
     minutes: positive(raw.duration),
+    // Step 8 stores its estimate as text and lesson generation passes it through, so a number
+    // is not the only form a time comes in; the text was being dropped.
+    time: typeof raw.duration === 'string' ? str(raw.duration) : undefined,
     purpose,
     instructions,
     expectedOutputs: strings(raw.studentOutputExpectations),

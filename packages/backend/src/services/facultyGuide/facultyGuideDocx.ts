@@ -162,6 +162,7 @@ function caseActivityBlock(c: GuideCaseActivity): Paragraph[] {
   ];
   return [
     labelled(`Case activity${meta ? ` (${meta})` : ''}`, c.title),
+    ...optional('Time', c.time, 1),
     ...optional('Purpose', c.purpose, 1),
     ...labelledList('Instructions', c.instructions, 1),
     ...labelledList('Students produce', c.expectedOutputs, 1),
