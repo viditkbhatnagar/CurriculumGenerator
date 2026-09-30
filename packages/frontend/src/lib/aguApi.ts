@@ -100,6 +100,54 @@ export interface AguDraftContent {
   cases: { id: string; title: string; week: number; source: string; outcomeIds: string[] }[];
 }
 
+/** T07-T11 as the screens read them; the full shape is in backend agu/draft/artefactTypes. */
+export interface AguArtefacts {
+  rubrics: {
+    assessmentId: string;
+    rows: { outcomeId: string; criterion: string; weight: number }[];
+  }[];
+  quizBank: {
+    plan: {
+      week: number;
+      items: number;
+      timeLimitMinutes: number;
+      attempts: number;
+      weight: number;
+    }[];
+    items: { id: string; week: number; outcomeId: string; type: string; question: string }[];
+    practice: { id: string; week: number; outcomeId: string; question: string }[];
+  };
+  finalExam: {
+    durationMinutes: number;
+    totalMarks: number;
+    paper: { number: number; outcomeId: string; type: string; question: string; marks: number }[];
+  } | null;
+  discussions: {
+    week: number;
+    prompt: string;
+    outcomeIds: string[];
+    graded: boolean;
+    weight: number;
+    contactHours: number;
+  }[];
+  tutorPack: {
+    glossary: { term: string }[];
+    faqs: { question: string }[];
+    workedExamples: { problem: string }[];
+    misconceptions: { misconception: string }[];
+    guardrails: { doNot: string; instead: string }[];
+  };
+  generatedAt: string;
+}
+
+export type AguArtefactStatus =
+  | 'not_started'
+  | 'generating'
+  | 'failed'
+  | 'needs_faculty'
+  | 'ready_for_review'
+  | 'faculty_accepted';
+
 export interface AguStageRun {
   stage: string;
   status: string;
@@ -131,6 +179,11 @@ export interface AguDraft {
   createdAt: string;
   updatedAt: string;
   acceptedAt?: string;
+  /** T07-T11, drafted in a second stage with its own status. */
+  artefacts?: AguArtefacts;
+  artefactFindings?: AguFinding[];
+  artefactStatus?: AguArtefactStatus;
+  artefactsAcceptedAt?: string;
 }
 
 export interface AguFacultyInputs {
@@ -145,9 +198,7 @@ export async function getAguCatalogue(): Promise<AguCatalogue> {
   return (await fetchAPI('/api/agu/catalogue')).data;
 }
 
-export async function getAguCourse(
-  code: string
-): Promise<{
+export async function getAguCourse(code: string): Promise<{
   course: AguCourse;
   drafts: Pick<AguDraft, '_id' | 'version' | 'status' | 'createdAt' | 'acceptedAt'>[];
 }> {
@@ -176,4 +227,13 @@ export async function regenerateAguDraft(id: string): Promise<void> {
 
 export async function acceptAguDraft(id: string): Promise<AguDraft> {
   return (await fetchAPI(`/api/agu/drafts/${id}/accept`, { method: 'POST', body: '{}' })).data;
+}
+
+/** Start drafting T07-T11 from the outline. The run continues in the background. */
+export async function draftAguArtefacts(id: string): Promise<void> {
+  await fetchAPI(`/api/agu/drafts/${id}/artefacts`, { method: 'POST', body: '{}' });
+}
+
+export async function acceptAguArtefacts(id: string): Promise<void> {
+  await fetchAPI(`/api/agu/drafts/${id}/artefacts/accept`, { method: 'POST', body: '{}' });
 }

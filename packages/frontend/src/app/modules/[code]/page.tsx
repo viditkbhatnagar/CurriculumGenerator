@@ -8,9 +8,11 @@ import {
   AguCourse,
   AguDraft,
   AguFacultyInputs,
+  acceptAguArtefacts,
   acceptAguDraft,
   createAguDraft,
   getAguCourse,
+  draftAguArtefacts,
   getAguDraft,
   regenerateAguDraft,
 } from '@/lib/aguApi';
@@ -70,10 +72,15 @@ export default function AguCoursePage() {
     );
   }, [loadCourse]);
 
-  // Poll only while the stored status says a generation is running.
+  // Poll only while the stored status says a generation is running: the outline's, or the
+  // assessments' drafted from it.
+  const running =
+    draft?.status === 'generating' ||
+    draft?.status === 'created' ||
+    draft?.artefactStatus === 'generating';
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
-    if (draft?.status === 'generating' || draft?.status === 'created') {
+    if (draft && running) {
       pollRef.current = setInterval(() => {
         loadDraft(draft._id).catch(() => undefined);
       }, POLL_MS);
@@ -81,7 +88,7 @@ export default function AguCoursePage() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [draft?._id, draft?.status, loadDraft]);
+  }, [draft?._id, running, loadDraft]);
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -209,6 +216,18 @@ export default function AguCoursePage() {
             onAccept={() =>
               run(async () => {
                 setDraft(await acceptAguDraft(draft._id));
+              })
+            }
+            onDraftArtefacts={() =>
+              run(async () => {
+                await draftAguArtefacts(draft._id);
+                await loadDraft(draft._id);
+              })
+            }
+            onAcceptArtefacts={() =>
+              run(async () => {
+                await acceptAguArtefacts(draft._id);
+                await loadDraft(draft._id);
               })
             }
           />

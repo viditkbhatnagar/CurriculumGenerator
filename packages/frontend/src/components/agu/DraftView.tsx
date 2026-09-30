@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AguDraft, AguFinding } from '@/lib/aguApi';
+import { AguDraft } from '@/lib/aguApi';
+import Findings from './Findings';
+import ArtefactsPanel from './ArtefactsPanel';
 import { downloadFile } from '@/lib/download';
 
 /**
@@ -20,61 +22,21 @@ const STATUS_LABEL: Record<AguDraft['status'], { text: string; tone: string }> =
   faculty_accepted: { text: 'Faculty accepted', tone: 'bg-emerald-600 text-white' },
 };
 
-function Findings({ findings }: { findings: AguFinding[] }) {
-  const blocking = findings.filter((f) => f.severity === 'blocking');
-  const warnings = findings.filter((f) => f.severity === 'warning');
-  if (!findings.length) {
-    return (
-      <p className="text-sm text-emerald-700">
-        No findings: every check passed on the stored draft.
-      </p>
-    );
-  }
-  return (
-    <div className="space-y-3">
-      {blocking.length > 0 && (
-        <div>
-          <h4 className="text-sm font-semibold text-red-700">Blocking ({blocking.length})</h4>
-          <ul className="mt-1 space-y-1">
-            {blocking.map((f, i) => (
-              <li key={`b${i}`} className="text-sm text-red-800">
-                <span className="font-mono text-xs mr-2">{f.code}</span>
-                {f.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {warnings.length > 0 && (
-        <div>
-          <h4 className="text-sm font-semibold text-amber-700">
-            For faculty to judge ({warnings.length})
-          </h4>
-          <ul className="mt-1 space-y-1">
-            {warnings.map((f, i) => (
-              <li key={`w${i}`} className="text-sm text-amber-900">
-                <span className="font-mono text-xs mr-2">{f.code}</span>
-                {f.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
 const hours = (xs: { hours: number }[]) => xs.reduce((n, x) => n + (x.hours || 0), 0);
 
 export default function DraftView({
   draft,
   onRegenerate,
   onAccept,
+  onDraftArtefacts,
+  onAcceptArtefacts,
   busy,
 }: {
   draft: AguDraft;
   onRegenerate: () => void;
   onAccept: () => void;
+  onDraftArtefacts: () => void;
+  onAcceptArtefacts: () => void;
   busy: boolean;
 }) {
   const status = STATUS_LABEL[draft.status];
@@ -122,7 +84,12 @@ export default function DraftView({
           )}
           <button
             onClick={onRegenerate}
-            disabled={busy || draft.status === 'generating' || draft.status === 'faculty_accepted'}
+            disabled={
+              busy ||
+              draft.status === 'generating' ||
+              draft.status === 'faculty_accepted' ||
+              draft.artefactStatus === 'generating'
+            }
             className="px-3 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             Regenerate outline
@@ -294,6 +261,15 @@ export default function DraftView({
             </section>
           )}
         </>
+      )}
+
+      {content && (
+        <ArtefactsPanel
+          draft={draft}
+          busy={busy}
+          onDraft={onDraftArtefacts}
+          onAccept={onAcceptArtefacts}
+        />
       )}
 
       <section aria-labelledby="history">
