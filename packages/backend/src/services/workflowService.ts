@@ -166,9 +166,11 @@ async function retrieveKBContext(
     // priority, cited). mloIds narrows the nodes to those serving the outcomes.
     workflowId?: string;
     mloIds?: string[];
+    // Which step is asking, so an empty result can be traced to the content it left ungrounded.
+    stage?: string;
   } = {}
 ): Promise<KBContext[]> {
-  const { maxResults = 15, minSimilarity = 0.65, domains, workflowId, mloIds } = options;
+  const { maxResults = 15, minSimilarity = 0.65, domains, workflowId, mloIds, stage } = options;
   const allResults: KBContext[] = [];
 
   try {
@@ -199,11 +201,31 @@ async function retrieveKBContext(
       .slice(0, maxResults);
 
     // Prepend this workflow's own ingested-textbook nodes (highest priority).
+    let results = uniqueResults;
     if (workflowId) {
       const bookCtx = await getWorkflowBookGrounding(workflowId, mloIds, Math.min(8, maxResults));
-      if (bookCtx.length) return [...bookCtx, ...uniqueResults];
+      if (bookCtx.length) results = [...bookCtx, ...uniqueResults];
     }
-    return uniqueResults;
+    // An empty result used to pass unremarked, which is how every step ran without
+    // knowledge-base context while the vector index did not exist. /health reports the index.
+    if (results.length === 0) {
+      loggingService.warn(
+        'Generating without knowledge-base evidence: retrieval returned nothing',
+        {
+          stage,
+          workflowId,
+          queries: queries.length,
+          domains,
+        }
+      );
+    } else {
+      loggingService.info('Knowledge-base passages retrieved', {
+        stage,
+        workflowId,
+        passages: results.length,
+      });
+    }
+    return results;
   } catch (error) {
     loggingService.warn('KB context retrieval failed, proceeding without KB context', { error });
     // Book grounding is independent of KB search — still return it if present.
@@ -670,6 +692,7 @@ class WorkflowService {
       maxResults: 12,
       minSimilarity: 0.6,
       domains: ['curriculum-design', 'accreditation', 'competency-framework', 'standards'],
+      stage: 'step1',
     });
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
@@ -973,6 +996,7 @@ IMPORTANT:
       maxResults: 15,
       minSimilarity: 0.55,
       domains: ['competency-framework', 'standards', 'accreditations', 'curriculum-design'],
+      stage: 'step2',
     });
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
@@ -1344,6 +1368,7 @@ IMPORTANT:
       maxResults: 12,
       minSimilarity: 0.55,
       domains: ['curriculum-design', 'standards', 'accreditations'],
+      stage: 'step3',
     });
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
@@ -2267,6 +2292,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       maxResults: 12,
       minSimilarity: 0.55,
       domains: ['curriculum-design', 'standards', 'typeOfOutputs'],
+      stage: 'step4',
     });
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
@@ -5853,6 +5879,7 @@ CRITICAL VALIDATION:
       maxResults: 5,
       minSimilarity: 0.5,
       domains: ['standards', 'accreditations', 'Subject Books'],
+      stage: 'step5',
     });
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
