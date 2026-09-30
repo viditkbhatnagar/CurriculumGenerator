@@ -6930,9 +6930,15 @@ router.get('/:id/export/faculty-guide', async (req: Request, res: Response) => {
     }
     const slug = workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum';
 
-    if (req.query.module !== undefined) {
-      const index = parseInt(req.query.module as string, 10);
-      const step4Module = (workflow.step4?.modules || [])[index];
+    // ?moduleId=<Step 4 module id> names one module unambiguously. ?module=<n> is kept, and here
+    // means the nth module in Step 4's order; the per-step Word route's ?module=<n> counts
+    // stored lesson plans instead, which are in the order they were generated.
+    if (req.query.module !== undefined || req.query.moduleId !== undefined) {
+      const step4Modules: any[] = workflow.step4?.modules || [];
+      const step4Module =
+        req.query.moduleId !== undefined
+          ? step4Modules.find((m: any) => m.id === String(req.query.moduleId))
+          : step4Modules[parseInt(req.query.module as string, 10)];
       const stub = step4Module && stubs.find((s: any) => s.moduleId === step4Module.id);
       if (!stub) {
         return res.status(404).json({ success: false, error: 'No lesson plans for that module' });
@@ -6958,6 +6964,8 @@ router.get('/:id/export/faculty-guide', async (req: Request, res: Response) => {
         step4: workflow.step4,
         caseTitles: (workflow.step8?.caseStudies || []).map((c: any) => [c.id, c.title]),
         glossary: (workflow.step9?.terms || []).map((t: any) => [t.term, t.definition]),
+        // Whether a module's guide is marked incomplete depends on its planned lesson count.
+        plannedLessonCounts: workflow.step10?.plannedLessonCounts,
         plans: await lessonPlansSignature(String(workflow._id)),
       }),
       contentType: 'application/zip',

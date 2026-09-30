@@ -36,11 +36,17 @@ export const FACULTY_GUIDE_FORMAT_VERSION = 2;
 
 /** How a module is named in its file inside the archive. */
 function moduleFileName(stepNumber: number, index: number, stub: any, step4Module: any): string {
-  const code = stub?.moduleCode || step4Module?.code || `M${String(index + 1).padStart(2, '0')}`;
-  const title = String(stub?.moduleTitle || step4Module?.title || 'Module')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
+  // Both parts are reduced to letters, digits and hyphens: the name also goes into a
+  // Content-Disposition header, where a quote breaks it and a line break makes setHeader throw.
+  const safe = (text: string) =>
+    text
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60);
+  const code =
+    safe(String(stub?.moduleCode || step4Module?.code || '')) ||
+    `M${String(index + 1).padStart(2, '0')}`;
+  const title = safe(String(stub?.moduleTitle || step4Module?.title || '')) || 'Module';
   return `Step${stepNumber}-${code}-${title}.docx`;
 }
 
