@@ -11,12 +11,15 @@ import {
   BarChart3,
   ChevronLeft,
   Sparkles,
+  GraduationCap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Workflows', href: '/workflow', icon: Workflow, highlight: true },
+  // The AGU module engine: catalogue courses developed into four-week course packages.
+  { name: 'AGU Courses', href: '/modules', icon: GraduationCap },
   { name: 'Programs', href: '/admin/programs', icon: FolderOpen },
   { name: 'Knowledge Base', href: '/admin/knowledge-base', icon: BookOpen },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
