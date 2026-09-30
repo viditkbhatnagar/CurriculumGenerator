@@ -14,6 +14,7 @@ import { AguCourseDraft } from '../agu/model/AguCourseDraft';
 import { generateOutline } from '../agu/generation/generateOutline';
 import { isReviewReady, validateDraft } from '../agu/validation/validateDraft';
 import { CourseDraft } from '../agu/draft/types';
+import { coursePackageBuffer } from '../agu/export/coursePackageDocx';
 
 const router = Router();
 
@@ -111,12 +112,10 @@ router.post(
     if (doc.status === 'generating')
       return res.status(409).json({ success: false, error: 'Already generating' });
     if (doc.status === 'faculty_accepted') {
-      return res
-        .status(409)
-        .json({
-          success: false,
-          error: 'This draft has been accepted; create a new version instead',
-        });
+      return res.status(409).json({
+        success: false,
+        error: 'This draft has been accepted; create a new version instead',
+      });
     }
     if (req.body?.facultyInputs)
       doc.facultyInputs = { ...doc.facultyInputs, ...req.body.facultyInputs };
@@ -134,12 +133,10 @@ router.patch('/drafts/:id', validateJWT, loadUser, async (req: Request, res: Res
   const doc = await AguCourseDraft.findById(req.params.id).catch(() => null);
   if (!doc) return res.status(404).json({ success: false, error: 'Draft not found' });
   if (doc.status === 'faculty_accepted') {
-    return res
-      .status(409)
-      .json({
-        success: false,
-        error: 'This draft has been accepted; create a new version to change it',
-      });
+    return res.status(409).json({
+      success: false,
+      error: 'This draft has been accepted; create a new version to change it',
+    });
   }
   const course = catalogueCourse(doc.courseCode);
   const edited = req.body?.draft as CourseDraft | undefined;
@@ -185,13 +182,11 @@ router.post('/drafts/:id/accept', validateJWT, loadUser, async (req: Request, re
   const findings = validateDraft(doc.draft, AGU_CATALOGUE_V1_4);
   const blocking = findings.filter((f) => f.severity === 'blocking');
   if (blocking.length) {
-    return res
-      .status(400)
-      .json({
-        success: false,
-        error: 'Resolve the blocking findings before accepting',
-        data: { blocking },
-      });
+    return res.status(400).json({
+      success: false,
+      error: 'Resolve the blocking findings before accepting',
+      data: { blocking },
+    });
   }
   doc.findings = findings;
   doc.status = 'faculty_accepted';
@@ -200,6 +195,41 @@ router.post('/drafts/:id/accept', validateJWT, loadUser, async (req: Request, re
   doc.markModified('findings');
   await doc.save();
   res.json({ success: true, data: doc });
+});
+
+/** GET /api/agu/drafts/:id/export — the draft rendered into AGU's templates as Word. */
+router.get('/drafts/:id/export', async (req: Request, res: Response) => {
+  try {
+    const doc = await AguCourseDraft.findById(req.params.id).lean();
+    const course = doc && catalogueCourse(doc.courseCode);
+    if (!doc || !doc.draft || !course) {
+      return res.status(404).json({ success: false, error: 'No drafted content to export yet' });
+    }
+    const buffer = await coursePackageBuffer({
+      draft: doc.draft,
+      course,
+      catalogue: AGU_CATALOGUE_V1_4,
+      findings: doc.findings || [],
+      status: doc.status,
+      version: doc.version,
+      tools: doc.facultyInputs?.tools,
+      sourcesOffered: (doc.sourcesOffered || []).length,
+      stageRuns: doc.stageRuns || [],
+    });
+    const name = `${course.code}-Course-Package-v${doc.version}.docx`;
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+    res.send(buffer);
+  } catch (error) {
+    loggingService.error('AGU course package export failed', {
+      id: req.params.id,
+      error: String(error),
+    });
+    res.status(500).json({ success: false, error: 'Could not build the course package' });
+  }
 });
 
 export default router;
