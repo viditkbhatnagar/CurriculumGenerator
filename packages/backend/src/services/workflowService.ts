@@ -4723,7 +4723,9 @@ CRITICAL VALIDATION:
       moduleCode: moduleToProcess.moduleCode,
       moduleTitle: moduleToProcess.moduleTitle,
       deliveryMode: workflow.step1?.delivery?.mode || 'online',
-      glossaryEntries: workflow.step9?.entries || [],
+      // See the matching note in the module-by-module path below.
+      glossaryEntries: (workflow.step9 as any)?.terms || workflow.step9?.entries || [],
+      sources: (workflow.step5 as any)?.sources || [],
     };
 
     // Import PPT generation service
@@ -4988,7 +4990,12 @@ CRITICAL VALIDATION:
         moduleCode: modulePlan.moduleCode,
         moduleTitle: modulePlan.moduleTitle,
         deliveryMode: workflow.step1?.delivery?.mode || 'online',
-        glossaryEntries: workflow.step9?.entries || [],
+        // Step 9 stores its glossary as `terms`; `entries` never existed, so every deck was
+        // generated with "No glossary entries available" and its glossary check passed empty.
+        glossaryEntries: (workflow.step9 as any)?.terms || workflow.step9?.entries || [],
+        // The verified Step 5 sources, which the deck's citation check matches against. Never
+        // passed before, so that check returned "assume valid" for every deck.
+        sources: (workflow.step5 as any)?.sources || [],
       };
 
       const pptDecks: any[] = [];
