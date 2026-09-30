@@ -1,4 +1,8 @@
-import { step5ValidationReport, step5Compliant } from '../services/step5Validation';
+import {
+  step5ValidationReport,
+  step5Compliant,
+  outcomesBelowSourceFloor,
+} from '../services/step5Validation';
 
 const YEAR = 2026;
 const modules = [
@@ -65,5 +69,15 @@ describe('step5Compliant', () => {
     const report = step5ValidationReport(wellSourced, modules, YEAR);
     expect(step5Compliant(report)).toBe(true);
     expect(step5Compliant({ ...report, freeAccessRatio: false })).toBe(false);
+  });
+});
+
+describe('outcomesBelowSourceFloor', () => {
+  it('names each outcome short of two sources, with its count', () => {
+    const sources = [source('m1', ['m1-1']), source('m1', ['m1-1']), source('m2', ['m2-1'])];
+    expect(outcomesBelowSourceFloor(sources, modules)).toEqual([
+      { mloId: 'm1-2', count: 0 },
+      { mloId: 'm2-1', count: 1 },
+    ]);
   });
 });

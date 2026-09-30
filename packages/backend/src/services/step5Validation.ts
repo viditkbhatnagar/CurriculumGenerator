@@ -103,6 +103,20 @@ function sourcesPerOutcome(
   });
 }
 
+/**
+ * The outcomes below the per-outcome floor, with how many sources each has. For the issue
+ * message: "some outcomes" told an author nothing about how far short a programme was, or
+ * which outcomes to find sources for.
+ */
+export function outcomesBelowSourceFloor(
+  sources: Step5SourceLike[],
+  modules: Step5ModuleLike[]
+): { mloId: string; count: number }[] {
+  return sourcesPerOutcome(sources || [], modules || []).filter(
+    (o) => o.count < MIN_SOURCES_PER_OUTCOME
+  );
+}
+
 export function step5ValidationReport(
   sources: Step5SourceLike[],
   modules: Step5ModuleLike[],

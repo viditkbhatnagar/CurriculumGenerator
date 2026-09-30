@@ -33,6 +33,7 @@ import {
   step5Compliant,
   isFreeAccess,
   MIN_SOURCES_PER_OUTCOME,
+  outcomesBelowSourceFloor,
 } from './step5Validation';
 import { step11ValidationFromDecks, step12ValidationFromPacks } from './deliverableValidation';
 import { circularDefinitions, usSpellings } from './glossaryValidation';
@@ -2692,10 +2693,18 @@ CRITICAL VALIDATION:
       complianceIssues.push('Not all MLOs have supporting sources');
     if (!validationReport.freeAccessRatio)
       complianceIssues.push('Less than 70% of sources are freely accessible');
-    if (!validationReport.minimumSourcesPerTopic)
+    if (!validationReport.minimumSourcesPerTopic) {
+      const below = outcomesBelowSourceFloor(sources, modules);
+      const totalOutcomes = modules.reduce((n: number, m: any) => n + (m?.mlos || []).length, 0);
       complianceIssues.push(
-        `Some outcomes have fewer than ${MIN_SOURCES_PER_OUTCOME} sources linked to them`
+        below.length > 0
+          ? `${below.length} of ${totalOutcomes} outcomes have fewer than ${MIN_SOURCES_PER_OUTCOME} sources linked to them: ${below
+              .slice(0, 6)
+              .map((o) => `${o.mloId} (${o.count})`)
+              .join(', ')}${below.length > 6 ? '…' : ''}`
+          : `Outcomes could not be checked for ${MIN_SOURCES_PER_OUTCOME} sources each: no sources, or a module with no outcomes`
       );
+    }
     if (!validationReport.traceabilityComplete)
       complianceIssues.push('Some sources serve no outcome, or some outcomes have no source');
 
