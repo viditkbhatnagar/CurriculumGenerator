@@ -233,4 +233,25 @@ describe('sanitizeSourcePayload', () => {
       sanitizeSourcePayload({ ...minimalValid, uploadedFiles: [] }).uploadedFiles
     ).toBeUndefined();
   });
+
+  // Stored URLs become links on the Step 5 and 6 screens. The input filter catches
+  // "javascript:" but not "java\tscript:", which browsers read the same way.
+  it('keeps only http(s) source URLs', () => {
+    const url = (u: string) => sanitizeSourcePayload({ ...minimalValid, url: u }).url;
+    expect(url('https://doi.org/10.1000/xyz')).toBe('https://doi.org/10.1000/xyz');
+    expect(url('http://example.org/a')).toBe('http://example.org/a');
+    expect(url('java\tscript:alert(1)')).toBeUndefined();
+    expect(url('javascript:alert(1)')).toBeUndefined();
+    expect(url('data:text/html,<b>x</b>')).toBeUndefined();
+    expect(url('https://exa mple.org')).toBeUndefined();
+  });
+
+  it('keeps a bare DOI or a doi.org link, and drops any other scheme', () => {
+    const doi = (d: string) => sanitizeSourcePayload({ ...minimalValid, doi: d }).doi;
+    expect(doi('10.1016/j.ijpe.2020.107849')).toBe('10.1016/j.ijpe.2020.107849');
+    expect(doi('https://doi.org/10.1016/j.ijpe.2020.107849')).toBe(
+      'https://doi.org/10.1016/j.ijpe.2020.107849'
+    );
+    expect(doi('javascript:alert(1)')).toBeUndefined();
+  });
 });

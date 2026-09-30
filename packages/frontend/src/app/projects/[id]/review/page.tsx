@@ -13,6 +13,7 @@ import {
   ThumbsUp,
   ThumbsDown,
 } from 'lucide-react';
+import { safeHref } from '@/lib/safeHref';
 
 interface CurriculumReview {
   _id: string;
@@ -341,7 +342,7 @@ export default function FinalReviewPage({ params }: { params: { id: string } }) 
                       {review.publishedAt && new Date(review.publishedAt).toLocaleDateString()}
                       <br />
                       <a
-                        href={review.lmsCourseUrl}
+                        href={safeHref(review.lmsCourseUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:underline"
@@ -449,7 +450,7 @@ export default function FinalReviewPage({ params }: { params: { id: string } }) 
               Curriculum has been published to the LMS and is now available to students.
             </p>
             <a
-              href={review.lmsCourseUrl}
+              href={safeHref(review.lmsCourseUrl)}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center text-green-700 hover:text-green-900 font-semibold"

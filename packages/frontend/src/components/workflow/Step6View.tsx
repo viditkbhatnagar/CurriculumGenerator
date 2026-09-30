@@ -18,6 +18,7 @@ import { useStepStatus } from '@/hooks/useStepStatus';
 import { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
 import { formatAuthorList } from '@/lib/citation';
+import { safeHref } from '@/lib/safeHref';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -986,7 +987,7 @@ function ReadingCard({
             )}
             {reading.url && (
               <a
-                href={reading.url}
+                href={safeHref(reading.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded hover:bg-cyan-500/30"

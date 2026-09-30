@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { KnowledgeBaseSource } from '@/types/knowledgeBase';
 import { useDeleteSource } from '@/hooks/useKnowledgeBase';
+import { safeHref } from '@/lib/safeHref';
 
 interface SourceCardProps {
   source: KnowledgeBaseSource;
@@ -36,9 +37,7 @@ export function SourceCard({ source }: SourceCardProps) {
             {source.metadata?.title || 'Untitled'}
           </h3>
           <div className="flex flex-wrap gap-2 text-sm text-gray-600">
-            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-              {source.domain}
-            </span>
+            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">{source.domain}</span>
             <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded">
               {source.source_type}
             </span>
@@ -62,7 +61,7 @@ export function SourceCard({ source }: SourceCardProps) {
         </p>
         {source.source_url && (
           <a
-            href={source.source_url}
+            href={safeHref(source.source_url)}
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-blue-600 hover:underline"

@@ -18,6 +18,7 @@ import {
   Wrench,
   Package,
 } from 'lucide-react';
+import { safeHref } from '@/lib/safeHref';
 
 interface PaidResource {
   resourceName: string;
@@ -326,7 +327,7 @@ export default function CostEvaluationPage() {
                       </div>
                       {resource.url && (
                         <a
-                          href={resource.url}
+                          href={safeHref(resource.url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:underline text-sm mt-2 inline-block"
@@ -397,7 +398,7 @@ export default function CostEvaluationPage() {
                           </div>
                           {alternative.url && (
                             <a
-                              href={alternative.url}
+                              href={safeHref(alternative.url)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:underline text-sm mt-2 inline-block"

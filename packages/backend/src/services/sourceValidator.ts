@@ -42,6 +42,28 @@ function cleanString(raw: unknown, maxLen = STRING_MAX): string | null {
   return stripped.length > maxLen ? stripped.slice(0, maxLen) : stripped;
 }
 
+/**
+ * A source URL only when it is a clean http(s) address. Stored URLs become links on the Step 5
+ * and Step 6 screens, and "javascript:" (or "java\tscript:", which the input filter misses)
+ * would run script when clicked.
+ */
+function webAddress(value: string | null): string | undefined {
+  if (!value || !/^https?:\/\//i.test(value) || /\s/.test(value)) return undefined;
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:' ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A DOI as "10.x/y" or a doi.org link; any other scheme is dropped. */
+function doiValue(value: string | null): string | undefined {
+  if (!value) return undefined;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return webAddress(value);
+  return value;
+}
+
 function cleanAuthors(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   const cleaned: string[] = [];
@@ -170,8 +192,8 @@ export function sanitizeSourcePayload(raw: any): SanitizedSource {
     : 'intermediate';
 
   const publisher = cleanString(raw.publisher, STRING_MAX) || undefined;
-  const url = cleanString(raw.url, 1000) || undefined;
-  const doi = cleanString(raw.doi, 200) || undefined;
+  const url = webAddress(cleanString(raw.url, 1000));
+  const doi = doiValue(cleanString(raw.doi, 200));
   const isbn = cleanString(raw.isbn, 40) || undefined;
   const complianceNotes = cleanString(raw.complianceNotes, NOTES_MAX) || undefined;
   const uploadedFile = cleanUploadedFile(raw.uploadedFile);

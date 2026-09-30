@@ -22,6 +22,7 @@ import StepDownloadButton from './StepDownloadButton';
 import FilePreviewModal from './FilePreviewModal';
 import { downloadFile } from '@/lib/download';
 import { formatAuthorList, toAuthorArray } from '@/lib/citation';
+import { safeHref } from '@/lib/safeHref';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -989,7 +990,7 @@ function SourceCard({
             )}
             {source.url && (
               <a
-                href={source.url}
+                href={safeHref(source.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded hover:bg-cyan-500/30 transition-colors"
@@ -1193,7 +1194,7 @@ function SourceCard({
               {source.doi && <p className="text-cyan-400">DOI: {source.doi}</p>}
               {source.url && (
                 <a
-                  href={source.url}
+                  href={safeHref(source.url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-400 hover:underline"
