@@ -29,6 +29,12 @@ import {
 } from './step10Completion';
 import { saveModulePlan, loadModulePlan, withLessons, loadLessonIndex } from './step10Store';
 import {
+  step5ValidationReport,
+  step5Compliant,
+  isFreeAccess,
+  MIN_SOURCES_PER_OUTCOME,
+} from './step5Validation';
+import {
   scenarioProfileFor,
   scenarioDirective,
   ukLawInNonUkCases,
@@ -2614,7 +2620,8 @@ CRITICAL VALIDATION:
           0
         ),
         allocatedIndependentHours: mod.selfStudyHours || mod.independentHours || 0,
-        allMLOsSupported: modMLOs.every((mloId: string) => supportedMLOs.has(mloId)),
+        allMLOsSupported:
+          modMLOs.length > 0 && modMLOs.every((mloId: string) => supportedMLOs.has(mloId)),
         // Which outcomes have nothing behind them, and which have nothing SCHOLARLY behind
         // them. The single tick could only say "all covered" or "not all covered", which
         // told an author nothing about what to go and find. Several outcomes ask students
@@ -2633,55 +2640,13 @@ CRITICAL VALIDATION:
       };
     });
 
-    // Validation report - Updated to support industry and free access sources
-    const approvedCategories = [
-      'peer_reviewed_journal',
-      'academic_textbook',
-      'professional_body',
-      'open_access',
-      'institutional',
-      'industry_report', // NEW: McKinsey, HBR, Deloitte, etc.
-      'government_research', // NEW: Gov.uk, OECD, World Bank, etc.
-    ];
+    // Count free access sources ('free_full_text' included: see isFreeAccess).
+    const freeAccessSources = sources.filter(isFreeAccess);
 
-    // Count free access sources.
-    //
-    // 'free_full_text' is what a looked-up source is stored as when OpenAlex gives a
-    // direct link to a legally free PDF — the strongest form of free access there is.
-    // It was missing from this list, so every verified source was counted as paywalled:
-    // the programme reported "Less than 70% of sources are freely accessible" while
-    // 274 of 413 sources had a working free PDF.
-    const freeAccessSources = sources.filter(
-      (s: any) =>
-        s.accessStatus === 'free_access' ||
-        s.accessStatus === 'open_access' ||
-        s.accessStatus === 'free_full_text' ||
-        s.complianceBadges?.freeAccess === true ||
-        s.complianceBadges?.fullTextAvailable === true
-    );
-
-    const validationReport = {
-      allSourcesApproved: sources.every((s: any) => approvedCategories.includes(s.category)),
-      recencyCompliance: sources.every(
-        (s: any) =>
-          currentYear - s.year <= 5 ||
-          (s.isSeminal && s.seminalJustification && s.pairedRecentSourceId)
-      ),
-      minimumSourcesPerTopic: true, // Simplified check
-      academicAppliedBalance: academicSources.length > 0 && appliedSources.length > 0,
-      // Relaxed: Accept 30% peer-reviewed when including industry sources
-      peerReviewRatio: peerReviewedSources.length / (totalSources || 1) >= 0.3,
-      completeCitations: sources.every(
-        (s: any) => s.citation && s.authors?.length > 0 && s.year && s.title
-      ),
-      apaAccuracy: true, // Assume validated
-      verifiedAccess: sources.every((s: any) => s.accessStatus !== 'rejected'),
-      noPaywalled: sources.every((s: any) => s.accessStatus !== 'rejected'),
-      everyMLOSupported: moduleSummaries.every((m: any) => m.allMLOsSupported),
-      traceabilityComplete: true,
-      // NEW: Check for free access - at least 70% should be free
-      freeAccessRatio: freeAccessSources.length / (totalSources || 1) >= 0.7,
-    };
+    // Every check is computed from the stored sources, fails on an empty list, and reports
+    // null when it is not run. Three of these used to be constant `true`: minimum sources per
+    // topic, APA accuracy and traceability. See step5Validation.
+    const validationReport = step5ValidationReport(sources, modules, currentYear);
 
     const complianceIssues: string[] = [];
     if (!validationReport.allSourcesApproved)
@@ -2695,8 +2660,14 @@ CRITICAL VALIDATION:
       complianceIssues.push('Not all MLOs have supporting sources');
     if (!validationReport.freeAccessRatio)
       complianceIssues.push('Less than 70% of sources are freely accessible');
+    if (!validationReport.minimumSourcesPerTopic)
+      complianceIssues.push(
+        `Some outcomes have fewer than ${MIN_SOURCES_PER_OUTCOME} sources linked to them`
+      );
+    if (!validationReport.traceabilityComplete)
+      complianceIssues.push('Some sources serve no outcome, or some outcomes have no source');
 
-    const agiCompliant = Object.values(validationReport).every((v) => v === true);
+    const agiCompliant = step5Compliant(validationReport);
 
     return {
       sources,
