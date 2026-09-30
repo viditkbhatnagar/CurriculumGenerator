@@ -3,6 +3,7 @@ import {
   buildOutlinePrompt,
   draftFromOutline,
   OfferedSource,
+  topicsFromDescription,
 } from '../agu/generation/outlinePrompt';
 import { validateDraft } from '../agu/validation/validateDraft';
 
@@ -138,5 +139,19 @@ describe('draftFromOutline', () => {
       (f) => f.severity === 'blocking'
     );
     expect(blocking).toEqual([]);
+  });
+});
+
+describe('topicsFromDescription', () => {
+  it('turns the catalogue "Covers ..." sentence into search phrases', () => {
+    expect(topicsFromDescription(cr08.description)).toEqual([
+      'data collection',
+      'preparation',
+      'descriptive',
+      'predictive analytics',
+      'data visualization',
+      'statistical analysis',
+      'machine learning fundamentals in support of evidence-based decision-making',
+    ]);
   });
 });

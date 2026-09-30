@@ -113,6 +113,16 @@ Run sheets cover minute 0 to 180 without gaps. Monitored hours add up to ${shape
   return { system, user };
 }
 
+/** The topics the catalogue description names, as search phrases. */
+export function topicsFromDescription(description: string): string[] {
+  const covers = /Covers\s+([^.]+)\./i.exec(description || '')?.[1] || description || '';
+  return covers
+    .split(/,|;|\band\b/)
+    .map((t) => t.replace(/^\s*(the|a|an)\s+/i, '').trim())
+    .filter((t) => t.length > 3)
+    .slice(0, 8);
+}
+
 const num = (v: unknown, fallback = 0) =>
   typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '');

@@ -40,6 +40,7 @@ import bookIngestionRoutes from './routes/bookIngestionRoutes';
 import archiveRoutes from './routes/archiveRoutes';
 import fileRoutes from './routes/fileRoutes';
 import folderRoutes from './routes/folderRoutes';
+import aguRoutes from './routes/aguRoutes';
 import step7StreamRoutes from './routes/step7StreamRoutes';
 import pptRoutes from './routes/pptRoutes';
 import standaloneRoutes from './routes/standaloneRoutes';
@@ -258,6 +259,9 @@ app.use('/api/v3/files', fileRoutes);
 
 // Dashboard folder organization (workflows into folders)
 app.use('/api/v3/folders', folderRoutes);
+
+// AGU module engine: catalogue courses developed into module packages
+app.use('/api/agu', aguRoutes);
 
 // Sentry error handler (must be before other error handlers)
 app.use(errorTrackingService.getErrorHandler());
