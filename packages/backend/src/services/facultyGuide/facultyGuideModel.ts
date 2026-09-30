@@ -590,7 +590,9 @@ export function formativeTask(raw: any): GuideFormativeTask | undefined {
     id,
     title,
     type: str(raw?.assessmentType),
-    purpose: str(raw?.purpose) || str(raw?.description),
+    // `purpose` holds the category ("formative"), which the appendix heading already says; the
+    // description is what tells a lecturer what the task is for.
+    purpose: str(raw?.description) || str(raw?.purpose),
     instructions: textLines(raw?.instructions),
     questions: (Array.isArray(raw?.questions) ? raw.questions : [])
       .map(
