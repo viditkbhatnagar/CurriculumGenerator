@@ -48,7 +48,8 @@ import { loggingService } from './loggingService';
 //      constants approval wrote; per-module documents are checked against their own module;
 //      Step 4 names topics stored as strings; entry requirements are labelled a proposal;
 //      Step 10 lists a slide deck only when Step 11 holds one.
-const EXPORT_FORMAT_VERSION = 'v20';
+// v21: Step 12 outcome coverage resolves packs' positional "MLO n" labels to stored ids.
+const EXPORT_FORMAT_VERSION = 'v21';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {
