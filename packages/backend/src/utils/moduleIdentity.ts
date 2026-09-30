@@ -57,3 +57,15 @@ export function moduleFileSlugOf(module: ModuleLike | null | undefined): string 
     .replace(/^_+|_+$/g, '');
   return slug || 'module';
 }
+
+/**
+ * How a per-module Word download names its module: the code ("M42"), or the label when there
+ * is no code. Never the position: the download is addressed by an index into an array kept in
+ * generation order, so "Module-28" was the name the server gave BBA's M42.
+ */
+export function moduleDownloadSlugOf(module: ModuleLike | null | undefined): string {
+  const code = moduleCodeOf(module)
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return code || moduleFileSlugOf(module).replace(/_/g, '-');
+}

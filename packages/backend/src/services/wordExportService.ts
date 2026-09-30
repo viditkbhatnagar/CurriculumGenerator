@@ -15,6 +15,7 @@ import { loggingService } from './loggingService';
 import { moduleLabelOf } from '../utils/moduleIdentity';
 import { bloomIndex, statedBloom } from './assessmentGeneratorService';
 import { modulesInDocument, validationFromPlans } from './step10Completion';
+import { PER_MODULE_ARRAYS } from '../utils/perModuleExport';
 import { entryRequirementsLabel } from '../utils/entryRequirements';
 import { step12ValidationFromPacks } from './deliverableValidation';
 import { normaliseTopic } from '../utils/topicShape';
@@ -4276,10 +4277,16 @@ If the content is better as bullets, put it in bullets array and leave paragraph
    * Filter module-level step data to a single module by index
    */
   private filterStepForModule(stepData: any, moduleArrayKey: string, moduleIndex: number): any {
-    if (!stepData || !stepData[moduleArrayKey]) return stepData;
-    const modules = stepData[moduleArrayKey];
-    if (!Array.isArray(modules) || moduleIndex < 0 || moduleIndex >= modules.length) {
-      return stepData;
+    const modules = stepData?.[moduleArrayKey];
+    if (
+      !Array.isArray(modules) ||
+      !Number.isInteger(moduleIndex) ||
+      moduleIndex < 0 ||
+      moduleIndex >= modules.length
+    ) {
+      // Never fall back to the whole step: for a large programme that is a document too big
+      // to build (the BBA's Step 10 needs about 1.9GB), requested as if it were one module.
+      throw new RangeError(`No module at position ${moduleIndex} in ${moduleArrayKey}`);
     }
     return { ...stepData, [moduleArrayKey]: [modules[moduleIndex]] };
   }
@@ -4329,12 +4336,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     // could contain Module 8's content).
     let moduleLabel = '';
     if (options?.moduleIndex !== undefined) {
-      const moduleArrayKeys: Record<number, string> = {
-        10: 'moduleLessonPlans',
-        11: 'modulePPTDecks',
-        12: 'moduleAssignmentPacks',
-      };
-      const arrKey = moduleArrayKeys[stepNumber];
+      const arrKey = PER_MODULE_ARRAYS[stepNumber];
       const mod = arrKey
         ? ((workflow as any)[`step${stepNumber}`]?.[arrKey] || [])[options.moduleIndex]
         : undefined;
@@ -4418,12 +4420,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     // Filter for module-level exports (steps 10-12)
     if (options?.moduleIndex !== undefined) {
-      const moduleArrayKeys: Record<number, string> = {
-        10: 'moduleLessonPlans',
-        11: 'modulePPTDecks',
-        12: 'moduleAssignmentPacks',
-      };
-      const arrayKey = moduleArrayKeys[stepNumber];
+      const arrayKey = PER_MODULE_ARRAYS[stepNumber];
       if (arrayKey) {
         stepData = this.filterStepForModule(stepData, arrayKey, options.moduleIndex);
       }

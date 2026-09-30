@@ -92,7 +92,8 @@ import { isStepDone } from '../services/stepGating';
 import { sanitizeReadingPayload } from '../services/readingValidator';
 import { sanitizeSourcePayload } from '../services/sourceValidator';
 import crypto from 'crypto';
-import { moduleLabelOf } from '../utils/moduleIdentity';
+import { moduleDownloadSlugOf, moduleLabelOf, ModuleLike } from '../utils/moduleIdentity';
+import { moduleEntryAt, parseModuleIndex, PER_MODULE_ARRAYS } from '../utils/perModuleExport';
 
 const router = Router();
 
@@ -6725,6 +6726,30 @@ router.post('/:id/complete', validateJWT, loadUser, async (req: Request, res: Re
 // EXPORT & DELIVERABLES
 // ============================================================================
 
+/** Why a per-module download refused its `?module=` value (see utils/perModuleExport). */
+const MODULE_INDEX_MESSAGE =
+  'module must be a whole number: the position of a module in this step, counting from 0';
+
+/**
+ * Why a `?module=<index>` request cannot be served, or null when it can. Reads only that
+ * step's per-module array, so a wrong index is refused before the export load brings in every
+ * module's lesson bodies (about 27MB for the BBA).
+ */
+async function refuseModuleRequest(
+  id: string,
+  stepNumber: number,
+  moduleIndex: number
+): Promise<{ status: number; error: string } | null> {
+  const key = PER_MODULE_ARRAYS[stepNumber];
+  if (!key) return { status: 400, error: 'Module param only valid for steps 10-12' };
+  const stored = await CurriculumWorkflow.findById(id).select(`step${stepNumber}.${key}`).lean();
+  if (!stored) return { status: 404, error: 'Workflow not found' };
+  if (!moduleEntryAt(stored, stepNumber, moduleIndex)) {
+    return { status: 404, error: `Step ${stepNumber} has no module at position ${moduleIndex}` };
+  }
+  return null;
+}
+
 /**
  * Load a workflow for export, with Step 10 lesson bodies filled in.
  *
@@ -6889,6 +6914,15 @@ router.get(
       if (isNaN(stepNumber) || stepNumber < 1 || stepNumber > 13) {
         return res.status(400).json({ success: false, error: 'Invalid step number (1-13)' });
       }
+      const moduleIndex = parseModuleIndex(req.query.module);
+      if (moduleIndex === null) {
+        return res.status(400).json({ success: false, error: MODULE_INDEX_MESSAGE });
+      }
+      if (moduleIndex !== undefined) {
+        const refusal = await refuseModuleRequest(req.params.id, stepNumber, moduleIndex);
+        if (refusal)
+          return res.status(refusal.status).json({ success: false, error: refusal.error });
+      }
       // Hydrated, because the download hashes a hydrated workflow. Hashing stubs here and
       // lesson bodies there produces two hashes that can never agree, so Step 10 would always
       // report its cached copy stale and the saved-copy option would never appear.
@@ -6896,8 +6930,6 @@ router.get(
       if (!workflow) {
         return res.status(404).json({ success: false, error: 'Workflow not found' });
       }
-      const moduleIndex =
-        req.query.module !== undefined ? parseInt(req.query.module as string, 10) : undefined;
       const peek = await peekCache(
         String(workflow._id),
         stepExportArtifact(stepNumber, moduleIndex),
@@ -6994,8 +7026,14 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
       return res.status(400).json({ success: false, error: 'Invalid step number (1-13)' });
     }
 
-    const moduleIndex =
-      req.query.module !== undefined ? parseInt(req.query.module as string, 10) : undefined;
+    const moduleIndex = parseModuleIndex(req.query.module);
+    if (moduleIndex === null) {
+      return res.status(400).json({ success: false, error: MODULE_INDEX_MESSAGE });
+    }
+    if (moduleIndex !== undefined) {
+      const refusal = await refuseModuleRequest(req.params.id, stepNumber, moduleIndex);
+      if (refusal) return res.status(refusal.status).json({ success: false, error: refusal.error });
+    }
 
     /**
      * A whole-programme Step 10 download is an ARCHIVE of one document per module.
@@ -7064,10 +7102,15 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
       return res.status(400).json({ success: false, error: `Step ${stepNumber} has no data yet` });
     }
 
-    if (moduleIndex !== undefined && ![10, 11, 12].includes(stepNumber)) {
-      return res
-        .status(400)
-        .json({ success: false, error: 'Module param only valid for steps 10-12' });
+    // Checked again on the loaded document, in case a module was regenerated between the two
+    // reads: outside the array the export used to fall back to the whole step.
+    const moduleEntry =
+      moduleIndex !== undefined ? moduleEntryAt(workflow, stepNumber, moduleIndex) : undefined;
+    if (moduleIndex !== undefined && !moduleEntry) {
+      return res.status(404).json({
+        success: false,
+        error: `Step ${stepNumber} has no module at position ${moduleIndex}`,
+      });
     }
 
     // Build minimal workflow data — always include step1 (program title) + step2 (kscMap)
@@ -7117,7 +7160,9 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
     };
 
     const stepSlug = STEP_SLUGS[stepNumber] || `Step-${stepNumber}`;
-    const moduleSlug = moduleIndex !== undefined ? `-Module-${moduleIndex + 1}` : '';
+    // Named by the module's code: the index counts stored entries in generation order, so
+    // "Module-28" was the name of BBA's M42.
+    const moduleSlug = moduleEntry ? `-${moduleDownloadSlugOf(moduleEntry as ModuleLike)}` : '';
     const programSlug = workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum';
     const dateSlug = new Date().toISOString().split('T')[0];
     const filename = `${programSlug}-${stepSlug}${moduleSlug}-${dateSlug}.docx`;
