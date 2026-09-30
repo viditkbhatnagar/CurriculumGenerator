@@ -21,16 +21,31 @@ describe('resolveKBDomains', () => {
     expect(resolveKBDomains(['typeOfOutputs'])).toEqual(['output_templates']);
   });
 
-  it('drops names that match no stored domain', () => {
+  it('maps Subject Books to the domain its ingestion writes', () => {
+    // Step 5's request. The ingestion script stores that folder as subject_knowledge.
     expect(resolveKBDomains(['standards', 'Subject Books'])).toEqual([
+      'education_standards',
+      'accreditation_standards',
+      'subject_knowledge',
+    ]);
+  });
+
+  it('drops names that match no stored domain', () => {
+    expect(resolveKBDomains(['standards', 'Marketing Folklore'])).toEqual([
       'education_standards',
       'accreditation_standards',
     ]);
   });
 
   it('searches everything rather than nothing when no requested name exists', () => {
-    expect(resolveKBDomains(['Subject Books'])).toBeUndefined();
+    expect(resolveKBDomains(['Marketing Folklore'])).toBeUndefined();
     expect(resolveKBDomains([])).toBeUndefined();
     expect(resolveKBDomains(undefined)).toBeUndefined();
+  });
+
+  it('ignores client input that is not a domain name instead of throwing', () => {
+    // POST /api/rag/search passes its `domains` through; these used to throw and return 500.
+    expect(resolveKBDomains(['constructor', 'toString'])).toBeUndefined();
+    expect(resolveKBDomains([5 as unknown as string, null as unknown as string])).toBeUndefined();
   });
 });

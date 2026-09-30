@@ -17,6 +17,10 @@ export const KB_DOMAINS = [
   'education_standards',
   'output_templates',
   'uk_diploma_programs',
+  // Written by the ingestion script and upload route for the "Subject Books" folder. None was
+  // stored as of 2026-09-30, so a request for subject books alone finds nothing, which is
+  // the honest answer rather than generic curriculum-design passages.
+  'subject_knowledge',
 ] as const;
 
 export type KBDomain = (typeof KB_DOMAINS)[number];
@@ -29,10 +33,15 @@ const ALIASES: Record<string, KBDomain[]> = {
   accreditations: ['accreditation_standards'],
   typeofoutputs: ['output_templates'],
   'uk-diploma-programs': ['uk_diploma_programs'],
+  'subject-books': ['subject_knowledge'],
 };
 
 const isStoredDomain = (name: string): name is KBDomain =>
   (KB_DOMAINS as readonly string[]).includes(name);
+
+/** Own keys only: "constructor" must not find Object.prototype.constructor. */
+const aliasFor = (key: string): KBDomain[] | undefined =>
+  Object.prototype.hasOwnProperty.call(ALIASES, key) ? ALIASES[key] : undefined;
 
 /**
  * The stored domains a request refers to. Returns undefined when nothing was requested or
@@ -43,13 +52,16 @@ export function resolveKBDomains(requested?: string[]): KBDomain[] | undefined {
   if (!requested?.length) return undefined;
   const resolved = new Set<KBDomain>();
   for (const raw of requested) {
-    const name = (raw || '').trim();
+    // The list can come from a client (POST /api/rag/search), so anything that is not a
+    // string is skipped rather than allowed to throw.
+    if (typeof raw !== 'string') continue;
+    const name = raw.trim();
     if (isStoredDomain(name)) {
       resolved.add(name);
       continue;
     }
     const key = name.toLowerCase().replace(/[\s_]+/g, '-');
-    for (const domain of ALIASES[key] || ALIASES[key.replace(/-/g, '')] || []) {
+    for (const domain of aliasFor(key) || aliasFor(key.replace(/-/g, '')) || []) {
       resolved.add(domain);
     }
   }
