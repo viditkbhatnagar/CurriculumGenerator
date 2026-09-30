@@ -1,0 +1,2576 @@
+{
+  "_note": "Trimmed from workflow 6aafd3ef05556f710b7d92a4, the Diploma in Logistics and Supply Chain Management tested by the product owner on 2026-09-21. Only the fields the regression checks read. step10.validation is the value stored at the time of the test (six constant passes), restored from the 2026-09-30 recompute backup.",
+  "step1": {
+    "programTitle": "Diploma in Logistics and Supply Chain Management",
+    "entryRequirements": "Academic prerequisites:\n- Higher Secondary Certificate (10+2) or equivalent; or a recognised Level 3 qualification (e.g., A-Levels or equivalent). Applicants should demonstrate passes in English and Mathematics (or Commerce/Accounts) or their regional equivalents. A minimum overall score of 50% (or grade C) is normally expected.\n- Applicants holding a prior diploma or degree in any discipline are welcome and may receive recognition of prior learning where appropriate.\n\nProfessional experience:\n- Not required for entry. However, applicants with 6\u201324 months of relevant experience (e.g., warehousing, transport operations, retail distribution, freight forwarding) are encouraged to apply and may be considered for RPL/APEL where evidence of competence is demonstrated.\n\nOther requirements:\n- English language proficiency: CEFR B2 (e.g., IELTS 5.5 with no band below 5.0) or equivalent. Applicants educated in English-medium schools or holding equivalent qualifications may be exempt.\n- Digital literacy: basic proficiency with office productivity tools, especially spreadsheets (sorting, filtering, basic formulas); ability to use email, online collaboration tools and web-based platforms.\n- Minimum age 18 at the point of enrolment. A personal statement may be requested to establish motivation and fit for the programme.\n\nRecognition of Prior Learning (RPL/APEL):\n- Prior certificated learning and/or experiential learning will be considered in line with institutional policy and AGI Academic Standards. Evidence may include transcripts, employer attestations, work products and supervisor references.\n- Up to 50% of the programme (maximum 30 UK credits, equivalent to 300 learning hours) may be awarded via RPL/APEL, provided learning outcomes are fully met and currency can be demonstrated."
+  },
+  "step4": {
+    "modules": [
+      {
+        "id": "mod-m01",
+        "code": "M01",
+        "title": "Supply Chain and Logistics Fundamentals for Kerala Industries",
+        "contactHours": 18,
+        "independentHours": 42,
+        "topics": [
+          "Kerala supply chain landscape and Kochi port overview",
+          "SCOR processes: Plan, Source, Make, Deliver, Return, Enable",
+          "Stakeholders and roles: shippers, 3PLs, customs brokers and carriers",
+          "Compliance basics: GST, e-way bills, HS codes and ICEGATE",
+          "Digital foundations: WMS, TMS, ERP and GS1 basics",
+          "Sustainability and reverse logistics essentials",
+          "Warehouse and transport safety culture; ethics and data confidentiality",
+          "Kerala case studies: retail, e-commerce and manufacturing"
+        ],
+        "mlos": [
+          {
+            "id": "M01-LO1"
+          },
+          {
+            "id": "M01-LO2"
+          },
+          {
+            "id": "M01-LO3"
+          },
+          {
+            "id": "M01-LO4"
+          }
+        ]
+      },
+      {
+        "id": "mod-m02",
+        "code": "M02",
+        "title": "Quantitative Methods and Data Analytics for Supply Chains",
+        "contactHours": 18,
+        "independentHours": 42,
+        "topics": [
+          "Descriptive statistics and visualisation for logistics",
+          "Data quality, cleansing and validation",
+          "Demand analysis basics: moving averages and simple smoothing",
+          "EOQ, safety stock and reorder point calculations",
+          "Cycle counting and variance analysis",
+          "Spreadsheet modelling in Excel/Google Sheets",
+          "Operational dashboards and KPI reporting",
+          "Shipment tracking metrics: lead time and on-time delivery"
+        ],
+        "mlos": [
+          {
+            "id": "M02-LO1"
+          },
+          {
+            "id": "M02-LO2"
+          },
+          {
+            "id": "M02-LO3"
+          },
+          {
+            "id": "M02-LO4"
+          }
+        ]
+      },
+      {
+        "id": "mod-m03",
+        "code": "M03",
+        "title": "Warehouse Operations, WMS and GS1 Barcoding",
+        "contactHours": 18,
+        "independentHours": 42,
+        "topics": [
+          "Receiving, put-away and location control",
+          "Slotting and warehouse layout principles",
+          "Picking methods, packing and dispatch",
+          "WMS functions: inbound, outbound and inventory control",
+          "GS1 barcodes: EAN, ITF-14, GS1-128 and label design",
+          "MHE basics and warehouse safety",
+          "E-commerce fulfilment and returns handling",
+          "Warehouse KPIs: accuracy, throughput and DIFOT"
+        ],
+        "mlos": [
+          {
+            "id": "M03-LO1"
+          },
+          {
+            "id": "M03-LO2"
+          },
+          {
+            "id": "M03-LO3"
+          },
+          {
+            "id": "M03-LO4"
+          }
+        ]
+      },
+      {
+        "id": "mod-m04",
+        "code": "M04",
+        "title": "Transportation Systems, TMS and Multimodal Logistics in India",
+        "contactHours": 18,
+        "independentHours": 42,
+        "topics": [
+          "Transport modes: road, rail, coastal and air",
+          "Kerala corridors and Kochi port-linked multimodal flows",
+          "TMS functions: load building, routing, tendering and tracking",
+          "Consolidation strategies and last-mile operations",
+          "Costing fundamentals: tariffs, fuel and surcharges",
+          "Compliance: permits, e-way bills, GST and vehicle limits",
+          "Sustainability and carbon awareness in transport",
+          "Exception management and carrier coordination"
+        ],
+        "mlos": [
+          {
+            "id": "M04-LO1"
+          },
+          {
+            "id": "M04-LO2"
+          },
+          {
+            "id": "M04-LO3"
+          },
+          {
+            "id": "M04-LO4"
+          }
+        ]
+      },
+      {
+        "id": "mod-m05",
+        "code": "M05",
+        "title": "Incoterms 2020 and Export\u2013Import Documentation for Kochi Port",
+        "contactHours": 18,
+        "independentHours": 42,
+        "topics": [
+          "Incoterms 2020 overview: E, F, C, D rules and risk transfer",
+          "Buyer\u2013seller obligations and cost allocations",
+          "Core documents: invoice, packing list, BL/AWB, COO and insurance",
+          "Indian customs and GST: HS classification, ICEGATE and e-way bills",
+          "Freight quotations and cost breakdowns aligned to Incoterms",
+          "Kochi port processes, CFS, FCL/LCL and partner roles",
+          "Document verification and error prevention",
+          "Ethics and data confidentiality in trade documentation"
+        ],
+        "mlos": [
+          {
+            "id": "M05-LO1"
+          },
+          {
+            "id": "M05-LO2"
+          },
+          {
+            "id": "M05-LO3"
+          },
+          {
+            "id": "M05-LO4"
+          }
+        ]
+      },
+      {
+        "id": "mod-m06",
+        "code": "M06",
+        "title": "Inventory Planning, EOQ and Stock Control for Retail Warehouses",
+        "contactHours": 18,
+        "independentHours": 42,
+        "topics": [
+          "ABC/XYZ classification and service levels",
+          "Demand variability and lead-time considerations",
+          "EOQ, safety stock and reorder point policy design",
+          "Periodic review, min\u2013max and VMI policy comparisons",
+          "Cycle counting, variance analysis and adjustments",
+          "WMS/ERP inventory settings and GS1 integration",
+          "Inventory KPIs: accuracy, fill rate and stock turns",
+          "Kerala retail case scenarios and supplier coordination"
+        ],
+        "mlos": [
+          {
+            "id": "M06-LO1"
+          },
+          {
+            "id": "M06-LO2"
+          },
+          {
+            "id": "M06-LO3"
+          },
+          {
+            "id": "M06-LO4"
+          }
+        ]
+      },
+      {
+        "id": "mod-m07",
+        "code": "M07",
+        "title": "Port Operations, Customs Coordination and Shipment Visibility",
+        "contactHours": 18,
+        "independentHours": 42,
+        "topics": [
+          "Kochi port operations and terminal flows",
+          "Incoterms 2020: cost, risk and control impacts",
+          "Indian customs, ICEGATE, GST and compliance",
+          "Export\u2013import documents: invoice, packing list, BL/AWB, COO, insurance, e\u2011way bill",
+          "CFS/ICD processes and port logistics partners",
+          "Shipment visibility: EDI/API, carrier portals and status codes",
+          "Exception handling, delays and escalation protocols",
+          "Data confidentiality and records retention"
+        ],
+        "mlos": [
+          {
+            "id": "M07-LO1"
+          },
+          {
+            "id": "M07-LO2"
+          },
+          {
+            "id": "M07-LO3"
+          },
+          {
+            "id": "M07-LO4"
+          }
+        ]
+      },
+      {
+        "id": "mod-m08",
+        "code": "M08",
+        "title": "Route Design, Costing and Low\u2011Carbon Transport for Kerala",
+        "contactHours": 18,
+        "independentHours": 42,
+        "topics": [
+          "Kerala transportation modes: road, rail and coastal",
+          "Route design and consolidation strategies",
+          "Costing components: fuel, tolls, tariffs and GST",
+          "TMS routing, load planning and last\u2011mile SLAs",
+          "Compliance: permits, e\u2011way bills, driver hours and safety",
+          "Carbon\u2011aware planning and emission factors",
+          "Carrier selection, contracts and performance",
+          "Reverse logistics and returns routing"
+        ],
+        "mlos": [
+          {
+            "id": "M08-LO1"
+          },
+          {
+            "id": "M08-LO2"
+          },
+          {
+            "id": "M08-LO3"
+          },
+          {
+            "id": "M08-LO4"
+          }
+        ]
+      },
+      {
+        "id": "mod-m09",
+        "code": "M09",
+        "title": "SCOR\u2011Aligned Warehouse Improvement and MHE Safety",
+        "contactHours": 18,
+        "independentHours": 42,
+        "topics": [
+          "SCOR processes and metrics for warehouses",
+          "Warehouse layout and flow mapping",
+          "Slotting strategies and pick methods",
+          "GS1 barcodes, WMS workflows and data quality",
+          "MHE selection, traffic management and safety SOPs",
+          "5S and Lean waste elimination",
+          "Performance dashboards: accuracy, throughput and cycle times",
+          "Change management and continuous improvement"
+        ],
+        "mlos": [
+          {
+            "id": "M09-LO1"
+          },
+          {
+            "id": "M09-LO2"
+          },
+          {
+            "id": "M09-LO3"
+          },
+          {
+            "id": "M09-LO4"
+          }
+        ]
+      },
+      {
+        "id": "mod-m10",
+        "code": "M10",
+        "title": "Applied Capstone Project in Kochi Logistics and Supply Chains",
+        "contactHours": 18,
+        "independentHours": 42,
+        "topics": [
+          "Project scoping and proposal writing",
+          "Data collection, ethics and confidentiality",
+          "Analytical tools: EOQ, safety stock, route costings and visibility analytics",
+          "WMS/TMS configuration and prototyping",
+          "SCOR alignment and KPI design",
+          "Implementation planning and change management",
+          "Reporting, dashboards and stakeholder communication"
+        ],
+        "mlos": [
+          {
+            "id": "M10-LO1"
+          },
+          {
+            "id": "M10-LO2"
+          },
+          {
+            "id": "M10-LO3"
+          },
+          {
+            "id": "M10-LO4"
+          }
+        ]
+      }
+    ]
+  },
+  "step5": {
+    "sources": [
+      {
+        "moduleId": "mod-m01",
+        "linkedMLOs": ["M01-LO1", "M01-LO4", "M01-LO2"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2025,
+        "citation": "My, D. V., Damodaran, D., Sudha, P., Pradeep, V., & Priscila, S. S. (2025). Supply Chain Issue and Challenges Faced by Street Food Business Units in Kerala. FMDB Transactions on Sustainable Technoprise Letters. https://doi.org/10.69888/ftstpl.2025.000395",
+        "authors": ["My, D. V.", "Damodaran, D.", "Sudha, P.", "Pradeep, V.", "Priscila, S. S."],
+        "title": "Supply Chain Issue and Challenges Faced by Street Food Business Units in Kerala",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m01",
+        "linkedMLOs": ["M01-LO1", "M01-LO4"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2026,
+        "citation": "R, A. V., & Divahar, S. R. (2026). Strategizing Smart Supply Chain Adoption: An Integrated Framework for Industry 4.0 Transformation in the Automotive Industries, Kerala. International Journal of Mechanical Engineering. https://doi.org/10.14445/23488360/ijme-v13i6p105",
+        "authors": ["R, A. V.", "Divahar, S. R."],
+        "title": "Strategizing Smart Supply Chain Adoption: An Integrated Framework for Industry 4.0 Transformation in the Automotive Industries, Kerala",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m01",
+        "linkedMLOs": ["M01-LO1"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2023,
+        "citation": "Szum, K., & Nazarko, J. (2023). The Importance of Advancing from Industry 4.0 to Industry 5.0: A SWOT Analysis of Turkey\u2019s SCM Strategy. Asian Journal of Individual and Organizational Behavior. https://doi.org/10.51847/4dhiy7o1mv",
+        "authors": ["Szum, K.", "Nazarko, J."],
+        "title": "The Importance of Advancing from Industry 4.0 to Industry 5.0: A SWOT Analysis of Turkey\u2019s SCM Strategy",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m01",
+        "linkedMLOs": ["M01-LO1"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2024,
+        "citation": "Vinod, R., Ramasamy, N., & Anand, M. D. (2024). Supply Chain Management Performance Improvement in Automotive Industry: A Comprehensive Review. Journal of Management World. https://doi.org/10.53935/jomw.v2024i4.400",
+        "authors": ["Vinod, R.", "Ramasamy, N.", "Anand, M. D."],
+        "title": "Supply Chain Management Performance Improvement in Automotive Industry: A Comprehensive Review",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m01",
+        "linkedMLOs": ["M01-LO1"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2023,
+        "citation": "Xu, W., Yu, L., & Proverbs, D. (2023). An evaluation of factors influencing the vulnerability of emergency logistics supply chains. International Journal of Logistics Research and Applications. https://doi.org/10.1080/13675567.2023.2209030",
+        "authors": ["Xu, W.", "Yu, L.", "Proverbs, D."],
+        "title": "An evaluation of factors influencing the vulnerability of emergency logistics supply chains",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m01",
+        "linkedMLOs": ["M01-LO1"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2026,
+        "citation": "Seshadri, N. M., Palaniswamy, A. S., McDermott, O., Mohanavelu, T., & Sumesh, A. (2026). Beyond the Buffer: A Hierarchical Blueprint for Resilient Supply Chain. Logistics. https://doi.org/10.3390/logistics10020043",
+        "authors": [
+          "Seshadri, N. M.",
+          "Palaniswamy, A. S.",
+          "McDermott, O.",
+          "Mohanavelu, T.",
+          "Sumesh, A."
+        ],
+        "title": "Beyond the Buffer: A Hierarchical Blueprint for Resilient Supply Chain",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m01",
+        "linkedMLOs": ["M01-LO3", "M01-LO1"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2021,
+        "citation": "McKinsey & Company. (2021). Automation in logistics: Big opportunity, bigger challenge. https://www.mckinsey.com/capabilities/operations/our-insights/automation-in-logistics-big-opportunity-bigger-challenge",
+        "authors": ["McKinsey & Company"],
+        "title": "Automation in logistics: Big opportunity, bigger challenge",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m01",
+        "linkedMLOs": ["M01-LO1", "M01-LO4"],
+        "category": "industry_report",
+        "type": "applied",
+        "year": 2021,
+        "citation": "World Economic Forum. (2021). Net-Zero challenge: The supply chain opportunity. https://www.weforum.org/publications/net-zero-challenge-the-supply-chain-opportunity",
+        "authors": ["World Economic Forum"],
+        "title": "Net-Zero Challenge: The supply chain opportunity",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m02",
+        "linkedMLOs": ["M02-LO1", "M02-LO2"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2021,
+        "citation": "Becerra, P., Mula, J., & Sanch\u00eds, R. (2021). Green supply chain quantitative models for sustainable inventory management: A review. Journal of Cleaner Production. https://doi.org/10.1016/j.jclepro.2021.129544",
+        "authors": ["Becerra, P.", "Mula, J.", "Sanch\u00eds, R."],
+        "title": "Green supply chain quantitative models for sustainable inventory management: A review",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m02",
+        "linkedMLOs": ["M02-LO4", "M02-LO2"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2022,
+        "citation": "Hasan, R., Kamal, M. M., Daowd, A., Eldabi, T., Koliousis, I., & \u03a0\u03b1\u03c0\u03b1\u03b4\u03cc\u03c0\u03bf\u03c5\u03bb\u03bf\u03c2, \u0398. (2022). Critical analysis of the impact of big data analytics on supply chain operations. Production Planning & Control. https://doi.org/10.1080/09537287.2022.2047237",
+        "authors": [
+          "Hasan, R.",
+          "Kamal, M. M.",
+          "Daowd, A.",
+          "Eldabi, T.",
+          "Koliousis, I.",
+          "\u03a0\u03b1\u03c0\u03b1\u03b4\u03cc\u03c0\u03bf\u03c5\u03bb\u03bf\u03c2, \u0398."
+        ],
+        "title": "Critical analysis of the impact of big data analytics on supply chain operations",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m02",
+        "linkedMLOs": ["M02-LO2", "M02-LO4"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2022,
+        "citation": "Nisar, Q. A., Haider, S., Ameer, I., Hussain, M. S., Gill, S. S., & Awan, U. (2022). Sustainable supply chain management performance in post COVID-19 era in an emerging economy: a big data perspective. International Journal of Emerging Markets. https://doi.org/10.1108/ijoem-12-2021-1807",
+        "authors": [
+          "Nisar, Q. A.",
+          "Haider, S.",
+          "Ameer, I.",
+          "Hussain, M. S.",
+          "Gill, S. S.",
+          "Awan, U."
+        ],
+        "title": "Sustainable supply chain management performance in post COVID-19 era in an emerging economy: a big data perspective",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m02",
+        "linkedMLOs": ["M02-LO1", "M02-LO3"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2023,
+        "citation": "Aljohani, A. (2023). Predictive Analytics and Machine Learning for Real-Time Supply Chain Risk Mitigation and Agility. Sustainability. https://doi.org/10.3390/su152015088",
+        "authors": ["Aljohani, A."],
+        "title": "Predictive Analytics and Machine Learning for Real-Time Supply Chain Risk Mitigation and Agility",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m02",
+        "linkedMLOs": ["M02-LO2", "M02-LO4"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2022,
+        "citation": "Gopal, P., Rana, N. P., Krishna, T. V., & Ramkumar, M. (2022). Impact of big data analytics on supply chain performance: an analysis of influencing factors. Annals of Operations Research. https://doi.org/10.1007/s10479-022-04749-6",
+        "authors": ["Gopal, P.", "Rana, N. P.", "Krishna, T. V.", "Ramkumar, M."],
+        "title": "Impact of big data analytics on supply chain performance: an analysis of influencing factors",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m02",
+        "linkedMLOs": ["M02-LO4", "M02-LO2"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2022,
+        "citation": "Bhatti, S. H., Hussain, W. M. H. W., Khan, J., Sultan, S., & Ferraris, A. (2022). Exploring data-driven innovation: What\u2019s missing in the relationship between big data analytics capabilities and supply chain innovation?. Annals of Operations Research. https://doi.org/10.1007/s10479-022-04772-7",
+        "authors": [
+          "Bhatti, S. H.",
+          "Hussain, W. M. H. W.",
+          "Khan, J.",
+          "Sultan, S.",
+          "Ferraris, A."
+        ],
+        "title": "Exploring data-driven innovation: What\u2019s missing in the relationship between big data analytics capabilities and supply chain innovation?",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m02",
+        "linkedMLOs": ["M02-LO2", "M02-LO1"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2022,
+        "citation": "McKinsey & Company. (2022). Creating a data-driven supply chain. https://www.mckinsey.com/capabilities/operations/our-insights/creating-a-data-driven-supply-chain",
+        "authors": ["McKinsey & Company"],
+        "title": "Creating a data-driven supply chain",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m02",
+        "linkedMLOs": ["M02-LO2", "M02-LO3"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2023,
+        "citation": "Deloitte Insights. (2023). Supply chain analytics: Driving value with KPIs, dashboards, and data governance. https://www2.deloitte.com/insights/us/en/focus/operations-transformation/supply-chain-analytics.html",
+        "authors": ["Deloitte Insights"],
+        "title": "Supply chain analytics: Driving value with KPIs, dashboards, and data governance",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m03",
+        "linkedMLOs": [],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2026,
+        "citation": "Mukherjee, S. (2026). An Approach to Effective Supply Chain: A Conceptual Framework and Research Agenda. International Journal of Creative and Open Research in Engineering and Management. https://doi.org/10.55041/ijcope.v2i8.012",
+        "authors": ["Mukherjee, S."],
+        "title": "An Approach to Effective Supply Chain: A Conceptual Framework and Research Agenda",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m03",
+        "linkedMLOs": ["M03-LO4"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2026,
+        "citation": "Hulyda, K. (2026). Implementation of RFID Technologies in Logistics and Supply Chain Management. International Journal of Economics and Management Studies. https://doi.org/10.14445/23939125/ijems-v13i7p101",
+        "authors": ["Hulyda, K."],
+        "title": "Implementation of RFID Technologies in Logistics and Supply Chain Management",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m03",
+        "linkedMLOs": [],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2025,
+        "citation": "\u041c\u0443\u0445\u0430, \u0422. (2025). THE INTEGRATION OF TRACKING TECHNOLOGIES IN SUPPLY CHAIN MANAGEMENT. Three Seas Economic Journal. https://doi.org/10.30525/2661-5150/2025-3-10",
+        "authors": ["\u041c\u0443\u0445\u0430, \u0422."],
+        "title": "THE INTEGRATION OF TRACKING TECHNOLOGIES IN SUPPLY CHAIN MANAGEMENT",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m03",
+        "linkedMLOs": ["M03-LO4"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2026,
+        "citation": "Ferreira, E. A., & Carvalho, A. D. (2026). PLANO DE IMPLANTA\u00c7\u00c3O DE SISTEMA RFID EM ARMAZ\u00c9NS: TRANSFORMA\u00c7\u00c3O DIGITAL INTRALOG\u00cdSTICA. South American Development Society Journal. https://doi.org/10.24325/issn.2446-5763.v12i34p283-304",
+        "authors": ["Ferreira, E. A.", "Carvalho, A. D."],
+        "title": "PLANO DE IMPLANTA\u00c7\u00c3O DE SISTEMA RFID EM ARMAZ\u00c9NS: TRANSFORMA\u00c7\u00c3O DIGITAL INTRALOG\u00cdSTICA",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Social Sciences"
+        }
+      },
+      {
+        "moduleId": "mod-m03",
+        "linkedMLOs": ["M03-LO4"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2025,
+        "citation": "Odumbo, O. R., & Ezekwu, E. (2025). Streamlining Logistics in Medical Supply Chains: Enhancing Accuracy, Speed, Affordability, and Operational Efficiency. International Journal of Research Publication and Reviews. https://doi.org/10.55248/gengpi.6.0125.0533",
+        "authors": ["Odumbo, O. R.", "Ezekwu, E."],
+        "title": "Streamlining Logistics in Medical Supply Chains: Enhancing Accuracy, Speed, Affordability, and Operational Efficiency",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m03",
+        "linkedMLOs": [],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2026,
+        "citation": "Chatterjee, S., & Rane, N. L. (2026). Supply chain management using machine learning, deep learning, and blockchain techniques: A review. International Journal of Applied Resilience and Sustainability. https://doi.org/10.70593/deepsci.0202021",
+        "authors": ["Chatterjee, S.", "Rane, N. L."],
+        "title": "Supply chain management using machine learning, deep learning, and blockchain techniques: A review",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Computer Science"
+        }
+      },
+      {
+        "moduleId": "mod-m03",
+        "linkedMLOs": ["M03-LO1", "M03-LO3", "M03-LO4"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2022,
+        "citation": "McKinsey & Company. (2022). Building the digital warehouse of the future. https://www.mckinsey.com/capabilities/operations/our-insights/building-the-digital-warehouse-of-the-future",
+        "authors": ["McKinsey & Company"],
+        "title": "Building the digital warehouse of the future",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m03",
+        "linkedMLOs": ["M03-LO1", "M03-LO3"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2024,
+        "citation": "Deloitte Insights. (2024). Orchestrating the smart warehouse: Cloud WMS and next\u2011gen fulfilment. https://www2.deloitte.com/insights/us/en/focus/technology-orchestration/smart-warehouse-management-systems-wms.html",
+        "authors": ["Deloitte Insights"],
+        "title": "Orchestrating the smart warehouse: Cloud WMS and next\u2011gen fulfilment",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m03",
+        "linkedMLOs": ["M03-LO2"],
+        "category": "professional_body",
+        "type": "applied",
+        "year": 2023,
+        "citation": "GS1. (2023). GS1 Logistic Label Guideline. Retrieved from https://www.gs1.org/standards/gs1-logistic-label-guideline",
+        "authors": ["GS1"],
+        "title": "GS1 Logistic Label Guideline",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m04",
+        "linkedMLOs": ["M04-LO1", "M04-LO2"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2026,
+        "citation": "Venkatachalam, D. (2026). TRANSPORT MANAGEMENT IN INDIA CURRENT SCENARIO AND FUTURE PROSPECTS. JOURNAL OF ADVANCE AND FUTURE RESEARCH. https://doi.org/10.56975/jaafr.v4i8.513581",
+        "authors": ["Venkatachalam, D."],
+        "title": "TRANSPORT MANAGEMENT IN INDIA CURRENT SCENARIO AND FUTURE PROSPECTS",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m04",
+        "linkedMLOs": ["M04-LO1", "M04-LO3"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2025,
+        "citation": "Ballamudi, S. (2025). SAP Transportation Management Implementation Using the MOORA Method. International Journal of Cloud Computing and Supply Chain Management. https://doi.org/10.55124/ijccscm.v1i2.238",
+        "authors": ["Ballamudi, S."],
+        "title": "SAP Transportation Management Implementation Using the MOORA Method",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m04",
+        "linkedMLOs": ["M04-LO1", "M04-LO3"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2025,
+        "citation": "Wang, R. (2025). Application and Benefit Analysis of Multimodal Transport in Pulp Logistics. European Journal of Engineering and Technologies. https://doi.org/10.71222/2hcxex46",
+        "authors": ["Wang, R."],
+        "title": "Application and Benefit Analysis of Multimodal Transport in Pulp Logistics",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m04",
+        "linkedMLOs": ["M04-LO1", "M04-LO4"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2026,
+        "citation": "Yaro, N. S. A., Akanbi, A. K., Umar, A. M., & Adedeji, J. A. (2026). Knowledge Mapping and Thematic Evolution of Transportation Management System Research in Nigeria and South Africa: A South-South Scientometric Perspective. International Journal of Civil Engineering. https://doi.org/10.14445/23488352/ijce-v13i7p114",
+        "authors": ["Yaro, N. S. A.", "Akanbi, A. K.", "Umar, A. M.", "Adedeji, J. A."],
+        "title": "Knowledge Mapping and Thematic Evolution of Transportation Management System Research in Nigeria and South Africa: A South-South Scientometric Perspective",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m04",
+        "linkedMLOs": ["M04-LO1", "M04-LO2"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2026,
+        "citation": "Krishnan, S., & Chinna, P. R. (2026). Insights Into Transportation Inefficiencies In Global Automotive Supply Chains: The Role Of Technology, Environment, And Regulation. IOSR Journal of Business and Management. https://doi.org/10.9790/487x-2802021733",
+        "authors": ["Krishnan, S.", "Chinna, P. R."],
+        "title": "Insights Into Transportation Inefficiencies In Global Automotive Supply Chains: The Role Of Technology, Environment, And Regulation",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m04",
+        "linkedMLOs": ["M04-LO2", "M04-LO1"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2021,
+        "citation": "Tripathy, S. (2021). Challenges Faced By the Indian Transportation Sector in Implementing New Age Technologies. Psychology and Education Journal. https://doi.org/10.17762/pae.v57i9.2694",
+        "authors": ["Tripathy, S."],
+        "title": "Challenges Faced By the Indian Transportation Sector in Implementing New Age Technologies",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m04",
+        "linkedMLOs": ["M04-LO1", "M04-LO3", "M04-LO4"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2021,
+        "citation": "McKinsey & Company. (2021). India e\u2011commerce logistics: The path to profitability. https://www.mckinsey.com/industries/travel-logistics-and-infrastructure/our-insights/indias-e-commerce-logistics-the-path-to-profitability",
+        "authors": ["McKinsey & Company"],
+        "title": "India e\u2011commerce logistics: The path to profitability",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m04",
+        "linkedMLOs": ["M04-LO1", "M04-LO3"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2023,
+        "citation": "World Economic Forum. (2023). Road Freight Zero: Pathways to faster adoption of zero\u2011emission trucks. https://www.weforum.org/publications/road-freight-zero-pathways-to-faster-adoption-of-zero-emission-trucks/",
+        "authors": ["World Economic Forum"],
+        "title": "Road Freight Zero: Pathways to faster adoption of zero\u2011emission trucks",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true,
+          "relevanceReview": true,
+          "relevanceNote": "Placed under this module, but reads as a closer fit for \"Route Design, Costing and Low\u2011Carbon Transport for Kerala\". Worth reviewing before use."
+        }
+      },
+      {
+        "moduleId": "mod-m05",
+        "linkedMLOs": ["M05-LO4"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2025,
+        "citation": "Senthilkumar, S., Gurusamy, P., & E, S. (2025). A study on Tiruppur shippers working aspects in the international shipments. International Journal of Foreign Trade and International Business. https://doi.org/10.33545/26633140.2025.v7.i2a.166",
+        "authors": ["Senthilkumar, S.", "Gurusamy, P.", "E, S."],
+        "title": "A study on Tiruppur shippers working aspects in the international shipments",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m05",
+        "linkedMLOs": ["M05-LO2", "M05-LO3"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2022,
+        "citation": "World Economic Forum. (2022). TradeTech \u2013 A new age for trade and supply chain finance. https://www.weforum.org/publications/tradetech-a-new-age-for-trade-and-supply-chain-finance/",
+        "authors": ["World Economic Forum"],
+        "title": "TradeTech \u2013 A new age for trade and supply chain finance",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m05",
+        "linkedMLOs": ["M05-LO3", "M05-LO4"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2023,
+        "citation": "World Economic Forum. (2023). The global trade data ecosystem. https://www.weforum.org/publications/the-global-trade-data-ecosystem/",
+        "authors": ["World Economic Forum"],
+        "title": "The global trade data ecosystem",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m05",
+        "linkedMLOs": ["M05-LO4"],
+        "category": "government_research",
+        "type": "applied",
+        "year": 2024,
+        "citation": "HM Revenue & Customs. (2024). Finding commodity codes for imports or exports. Retrieved from https://www.gov.uk/guidance/finding-commodity-codes-for-imports-or-exports",
+        "authors": ["HM Revenue & Customs"],
+        "title": "Finding commodity codes for imports or exports",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m06",
+        "linkedMLOs": ["M06-LO1", "M06-LO2"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2024,
+        "citation": "Mubasysyir, M. H., Supian, S., & Hertini, E. (2024). Multi-Item Inventory Control Using Economic Order Quantity (EOQ) Model with Safety Stock, Reorder Point, and Maximum Capacity in Retail Business. International Journal of Global Operations Research. https://doi.org/10.47194/ijgor.v5i1.237",
+        "authors": ["Mubasysyir, M. H.", "Supian, S.", "Hertini, E."],
+        "title": "Multi-Item Inventory Control Using Economic Order Quantity (EOQ) Model with Safety Stock, Reorder Point, and Maximum Capacity in Retail Business",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m06",
+        "linkedMLOs": ["M06-LO4", "M06-LO1"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2021,
+        "citation": "Kartika, I. M., Suwandana, I. M. A., Gupta, I. G. B. W., & Herlambang, P. G. D. (2021). EOQ Development Model in Optimize Raw Material Inventory. International Journal for Applied Information Management. https://doi.org/10.47738/ijaim.v2i2.27",
+        "authors": [
+          "Kartika, I. M.",
+          "Suwandana, I. M. A.",
+          "Gupta, I. G. B. W.",
+          "Herlambang, P. G. D."
+        ],
+        "title": "EOQ Development Model in Optimize Raw Material Inventory",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m06",
+        "linkedMLOs": ["M06-LO1", "M06-LO2"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2022,
+        "citation": "Silitonga, R. Y. H., & Sembiring, E. E. L. B. (2022). Inventory Policy for Retail Stores: A Multi-Item EOQ Model Considering Permissible Delay in Payment and Limited Warehouse Capacity. Jurnal Optimasi Sistem Industri. https://doi.org/10.25077/josi.v21.n1.p28-37.2022",
+        "authors": ["Silitonga, R. Y. H.", "Sembiring, E. E. L. B."],
+        "title": "Inventory Policy for Retail Stores: A Multi-Item EOQ Model Considering Permissible Delay in Payment and Limited Warehouse Capacity",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m06",
+        "linkedMLOs": ["M06-LO2", "M06-LO4"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2022,
+        "citation": "Berling, P., Johansson, L., & Marklund, J. (2022). Controlling inventories in omni/multi-channel distribution systems with variable customer order-sizes. Omega. https://doi.org/10.1016/j.omega.2022.102745",
+        "authors": ["Berling, P.", "Johansson, L.", "Marklund, J."],
+        "title": "Controlling inventories in omni/multi-channel distribution systems with variable customer order-sizes",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m06",
+        "linkedMLOs": ["M06-LO2", "M06-LO4"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2023,
+        "citation": "Hidayatuloh, S., Winati, F. D., Samodro, G., Qisthani, N. N., & Kasanah, Y. U. (2023). Inventory Optimization in Pharmacy Using Inventory Simulation-Based Model During the Covid-19 Pandemic. Jurnal INTECH Teknik Industri Universitas Serang Raya. https://doi.org/10.30656/intech.v9i2.5820",
+        "authors": [
+          "Hidayatuloh, S.",
+          "Winati, F. D.",
+          "Samodro, G.",
+          "Qisthani, N. N.",
+          "Kasanah, Y. U."
+        ],
+        "title": "Inventory Optimization in Pharmacy Using Inventory Simulation-Based Model During the Covid-19 Pandemic",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m06",
+        "linkedMLOs": ["M06-LO1", "M06-LO3"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2026,
+        "citation": "Tziora, E., Karakatsoulis, G., Skouri, K., & Syntetos, A. A. (2026). On the impact of supply uncertainty on inventory decisions: EOQ-based models. International Journal of Production Research. https://doi.org/10.1080/00207543.2025.2606914",
+        "authors": ["Tziora, E.", "Karakatsoulis, G.", "Skouri, K.", "Syntetos, A. A."],
+        "title": "On the impact of supply uncertainty on inventory decisions: EOQ-based models",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m06",
+        "linkedMLOs": ["M06-LO2", "M06-LO4"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2022,
+        "citation": "McKinsey & Company. (2022). Warehouse automation: Accelerating the path to higher throughput and accuracy. https://www.mckinsey.com/capabilities/operations/our-insights/warehouse-automation-accelerating-the-path-to-higher-throughput-and-accuracy",
+        "authors": ["McKinsey & Company"],
+        "title": "Warehouse automation: Accelerating the path to higher throughput and accuracy",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true,
+          "relevanceReview": true,
+          "relevanceNote": "Placed under this module, but reads as a closer fit for \"Warehouse Operations, WMS and GS1 Barcoding\". Worth reviewing before use."
+        }
+      },
+      {
+        "moduleId": "mod-m06",
+        "linkedMLOs": ["M06-LO1", "M06-LO2", "M06-LO4"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2024,
+        "citation": "Deloitte Insights. (2024). Inventory analytics: Improving service levels and working capital with better policies and parameters. https://www2.deloitte.com/insights/us/en/focus/industry-4-0/inventory-analytics-service-levels-working-capital.html",
+        "authors": ["Deloitte Insights"],
+        "title": "Inventory analytics: Improving service levels and working capital with better policies and parameters",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m07",
+        "linkedMLOs": ["M07-LO1", "M07-LO4"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2021,
+        "citation": "Kapkaeva, N., Gurzhiy, A., Maydanova, S., & Levina, A. (2021). Digital Platform for Maritime Port Ecosystem: Port of Hamburg Case. Transportation research procedia. https://doi.org/10.1016/j.trpro.2021.02.146",
+        "authors": ["Kapkaeva, N.", "Gurzhiy, A.", "Maydanova, S.", "Levina, A."],
+        "title": "Digital Platform for Maritime Port Ecosystem: Port of Hamburg Case",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m07",
+        "linkedMLOs": ["M07-LO1", "M07-LO4"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2025,
+        "citation": "Akhter, H. (2025). Analytical Study of Efficiency of Smart Ports. American Journal of Traffic and Transportation Engineering. https://doi.org/10.11648/j.ajtte.20251005.12",
+        "authors": ["Akhter, H."],
+        "title": "Analytical Study of Efficiency of Smart Ports",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m07",
+        "linkedMLOs": ["M07-LO1", "M07-LO3"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2025,
+        "citation": "Jakovlev, S., Eglynas, T., Jank\u016bnas, V., Jusis, M., & Vozn\u0306\u00e1k, M. (2025). Analysis of Damage to Shipping Container Sides During Port Handling Operations. Journal of Marine Science and Engineering. https://doi.org/10.3390/jmse13050982",
+        "authors": [
+          "Jakovlev, S.",
+          "Eglynas, T.",
+          "Jank\u016bnas, V.",
+          "Jusis, M.",
+          "Vozn\u0306\u00e1k, M."
+        ],
+        "title": "Analysis of Damage to Shipping Container Sides During Port Handling Operations",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m07",
+        "linkedMLOs": ["M07-LO1"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2025,
+        "citation": "Caballini, C., Ghiara, H., & Gommellini, G. (2025). From a Distance to a Process Perspective: A Method for Assessing the Feasibility of a Port\u2013Dry Port System. Applied Sciences. https://doi.org/10.3390/app152111715",
+        "authors": ["Caballini, C.", "Ghiara, H.", "Gommellini, G."],
+        "title": "From a Distance to a Process Perspective: A Method for Assessing the Feasibility of a Port\u2013Dry Port System",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m07",
+        "linkedMLOs": ["M07-LO1", "M07-LO4"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2021,
+        "citation": "Jiang, B. et al. (2021). Exploring the impact of port-centric information integration on port performance: the case of Qingdao Port. Maritime Policy & Management. https://doi.org/10.1080/03088839.2021.2007551",
+        "authors": [
+          "Jiang, B.",
+          "Haider, J.",
+          "Li, J.",
+          "Wang, Y.",
+          "Wang, Y.",
+          "Yip, T. L.",
+          "Wang, Y.",
+          "Wang, Y."
+        ],
+        "title": "Exploring the impact of port-centric information integration on port performance: the case of Qingdao Port",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m07",
+        "linkedMLOs": ["M07-LO1", "M07-LO3"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2026,
+        "citation": "Gavalas, D., Katsounis, I., & Vasiliadis, L. (2026). Gateways of aid: Analyzing port performance in disaster relief operations. Maritime Technology and Research. https://doi.org/10.33175/mtr.2026.283206",
+        "authors": ["Gavalas, D.", "Katsounis, I.", "Vasiliadis, L."],
+        "title": "Gateways of aid: Analyzing port performance in disaster relief operations",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m07",
+        "linkedMLOs": ["M07-LO3", "M07-LO4"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2022,
+        "citation": "Deloitte. (2022). Supply chain control tower: Orchestrating the end-to-end supply chain. Deloitte Insights. https://www2.deloitte.com/insights/us/en/topics/operations/supply-chain-control-tower.html",
+        "authors": ["Deloitte Insights"],
+        "title": "Supply chain control tower: Orchestrating the end-to-end supply chain",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true,
+          "relevanceReview": true,
+          "relevanceNote": "Placed under this module, but reads as a closer fit for \"Supply Chain and Logistics Fundamentals for Kerala Industries\". Worth reviewing before use."
+        }
+      },
+      {
+        "moduleId": "mod-m07",
+        "linkedMLOs": ["M07-LO1", "M07-LO3", "M07-LO4"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2023,
+        "citation": "World Economic Forum. (2023). The TradeTech handbook. https://www.weforum.org/publications/the-tradetech-handbook/",
+        "authors": ["World Economic Forum"],
+        "title": "The TradeTech Handbook",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m07",
+        "linkedMLOs": ["M07-LO2"],
+        "category": "professional_body",
+        "type": "applied",
+        "year": 2024,
+        "citation": "UK Government. (2024). International trade paperwork: The basics. Retrieved from https://www.gov.uk/guidance/international-trade-paperwork-the-basics",
+        "authors": ["UK Government"],
+        "title": "International trade paperwork: The basics",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m08",
+        "linkedMLOs": ["M08-LO3", "M08-LO2"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2022,
+        "citation": "Sahu, P. K., Pani, A., & Santos, G. (2022). Freight Traffic Impacts and Logistics Inefficiencies in India: Policy Interventions and Solution Concepts for Sustainable City Logistics. Transportation in Developing Economies. https://doi.org/10.1007/s40890-022-00161-8",
+        "authors": ["Sahu, P. K.", "Pani, A.", "Santos, G."],
+        "title": "Freight Traffic Impacts and Logistics Inefficiencies in India: Policy Interventions and Solution Concepts for Sustainable City Logistics",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m08",
+        "linkedMLOs": ["M08-LO4", "M08-LO1"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2025,
+        "citation": "Mahadevia, D., Pathak, M., Lathia, S., Mukhopadhyay, C., & Rawal, S. (2025). Sustainable and inclusive low-carbon transport scenarios for Surat city, India. Carbon Footprints. https://doi.org/10.20517/cf.2025.01",
+        "authors": ["Mahadevia, D.", "Pathak, M.", "Lathia, S.", "Mukhopadhyay, C.", "Rawal, S."],
+        "title": "Sustainable and inclusive low-carbon transport scenarios for Surat city, India",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Social Sciences"
+        }
+      },
+      {
+        "moduleId": "mod-m08",
+        "linkedMLOs": ["M08-LO3", "M08-LO2"],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2025,
+        "citation": "Anbalagan, C., Jayanthi, L. N., Thulasibalan, M., & Vignesh, P. (2025). THE EVOLUTION OF SHIPPING TRANSPORT ININDIA: CHALLENGES, INNOVATIONS, AND FUTURE PROSPECTS. ASET Journal of Management Science. https://doi.org/10.47059/ajms/v4i2/26",
+        "authors": ["Anbalagan, C.", "Jayanthi, L. N.", "Thulasibalan, M.", "Vignesh, P."],
+        "title": "THE EVOLUTION OF SHIPPING TRANSPORT ININDIA: CHALLENGES, INNOVATIONS, AND FUTURE PROSPECTS",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m08",
+        "linkedMLOs": [],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2023,
+        "citation": "Oladimeji, D., Gupta, K., Kose, N. A., Gundogan, K., Ge, L., & Liang, F. (2023). Smart Transportation: An Overview of Technologies and Applications. Sensors. https://doi.org/10.3390/s23083880",
+        "authors": [
+          "Oladimeji, D.",
+          "Gupta, K.",
+          "Kose, N. A.",
+          "Gundogan, K.",
+          "Ge, L.",
+          "Liang, F."
+        ],
+        "title": "Smart Transportation: An Overview of Technologies and Applications",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m08",
+        "linkedMLOs": [],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2021,
+        "citation": "Bergek, A., Bj\u00f8rgum, \u00d8., Hansen, T., Hanson, J., & Ste\u00e9n, M. (2021). Sustainability transitions in coastal shipping: The role of regime segmentation. Transportation Research Interdisciplinary Perspectives. https://doi.org/10.1016/j.trip.2021.100497",
+        "authors": [
+          "Bergek, A.",
+          "Bj\u00f8rgum, \u00d8.",
+          "Hansen, T.",
+          "Hanson, J.",
+          "Ste\u00e9n, M."
+        ],
+        "title": "Sustainability transitions in coastal shipping: The role of regime segmentation",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Social Sciences"
+        }
+      },
+      {
+        "moduleId": "mod-m08",
+        "linkedMLOs": [],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2025,
+        "citation": "Luca, G., Guju, D., & Com\u0103nescu, L. (2025). The Development of Inland Waterway Transport as a Key to Ensuring Sustainability: A Geographic Overview of the Bucharest\u2013Danube Canal. Sustainability. https://doi.org/10.3390/su17104438",
+        "authors": ["Luca, G.", "Guju, D.", "Com\u0103nescu, L."],
+        "title": "The Development of Inland Waterway Transport as a Key to Ensuring Sustainability: A Geographic Overview of the Bucharest\u2013Danube Canal",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m08",
+        "linkedMLOs": ["M08-LO1", "M08-LO4"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2023,
+        "citation": "McKinsey & Company. (2023). Decarbonizing road freight: A pragmatic pathway to lower\u2011cost, low\u2011carbon logistics. https://www.mckinsey.com/capabilities/operations/our-insights/decarbonizing-road-freight-a-pragmatic-pathway-to-lower-cost-low-carbon-logistics",
+        "authors": ["McKinsey & Company"],
+        "title": "Decarbonizing road freight: A pragmatic pathway to lower\u2011cost, low\u2011carbon logistics",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m08",
+        "linkedMLOs": ["M08-LO2", "M08-LO3", "M08-LO4"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2024,
+        "citation": "Deloitte Insights. (2024). Smarter last\u2011mile: How e\u2011commerce players can use routing, micro\u2011fulfilment and returns optimisation to cut cost and carbon. https://www2.deloitte.com/insights/us/en/topics/operations/smarter-last-mile-routing-micro-fulfilment-returns-optimisation.html",
+        "authors": ["Deloitte Insights"],
+        "title": "Smarter last\u2011mile: How e\u2011commerce players can use routing, micro\u2011fulfilment and returns optimisation to cut cost and carbon",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m09",
+        "linkedMLOs": [],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2026,
+        "citation": "Papalexi, M., Vafadarnikjoo, A., Bamford, D., & Dehe, B. (2026). Developing pharmaceutical supply chain resilient capabilities: the role of Industry 4.0 technologies. Supply Chain Management An International Journal. https://doi.org/10.1108/scm-03-2025-0180",
+        "authors": ["Papalexi, M.", "Vafadarnikjoo, A.", "Bamford, D.", "Dehe, B."],
+        "title": "Developing pharmaceutical supply chain resilient capabilities: the role of Industry 4.0 technologies",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Business, Management and Accounting"
+        }
+      },
+      {
+        "moduleId": "mod-m09",
+        "linkedMLOs": ["M09-LO1", "M09-LO3"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2022,
+        "citation": "World Economic Forum. (2022). Digital traceability: A framework for more resilient, sustainable and circular supply chains. https://www.weforum.org/reports/digital-traceability-a-framework-for-more-resilient-sustainable-and-circular-supply-chains/",
+        "authors": ["World Economic Forum"],
+        "title": "Digital traceability: A framework for more resilient, sustainable and circular supply chains",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m09",
+        "linkedMLOs": ["M09-LO4"],
+        "category": "professional_body",
+        "type": "applied",
+        "year": 2024,
+        "citation": "Health and Safety Executive. (2024). Rider-operated lift trucks: Operator training and safe use (L117) \u2013 Approved Code of Practice and guidance. Retrieved from https://www.gov.uk/government/publications/rider-operated-lift-trucks-operator-training-and-safe-use-l117",
+        "authors": ["Health and Safety Executive"],
+        "title": "Rider-operated lift trucks: Operator training and safe use (L117) \u2013 Approved Code of Practice and guidance",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m09",
+        "linkedMLOs": ["M09-LO1", "M09-LO2", "M09-LO3"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2023,
+        "citation": "PwC. (2023). The connected warehouse: Accelerating fulfilment through digital operations. https://www.pwc.com/gx/en/operations/connected-supply-chain/connected-warehouse.html",
+        "authors": ["PwC"],
+        "title": "The connected warehouse: Accelerating fulfilment through digital operations",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m10",
+        "linkedMLOs": [],
+        "category": "peer_reviewed_journal",
+        "type": "academic",
+        "year": 2025,
+        "citation": "Pe\u00f1a, C. A., S\u00e1nchez, O., Casta\u00f1eda, K., Garc\u00eda, A., & Camacho, F. J. F. (2025). BIM-based tool to support construction planning of earthworks in road projects. Alexandria Engineering Journal. https://doi.org/10.1016/j.aej.2025.11.023",
+        "authors": [
+          "Pe\u00f1a, C. A.",
+          "S\u00e1nchez, O.",
+          "Casta\u00f1eda, K.",
+          "Garc\u00eda, A.",
+          "Camacho, F. J. F."
+        ],
+        "title": "BIM-based tool to support construction planning of earthworks in road projects",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": true,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m10",
+        "linkedMLOs": [],
+        "category": "open_access",
+        "type": "academic",
+        "year": 2024,
+        "citation": "Islam, M., Rehman, A., & Mojumder, M. U. (2024). SUSTAINABILITY METRICS IN GREEN INFRASTRUCTURE: A REVIEW OF LEED, LIFECYCLE COSTING, AND WASTE REDUCTION IN CONSTRUCTION. . https://doi.org/10.63125/0rjhb708",
+        "authors": ["Islam, M.", "Rehman, A.", "Mojumder, M. U."],
+        "title": "SUSTAINABILITY METRICS IN GREEN INFRASTRUCTURE: A REVIEW OF LEED, LIFECYCLE COSTING, AND WASTE REDUCTION IN CONSTRUCTION",
+        "accessStatus": "free_full_text",
+        "complianceBadges": {
+          "peerReviewed": false,
+          "openAccess": true,
+          "fullTextAvailable": true,
+          "verifiedVia": "OpenAlex",
+          "subjectField": "Engineering"
+        }
+      },
+      {
+        "moduleId": "mod-m10",
+        "linkedMLOs": ["M10-LO1", "M10-LO2", "M10-LO3"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2022,
+        "citation": "McKinsey & Company. (2022). Supply-chain control towers: The heart of next-generation operations. https://www.mckinsey.com/capabilities/operations/our-insights/supply-chain-control-towers-the-heart-of-next-generation-operations",
+        "authors": ["McKinsey & Company"],
+        "title": "Supply-chain control towers: The heart of next-generation operations",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m10",
+        "linkedMLOs": ["M10-LO2", "M10-LO3"],
+        "category": "industry_report",
+        "type": "industry",
+        "year": 2021,
+        "citation": "World Economic Forum. (2021). Net-zero challenge: The supply chain opportunity. https://www.weforum.org/reports/net-zero-challenge-the-supply-chain-opportunity",
+        "authors": ["World Economic Forum"],
+        "title": "Net-Zero Challenge: The supply chain opportunity",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      },
+      {
+        "moduleId": "mod-m10",
+        "linkedMLOs": ["M10-LO2", "M10-LO4"],
+        "category": "professional_body",
+        "type": "applied",
+        "year": 2021,
+        "citation": "Project Management Institute. (2021). Stakeholder analysis: An important tool for managing projects. Retrieved from https://www.pmi.org/learning/library/stakeholder-analysis-important-tool-projects-7755",
+        "authors": ["Project Management Institute"],
+        "title": "Stakeholder analysis: An important tool for managing projects",
+        "accessStatus": "free_access",
+        "complianceBadges": {
+          "freeAccess": true,
+          "peerReviewed": false,
+          "recent": true
+        }
+      }
+    ]
+  },
+  "step8": {
+    "caseStudies": []
+  },
+  "step10": {
+    "validation": {
+      "allModulesHaveLessonPlans": true,
+      "allLessonDurationsValid": true,
+      "totalHoursMatch": true,
+      "allMLOsCovered": true,
+      "caseStudiesIntegrated": true,
+      "assessmentsIntegrated": true
+    },
+    "moduleLessonPlans": [
+      {
+        "moduleId": "mod-m05",
+        "totalLessons": 12,
+        "plannedLessonCount": null,
+        "stats": {
+          "lessonCount": 12,
+          "contactHours": 18,
+          "lessonMinutes": 1080,
+          "caseStudiesIncluded": 0,
+          "formativeChecksIncluded": 0,
+          "durationsValid": true,
+          "hoursMatch": true,
+          "mlosCovered": true
+        }
+      },
+      {
+        "moduleId": "mod-m04",
+        "totalLessons": 12,
+        "plannedLessonCount": null,
+        "stats": {
+          "lessonCount": 12,
+          "contactHours": 18,
+          "lessonMinutes": 1080,
+          "caseStudiesIncluded": 0,
+          "formativeChecksIncluded": 0,
+          "durationsValid": true,
+          "hoursMatch": true,
+          "mlosCovered": true
+        }
+      },
+      {
+        "moduleId": "mod-m03",
+        "totalLessons": 12,
+        "plannedLessonCount": null,
+        "stats": {
+          "lessonCount": 12,
+          "contactHours": 18,
+          "lessonMinutes": 1080,
+          "caseStudiesIncluded": 0,
+          "formativeChecksIncluded": 0,
+          "durationsValid": true,
+          "hoursMatch": true,
+          "mlosCovered": true
+        }
+      },
+      {
+        "moduleId": "mod-m02",
+        "totalLessons": 12,
+        "plannedLessonCount": null,
+        "stats": {
+          "lessonCount": 12,
+          "contactHours": 18,
+          "lessonMinutes": 1080,
+          "caseStudiesIncluded": 0,
+          "formativeChecksIncluded": 0,
+          "durationsValid": true,
+          "hoursMatch": true,
+          "mlosCovered": true
+        }
+      },
+      {
+        "moduleId": "mod-m01",
+        "totalLessons": 12,
+        "plannedLessonCount": null,
+        "stats": {
+          "lessonCount": 12,
+          "contactHours": 18,
+          "lessonMinutes": 1080,
+          "caseStudiesIncluded": 0,
+          "formativeChecksIncluded": 0,
+          "durationsValid": true,
+          "hoursMatch": true,
+          "mlosCovered": true
+        }
+      },
+      {
+        "moduleId": "mod-m07",
+        "totalLessons": 12,
+        "plannedLessonCount": null,
+        "stats": {
+          "lessonCount": 12,
+          "contactHours": 18,
+          "lessonMinutes": 1080,
+          "caseStudiesIncluded": 0,
+          "formativeChecksIncluded": 0,
+          "durationsValid": true,
+          "hoursMatch": true,
+          "mlosCovered": true
+        }
+      },
+      {
+        "moduleId": "mod-m06",
+        "totalLessons": 12,
+        "plannedLessonCount": null,
+        "stats": {
+          "lessonCount": 12,
+          "contactHours": 18,
+          "lessonMinutes": 1080,
+          "caseStudiesIncluded": 0,
+          "formativeChecksIncluded": 0,
+          "durationsValid": true,
+          "hoursMatch": true,
+          "mlosCovered": true
+        }
+      },
+      {
+        "moduleId": "mod-m08",
+        "totalLessons": 12,
+        "plannedLessonCount": null,
+        "stats": {
+          "lessonCount": 12,
+          "contactHours": 18,
+          "lessonMinutes": 1080,
+          "caseStudiesIncluded": 0,
+          "formativeChecksIncluded": 0,
+          "durationsValid": true,
+          "hoursMatch": true,
+          "mlosCovered": true
+        }
+      },
+      {
+        "moduleId": "mod-m09",
+        "totalLessons": 12,
+        "plannedLessonCount": null,
+        "stats": {
+          "lessonCount": 12,
+          "contactHours": 18,
+          "lessonMinutes": 1080,
+          "caseStudiesIncluded": 0,
+          "formativeChecksIncluded": 0,
+          "durationsValid": true,
+          "hoursMatch": true,
+          "mlosCovered": true
+        }
+      },
+      {
+        "moduleId": "mod-m10",
+        "totalLessons": 12,
+        "plannedLessonCount": null,
+        "stats": {
+          "lessonCount": 12,
+          "contactHours": 18,
+          "lessonMinutes": 1080,
+          "caseStudiesIncluded": 0,
+          "formativeChecksIncluded": 0,
+          "durationsValid": true,
+          "hoursMatch": true,
+          "mlosCovered": true
+        }
+      }
+    ]
+  },
+  "moduleLessonPlans": [
+    {
+      "moduleId": "mod-m05",
+      "plannedLessonCount": 12,
+      "lessons": [
+        {
+          "lessonTitle": "HS classification basics, GST treatment and data confiden...",
+          "duration": 90,
+          "linkedMLOs": ["M05-LO4", "M05-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "HS classification basics, GST treatment and data confiden... (2)",
+          "duration": 90,
+          "linkedMLOs": ["M05-LO4", "M05-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "HS classification basics, GST treatment and data confiden... (3)",
+          "duration": 90,
+          "linkedMLOs": ["M05-LO4", "M05-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Select appropriate Incoterms 2020 to align cost, risk and...",
+          "duration": 90,
+          "linkedMLOs": ["M05-LO1", "M05-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Prepare and verify commercial invoice, packing list, BL/A...",
+          "duration": 90,
+          "linkedMLOs": ["M05-LO2", "M05-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Coordinate with carriers and customs brokers to align doc...",
+          "duration": 90,
+          "linkedMLOs": ["M05-LO3", "M05-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Select appropriate Incoterms 2020 to align cost, risk and... (7)",
+          "duration": 90,
+          "linkedMLOs": ["M05-LO1", "M05-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Prepare and verify commercial invoice, packing list, BL/A... (8)",
+          "duration": 90,
+          "linkedMLOs": ["M05-LO2", "M05-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Coordinate with carriers and customs brokers to align doc... (9)",
+          "duration": 90,
+          "linkedMLOs": ["M05-LO3", "M05-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Select appropriate Incoterms 2020 to align cost, risk and... (10)",
+          "duration": 90,
+          "linkedMLOs": ["M05-LO1", "M05-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Prepare and verify commercial invoice, packing list, BL/A... (11)",
+          "duration": 90,
+          "linkedMLOs": ["M05-LO2", "M05-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Coordinate with carriers and customs brokers to align doc... (12)",
+          "duration": 90,
+          "linkedMLOs": ["M05-LO3", "M05-LO4"],
+          "formativeChecks": []
+        }
+      ]
+    },
+    {
+      "moduleId": "mod-m03",
+      "plannedLessonCount": 12,
+      "lessons": [
+        {
+          "lessonTitle": "Warehouse layout, slotting principles, MHE and safety bas...",
+          "duration": 90,
+          "linkedMLOs": ["M03-LO3", "M03-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Warehouse layout, slotting principles, MHE and safety bas... (2)",
+          "duration": 90,
+          "linkedMLOs": ["M03-LO3", "M03-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Warehouse layout, slotting principles, MHE and safety bas... (3)",
+          "duration": 90,
+          "linkedMLOs": ["M03-LO3", "M03-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Operate a WMS sandbox to plan receiving, slot locations a...",
+          "duration": 90,
+          "linkedMLOs": ["M03-LO1", "M03-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Configure and apply GS1 barcodes for items and cartons, a...",
+          "duration": 90,
+          "linkedMLOs": ["M03-LO2", "M03-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "5S and simple Lean techniques to improve picking accuracy...",
+          "duration": 90,
+          "linkedMLOs": ["M03-LO4", "M03-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Operate a WMS sandbox to plan receiving, slot locations a... (7)",
+          "duration": 90,
+          "linkedMLOs": ["M03-LO1", "M03-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Configure and apply GS1 barcodes for items and cartons, a... (8)",
+          "duration": 90,
+          "linkedMLOs": ["M03-LO2", "M03-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "5S and simple Lean techniques to improve picking accuracy... (9)",
+          "duration": 90,
+          "linkedMLOs": ["M03-LO4", "M03-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Operate a WMS sandbox to plan receiving, slot locations a... (10)",
+          "duration": 90,
+          "linkedMLOs": ["M03-LO1", "M03-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Configure and apply GS1 barcodes for items and cartons, a... (11)",
+          "duration": 90,
+          "linkedMLOs": ["M03-LO2", "M03-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "5S and simple Lean techniques to improve picking accuracy... (12)",
+          "duration": 90,
+          "linkedMLOs": ["M03-LO4", "M03-LO3"],
+          "formativeChecks": []
+        }
+      ]
+    },
+    {
+      "moduleId": "mod-m04",
+      "plannedLessonCount": 12,
+      "lessons": [
+        {
+          "lessonTitle": "Tracking milestones and exception\u2011handling communication ...",
+          "duration": 90,
+          "linkedMLOs": ["M04-LO4", "M04-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Tracking milestones and exception\u2011handling communication ... (2)",
+          "duration": 90,
+          "linkedMLOs": ["M04-LO4", "M04-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Tracking milestones and exception\u2011handling communication ... (3)",
+          "duration": 90,
+          "linkedMLOs": ["M04-LO4", "M04-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Select suitable transport modes and consolidation strateg...",
+          "duration": 90,
+          "linkedMLOs": ["M04-LO1", "M04-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Plan compliant intra\u2011state routes and schedules in a TMS,...",
+          "duration": 90,
+          "linkedMLOs": ["M04-LO2", "M04-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Compute basic transport costs per kilometre and per shipm...",
+          "duration": 90,
+          "linkedMLOs": ["M04-LO3", "M04-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Select suitable transport modes and consolidation strateg... (7)",
+          "duration": 90,
+          "linkedMLOs": ["M04-LO1", "M04-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Plan compliant intra\u2011state routes and schedules in a TMS,... (8)",
+          "duration": 90,
+          "linkedMLOs": ["M04-LO2", "M04-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Compute basic transport costs per kilometre and per shipm... (9)",
+          "duration": 90,
+          "linkedMLOs": ["M04-LO3", "M04-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Select suitable transport modes and consolidation strateg... (10)",
+          "duration": 90,
+          "linkedMLOs": ["M04-LO1", "M04-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Plan compliant intra\u2011state routes and schedules in a TMS,... (11)",
+          "duration": 90,
+          "linkedMLOs": ["M04-LO2", "M04-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Compute basic transport costs per kilometre and per shipm... (12)",
+          "duration": 90,
+          "linkedMLOs": ["M04-LO3", "M04-LO4"],
+          "formativeChecks": []
+        }
+      ]
+    },
+    {
+      "moduleId": "mod-m02",
+      "plannedLessonCount": 12,
+      "lessons": [
+        {
+          "lessonTitle": "Data confidentiality and ethical considerations when hand...",
+          "duration": 90,
+          "linkedMLOs": ["M02-LO4", "M02-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Data confidentiality and ethical considerations when hand... (2)",
+          "duration": 90,
+          "linkedMLOs": ["M02-LO4", "M02-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Data confidentiality and ethical considerations when hand... (3)",
+          "duration": 90,
+          "linkedMLOs": ["M02-LO4", "M02-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Calculate EOQ, safety stock and reorder points from deman...",
+          "duration": 90,
+          "linkedMLOs": ["M02-LO1", "M02-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Build spreadsheet models to clean data, compute KPIs and ...",
+          "duration": 90,
+          "linkedMLOs": ["M02-LO2", "M02-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Reconcile sample cycle\u2011count variances using basic root c...",
+          "duration": 90,
+          "linkedMLOs": ["M02-LO3", "M02-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Calculate EOQ, safety stock and reorder points from deman... (7)",
+          "duration": 90,
+          "linkedMLOs": ["M02-LO1", "M02-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Build spreadsheet models to clean data, compute KPIs and ... (8)",
+          "duration": 90,
+          "linkedMLOs": ["M02-LO2", "M02-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Reconcile sample cycle\u2011count variances using basic root c... (9)",
+          "duration": 90,
+          "linkedMLOs": ["M02-LO3", "M02-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Calculate EOQ, safety stock and reorder points from deman... (10)",
+          "duration": 90,
+          "linkedMLOs": ["M02-LO1", "M02-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Build spreadsheet models to clean data, compute KPIs and ... (11)",
+          "duration": 90,
+          "linkedMLOs": ["M02-LO2", "M02-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Reconcile sample cycle\u2011count variances using basic root c... (12)",
+          "duration": 90,
+          "linkedMLOs": ["M02-LO3", "M02-LO4"],
+          "formativeChecks": []
+        }
+      ]
+    },
+    {
+      "moduleId": "mod-m01",
+      "plannedLessonCount": 12,
+      "lessons": [
+        {
+          "lessonTitle": "SCOR processes and map end-to-end material, information a...",
+          "duration": 90,
+          "linkedMLOs": ["M01-LO1", "M01-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Roles of WMS, TMS and GS1 barcodes in coordinating receiv...",
+          "duration": 90,
+          "linkedMLOs": ["M01-LO3", "M01-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Recognise regulatory, safety and data confidentiality req...",
+          "duration": 90,
+          "linkedMLOs": ["M01-LO4", "M01-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "SCOR processes and map end-to-end material, information a... (4)",
+          "duration": 90,
+          "linkedMLOs": ["M01-LO1", "M01-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Roles of WMS, TMS and GS1 barcodes in coordinating receiv... (5)",
+          "duration": 90,
+          "linkedMLOs": ["M01-LO3", "M01-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Recognise regulatory, safety and data confidentiality req... (6)",
+          "duration": 90,
+          "linkedMLOs": ["M01-LO4", "M01-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "SCOR processes and map end-to-end material, information a... (7)",
+          "duration": 90,
+          "linkedMLOs": ["M01-LO1", "M01-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Roles of WMS, TMS and GS1 barcodes in coordinating receiv... (8)",
+          "duration": 90,
+          "linkedMLOs": ["M01-LO3", "M01-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Recognise regulatory, safety and data confidentiality req... (9)",
+          "duration": 90,
+          "linkedMLOs": ["M01-LO4", "M01-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Incoterms 2020 basics to align costs, risk and control in...",
+          "duration": 90,
+          "linkedMLOs": ["M01-LO2", "M01-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Incoterms 2020 basics to align costs, risk and control in... (11)",
+          "duration": 90,
+          "linkedMLOs": ["M01-LO2", "M01-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Incoterms 2020 basics to align costs, risk and control in... (12)",
+          "duration": 90,
+          "linkedMLOs": ["M01-LO2", "M01-LO1"],
+          "formativeChecks": []
+        }
+      ]
+    },
+    {
+      "moduleId": "mod-m07",
+      "plannedLessonCount": 12,
+      "lessons": [
+        {
+          "lessonTitle": "Incoterms 2020 to prepare and verify export\u2013import docume...",
+          "duration": 90,
+          "linkedMLOs": ["M07-LO2", "M07-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Incoterms 2020 to prepare and verify export\u2013import docume... (2)",
+          "duration": 90,
+          "linkedMLOs": ["M07-LO2", "M07-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Incoterms 2020 to prepare and verify export\u2013import docume... (3)",
+          "duration": 90,
+          "linkedMLOs": ["M07-LO2", "M07-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Kochi port workflows and customs touchpoints, mapping rol...",
+          "duration": 90,
+          "linkedMLOs": ["M07-LO1", "M07-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Tracking data and carrier updates to identify delays and ...",
+          "duration": 90,
+          "linkedMLOs": ["M07-LO3", "M07-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Kochi port workflows and customs touchpoints, mapping rol... (6)",
+          "duration": 90,
+          "linkedMLOs": ["M07-LO1", "M07-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Tracking data and carrier updates to identify delays and ... (7)",
+          "duration": 90,
+          "linkedMLOs": ["M07-LO3", "M07-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Kochi port workflows and customs touchpoints, mapping rol... (8)",
+          "duration": 90,
+          "linkedMLOs": ["M07-LO1", "M07-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Tracking data and carrier updates to identify delays and ... (9)",
+          "duration": 90,
+          "linkedMLOs": ["M07-LO3", "M07-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Visibility systems, EDI/API integrations and confidential...",
+          "duration": 90,
+          "linkedMLOs": ["M07-LO4", "M07-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Visibility systems, EDI/API integrations and confidential... (11)",
+          "duration": 90,
+          "linkedMLOs": ["M07-LO4", "M07-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Visibility systems, EDI/API integrations and confidential... (12)",
+          "duration": 90,
+          "linkedMLOs": ["M07-LO4", "M07-LO2"],
+          "formativeChecks": []
+        }
+      ]
+    },
+    {
+      "moduleId": "mod-m06",
+      "plannedLessonCount": 12,
+      "lessons": [
+        {
+          "lessonTitle": "WMS/ERP settings to implement reorder policies and GS1-dr...",
+          "duration": 90,
+          "linkedMLOs": ["M06-LO2", "M06-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "WMS/ERP settings to implement reorder policies and GS1-dr... (2)",
+          "duration": 90,
+          "linkedMLOs": ["M06-LO2", "M06-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "WMS/ERP settings to implement reorder policies and GS1-dr... (3)",
+          "duration": 90,
+          "linkedMLOs": ["M06-LO2", "M06-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Demand and stock data to calculate EOQ, safety stock and ...",
+          "duration": 90,
+          "linkedMLOs": ["M06-LO1", "M06-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Cycle\u2011count discrepancies, identify root causes and recom...",
+          "duration": 90,
+          "linkedMLOs": ["M06-LO3", "M06-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Demand and stock data to calculate EOQ, safety stock and ... (6)",
+          "duration": 90,
+          "linkedMLOs": ["M06-LO1", "M06-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Cycle\u2011count discrepancies, identify root causes and recom... (7)",
+          "duration": 90,
+          "linkedMLOs": ["M06-LO3", "M06-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Demand and stock data to calculate EOQ, safety stock and ... (8)",
+          "duration": 90,
+          "linkedMLOs": ["M06-LO1", "M06-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Cycle\u2011count discrepancies, identify root causes and recom... (9)",
+          "duration": 90,
+          "linkedMLOs": ["M06-LO3", "M06-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "A SCOR\u2011aligned stock control improvement plan using 5S, l...",
+          "duration": 90,
+          "linkedMLOs": ["M06-LO4", "M06-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "A SCOR\u2011aligned stock control improvement plan using 5S, l... (11)",
+          "duration": 90,
+          "linkedMLOs": ["M06-LO4", "M06-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "A SCOR\u2011aligned stock control improvement plan using 5S, l... (12)",
+          "duration": 90,
+          "linkedMLOs": ["M06-LO4", "M06-LO2"],
+          "formativeChecks": []
+        }
+      ]
+    },
+    {
+      "moduleId": "mod-m08",
+      "plannedLessonCount": 12,
+      "lessons": [
+        {
+          "lessonTitle": "TMS to plan loads, consolidation and last\u2011mile routing fo...",
+          "duration": 90,
+          "linkedMLOs": ["M08-LO2", "M08-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "TMS to plan loads, consolidation and last\u2011mile routing fo... (2)",
+          "duration": 90,
+          "linkedMLOs": ["M08-LO2", "M08-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "TMS to plan loads, consolidation and last\u2011mile routing fo... (3)",
+          "duration": 90,
+          "linkedMLOs": ["M08-LO2", "M08-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Consolidation, hub\u2011and\u2011spoke and milk\u2011run designs to bala...",
+          "duration": 90,
+          "linkedMLOs": ["M08-LO3", "M08-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Consolidation, hub\u2011and\u2011spoke and milk\u2011run designs to bala... (5)",
+          "duration": 90,
+          "linkedMLOs": ["M08-LO3", "M08-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Consolidation, hub\u2011and\u2011spoke and milk\u2011run designs to bala... (6)",
+          "duration": 90,
+          "linkedMLOs": ["M08-LO3", "M08-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Intra\u2011state route alternatives for mixed loads using cost...",
+          "duration": 90,
+          "linkedMLOs": ["M08-LO1", "M08-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Intra\u2011state route alternatives for mixed loads using cost... (8)",
+          "duration": 90,
+          "linkedMLOs": ["M08-LO1", "M08-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Intra\u2011state route alternatives for mixed loads using cost... (9)",
+          "duration": 90,
+          "linkedMLOs": ["M08-LO1", "M08-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "A low\u2011carbon transport plan incorporating mode shift, bac...",
+          "duration": 90,
+          "linkedMLOs": ["M08-LO4", "M08-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "A low\u2011carbon transport plan incorporating mode shift, bac... (11)",
+          "duration": 90,
+          "linkedMLOs": ["M08-LO4", "M08-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "A low\u2011carbon transport plan incorporating mode shift, bac... (12)",
+          "duration": 90,
+          "linkedMLOs": ["M08-LO4", "M08-LO2"],
+          "formativeChecks": []
+        }
+      ]
+    },
+    {
+      "moduleId": "mod-m09",
+      "plannedLessonCount": 12,
+      "lessons": [
+        {
+          "lessonTitle": "GS1 barcodes and WMS workflows to redesign receiving, put...",
+          "duration": 90,
+          "linkedMLOs": ["M09-LO3", "M09-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "GS1 barcodes and WMS workflows to redesign receiving, put... (2)",
+          "duration": 90,
+          "linkedMLOs": ["M09-LO3", "M09-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "GS1 barcodes and WMS workflows to redesign receiving, put... (3)",
+          "duration": 90,
+          "linkedMLOs": ["M09-LO3", "M09-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Warehouse performance using SCOR metrics to identify bott...",
+          "duration": 90,
+          "linkedMLOs": ["M09-LO1", "M09-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Warehouse performance using SCOR metrics to identify bott... (5)",
+          "duration": 90,
+          "linkedMLOs": ["M09-LO1", "M09-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Warehouse performance using SCOR metrics to identify bott... (6)",
+          "duration": 90,
+          "linkedMLOs": ["M09-LO1", "M09-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "MHE safety risks and control measures, including traffic ...",
+          "duration": 90,
+          "linkedMLOs": ["M09-LO4", "M09-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "MHE safety risks and control measures, including traffic ... (8)",
+          "duration": 90,
+          "linkedMLOs": ["M09-LO4", "M09-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "MHE safety risks and control measures, including traffic ... (9)",
+          "duration": 90,
+          "linkedMLOs": ["M09-LO4", "M09-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "A SCOR\u2011aligned improvement plan covering layout, slotting...",
+          "duration": 90,
+          "linkedMLOs": ["M09-LO2", "M09-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "A SCOR\u2011aligned improvement plan covering layout, slotting... (11)",
+          "duration": 90,
+          "linkedMLOs": ["M09-LO2", "M09-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "A SCOR\u2011aligned improvement plan covering layout, slotting... (12)",
+          "duration": 90,
+          "linkedMLOs": ["M09-LO2", "M09-LO3"],
+          "formativeChecks": []
+        }
+      ]
+    },
+    {
+      "moduleId": "mod-m10",
+      "plannedLessonCount": 12,
+      "lessons": [
+        {
+          "lessonTitle": "Appropriate tools, such as EOQ, Incoterms documents, WMS/...",
+          "duration": 90,
+          "linkedMLOs": ["M10-LO3", "M10-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Appropriate tools, such as EOQ, Incoterms documents, WMS/... (2)",
+          "duration": 90,
+          "linkedMLOs": ["M10-LO3", "M10-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Appropriate tools, such as EOQ, Incoterms documents, WMS/... (3)",
+          "duration": 90,
+          "linkedMLOs": ["M10-LO3", "M10-LO1"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "A Kochi logistics problem using demand, stock, route or v...",
+          "duration": 90,
+          "linkedMLOs": ["M10-LO1", "M10-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "A Kochi logistics problem using demand, stock, route or v... (5)",
+          "duration": 90,
+          "linkedMLOs": ["M10-LO1", "M10-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "A Kochi logistics problem using demand, stock, route or v... (6)",
+          "duration": 90,
+          "linkedMLOs": ["M10-LO1", "M10-LO4"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Stakeholder, compliance and confidentiality risks, and de...",
+          "duration": 90,
+          "linkedMLOs": ["M10-LO4", "M10-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Stakeholder, compliance and confidentiality risks, and de... (8)",
+          "duration": 90,
+          "linkedMLOs": ["M10-LO4", "M10-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "Stakeholder, compliance and confidentiality risks, and de... (9)",
+          "duration": 90,
+          "linkedMLOs": ["M10-LO4", "M10-LO2"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "An implementable, SCOR\u2011aligned solution with actions, res...",
+          "duration": 90,
+          "linkedMLOs": ["M10-LO2", "M10-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "An implementable, SCOR\u2011aligned solution with actions, res... (11)",
+          "duration": 90,
+          "linkedMLOs": ["M10-LO2", "M10-LO3"],
+          "formativeChecks": []
+        },
+        {
+          "lessonTitle": "An implementable, SCOR\u2011aligned solution with actions, res... (12)",
+          "duration": 90,
+          "linkedMLOs": ["M10-LO2", "M10-LO3"],
+          "formativeChecks": []
+        }
+      ]
+    }
+  ]
+}
