@@ -30,3 +30,9 @@ describe('topicShape', () => {
     });
   });
 });
+
+describe('topicTitle falls through an empty title', () => {
+  it('uses the name when the title is empty', () => {
+    expect(topicTitle({ title: '', name: 'Port operations' })).toBe('Port operations');
+  });
+});

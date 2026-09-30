@@ -20,7 +20,8 @@ export function topicTitle(topic: unknown): string {
   if (typeof topic === 'string') return topic.trim();
   if (topic && typeof topic === 'object') {
     const t = topic as { title?: unknown; name?: unknown; topic?: unknown };
-    const title = t.title ?? t.name ?? t.topic;
+    // `||`, not `??`: an empty title must fall through to a name, not stop the search.
+    const title = [t.title, t.name, t.topic].find((v) => typeof v === 'string' && v.trim());
     return typeof title === 'string' ? title.trim() : '';
   }
   return '';

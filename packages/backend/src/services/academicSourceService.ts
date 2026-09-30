@@ -17,6 +17,7 @@
  * email for their "polite pool"; without it they throttle harder.
  */
 import { loggingService } from './loggingService';
+import { topicTitle } from '../utils/topicShape';
 
 const OPENALEX = 'https://api.openalex.org';
 const CROSSREF = 'https://api.crossref.org';
@@ -291,15 +292,17 @@ export interface ModuleProfile {
  * coarser weights than a 46-module degree.
  */
 export function buildModuleProfiles(
-  modules: { id: string; title?: string; topics?: string[]; mlos?: { statement?: string }[] }[]
+  modules: { id: string; title?: string; topics?: unknown[]; mlos?: { statement?: string }[] }[]
 ): Map<string, ModuleProfile> {
   const docs = modules.map((m) => ({
     id: m.id,
     tokens: new Set(
       tokenise(
-        [m.title || '', ...(m.topics || []), ...(m.mlos || []).map((x) => x.statement || '')].join(
-          ' '
-        )
+        [
+          m.title || '',
+          ...(m.topics || []).map(topicTitle),
+          ...(m.mlos || []).map((x) => x.statement || ''),
+        ].join(' ')
       )
     ),
   }));

@@ -56,6 +56,7 @@ import {
 } from '../services/step10Completion';
 import { step11ValidationFromDecks } from '../services/deliverableValidation';
 import { step8ApprovalBlocker } from '../services/step8Approval';
+import { topicTitle } from '../utils/topicShape';
 import {
   withLessons,
   saveModulePlan,
@@ -2675,7 +2676,9 @@ router.post('/:id/step4/import', validateJWT, loadUser, (req: Request, res: Resp
         const liveTopics: any[] = Array.isArray(updated.topics) ? updated.topics : [];
         const liveTopicByTitle = new Map<string, any>();
         liveTopics.forEach((t: any) => {
-          if (t.title) liveTopicByTitle.set(norm(t.title), t);
+          // Stored topics are usually plain strings, which carry no id or description to keep.
+          const title = topicTitle(t);
+          if (title) liveTopicByTitle.set(norm(title), typeof t === 'string' ? {} : t);
         });
         updated.topics = pmod.topics.map((t, tIdx) => {
           const prior = liveTopicByTitle.get(norm(t.title));
@@ -8709,7 +8712,11 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
 
               if (update.action === 'update' && update.match) {
                 // Find the child item by matching
-                const childIdx = childArray.findIndex((child: any) => {
+                // Step 4 stores topics as plain strings, which have no `title` to match on, so
+                // every topic edit came back "no item matched". A string child is matched as
+                // its title.
+                const childIdx = childArray.findIndex((rawChild: any) => {
+                  const child = typeof rawChild === 'string' ? { title: rawChild } : rawChild;
                   const matchCriteria = { ...update.match };
                   delete matchCriteria.moduleId;
                   delete matchCriteria.quizId;
@@ -8726,7 +8733,18 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
                 });
 
                 if (childIdx !== -1) {
-                  childArray[childIdx] = { ...childArray[childIdx], ...update.changes };
+                  const current = childArray[childIdx];
+                  const renameOnly =
+                    Object.keys(update.changes || {}).every((k) => k === 'title') &&
+                    typeof update.changes?.title === 'string';
+                  // A renamed string topic stays a string; one given other fields (hours, a
+                  // description) becomes an object, which every topic reader accepts.
+                  childArray[childIdx] =
+                    typeof current === 'string'
+                      ? renameOnly
+                        ? update.changes.title
+                        : { title: current, ...update.changes }
+                      : { ...current, ...update.changes };
                   workflow.markModified(targetStepKey);
                   noteApplied();
                   loggingService.info('Nested item updated', {
@@ -8757,9 +8775,12 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
                 delete matchCriteria.moduleId;
                 delete matchCriteria.quizId;
                 delete matchCriteria.caseId;
-                const childIdx = childArray.findIndex((child: any) =>
-                  Object.keys(matchCriteria).every((key) => child[key] === matchCriteria[key])
-                );
+                const childIdx = childArray.findIndex((rawChild: any) => {
+                  const child = typeof rawChild === 'string' ? { title: rawChild } : rawChild;
+                  return Object.keys(matchCriteria).every(
+                    (key) => child[key] === matchCriteria[key]
+                  );
+                });
                 if (childIdx !== -1) {
                   childArray.splice(childIdx, 1);
                   workflow.markModified(targetStepKey);

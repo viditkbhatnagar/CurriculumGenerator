@@ -159,7 +159,11 @@ const countMatches = (text: string, pattern: RegExp): number =>
 
 /** The module's own subject matter, as one searchable string. */
 function subjectOf(module: DriftModule): string {
-  return [module?.moduleTitle, ...(module?.topics || [])].filter(Boolean).join(' ');
+  // Topics may be strings or {title} objects; joining an object printed "[object Object]".
+  const topics = ((module?.topics || []) as unknown[]).map((t) =>
+    typeof t === 'string' ? t : String((t as { title?: unknown })?.title || '')
+  );
+  return [module?.moduleTitle, ...topics].filter(Boolean).join(' ');
 }
 
 /**

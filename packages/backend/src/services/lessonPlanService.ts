@@ -28,6 +28,7 @@ import {
   ReadingAssignment,
   CharacterBrief,
 } from '../models/CurriculumWorkflow';
+import { topicTitle } from '../utils/topicShape';
 
 // ============================================================================
 // INTERFACES
@@ -572,7 +573,7 @@ export class LessonPlanService {
      *
      * Falls back to the positional spread when the module has no topics to match against.
      */
-    const topics = (moduleTopics || []).filter((t) => typeof t === 'string' && t.trim());
+    const topics = (moduleTopics || []).map(topicTitle).filter(Boolean);
     // Sorted the same way distributeMLOs sorts, so an index means the same thing either way.
     const orderedMLOs = [...mlos].sort(
       (a, b) => getBloomLevelOrder(a.bloomLevel) - getBloomLevelOrder(b.bloomLevel)
@@ -1070,7 +1071,9 @@ impressive it looks.
    * an unallocated topic list does.
    */
   private buildTopicGuidance(block: LessonBlock, module: ModuleData): string {
-    const topics = (module.topics || []).filter((t) => typeof t === 'string' && t.trim());
+    // Topics arrive as strings or as {title, hours} objects (after a Step 4 re-upload); keeping
+    // strings only dropped a re-uploaded module's whole syllabus from the lesson prompt.
+    const topics = (module.topics || []).map(topicTitle).filter(Boolean);
     if (topics.length === 0) return '';
 
     const total = Math.max(1, block.totalLessonsInModule || topics.length);
