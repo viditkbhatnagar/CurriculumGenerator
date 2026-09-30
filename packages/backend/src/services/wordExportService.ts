@@ -436,9 +436,27 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       }
     }
 
-    // Entry Requirements
+    // Entry Requirements. The model writes these; no institution has supplied or approved
+    // them. Printed as settled fact, they read as the institution's admission, language and
+    // RPL rules, which is what the 21 Sep 2026 review flagged as unauthorised claims.
     if (step1.entryRequirements) {
-      contentChildren.push(this.createH2('Entry Requirements'));
+      contentChildren.push(this.createH2('Entry Requirements (Proposal)'));
+      contentChildren.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text:
+                'Proposed for institutional approval. Entry, English-language, recognition of prior ' +
+                'learning and credit-transfer rules are set by the institution; nothing in this ' +
+                'section is institutional policy until it is approved.',
+              italics: true,
+              size: FONT_SIZES.BODY,
+              font: FONT_FAMILY,
+            }),
+          ],
+          spacing: { after: 120, line: LINE_SPACING },
+        })
+      );
       const formatted = await this.formatTextIntelligently(
         step1.entryRequirements,
         'Entry Requirements'

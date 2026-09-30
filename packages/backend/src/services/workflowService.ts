@@ -483,6 +483,8 @@ class WorkflowService {
       executiveSummary: generatedContent.executiveSummary,
       programAims: generatedContent.programAims,
       entryRequirements: generatedContent.entryRequirements,
+      // Generated, never supplied by the institution: the export presents it as a proposal.
+      entryRequirementsOrigin: 'proposal',
       careerPathways: generatedContent.careerPathways,
       completenessScore,
       validatedAt: new Date(),
@@ -800,13 +802,13 @@ Based on the knowledge base materials and program specification, generate:
       - Portfolio requirements (if applicable)
    
    c) OTHER REQUIREMENTS
-      - English language proficiency (if applicable)
       - Technical skills or software knowledge
       - Professional membership or registration
-   
-   d) RECOGNITION OF PRIOR LEARNING
-      - How RPL/APEL is considered
-      - Maximum credits transferable
+
+   This whole section is a PROPOSAL for the institution to approve, not institutional policy.
+   Institutional rules are NOT yours to set: for English-language thresholds, recognition of
+   prior learning (RPL/APEL), credit transfer limits, age requirements and any university or
+   regulatory policy, write "[To be set by the institution]" instead of inventing a value.
 
 4. **CAREER PATHWAYS** (4-6 realistic progressions)
    Based on the target job roles and industry sector, specify:
