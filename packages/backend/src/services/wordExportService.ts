@@ -15,6 +15,7 @@ import { loggingService } from './loggingService';
 import { moduleLabelOf } from '../utils/moduleIdentity';
 import { bloomIndex, statedBloom } from './assessmentGeneratorService';
 import { validationFromPlans } from './step10Completion';
+import { step12ValidationFromPacks } from './deliverableValidation';
 
 interface WorkflowData {
   projectName: string;
@@ -3072,8 +3073,14 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       this.createH1('12. Assignment Packs')
     );
 
-    // Validation summary
-    if (step12.validation) {
+    // Validation summary, computed from the packs in this document. Workflows generated
+    // before 2026-09-30 store a constant `true` for outcome coverage and, on the per-module
+    // path, rubric completeness.
+    const step12Validation = step12ValidationFromPacks(
+      step12.moduleAssignmentPacks || [],
+      step4?.modules || []
+    );
+    if (step12.validation || (step12.moduleAssignmentPacks || []).length) {
       contentChildren.push(this.createH2('12.1 Validation Summary'));
 
       const validationRows = [
@@ -3086,25 +3093,25 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         new TableRow({
           children: [
             this.createTableCell('All Modules Have Assignments'),
-            this.createTableCell(step12.validation.allModulesHaveAssignments ? '✓ Pass' : '✗ Fail'),
+            this.createTableCell(step12Validation.allModulesHaveAssignments ? '✓ Pass' : '✗ Fail'),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('All Variants Generated'),
-            this.createTableCell(step12.validation.allVariantsGenerated ? '✓ Pass' : '✗ Fail'),
+            this.createTableCell(step12Validation.allVariantsGenerated ? '✓ Pass' : '✗ Fail'),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('All Module Learning Outcomes Covered'),
-            this.createTableCell(step12.validation.allMLOsCovered ? '✓ Pass' : '✗ Fail'),
+            this.createTableCell(step12Validation.allMLOsCovered ? '✓ Pass' : '✗ Fail'),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('All Rubrics Complete'),
-            this.createTableCell(step12.validation.allRubricsComplete ? '✓ Pass' : '✗ Fail'),
+            this.createTableCell(step12Validation.allRubricsComplete ? '✓ Pass' : '✗ Fail'),
           ],
         }),
       ];
