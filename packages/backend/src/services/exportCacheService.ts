@@ -44,7 +44,11 @@ import { loggingService } from './loggingService';
 //     guide and rubric as three separate artefacts.
 // v10: Step 7 renders Bloom levels — per assessment and per question — which were stored
 //      but shown only for PLOs, MLOs and lessons.
-const EXPORT_FORMAT_VERSION = 'v19';
+// v20: Steps 5, 10, 11 and 12 print validation computed from the stored data instead of the
+//      constants approval wrote; per-module documents are checked against their own module;
+//      Step 4 names topics stored as strings; entry requirements are labelled a proposal;
+//      Step 10 lists a slide deck only when Step 11 holds one.
+const EXPORT_FORMAT_VERSION = 'v20';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {
@@ -214,8 +218,31 @@ export function stepExportContentHash(
     // module-level independent activities, hours and MLO alignment, 5 and 6 to name each
     // module in its heading — so their caches must invalidate when step4 changes, and
     // including it here also busts copies cached before each of those was added.
-    aux: [5, 6, 7, 8, 10].includes(stepNumber) ? workflow.step4 : undefined,
+    // 12 checks each module's outcomes against its pack.
+    aux: [5, 6, 7, 8, 10, 12].includes(stepNumber) ? workflow.step4 : undefined,
+    // Step 10 also prints outcome wording (Step 3), case titles and the not-required mark
+    // (Step 8) and which decks exist (Step 11).
+    step10Aux:
+      stepNumber === 10
+        ? {
+            step3: workflow.step3,
+            step8: workflow.step8,
+            decks: step11DeckIds(workflow.step11),
+          }
+        : undefined,
   });
+}
+
+/** The slide decks Step 11 holds, as ids: all a Step 10 document needs to know about them. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function step11DeckIds(step11: any): string[] {
+  const ids: string[] = [];
+  for (const mod of step11?.modulePPTDecks || []) {
+    for (const deck of mod?.pptDecks || []) {
+      ids.push(String(deck?.deckId || deck?.lessonId || ''));
+    }
+  }
+  return ids.sort();
 }
 
 export interface CachePeekResult {

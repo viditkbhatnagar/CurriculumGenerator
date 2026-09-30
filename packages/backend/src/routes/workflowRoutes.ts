@@ -38,6 +38,7 @@ import {
   hashExportInput,
   stepExportArtifact,
   stepExportContentHash,
+  step11DeckIds,
   peekCache,
 } from '../services/exportCacheService';
 import { analyticsStorageService } from '../services/analyticsStorageService';
@@ -6996,10 +6997,19 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
         // Hashed from the stored rows, not the document: the document holds only counts, so
         // a regenerated module with the same number of lessons would otherwise hash the same
         // and the reviewer would keep downloading the previous archive.
+        // Everything else each module's document renders from is hashed too: outcome and
+        // competency wording (Steps 2 and 3), case titles and the not-required mark (Step 8),
+        // and which slide decks exist (Step 11). Leaving any of them out served an archive
+        // built before, say, the decks were generated.
         contentHash: hashExportInput({
           step: 10,
           step1: stubWorkflow.step1,
+          step2: stubWorkflow.step2,
+          step3: stubWorkflow.step3,
           step4: stubWorkflow.step4,
+          step8: stubWorkflow.step8,
+          decks: step11DeckIds(stubWorkflow.step11),
+          plannedLessonCounts: stubWorkflow.step10?.plannedLessonCounts,
           plans: await lessonPlansSignature(String(stubWorkflow._id)),
         }),
         contentType: 'application/zip',
