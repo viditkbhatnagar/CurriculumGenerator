@@ -43,6 +43,11 @@ export interface IAguCourseDraft extends Document {
   findings: Finding[];
   sourcesOffered: OfferedSource[];
   stageRuns: StageRun[];
+  /**
+   * The last time a running generation reported in. It moves after every stage, so a long but
+   * healthy run is not mistaken for a dead one; see agu/generation/generationGuard.ts.
+   */
+  heartbeatAt?: Date;
   acceptedBy?: string;
   acceptedAt?: Date;
   createdBy?: string;
@@ -78,6 +83,7 @@ const AguCourseDraftSchema = new Schema<IAguCourseDraft>(
     findings: { type: Schema.Types.Mixed, default: [] },
     sourcesOffered: { type: Schema.Types.Mixed, default: [] },
     stageRuns: { type: [StageRunSchema], default: [] },
+    heartbeatAt: Date,
     acceptedBy: String,
     acceptedAt: Date,
     createdBy: String,

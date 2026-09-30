@@ -7,6 +7,10 @@
  * and structural problems the model can fix (hours, weights, run sheets, outcome counts) get at
  * most two repair rounds, the limit the Phase One roadmap sets. Every stage is recorded on the
  * draft with its model, source counts and error, and a failure leaves the draft 'failed'.
+ *
+ * The run lives in the web process and can take several minutes, so it reports in after every
+ * stage (see heartbeat). The status sweep fails a draft only when that stops, not merely because
+ * the run is long.
  */
 import config from '../../config';
 import { openaiService } from '../../services/openaiService';
@@ -20,7 +24,7 @@ import {
 import { AGU_CATALOGUE_V1_4, catalogueCourse } from '../catalogue/catalogueV1_4';
 import { CatalogueCourse } from '../catalogue/types';
 import { Finding } from '../draft/types';
-import { isReviewReady, validateDraft } from '../validation/validateDraft';
+import { reviewStatus, validateDraft } from '../validation/validateDraft';
 import {
   buildOutlinePrompt,
   draftFromOutline,
@@ -107,6 +111,23 @@ function record(doc: IAguCourseDraft, run: StageRun): void {
   doc.stageRuns = [...(doc.stageRuns || []), run];
 }
 
+/**
+ * Record that the run is still alive. It is an atomic update, not a save of the loaded
+ * document: stages finish concurrently, and Mongoose refuses two saves of one document at once.
+ * A failed write is logged and the run carries on; a database that is really down fails the
+ * final save anyway, and the sweep then records the run as interrupted.
+ */
+async function heartbeat(draftId: string): Promise<void> {
+  try {
+    await AguCourseDraft.updateOne({ _id: draftId }, { $set: { heartbeatAt: new Date() } });
+  } catch (error) {
+    loggingService.warn('AGU outline: could not record a heartbeat', {
+      draftId,
+      error: String(error),
+    });
+  }
+}
+
 /** Generate (or regenerate) the outline for a stored draft and save the outcome. */
 export async function generateOutline(draftId: string): Promise<IAguCourseDraft> {
   const doc = await AguCourseDraft.findById(draftId);
@@ -116,10 +137,21 @@ export async function generateOutline(draftId: string): Promise<IAguCourseDraft>
 
   const started = new Date();
   doc.status = 'generating';
+  // Reset, not just set: a regenerated draft still carries the last run's old heartbeat, and the
+  // sweep would read it as a run that went quiet hours ago.
+  doc.heartbeatAt = started;
   await doc.save();
 
   try {
-    const [sources, guidance] = await Promise.all([offeredSources(course), designGuidance()]);
+    const reportingIn = async <T>(stage: Promise<T>): Promise<T> => {
+      const result = await stage;
+      await heartbeat(draftId);
+      return result;
+    };
+    const [sources, guidance] = await Promise.all([
+      reportingIn(offeredSources(course)),
+      reportingIn(designGuidance()),
+    ]);
     const { system, user } = buildOutlinePrompt(
       course,
       AGU_CATALOGUE_V1_4,
@@ -129,6 +161,7 @@ export async function generateOutline(draftId: string): Promise<IAguCourseDraft>
     );
 
     let answer = await askModel(system, user);
+    await heartbeat(draftId);
     let { draft, findings: parseFindings } = draftFromOutline(
       answer,
       course,
@@ -154,6 +187,7 @@ export async function generateOutline(draftId: string): Promise<IAguCourseDraft>
       if (fixable.length === 0) break;
       const repairStarted = new Date();
       answer = await askModel(system, `${user}\n\n${repairRequest(fixable, answer)}`);
+      await heartbeat(draftId);
       ({ draft, findings: parseFindings } = draftFromOutline(
         answer,
         course,
@@ -183,7 +217,7 @@ export async function generateOutline(draftId: string): Promise<IAguCourseDraft>
           'No open-access sources were found for this course, so no readings could be proposed. Add faculty-supplied or licensed readings.',
       });
     }
-    doc.status = isReviewReady(doc.findings) ? 'ready_for_review' : 'needs_faculty';
+    doc.status = reviewStatus(doc.findings);
     doc.markModified('draft');
     doc.markModified('findings');
     doc.markModified('sourcesOffered');
