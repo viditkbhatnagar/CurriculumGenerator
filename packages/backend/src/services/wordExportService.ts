@@ -2200,7 +2200,12 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         new TableRow({
           children: [
             this.createTableCell('Case Studies Integrated'),
-            this.createTableCell(passFail(liveValidation.caseStudiesIntegrated)),
+            // Recorded at Step 8 approval when the programme needs no case studies.
+            this.createTableCell(
+              (step8 as any)?.notRequired
+                ? '— Not required'
+                : passFail(liveValidation.caseStudiesIntegrated)
+            ),
           ],
         }),
         new TableRow({

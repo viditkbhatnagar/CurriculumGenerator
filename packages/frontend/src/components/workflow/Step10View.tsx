@@ -1578,11 +1578,17 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                 <span className={validation.allMLOsCovered ? 'text-emerald-400' : 'text-red-400'}>
                   {validation.allMLOsCovered ? '✓' : '✗'} All MLOs Covered
                 </span>
-                <span
-                  className={validation.caseStudiesIntegrated ? 'text-emerald-400' : 'text-red-400'}
-                >
-                  {validation.caseStudiesIntegrated ? '✓' : '✗'} Case Studies Integrated
-                </span>
+                {(workflow.step8 as { notRequired?: unknown } | undefined)?.notRequired ? (
+                  <span className="text-teal-500">– Case studies not required</span>
+                ) : (
+                  <span
+                    className={
+                      validation.caseStudiesIntegrated ? 'text-emerald-400' : 'text-red-400'
+                    }
+                  >
+                    {validation.caseStudiesIntegrated ? '✓' : '✗'} Case Studies Integrated
+                  </span>
+                )}
                 <span
                   className={validation.assessmentsIntegrated ? 'text-emerald-400' : 'text-red-400'}
                 >
