@@ -33,6 +33,7 @@ import {
   convertInchesToTwip,
 } from 'docx';
 import type { ICurriculumWorkflow } from '../models/CurriculumWorkflow';
+import { entryRequirementsLabel } from '../utils/entryRequirements';
 import { loggingService } from './loggingService';
 
 const FONT_FAMILY = 'Calibri';
@@ -108,7 +109,11 @@ class CourseSpecificationExportService {
 
     const entry = step1.entryRequirements;
     if (entry && String(entry).trim()) {
-      bodyChildren.push(this.h1('Entry Requirements'));
+      // Generated text is labelled a proposal here as in the main export; this is the document
+      // an institution is most likely to circulate.
+      const entryLabel = entryRequirementsLabel(step1);
+      bodyChildren.push(this.h1(entryLabel.heading));
+      if (entryLabel.note) bodyChildren.push(this.note(entryLabel.note));
       String(entry)
         .split(/\n+/)
         .map((line) => line.trim())
@@ -336,6 +341,13 @@ class CourseSpecificationExportService {
       spacing: { before: 100, after: 100 },
       alignment: AlignmentType.JUSTIFIED,
       children: [new TextRun({ text, size: FONT_SIZES.BODY, font: FONT_FAMILY })],
+    });
+  }
+
+  private note(text: string): Paragraph {
+    return new Paragraph({
+      spacing: { before: 100, after: 100 },
+      children: [new TextRun({ text, italics: true, size: FONT_SIZES.BODY, font: FONT_FAMILY })],
     });
   }
 
