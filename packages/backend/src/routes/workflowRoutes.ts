@@ -2181,6 +2181,18 @@ router.put(
       }
 
       Object.assign(module, moduleUpdates);
+      // Independent hours are stored under two names: the screens write `selfStudyHours`, and
+      // generation and some readers use `independentHours` first. An edit that set only one
+      // left the other stale, so the screen showed the new figure while Step 12 and the
+      // exports kept the old one. Whichever the client sent, both now hold it.
+      const editedIndependent =
+        moduleUpdates.selfStudyHours !== undefined
+          ? moduleUpdates.selfStudyHours
+          : moduleUpdates.independentHours;
+      if (editedIndependent !== undefined) {
+        (module as any).selfStudyHours = editedIndependent;
+        (module as any).independentHours = editedIndependent;
+      }
       if (nextContactActivities !== undefined) {
         (module as any).contactActivities = nextContactActivities;
       }
