@@ -68,7 +68,57 @@ const MEASURABLE_VERBS = new Set([
   'estimate',
   'forecast',
   'measure',
+  // Added after the CR08 draft, where each was flagged although it names something a student
+  // visibly does: "quantify business value", "clean and transform datasets".
+  'quantify',
+  'clean',
+  'transform',
+  'prepare',
+  'plan',
+  'integrate',
+  'synthesise',
+  'synthesize',
+  'argue',
+  'defend',
+  'test',
+  'validate',
+  'translate',
+  'deliver',
+  'negotiate',
+  'manage',
 ]);
+
+const CLAUSE_JOINERS = new Set(['and', 'or', 'then', 'plus']);
+
+const bareWord = (w: string | undefined) => (w || '').toLowerCase().replace(/[^a-z-]/g, '');
+
+/**
+ * The actions an outcome asks for: a measurable verb that opens the statement or a clause
+ * ("Interpret and evaluate ... and assess"). Counting every word on the verb list treated
+ * nouns and adjectives as actions ("predictive model outputs", "use cases", "a design
+ * brief"), so single-behaviour outcomes were reported as overloaded. A leading adverb
+ * ("critically evaluate") is skipped.
+ */
+export function outcomeActions(statement: string): string[] {
+  const words = statement.replace(/[()]/g, ' ').split(/\s+/).filter(Boolean);
+  const actions: string[] = [];
+  for (let i = 0; i < words.length; i++) {
+    const previous = words[i - 1];
+    const opensClause =
+      i === 0 || CLAUSE_JOINERS.has(bareWord(previous)) || /[,;:]$/.test(previous || '');
+    if (!opensClause) continue;
+    let word = bareWord(words[i]);
+    if (word.endsWith('ly') && words[i + 1]) word = bareWord(words[i + 1]);
+    if (MEASURABLE_VERBS.has(word) && !actions.includes(word)) actions.push(word);
+  }
+  return actions;
+}
+
+/** The verb an outcome starts with, past a leading adverb ("Critically evaluate" -> evaluate). */
+function leadingVerb(statement: string): string {
+  const [first, second] = statement.split(/\s+/).map(bareWord);
+  return first?.endsWith('ly') && second ? second : first || '';
+}
 const VAGUE_VERBS = new Set([
   'understand',
   'know',
@@ -182,11 +232,7 @@ function checkOutcomes(draft: CourseDraft, catalogue: CatalogueEdition): Finding
   draft.outcomes.forEach((o, i) => {
     const path = `outcomes[${i}]`;
     const statement = (o.statement || '').trim();
-    const verb =
-      statement
-        .split(/\s+/)[0]
-        ?.toLowerCase()
-        .replace(/[^a-z]/g, '') || '';
+    const verb = leadingVerb(statement);
     if (!statement)
       out.push({
         code: 'OUTCOME_EMPTY',
@@ -208,11 +254,8 @@ function checkOutcomes(draft: CourseDraft, catalogue: CatalogueEdition): Finding
         message: `${o.id} starts with "${verb}"; check that it names an observable behaviour.`,
         path,
       });
-    // More than one assessable action joined together is an overloaded outcome.
-    const actions = statement
-      .toLowerCase()
-      .split(/[\s,;]+/)
-      .filter((w) => MEASURABLE_VERBS.has(w));
+    // More than two assessable actions joined together is an overloaded outcome.
+    const actions = outcomeActions(statement);
     if (actions.length > 2)
       out.push({
         code: 'OUTCOME_OVERLOADED',

@@ -1,5 +1,10 @@
 import { AGU_CATALOGUE_V1_4 } from '../agu/catalogue/catalogueV1_4';
-import { validateDraft, isReviewReady, reviewStatus } from '../agu/validation/validateDraft';
+import {
+  validateDraft,
+  isReviewReady,
+  reviewStatus,
+  outcomeActions,
+} from '../agu/validation/validateDraft';
 import { findProhibitedClaims, DISCLOSURES } from '../agu/rules/usUtahRules';
 import { CourseDraft } from '../agu/draft/types';
 import { validDraft } from './fixtures/aguDraftFixture';
@@ -194,5 +199,23 @@ describe('findProhibitedClaims', () => {
     const m = findProhibitedClaims('Apply UK GDPR principles to customer data.');
     expect(m.map((x) => x.ruleId)).toEqual(['uk_framing']);
     expect(m[0].severity).toBe('warning');
+  });
+});
+
+describe('outcomeActions', () => {
+  it('counts the verbs that open a clause, not nouns that are also on the verb list', () => {
+    // CR08's CLO3 was reported as four actions, "model" among them, from "predictive model".
+    expect(
+      outcomeActions(
+        'Interpret and evaluate predictive model outputs (e.g., confusion matrix, ROC-AUC) to set decision thresholds and assess risk-reward trade-offs.'
+      )
+    ).toEqual(['interpret', 'evaluate', 'assess']);
+    expect(outcomeActions('Analyse how firms use financial models to design budgets.')).toEqual([
+      'analyse',
+    ]);
+  });
+
+  it('skips a leading adverb', () => {
+    expect(outcomeActions('Critically evaluate competing forecasts.')).toEqual(['evaluate']);
   });
 });
