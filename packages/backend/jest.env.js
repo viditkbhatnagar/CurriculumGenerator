@@ -11,3 +11,13 @@ process.env.MONGODB_URI =
   process.env.TEST_MONGODB_URI || 'mongodb://127.0.0.1:27017/curriculum_generator_test';
 process.env.REDIS_URL = process.env.TEST_REDIS_URL || '';
 process.env.OPENAI_API_KEY = process.env.TEST_OPENAI_API_KEY || 'sk-test-not-a-real-key';
+
+// Storage and error tracking too. The local .env holds the production bucket's credentials, so
+// a suite that reached the export cache, deck offload or source-file store would write to it.
+// No suite does today; this keeps it that way. Blank values switch those services off.
+process.env.S3_BUCKET = process.env.TEST_S3_BUCKET || '';
+process.env.S3_ACCESS_KEY_ID = '';
+process.env.S3_SECRET_ACCESS_KEY = '';
+process.env.AWS_ACCESS_KEY_ID = '';
+process.env.AWS_SECRET_ACCESS_KEY = '';
+process.env.SENTRY_DSN = '';
