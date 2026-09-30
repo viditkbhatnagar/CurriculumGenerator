@@ -4,6 +4,7 @@ import { loggingService } from './loggingService';
 import { monitoringService } from './monitoringService';
 import { errorTrackingService } from './errorTrackingService';
 import { analyticsStorageService } from './analyticsStorageService';
+import { cleanModelOutput, stripXmlInvalid } from '../utils/xmlSafe';
 
 /**
  * Unified OpenAI Service
@@ -336,7 +337,9 @@ export class OpenAIService {
           })
           .catch((err) => loggingService.error('Failed to store cost analytics', { error: err }));
 
-        return content;
+        // The model sometimes emits control characters (U+0014 where a dash was meant). Stored,
+        // they make every Word or PowerPoint export of that content invalid. See xmlSafe.
+        return cleanModelOutput(content, responseFormat === 'json_object');
       } catch (error) {
         clearTimeout(timeoutId);
 
@@ -437,7 +440,10 @@ export class OpenAIService {
           })
           .catch((err) => loggingService.error('Failed to store cost analytics', { error: err }));
 
-        return this.safeParseJSON(content, 'generateStructuredContent') as T;
+        return this.safeParseJSON(
+          cleanModelOutput(content, true),
+          'generateStructuredContent'
+        ) as T;
       } catch (error) {
         clearTimeout(timeoutId);
 
@@ -514,7 +520,9 @@ export class OpenAIService {
         // for. Without it this file fails to compile under ts-jest, which is why nothing that
         // imports it could be tested.
         for await (const chunk of stream as unknown as AsyncIterable<any>) {
-          const content = chunk.choices[0]?.delta?.content || '';
+          // Raw control characters only: an escaped one can be split across chunks, and the
+          // exports clean whatever is stored anyway.
+          const content = stripXmlInvalid(chunk.choices[0]?.delta?.content || '');
           if (content) {
             callback({ content, done: false });
           }
