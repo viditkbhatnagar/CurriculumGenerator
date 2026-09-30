@@ -69,7 +69,12 @@ import {
   loadLessonIndex,
   lessonPlansSignature,
 } from '../services/step10Store';
-import { generateStep10Zip } from '../services/stepZipExportService';
+import {
+  generateStep10Zip,
+  generateFacultyGuideZip,
+  facultyGuideForModule,
+  FACULTY_GUIDE_FORMAT_VERSION,
+} from '../services/stepZipExportService';
 import multer from 'multer';
 import { llmService } from '../services/llmService';
 import {
@@ -6884,6 +6889,67 @@ router.get(
     }
   }
 );
+
+/**
+ * GET /api/v3/workflow/:id/export/faculty-guide
+ * The Step 10 lesson plans reorganised as a faculty delivery guide: short bullets under nine
+ * headings per session, for the lecturer who has to teach them. Query ?module=<0-based index>
+ * returns one module's Word document; without it, a zip of every module's guide.
+ */
+router.get('/:id/export/faculty-guide', async (req: Request, res: Response) => {
+  try {
+    // Stubs only: each module's lessons are loaded while its own guide is written.
+    const workflow: any = await CurriculumWorkflow.findById(req.params.id);
+    if (!workflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const stubs: any[] = workflow.step10?.moduleLessonPlans || [];
+    if (stubs.length === 0) {
+      return res.status(400).json({ success: false, error: 'Step 10 has no lesson plans yet' });
+    }
+    const slug = workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum';
+
+    if (req.query.module !== undefined) {
+      const index = parseInt(req.query.module as string, 10);
+      const step4Module = (workflow.step4?.modules || [])[index];
+      const stub = step4Module && stubs.find((s: any) => s.moduleId === step4Module.id);
+      if (!stub) {
+        return res.status(404).json({ success: false, error: 'No lesson plans for that module' });
+      }
+      const doc = await facultyGuideForModule(String(workflow._id), workflow, stub);
+      if (!doc) {
+        return res.status(404).json({ success: false, error: 'That module has no lessons yet' });
+      }
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+      return res.send(doc.buffer);
+    }
+
+    await serveCachedExport(res, {
+      workflowId: String(workflow._id),
+      artifact: 'faculty-guide.zip',
+      contentHash: hashExportInput({
+        facultyGuideFormat: FACULTY_GUIDE_FORMAT_VERSION,
+        step1: workflow.step1,
+        step4: workflow.step4,
+        caseTitles: (workflow.step8?.caseStudies || []).map((c: any) => [c.id, c.title]),
+        glossary: (workflow.step9?.terms || []).map((t: any) => [t.term, t.definition]),
+        plans: await lessonPlansSignature(String(workflow._id)),
+      }),
+      contentType: 'application/zip',
+      filename: `${slug}-Faculty-Delivery-Guide-${new Date().toISOString().split('T')[0]}.zip`,
+      generate: () => generateFacultyGuideZip(String(workflow._id), workflow),
+    });
+  } catch (error) {
+    loggingService.error('Faculty guide export failed', { error, workflowId: req.params.id });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: 'Failed to build the faculty delivery guide' });
+    }
+  }
+});
 
 /**
  * GET /api/v3/workflow/:id/export/word/step/:stepNumber

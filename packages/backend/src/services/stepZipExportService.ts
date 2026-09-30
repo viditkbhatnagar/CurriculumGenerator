@@ -22,6 +22,14 @@ import archiver from 'archiver';
 import { loggingService } from './loggingService';
 import { wordExportService } from './wordExportService';
 import { loadModulePlan } from './step10Store';
+import { guideContextFromWorkflow, guideModule } from './facultyGuide/facultyGuideModel';
+import { facultyGuideBuffer } from './facultyGuide/facultyGuideDocx';
+
+/**
+ * Bumped whenever the faculty guide's layout changes, so the export cache cannot keep serving
+ * the previous layout for unchanged lessons.
+ */
+export const FACULTY_GUIDE_FORMAT_VERSION = 1;
 
 /** How a module is named in its file inside the archive. */
 function moduleFileName(stepNumber: number, index: number, stub: any, step4Module: any): string {
@@ -40,21 +48,15 @@ function moduleFileName(stepNumber: number, index: number, stub: any, step4Modul
  * only while its own document is being written, so the whole programme's teaching content is
  * never resident at once.
  */
-export async function generateStep10Zip(workflowId: string, workflow: any): Promise<Buffer> {
-  const stubs: any[] = workflow?.step10?.moduleLessonPlans || [];
-  if (stubs.length === 0) {
-    throw new Error('Step 10 has no module lesson plans to export');
-  }
-
-  const step4Modules: any[] = workflow?.step4?.modules || [];
-
-  /**
-   * Written in Step 4 order, not in the order the modules happened to finish generating.
-   *
-   * The stub array is in completion order — with modules generating five at a time it ends up
-   * shuffled (M45 before M43) — and a reviewer looking for module 12 should not have to hunt
-   * through the archive for it.
-   */
+/**
+ * The Step 10 stubs in Step 4 order, not in the order the modules finished generating.
+ *
+ * The stub array is in completion order: with modules generating five at a time it ends up
+ * shuffled (M45 before M43), and a reviewer looking for module 12 should not have to hunt
+ * through the archive for it. Anything Step 4 no longer lists still comes last, because
+ * dropping it would make the archive quietly shorter than the programme behind it.
+ */
+function stubsInStep4Order(stubs: any[], step4Modules: any[]): any[] {
   const ordered: any[] = [];
   const byId = new Map(stubs.filter((m) => m?.moduleId).map((m) => [m.moduleId, m]));
   for (const m of step4Modules) {
@@ -64,9 +66,19 @@ export async function generateStep10Zip(workflowId: string, workflow: any): Prom
       byId.delete(m.id);
     }
   }
-  // Anything Step 4 no longer lists still gets exported; dropping it would make the archive
-  // quietly shorter than the programme behind it.
   for (const leftover of byId.values()) ordered.push(leftover);
+  return ordered;
+}
+
+export async function generateStep10Zip(workflowId: string, workflow: any): Promise<Buffer> {
+  const stubs: any[] = workflow?.step10?.moduleLessonPlans || [];
+  if (stubs.length === 0) {
+    throw new Error('Step 10 has no module lesson plans to export');
+  }
+
+  const step4Modules: any[] = workflow?.step4?.modules || [];
+
+  const ordered = stubsInStep4Order(stubs, step4Modules);
   const archive = archiver('zip', { zlib: { level: 9 } });
   const chunks: Buffer[] = [];
   archive.on('data', (c: Buffer) => chunks.push(c));
@@ -136,4 +148,82 @@ export async function generateStep10Zip(workflowId: string, workflow: any): Prom
     bytes: zip.length,
   });
   return zip;
+}
+
+/** One module's faculty delivery guide as a Word document, or null if it holds no lessons. */
+export async function facultyGuideForModule(
+  workflowId: string,
+  workflow: any,
+  stub: any
+): Promise<{ name: string; buffer: Buffer } | null> {
+  const step4Modules: any[] = workflow?.step4?.modules || [];
+  const index = Math.max(
+    0,
+    step4Modules.findIndex((m) => m.id === stub.moduleId)
+  );
+  const step4Module = step4Modules.find((m) => m.id === stub.moduleId);
+  const plan = await loadModulePlan(workflowId, stub.moduleId);
+  if (!plan || (plan.lessons || []).length === 0) return null;
+  const guide = guideModule(
+    {
+      code: step4Module?.code || stub.moduleCode,
+      title: step4Module?.title || stub.moduleTitle,
+      contactHours: step4Module?.contactHours,
+      mlos: step4Module?.mlos,
+    },
+    plan.lessons,
+    guideContextFromWorkflow(workflow, step4Module)
+  );
+  const buffer = await facultyGuideBuffer(guide, workflow?.step1?.programTitle);
+  const name = moduleFileName(10, index, stub, step4Module).replace(/^Step10-/, 'Faculty-Guide-');
+  return { name, buffer };
+}
+
+/**
+ * Build a zip holding one faculty delivery guide per module, a module at a time for the same
+ * memory reason as the Step 10 archive.
+ */
+export async function generateFacultyGuideZip(workflowId: string, workflow: any): Promise<Buffer> {
+  const stubs: any[] = workflow?.step10?.moduleLessonPlans || [];
+  if (stubs.length === 0) {
+    throw new Error('Step 10 has no module lesson plans to build a faculty guide from');
+  }
+  const ordered = stubsInStep4Order(stubs, workflow?.step4?.modules || []);
+
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  const chunks: Buffer[] = [];
+  archive.on('data', (c: Buffer) => chunks.push(c));
+  const finished = new Promise<void>((resolve, reject) => {
+    archive.on('error', reject);
+    archive.on('end', () => resolve());
+  });
+
+  const failed: string[] = [];
+  for (const stub of ordered) {
+    try {
+      const doc = await facultyGuideForModule(workflowId, workflow, stub);
+      if (!doc) {
+        failed.push(stub.moduleCode || stub.moduleId);
+        continue;
+      }
+      archive.append(doc.buffer, { name: doc.name });
+    } catch (error) {
+      failed.push(stub.moduleCode || stub.moduleId);
+      loggingService.error('Could not add a module to the faculty guide archive', {
+        workflowId,
+        moduleId: stub.moduleId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  if (failed.length > 0) {
+    // Named in the archive, because a silently shorter zip reads as "that is all there was".
+    archive.append(
+      `These modules have no faculty guide in this archive because their lessons could not be loaded:\n${failed.join('\n')}\n`,
+      { name: 'MISSING-MODULES.txt' }
+    );
+  }
+  await archive.finalize();
+  await finished;
+  return Buffer.concat(chunks);
 }
