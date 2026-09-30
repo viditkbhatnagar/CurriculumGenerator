@@ -1,4 +1,6 @@
+import mongoose from 'mongoose';
 import { db } from '../db';
+import { KNOWLEDGE_BASE_COLLECTION, probeVectorIndex } from './vectorIndexProbe';
 import { cacheService } from './cacheService';
 import { monitoringService } from './monitoringService';
 import { loggingService } from './loggingService';
@@ -30,8 +32,12 @@ interface ServiceHealth {
   lastChecked: string;
 }
 
+// Render polls /health continuously; the vector index changes rarely.
+const VECTOR_PROBE_TTL_MS = 5 * 60 * 1000;
+
 class HealthCheckService {
   private startTime: number;
+  private vectorProbe: { at: number; health: ServiceHealth } | null = null;
 
   constructor() {
     this.startTime = Date.now();
@@ -42,17 +48,21 @@ class HealthCheckService {
     const timestamp = new Date().toISOString();
     const uptime = Math.floor((Date.now() - this.startTime) / 1000);
 
-    const [databaseHealth, cacheHealth] = await Promise.all([
+    const [databaseHealth, cacheHealth, vectorHealth] = await Promise.all([
       this.checkDatabase(),
       this.checkCache(),
+      this.checkVectorIndex(),
     ]);
 
     const metrics = monitoringService.getHealthMetrics();
 
     // Determine overall status
+    // The vector index is reported but not critical: without it the app still serves, it just
+    // generates without knowledge-base context, which is what this entry exists to make visible.
     const services = {
       database: databaseHealth,
       cache: cacheHealth,
+      vectorDb: vectorHealth,
     };
 
     const overallStatus = this.determineOverallStatus(services, metrics);
@@ -116,6 +126,32 @@ class HealthCheckService {
         lastChecked: new Date().toISOString(),
       };
     }
+  }
+
+  // Check that knowledge-base retrieval can return anything at all
+  private async checkVectorIndex(): Promise<ServiceHealth> {
+    if (this.vectorProbe && Date.now() - this.vectorProbe.at < VECTOR_PROBE_TTL_MS) {
+      return this.vectorProbe.health;
+    }
+    const database = mongoose.connection?.db;
+    if (!database) {
+      return {
+        status: 'unhealthy',
+        message: 'MongoDB is not connected',
+        lastChecked: new Date().toISOString(),
+      };
+    }
+    const startTime = Date.now();
+    const probe = await probeVectorIndex(database.collection(KNOWLEDGE_BASE_COLLECTION) as any);
+    const health: ServiceHealth = {
+      status: probe.status,
+      responseTime: Date.now() - startTime,
+      message: probe.message,
+      lastChecked: new Date().toISOString(),
+    };
+    if (probe.status !== 'healthy') loggingService.warn('Vector index check failed', health);
+    this.vectorProbe = { at: Date.now(), health };
+    return health;
   }
 
   // Check cache connectivity and performance

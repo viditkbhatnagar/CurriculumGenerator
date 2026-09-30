@@ -2,6 +2,7 @@ import { KnowledgeBase, IKnowledgeBase } from '../models/KnowledgeBase';
 import { embeddingService } from './embeddingService';
 import { cacheService, CacheNamespace } from './cacheService';
 import crypto from 'crypto';
+import { KNOWLEDGE_BASE_VECTOR_INDEX } from './vectorIndexProbe';
 
 /**
  * Vector Search Service
@@ -36,7 +37,7 @@ export interface VectorSearchResult {
 }
 
 export class VectorSearchService {
-  private readonly vectorIndexName = 'knowledge_base_vector_index';
+  private readonly vectorIndexName = KNOWLEDGE_BASE_VECTOR_INDEX;
 
   /**
    * Generate cache key for search queries
@@ -223,9 +224,7 @@ export class VectorSearchService {
       // 60% similarity, 30% credibility, 10% recency
       const recencyScore = this.calculateRecencyScore(result.publicationDate);
       const compositeScore =
-        result.similarityScore * 0.6 +
-        (result.credibilityScore / 100) * 0.3 +
-        recencyScore * 0.1;
+        result.similarityScore * 0.6 + (result.credibilityScore / 100) * 0.3 + recencyScore * 0.1;
 
       return {
         ...result,
