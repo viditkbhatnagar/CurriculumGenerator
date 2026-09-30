@@ -52,7 +52,10 @@ import { loggingService } from './loggingService';
 // v22: every Word and PowerPoint export strips the characters XML 1.0 forbids. Copies cached
 //      before that keep them as stored: the BBA faculty-guide zip went on serving an M42 guide
 //      that Word cannot open, from cache, after the fix was deployed.
-const EXPORT_FORMAT_VERSION = 'v22';
+// v23: text of 500 characters or less is printed as written rather than reflowed by a model,
+//      model answers are cleaned of control characters, and seven sections that dropped text
+//      the model returned as a list now keep it.
+const EXPORT_FORMAT_VERSION = 'v23';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {

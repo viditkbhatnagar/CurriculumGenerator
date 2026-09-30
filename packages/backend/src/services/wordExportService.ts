@@ -19,7 +19,7 @@ import { PER_MODULE_ARRAYS } from '../utils/perModuleExport';
 import { entryRequirementsLabel } from '../utils/entryRequirements';
 import { step12ValidationFromPacks } from './deliverableValidation';
 import { normaliseTopic } from '../utils/topicShape';
-import { xmlSafeDeep } from '../utils/xmlSafe';
+import { cleanModelOutput, xmlSafeDeep } from '../utils/xmlSafe';
 
 interface WorkflowData {
   projectName: string;
@@ -70,6 +70,15 @@ const PARA_SPACING = {
   after: 120,
 };
 
+/**
+ * Text this long or shorter is used as written instead of being sent to the model to reflow.
+ * The model is asked for paragraphs of four to seven lines, which is about this many
+ * characters, so there is nothing to restructure. Sending everything made the BBA's
+ * whole-programme document wait on 751 model calls in a row (382 of them glossary definitions
+ * under 300 characters) and take over 15 minutes, and it let the model reword approved text.
+ */
+const SINGLE_PARAGRAPH_CHARS = 500;
+
 export class WordExportService {
   private openai: OpenAI;
 
@@ -91,6 +100,9 @@ export class WordExportService {
   ): Promise<{ paragraphs: string[]; bullets: string[] }> {
     if (!text || text.trim().length === 0) {
       return { paragraphs: [], bullets: [] };
+    }
+    if (text.trim().length <= SINGLE_PARAGRAPH_CHARS) {
+      return { paragraphs: [text.trim()], bullets: [] };
     }
 
     try {
@@ -136,7 +148,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         throw new Error('No response from OpenAI');
       }
 
-      const result = JSON.parse(content);
+      // The answer goes into the document after the export has already removed the characters
+      // XML forbids, so it is cleaned here: raw and escaped control characters alike.
+      const result = JSON.parse(cleanModelOutput(content, true));
       return {
         paragraphs: result.paragraphs || [],
         bullets: result.bullets || [],
@@ -184,6 +198,22 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   /**
    * Create formatted paragraphs with Times New Roman font and proper spacing
    */
+  /**
+   * For a section that renders only paragraphs: the formatted text, with anything the model
+   * returned as a list kept as "• " lines. Seven sections rendered `paragraphs` alone, so text the
+   * model chose to list was left out of the document; a whole case study scenario could vanish.
+   */
+  private async formatAsParagraphs(
+    text: string,
+    context: string
+  ): Promise<{ paragraphs: string[]; bullets: string[] }> {
+    const formatted = await this.formatTextIntelligently(text, context);
+    return {
+      paragraphs: [...formatted.paragraphs, ...formatted.bullets.map((b) => `• ${b}`)],
+      bullets: [],
+    };
+  }
+
   private createFormattedParagraphs(
     texts: string[],
     options: { isBullet?: boolean; size?: number; isNumbered?: boolean } = {}
@@ -1401,7 +1431,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         );
 
         if (assessment.description) {
-          const formatted = await this.formatTextIntelligently(
+          const formatted = await this.formatAsParagraphs(
             assessment.description,
             'Assessment Description'
           );
@@ -1740,7 +1770,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
         // Description
         if (assessment.description) {
-          const formatted = await this.formatTextIntelligently(
+          const formatted = await this.formatAsParagraphs(
             assessment.description,
             'Summative Assessment Description'
           );
@@ -1851,7 +1881,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         contentChildren.push(this.createH3(caseStudy.title || 'Untitled Case Study'));
 
         if (caseStudy.scenario || caseStudy.description) {
-          const formatted = await this.formatTextIntelligently(
+          const formatted = await this.formatAsParagraphs(
             caseStudy.scenario || caseStudy.description,
             'Case Study Scenario'
           );
@@ -1944,7 +1974,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       );
 
       if (term.definition || term.description) {
-        const formatted = await this.formatTextIntelligently(
+        const formatted = await this.formatAsParagraphs(
           term.definition || term.description,
           'Glossary Term Definition'
         );
@@ -3361,7 +3391,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           // Brief
           if (variant.brief) {
             if (variant.brief.studentFacingIntro) {
-              const formatted = await this.formatTextIntelligently(
+              const formatted = await this.formatAsParagraphs(
                 variant.brief.studentFacingIntro,
                 'Assignment Brief Introduction'
               );
@@ -3483,7 +3513,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
           // Academic integrity
           if (variant.academicIntegrity) {
-            const formatted = await this.formatTextIntelligently(
+            const formatted = await this.formatAsParagraphs(
               variant.academicIntegrity,
               'Academic Integrity Statement'
             );
@@ -3725,10 +3755,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         );
 
         if (scenario.scenarioText) {
-          const formatted = await this.formatTextIntelligently(
-            scenario.scenarioText,
-            'Exam Scenario'
-          );
+          const formatted = await this.formatAsParagraphs(scenario.scenarioText, 'Exam Scenario');
           if (formatted.paragraphs.length > 0) {
             contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
           }
