@@ -307,15 +307,22 @@ export interface Step10ValidationFlags {
 function combineModuleStats(
   modules: CountableModule[],
   statsFor: (moduleId: string | undefined) => ModuleStats | undefined,
-  completedIds: Set<string>
+  completedIds: Set<string>,
+  plannedLessonCounts?: Record<string, number>
 ): Step10ValidationFlags {
   const list = modules || [];
-  const stats = list.map((m) => statsFor(m?.id));
+  // A module with no contact hours has no lessons, so it has no durations, hours, outcomes or
+  // cases to check. `completedModuleIds` already counts it as finished; leaving it in the
+  // per-module checks made every one of them fail for the whole programme because of a
+  // module that was never meant to be taught.
+  const taught = list.filter((m) => expectedLessonCount(m, plannedLessonCounts) > 0);
+  const stats = taught.map((m) => statsFor(m?.id));
   const every = (test: (s: ModuleStats) => boolean) =>
     stats.length > 0 && stats.every((s) => !!s && test(s));
 
   return {
-    allModulesHaveLessonPlans: list.length > 0 && completedIds.size >= list.length,
+    allModulesHaveLessonPlans:
+      list.length > 0 && list.every((m) => !!m?.id && completedIds.has(m.id)),
     allLessonDurationsValid: every((s) => s.durationsValid),
     totalHoursMatch: every((s) => s.hoursMatch),
     allMLOsCovered: every((s) => s.mlosCovered),
@@ -348,7 +355,8 @@ export function validationFromStubs(
       // lessons on the stub and never recorded stats; compute them from those lessons.
       return stub?.lessons?.length ? moduleStats(stub, moduleById.get(id)) : undefined;
     },
-    completedModuleIds(modules, step10)
+    completedModuleIds(modules, step10),
+    step10?.plannedLessonCounts
   );
 }
 
@@ -370,7 +378,8 @@ export function validationFromPlans(
       const plan = id ? byId.get(id) : undefined;
       return plan ? moduleStats(plan, moduleById.get(id)) : undefined;
     },
-    completedModuleIds(modules, { moduleLessonPlans: plans, plannedLessonCounts })
+    completedModuleIds(modules, { moduleLessonPlans: plans, plannedLessonCounts }),
+    plannedLessonCounts
   );
 }
 

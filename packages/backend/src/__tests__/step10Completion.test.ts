@@ -430,3 +430,33 @@ describe('modules with nothing to teach', () => {
     expect(nextIncompleteModuleIndex(modules, step10)).toBe(-1);
   });
 });
+
+describe('a module with no contact hours in the programme checks', () => {
+  it('does not fail the per-module checks of every other module', () => {
+    // A dissertation or placement module with no contact time has nothing to generate, so it
+    // has no plan and no stats. It is finished by definition, and it must not turn every
+    // other module's durations, hours, outcomes and cases into failures.
+    const modules = [
+      { id: 'a', contactHours: 3, mlos: [{ id: 'm1' }] },
+      { id: 'proj', contactHours: 0, mlos: [{ id: 'p1' }] },
+    ];
+    const plans = [
+      {
+        moduleId: 'a',
+        lessons: [1, 2].map(() => ({
+          duration: 90,
+          linkedMLOs: ['m1'],
+          caseStudyActivity: {},
+          formativeChecks: [1],
+        })),
+      },
+    ];
+    expect(Object.values(validationFromPlans(modules, plans))).toEqual(Array(6).fill(true));
+  });
+
+  it('passes nothing when no module has anything to teach', () => {
+    const v = validationFromPlans([{ id: 'proj', contactHours: 0, mlos: [] }], []);
+    expect(v.allLessonDurationsValid).toBe(false);
+    expect(v.caseStudiesIntegrated).toBe(false);
+  });
+});
