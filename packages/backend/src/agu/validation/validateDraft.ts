@@ -7,11 +7,15 @@
  * at fails rather than passes. Findings are either blocking (the draft cannot be offered as
  * faculty-review ready) or warnings (faculty should look).
  *
+ * A draft can arrive with sections missing (an edit from a stale client, a document stored
+ * before a section existed). That is reported as a blocking finding, never thrown.
+ *
  * Pure, no I/O, so each rule can be tested.
  */
 import { CatalogueCourse, CatalogueEdition } from '../catalogue/types';
 import { findProhibitedClaims } from '../rules/usUtahRules';
 import { CourseDraft, Finding } from '../draft/types';
+import { collectDraftText } from './draftText';
 
 const HOURS_TOLERANCE = 0.5;
 
@@ -77,6 +81,38 @@ const VAGUE_VERBS = new Set([
 const near = (a: number, b: number) => Math.abs(a - b) <= HOURS_TOLERANCE;
 const sum = (xs: number[]) => xs.reduce((n, x) => n + (Number.isFinite(x) ? x : 0), 0);
 
+/** The lists every draft carries. */
+const SECTIONS = ['outcomes', 'weeks', 'assessments', 'readings', 'cases', 'narrative'] as const;
+
+const missingSection = (name: string): Finding => ({
+  code: 'SECTION_MISSING',
+  severity: 'blocking',
+  message: `The draft is missing its "${name}" section, so the checks that read it could not run. Add it (an empty list is allowed) and save again.`,
+  path: name,
+});
+
+/**
+ * The draft with every list present, and a blocking finding for each list that was not. A
+ * missing list is read as empty, so the checks that need its contents fail rather than throw.
+ */
+function withSections(raw: CourseDraft | null | undefined): {
+  draft: CourseDraft;
+  missing: Finding[];
+} {
+  const source = (raw !== null && typeof raw === 'object' ? raw : {}) as Partial<CourseDraft>;
+  const lists: Record<string, unknown[]> = {};
+  const missing: Finding[] = [];
+  for (const name of SECTIONS) {
+    const value = source[name];
+    if (Array.isArray(value)) lists[name] = value;
+    else {
+      lists[name] = [];
+      missing.push(missingSection(name));
+    }
+  }
+  return { draft: { ...source, ...lists } as CourseDraft, missing };
+}
+
 function checkLocked(draft: CourseDraft, course: CatalogueCourse | undefined): Finding[] {
   if (!course) {
     return [
@@ -87,8 +123,12 @@ function checkLocked(draft: CourseDraft, course: CatalogueCourse | undefined): F
       },
     ];
   }
-  const out: Finding[] = [];
   const l = draft.locked;
+  if (l === null || typeof l !== 'object') {
+    return [missingSection('locked')];
+  }
+  const out: Finding[] = [];
+  const hours: Partial<typeof l.hours> = l.hours ?? {};
   if (l.title !== course.title)
     out.push({
       code: 'LOCKED_TITLE',
@@ -104,9 +144,9 @@ function checkLocked(draft: CourseDraft, course: CatalogueCourse | undefined): F
       source: course.source,
     });
   if (
-    l.hours.total !== course.hours.total ||
-    l.hours.contact !== course.hours.contact ||
-    l.hours.independent !== course.hours.independent
+    hours.total !== course.hours.total ||
+    hours.contact !== course.hours.contact ||
+    hours.independent !== course.hours.independent
   ) {
     out.push({
       code: 'LOCKED_HOURS',
@@ -448,20 +488,33 @@ function checkResources(draft: CourseDraft): Finding[] {
 }
 
 function checkClaims(draft: CourseDraft): Finding[] {
-  return draft.narrative.flatMap((n) =>
-    findProhibitedClaims(n.text).map((m) => ({
-      code: `CLAIM_${m.ruleId.toUpperCase()}`,
-      severity: m.severity,
-      message: `${m.message} In ${n.field}: "${m.sentence}"`,
-      path: n.field,
-      source: m.source,
-    }))
-  );
+  const { fields, tooDeep } = collectDraftText(draft);
+  return [
+    ...fields.flatMap(({ field, text }) =>
+      findProhibitedClaims(text).map((m) => ({
+        code: `CLAIM_${m.ruleId.toUpperCase()}`,
+        severity: m.severity,
+        message: `${m.message} In ${field}: "${m.sentence}"`,
+        path: field,
+        source: m.source,
+      }))
+    ),
+    ...tooDeep.map(
+      (path): Finding => ({
+        code: 'DRAFT_TOO_DEEP',
+        severity: 'blocking',
+        message: `${path} is nested too deeply to be checked for prohibited claims. Flatten it.`,
+        path,
+      })
+    ),
+  ];
 }
 
-export function validateDraft(draft: CourseDraft, catalogue: CatalogueEdition): Finding[] {
+export function validateDraft(raw: CourseDraft, catalogue: CatalogueEdition): Finding[] {
+  const { draft, missing } = withSections(raw);
   const course = catalogue.courses.find((c) => c.code === draft.courseCode);
   return [
+    ...missing,
     ...checkLocked(draft, course),
     ...checkOutcomes(draft, catalogue),
     ...checkWeeksAndHours(draft, catalogue),
@@ -474,4 +527,9 @@ export function validateDraft(draft: CourseDraft, catalogue: CatalogueEdition): 
 /** Faculty-review ready means no blocking finding. Warnings are for faculty to judge. */
 export function isReviewReady(findings: Finding[]): boolean {
   return !findings.some((f) => f.severity === 'blocking');
+}
+
+/** The status a saved draft gets. It comes from the findings and from nothing a client sends. */
+export function reviewStatus(findings: Finding[]): 'ready_for_review' | 'needs_faculty' {
+  return isReviewReady(findings) ? 'ready_for_review' : 'needs_faculty';
 }

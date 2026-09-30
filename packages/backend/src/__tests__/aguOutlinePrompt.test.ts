@@ -2,87 +2,12 @@ import { AGU_CATALOGUE_V1_4, catalogueCourse } from '../agu/catalogue/catalogueV
 import {
   buildOutlinePrompt,
   draftFromOutline,
-  OfferedSource,
   topicsFromDescription,
 } from '../agu/generation/outlinePrompt';
 import { validateDraft } from '../agu/validation/validateDraft';
+import { modelAnswer, sources } from './fixtures/aguOutlineFixture';
 
 const cr08 = catalogueCourse('CR08')!;
-const sources: OfferedSource[] = [1, 2, 3, 4, 5].map((n) => ({
-  sourceId: `W${n}`,
-  citation: `Author ${n} (2024). Open paper ${n}. Journal.`,
-  openAccess: true,
-  link: `https://example.org/${n}.pdf`,
-}));
-
-const week = (n: number) => ({
-  number: n,
-  theme: `Theme ${n}`,
-  outcomeNumbers: [n],
-  lecture: {
-    title: `Lecture ${n}`,
-    topics: [`Topic ${n}`],
-    runSheet: [
-      { start: 0, end: 15, segment: 'Opening / recap', activity: 'Recap' },
-      { start: 15, end: 165, segment: 'Core', activity: 'Teach' },
-      { start: 165, end: 180, segment: 'Wrap-up & next steps', activity: 'Close' },
-    ],
-  },
-  monitoredStudy: [
-    {
-      activity: 'Guided lab',
-      facultyRole: 'Reviews checkpoints',
-      evidenceLogged: 'Checkpoint log',
-      hours: 8.25,
-    },
-  ],
-  independentStudy: [{ activity: 'Reading', hours: 22.5 }],
-  gradedItemsDue: [],
-});
-
-const modelAnswer = {
-  title: 'A different title the model tried',
-  outcomes: [1, 2, 3, 4].map((n) => ({
-    statement: `Evaluate decision problem ${n} using descriptive analytics.`,
-    bloomLevel: 'evaluate',
-  })),
-  weeks: [1, 2, 3, 4].map(week),
-  assessments: [
-    {
-      component: 'applied_assignment',
-      title: 'Brief',
-      weight: 40,
-      weekDue: 4,
-      outcomeNumbers: [1, 2],
-      aiUse: 'Disclose prompts.',
-    },
-    {
-      component: 'weekly_quiz_discussion',
-      title: 'Quizzes',
-      weight: 20,
-      weekDue: 1,
-      outcomeNumbers: [1, 2, 3, 4, 9],
-      aiUse: 'No AI.',
-    },
-    {
-      component: 'final_exam',
-      title: 'Final',
-      weight: 40,
-      weekDue: 4,
-      outcomeNumbers: [3, 4],
-      aiUse: 'No AI.',
-    },
-  ],
-  readings: [
-    { sourceNumber: 1, week: 1 },
-    { sourceNumber: 2, week: 2 },
-    { sourceNumber: 3, week: 3 },
-    { sourceNumber: 4, week: 4 },
-    { sourceNumber: 17, week: 2 },
-  ],
-  cases: [{ title: 'Retailer demand forecast', week: 2, outcomeNumbers: [2] }],
-  rationale: 'Applied, no-code emphasis as requested.',
-};
 
 describe('buildOutlinePrompt', () => {
   const { system, user } = buildOutlinePrompt(
@@ -139,6 +64,25 @@ describe('draftFromOutline', () => {
       (f) => f.severity === 'blocking'
     );
     expect(blocking).toEqual([]);
+  });
+
+  it('keeps in the narrative only text that has no structured field of its own', () => {
+    expect(draft.narrative.map((n) => n.field)).toEqual(['rationale', 'disclosure.registration']);
+  });
+
+  it('reports a claim the model wrote once, at the field it is in', () => {
+    const claimed = JSON.parse(JSON.stringify(modelAnswer));
+    claimed.assessments[0].brief = 'Complete this accredited assignment.';
+    claimed.weeks[1].lecture.topics = ['An AACSB-accredited case'];
+    const built = draftFromOutline(claimed, cr08, AGU_CATALOGUE_V1_4, sources).draft;
+    const claims = validateDraft(built, AGU_CATALOGUE_V1_4)
+      .filter((f) => f.code.startsWith('CLAIM_'))
+      .map((f) => [f.code, f.path]);
+    expect(claims).toEqual([
+      ['CLAIM_ACCREDITATION', 'weeks[1].liveLecture.topics[0]'],
+      ['CLAIM_NAMED_ACCREDITOR', 'weeks[1].liveLecture.topics[0]'],
+      ['CLAIM_ACCREDITATION', 'assessments[0].brief'],
+    ]);
   });
 });
 

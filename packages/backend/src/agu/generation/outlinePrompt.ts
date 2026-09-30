@@ -249,15 +249,11 @@ export function draftFromOutline(
     assessments,
     readings,
     cases,
+    // Only text with no structured home. The claim scan walks every other field of the draft
+    // (briefs, themes, lecture titles, outcomes, activities) where it lives, so copying them
+    // here would only report the same sentence twice.
     narrative: [
       ...(rationale ? [{ field: 'rationale', text: rationale }] : []),
-      ...assessments
-        .filter((a) => a.brief)
-        .map((a) => ({ field: `assessments.${a.id}.brief`, text: a.brief as string })),
-      ...weeks.map((w) => ({
-        field: `weeks.${w.number}.theme`,
-        text: `${w.theme}. ${w.liveLecture.title}.`,
-      })),
       { field: 'disclosure.registration', text: DISCLOSURES[0].text },
     ],
   };

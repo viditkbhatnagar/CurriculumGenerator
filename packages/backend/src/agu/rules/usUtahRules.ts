@@ -5,8 +5,9 @@
  * Division of Consumer Protection registration, which is not accreditation or approval, and
  * the product owner's specification is explicit: "Do not call a state authorisation
  * accreditation or claim DEAC or another future accreditor already applies." A model writing
- * course material will produce these claims unprompted, so every narrative field is scanned
- * and a match blocks the draft until faculty remove it.
+ * course material will produce these claims unprompted, so every free-text field of a draft is
+ * scanned (validation/draftText.ts walks them) and a match blocks the draft until faculty
+ * remove it.
  *
  * Sources: AGU Catalog v1.4 §2, §2.3, §4, Appendix A; the product owner's catalogue redline
  * and compliance red-flag register; the Phase One Roadmap §3.
@@ -17,20 +18,26 @@ export const RULE_PACK_VERSION = 'us-utah-1';
 export interface ProhibitedClaim {
   id: string;
   pattern: RegExp;
-  /** A match is allowed when the surrounding sentence also matches this (e.g. a denial). */
-  allowWhen?: RegExp;
+  /**
+   * Whether a negation excuses a match, and where it may sit. Omitted: never ("UK GDPR" is not
+   * denied by a "not"). 'before': in the few words before the claim ("is not accredited",
+   * "does not guarantee"). 'within': also between the words of the claim, for a claim that a
+   * denial splits ("credits do not transfer to any"). It is chosen per rule because a negation
+   * inside "guarantee ... job" belongs to something else: "we guarantee that no graduate is left
+   * without a job" is a promise. See isDenied.
+   */
+  denial?: 'before' | 'within';
   severity: 'blocking' | 'warning';
   message: string;
   source: string;
 }
 
-const NEGATION = /\b(not|no|never|neither|nor|isn't|is not|does not|doesn't|without)\b/i;
-
 export const PROHIBITED_CLAIMS: ProhibitedClaim[] = [
   {
     id: 'accreditation',
-    pattern: /\baccredit(ed|ation|ing)?\b/i,
-    allowWhen: NEGATION,
+    // The stem, so "accredits" and "accreditor" match as well as "accredited".
+    pattern: /\baccredit\w*/i,
+    denial: 'before',
     severity: 'blocking',
     message:
       'Claims or implies accreditation. AGU is registered in Utah, not accredited; only the disclosure wording may mention accreditation, and only to deny it.',
@@ -39,7 +46,7 @@ export const PROHIBITED_CLAIMS: ProhibitedClaim[] = [
   {
     id: 'named_accreditor',
     pattern: /\b(DEAC|WASC|HLC|MSCHE|NECHE|SACSCOC|NWCCU|AACSB|ACBSP|IACBE)\b/,
-    allowWhen: NEGATION,
+    denial: 'before',
     severity: 'blocking',
     message:
       'Names an accreditor. No accreditor applies to AGU; a future accreditor is not to be claimed.',
@@ -48,16 +55,19 @@ export const PROHIBITED_CLAIMS: ProhibitedClaim[] = [
   {
     id: 'state_approval',
     pattern: /\b(approved|endorsed|recommended|licensed)\s+by\s+(the\s+)?(state|utah|division)/i,
-    allowWhen: NEGATION,
+    denial: 'before',
     severity: 'blocking',
     message: 'Presents the Utah registration as state approval or endorsement.',
     source: 'Catalog v1.4 Appendix A; DCP certificate',
   },
   {
     id: 'transfer_guarantee',
+    // Inflected forms matter: "every credit transfers automatically" is the claim. The gaps are
+    // lazy so the match ends at the nearest claim term and a second claim in the same sentence
+    // is judged on its own.
     pattern:
-      /\b(credits?|degree|certificate)s?\b[^.]{0,60}\b(transfer|recogni[sz]ed)\b[^.]{0,40}\b(guarantee|automatic|all|any)\b/i,
-    allowWhen: NEGATION,
+      /\b(credits?|degrees?|certificates?)\b[^.]{0,60}?\b(transfer(?:s|red|ring)?|recogni[sz]ed)\b[^.]{0,40}?\b(guarantee[sd]?|automatic(?:ally)?|all|any)\b/i,
+    denial: 'within',
     severity: 'blocking',
     message:
       'Promises credit transfer or recognition, which the catalogue leaves to the receiving institution.',
@@ -66,8 +76,8 @@ export const PROHIBITED_CLAIMS: ProhibitedClaim[] = [
   {
     id: 'placement_or_earnings',
     pattern:
-      /\b(guarantee[sd]?|assured)\b[^.]{0,50}\b(job|employment|placement|promotion|salary|earnings)\b/i,
-    allowWhen: NEGATION,
+      /\b(guarantee(?:s|d|ing)?|assured)\b[^.]{0,50}?\b(jobs?|employment|placements?|promotions?|salary|salaries|earnings?)\b/i,
+    denial: 'before',
     severity: 'blocking',
     message: 'Promises employment, placement or earnings outcomes.',
     source: 'Product owner compliance register; Catalog v1.4 §12',
@@ -75,8 +85,8 @@ export const PROHIBITED_CLAIMS: ProhibitedClaim[] = [
   {
     id: 'licensure',
     pattern:
-      /\b(leads? to|qualif(y|ies) (you|students|graduates) for|prepares? (you|students) for)\b[^.]{0,40}\blicen[cs](e|ure)\b/i,
-    allowWhen: NEGATION,
+      /\b(leads? to|qualif(y|ies) (you|students|graduates) for|prepares? (you|students) for)\b[^.]{0,40}?\blicen[cs](e|ure)\b/i,
+    denial: 'before',
     severity: 'blocking',
     message:
       'Implies the course leads to professional licensure; the catalogue states no programme does.',
@@ -84,8 +94,8 @@ export const PROHIBITED_CLAIMS: ProhibitedClaim[] = [
   },
   {
     id: 'vendor_certification',
-    pattern: /\b(earn|obtain|awarded|receive)\b[^.]{0,40}\b(certification|certified)\b/i,
-    allowWhen: NEGATION,
+    pattern: /\b(earn|obtain|awarded|receive)\b[^.]{0,40}?\b(certification|certified)\b/i,
+    denial: 'before',
     severity: 'warning',
     message:
       'May imply a vendor or professional certification. Name any external exam only with the vendor-certification disclaimer.',
@@ -137,10 +147,107 @@ export const DISCLOSURES: Disclosure[] = [
   },
 ];
 
-/** Split text into sentences so a denial can be read in context. */
+/** Split text into sentences (and lines, which end a clause too) so a denial is read in context. */
 function sentencesOf(text: string): string[] {
-  return text.split(/(?<=[.!?])\s+/).filter(Boolean);
+  return text.split(/(?<=[.!?])\s+|\s*\n\s*/).filter(Boolean);
 }
+
+/** One wording of a sentence for comparison: quotes straightened, spacing collapsed, lower case. */
+const normalised = (sentence: string): string =>
+  sentence
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+/**
+ * The disclosure sentences as approved. The rule pack's own message says only this wording may
+ * mention accreditation, and only to deny it, so an approved sentence passes as written:
+ * "No program offered by this institution holds programmatic accreditation ..." denies with a
+ * negation seven words from the term, which no narrow reading of a denial could accept.
+ */
+const APPROVED_SENTENCES = new Set(DISCLOSURES.flatMap((d) => sentencesOf(d.text).map(normalised)));
+
+/**
+ * How far back from a claim a negation still denies it, in words outside the claim itself. A
+ * denial reads "is not accredited", "does not guarantee", "no guarantee that credits transfer";
+ * a negation further off belongs to something else ("there is no fee for our accredited MBA" is
+ * a claim). The reach is deliberately short and lexical: wording this check cannot tell from a
+ * claim is flagged for faculty to reword, never excused.
+ */
+const DENIAL_REACH_WORDS = 4;
+
+const NEGATIONS = new Set([
+  'not',
+  'no',
+  'never',
+  'neither',
+  'nor',
+  'none',
+  'nothing',
+  'without',
+  'cannot',
+  'non',
+]);
+
+/**
+ * Words that start a new clause, so a negation before them no longer applies after them. "Yet"
+ * is left out: in "has not yet been accredited" it is an adverb, and as a conjunction it follows
+ * a comma, which already ends the clause.
+ */
+const CLAUSE_BREAK_WORDS = new Set([
+  'and',
+  'but',
+  'however',
+  'although',
+  'though',
+  'whereas',
+  'while',
+]);
+const CLAUSE_BREAK_MARKS = /^[,;:()\u2014\u2013\u2022|]$/;
+
+interface Token {
+  text: string;
+  start: number;
+}
+
+/** The words and clause marks of a text, lower-cased, with where each one starts. */
+function tokensOf(text: string): Token[] {
+  return [...text.matchAll(/[a-z0-9]+(?:['\u2019][a-z]+)?|[,;:()\u2014\u2013\u2022|]/gi)].map(
+    (m) => ({
+      text: m[0].toLowerCase(),
+      start: m.index ?? 0,
+    })
+  );
+}
+
+const isNegation = (word: string): boolean => NEGATIONS.has(word) || /n['\u2019]t$/.test(word);
+
+/**
+ * Whether a negation denies this match. Walking back from the claim, a negation counts when it
+ * is within DENIAL_REACH_WORDS words before the claim, and, for a rule whose denial may sit
+ * 'within' its claim, anywhere inside the claim phrase ("credits do not transfer to any"). A
+ * clause break ends the search: "no hidden fees, fully accredited" and "no fees and accredited
+ * by DEAC" are claims. "Not only accredited" is an emphasis, not a denial.
+ */
+function isDenied(sentence: string, match: RegExpMatchArray, where: 'before' | 'within'): boolean {
+  const claimStart = match.index ?? 0;
+  const reachedTo = where === 'within' ? claimStart + match[0].length : claimStart;
+  const tokens = tokensOf(sentence.slice(0, reachedTo));
+  let outside = 0;
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const { text, start } = tokens[i];
+    if (CLAUSE_BREAK_WORDS.has(text) || CLAUSE_BREAK_MARKS.test(text)) return false;
+    if (start < claimStart && ++outside > DENIAL_REACH_WORDS) return false;
+    if (isNegation(text) && !(text === 'not' && tokens[i + 1]?.text === 'only')) return true;
+  }
+  return false;
+}
+
+/** Each rule's pattern made global once, so every occurrence in a sentence can be judged. */
+const GLOBAL_PATTERNS = PROHIBITED_CLAIMS.map(
+  (rule) => new RegExp(rule.pattern.source, `${rule.pattern.flags.replace('g', '')}g`)
+);
 
 export interface ClaimMatch {
   ruleId: string;
@@ -150,13 +257,19 @@ export interface ClaimMatch {
   sentence: string;
 }
 
-/** Every prohibited claim in a piece of text, sentence by sentence. */
+/**
+ * Every prohibited claim in a piece of text, sentence by sentence. A rule fires once per
+ * sentence, and only if at least one of its occurrences is not denied.
+ */
 export function findProhibitedClaims(text: string): ClaimMatch[] {
   const matches: ClaimMatch[] = [];
-  for (const sentence of sentencesOf(text || '')) {
-    for (const rule of PROHIBITED_CLAIMS) {
-      if (!rule.pattern.test(sentence)) continue;
-      if (rule.allowWhen && rule.allowWhen.test(sentence)) continue;
+  for (const sentence of sentencesOf(typeof text === 'string' ? text : '')) {
+    if (APPROVED_SENTENCES.has(normalised(sentence))) continue;
+    PROHIBITED_CLAIMS.forEach((rule, i) => {
+      const claimed = [...sentence.matchAll(GLOBAL_PATTERNS[i])].some(
+        (m) => !rule.denial || !isDenied(sentence, m, rule.denial)
+      );
+      if (!claimed) return;
       matches.push({
         ruleId: rule.id,
         severity: rule.severity,
@@ -164,7 +277,7 @@ export function findProhibitedClaims(text: string): ClaimMatch[] {
         source: rule.source,
         sentence: sentence.trim(),
       });
-    }
+    });
   }
   return matches;
 }

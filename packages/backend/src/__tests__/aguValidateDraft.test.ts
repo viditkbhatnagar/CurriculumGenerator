@@ -1,109 +1,8 @@
-import { AGU_CATALOGUE_V1_4, catalogueCourse } from '../agu/catalogue/catalogueV1_4';
-import { validateDraft, isReviewReady } from '../agu/validation/validateDraft';
+import { AGU_CATALOGUE_V1_4 } from '../agu/catalogue/catalogueV1_4';
+import { validateDraft, isReviewReady, reviewStatus } from '../agu/validation/validateDraft';
 import { findProhibitedClaims, DISCLOSURES } from '../agu/rules/usUtahRules';
 import { CourseDraft } from '../agu/draft/types';
-
-const cr08 = catalogueCourse('CR08')!;
-
-function week(n: number): CourseDraft['weeks'][number] {
-  return {
-    number: n,
-    theme: `Week ${n} theme`,
-    outcomeIds: [`CLO${n}`],
-    liveLecture: {
-      title: `Lecture ${n}`,
-      topics: [`Topic ${n}`],
-      hours: 3,
-      runSheet: [
-        { startMinute: 0, endMinute: 15, segment: 'Opening / recap', activity: 'Recap' },
-        { startMinute: 15, endMinute: 165, segment: 'Core', activity: 'Teach' },
-        { startMinute: 165, endMinute: 180, segment: 'Wrap-up & next steps', activity: 'Close' },
-      ],
-    },
-    // 33 monitored hours over four weeks: 8.25 each.
-    monitoredStudy: [
-      {
-        id: `m${n}`,
-        activity: 'Guided lab',
-        facultyRole: 'Reviews checkpoints',
-        evidenceLogged: 'Checkpoint log',
-        hours: 8.25,
-      },
-    ],
-    independentStudy: [{ id: `i${n}`, activity: 'Reading and practice', hours: 22.5 }],
-    gradedItemsDue: [],
-  };
-}
-
-function validDraft(): CourseDraft {
-  return {
-    courseCode: 'CR08',
-    catalogueVersion: '1.4',
-    locked: {
-      title: cr08.title,
-      semesterCredits: 3,
-      hours: { ...cr08.hours },
-      description: cr08.description,
-    },
-    outcomes: [1, 2, 3, 4].map((n) => ({
-      id: `CLO${n}`,
-      statement: `Evaluate business data problem ${n} with a suitable analytic method.`,
-      bloomLevel: 'evaluate' as const,
-      origin: 'proposal' as const,
-    })),
-    weeks: [1, 2, 3, 4].map(week),
-    assessments: [
-      {
-        id: 'a1',
-        component: 'applied_assignment',
-        title: 'Applied analytics brief',
-        weight: 40,
-        weekDue: 4,
-        outcomeIds: ['CLO1', 'CLO2'],
-        proctored: false,
-        aiUse: 'AI may be used to draft code; disclose prompts.',
-      },
-      {
-        id: 'a2',
-        component: 'weekly_quiz_discussion',
-        title: 'Weekly quizzes',
-        weight: 20,
-        weekDue: 1,
-        outcomeIds: ['CLO1', 'CLO2', 'CLO3', 'CLO4'],
-        proctored: false,
-        aiUse: 'No AI use during quizzes.',
-      },
-      {
-        id: 'a3',
-        component: 'final_exam',
-        title: 'Final exam',
-        weight: 40,
-        weekDue: 4,
-        outcomeIds: ['CLO3', 'CLO4'],
-        proctored: true,
-        aiUse: 'No AI use.',
-      },
-    ],
-    readings: [1, 2, 3, 4].map((n) => ({
-      id: `r${n}`,
-      citation: `Open text chapter ${n}`,
-      week: n,
-      required: true,
-      access: 'open' as const,
-    })),
-    cases: [
-      {
-        id: 'c1',
-        title: 'Retail demand case',
-        week: 2,
-        source: 'hypothetical',
-        outcomeIds: ['CLO2'],
-        rights: '',
-      },
-    ],
-    narrative: [{ field: 'syllabus.description', text: DISCLOSURES[0].text }],
-  };
-}
+import { validDraft } from './fixtures/aguDraftFixture';
 
 const codes = (d: CourseDraft) => validateDraft(d, AGU_CATALOGUE_V1_4).map((f) => f.code);
 
@@ -204,6 +103,78 @@ describe('validateDraft', () => {
         'READINGS_NONE',
       ])
     );
+  });
+});
+
+describe('validateDraft on a draft with sections missing', () => {
+  // The route used to accept { outcomes: [], weeks: [] } and then throw on the missing lists.
+  const partial = (): CourseDraft => {
+    const { courseCode, catalogueVersion, locked, outcomes, weeks } = validDraft();
+    return { courseCode, catalogueVersion, locked, outcomes, weeks } as unknown as CourseDraft;
+  };
+  const find = (d: CourseDraft) => validateDraft(d, AGU_CATALOGUE_V1_4);
+
+  it('does not throw', () => {
+    expect(() => find(partial())).not.toThrow();
+    expect(() => find({} as CourseDraft)).not.toThrow();
+    expect(() => find(null as unknown as CourseDraft)).not.toThrow();
+  });
+
+  it('reports each missing list as a blocking finding that names it', () => {
+    const missing = find(partial()).filter((f) => f.code === 'SECTION_MISSING');
+    expect(missing.map((f) => f.path).sort()).toEqual([
+      'assessments',
+      'cases',
+      'narrative',
+      'readings',
+    ]);
+    expect(missing.every((f) => f.severity === 'blocking')).toBe(true);
+    expect(missing[0].message).toMatch(/missing/i);
+  });
+
+  it('treats a missing list as empty, so the checks that depend on it still fail', () => {
+    expect(find(partial()).map((f) => f.code)).toEqual(
+      expect.arrayContaining(['ASSESSMENT_NONE', 'READINGS_NONE', 'OUTCOME_NOT_ASSESSED'])
+    );
+  });
+
+  it('is never review ready', () => {
+    expect(isReviewReady(find(partial()))).toBe(false);
+    expect(isReviewReady(find({} as CourseDraft))).toBe(false);
+  });
+
+  it('treats a list that is not a list as missing, not as data', () => {
+    const d = validDraft();
+    (d as any).readings = 'none';
+    (d as any).cases = { 0: 'x' };
+    const missing = find(d).filter((f) => f.code === 'SECTION_MISSING');
+    expect(missing.map((f) => f.path).sort()).toEqual(['cases', 'readings']);
+  });
+
+  it('reports a missing locked section instead of comparing against undefined', () => {
+    const d = validDraft();
+    delete (d as any).locked;
+    const found = find(d);
+    expect(found).toContainEqual(
+      expect.objectContaining({ code: 'SECTION_MISSING', path: 'locked', severity: 'blocking' })
+    );
+    expect(found.map((f) => f.code)).not.toContain('LOCKED_TITLE');
+  });
+
+  it('reports a missing hours block as a hours mismatch', () => {
+    const d = validDraft();
+    delete (d.locked as any).hours;
+    expect(find(d).map((f) => f.code)).toContain('LOCKED_HOURS');
+  });
+});
+
+describe('reviewStatus', () => {
+  it('derives the status from the findings alone', () => {
+    const blocking = { code: 'X', severity: 'blocking' as const, message: 'm' };
+    const warning = { code: 'Y', severity: 'warning' as const, message: 'm' };
+    expect(reviewStatus([])).toBe('ready_for_review');
+    expect(reviewStatus([warning])).toBe('ready_for_review');
+    expect(reviewStatus([warning, blocking])).toBe('needs_faculty');
   });
 });
 
