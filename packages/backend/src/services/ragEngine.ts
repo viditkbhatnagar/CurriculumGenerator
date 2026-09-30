@@ -12,6 +12,7 @@ import {
   Citation,
 } from '../types/rag';
 import crypto from 'crypto';
+import { resolveKBDomains } from './kbDomains';
 
 /**
  * RAG Engine Service
@@ -49,16 +50,8 @@ export class RAGEngine {
    * Uses MongoDB Atlas Vector Search
    * Implements Requirements 2.1, 2.2, 2.3, 2.4, 2.5
    */
-  async semanticSearch(
-    query: string,
-    options: RetrievalOptions = {}
-  ): Promise<SearchResult[]> {
-    const {
-      maxSources = 10,
-      minSimilarity = 0.75,
-      recencyWeight = 0.3,
-      domains,
-    } = options;
+  async semanticSearch(query: string, options: RetrievalOptions = {}): Promise<SearchResult[]> {
+    const { maxSources = 10, minSimilarity = 0.75, recencyWeight = 0.3, domains } = options;
 
     try {
       // Use vector search service with MongoDB
@@ -66,7 +59,9 @@ export class RAGEngine {
         limit: maxSources,
         minSimilarity,
         recencyWeight,
-        domain: domains?.[0], // Use first domain if multiple specified
+        // Every requested domain, under the names the knowledge base stores. Passing only the
+        // first, under the prompts' own names, matched nothing.
+        domains: resolveKBDomains(domains),
       });
 
       // Transform to SearchResult format
@@ -104,11 +99,7 @@ export class RAGEngine {
     query: string,
     options: RetrievalOptions = {}
   ): Promise<SearchResult[]> {
-    const {
-      maxSources = 10,
-      minSimilarity = 0.75,
-      domains,
-    } = options;
+    const { maxSources = 10, minSimilarity = 0.75, domains } = options;
 
     try {
       // Generate query variations
@@ -118,7 +109,7 @@ export class RAGEngine {
       const vectorResults = await vectorSearchService.multiQuerySearch(queryVariations, {
         limit: maxSources,
         minSimilarity,
-        domain: domains?.[0],
+        domains: resolveKBDomains(domains),
       });
 
       // Transform to SearchResult format
@@ -161,14 +152,8 @@ export class RAGEngine {
    * Semantic weight: 0.7, Keyword weight: 0.3
    * Implements Requirement 3.4
    */
-  async hybridSearch(
-    query: string,
-    options: RetrievalOptions = {}
-  ): Promise<SearchResult[]> {
-    const {
-      maxSources = 10,
-      minSimilarity = 0.75,
-    } = options;
+  async hybridSearch(query: string, options: RetrievalOptions = {}): Promise<SearchResult[]> {
+    const { maxSources = 10, minSimilarity = 0.75 } = options;
 
     try {
       // Perform semantic search
@@ -188,7 +173,7 @@ export class RAGEngine {
         semanticResults,
         keywordResults,
         0.7, // semantic weight
-        0.3  // keyword weight
+        0.3 // keyword weight
       );
 
       // Re-rank combined results
@@ -299,43 +284,38 @@ export class RAGEngine {
     }
 
     // Convert to array and sort by combined score
-    return Array.from(resultMap.values()).sort(
-      (a, b) => b.similarityScore - a.similarityScore
-    );
+    return Array.from(resultMap.values()).sort((a, b) => b.similarityScore - a.similarityScore);
   }
 
   /**
    * Re-rank results using cross-encoder model for improved relevance
    * Implements Requirement 3.4
-   * 
+   *
    * Note: This is a simplified implementation. In production, you would use
    * a cross-encoder model like 'cross-encoder/ms-marco-MiniLM-L-12-v2'
    */
-  private async reRankResults(
-    query: string,
-    results: SearchResult[]
-  ): Promise<SearchResult[]> {
+  private async reRankResults(query: string, results: SearchResult[]): Promise<SearchResult[]> {
     // For now, implement a simple re-ranking based on content relevance
     // In production, this would use a cross-encoder model
-    
+
     const queryTerms = query.toLowerCase().split(/\s+/);
-    
-    const reranked = results.map(result => {
+
+    const reranked = results.map((result) => {
       const content = result.content.toLowerCase();
-      
+
       // Calculate term frequency score
       let termScore = 0;
       for (const term of queryTerms) {
         const matches = (content.match(new RegExp(term, 'g')) || []).length;
         termScore += matches;
       }
-      
+
       // Normalize term score
       const normalizedTermScore = termScore / (content.length / 100);
-      
+
       // Combine with existing similarity score (70% similarity, 30% term frequency)
       const rerankedScore = result.similarityScore * 0.7 + normalizedTermScore * 0.3;
-      
+
       return {
         ...result,
         similarityScore: rerankedScore,
@@ -350,13 +330,10 @@ export class RAGEngine {
    * Retrieve context for content generation
    * Combines semantic search with optional keyword search
    */
-  async retrieveContext(
-    query: string,
-    options: RetrievalOptions = {}
-  ): Promise<Context[]> {
+  async retrieveContext(query: string, options: RetrievalOptions = {}): Promise<Context[]> {
     const searchResults = await this.semanticSearch(query, options);
 
-    return searchResults.map(result => ({
+    return searchResults.map((result) => ({
       content: result.content,
       source: result.source,
       relevanceScore: result.similarityScore,
@@ -446,10 +423,7 @@ export class RAGEngine {
    * Generates APA 7th edition citations automatically
    * Uses MongoDB to fetch source URLs
    */
-  async attributeSources(
-    content: string,
-    usedSources: Context[]
-  ): Promise<ContentWithCitations> {
+  async attributeSources(content: string, usedSources: Context[]): Promise<ContentWithCitations> {
     const citations: Citation[] = [];
     const sources: SourceMetadata[] = [];
 
@@ -512,13 +486,13 @@ export class RAGEngine {
 
     // In a real implementation, this would call an LLM service
     // For now, we'll create a placeholder content structure
-    const content = `Generated content based on query: ${query}\n\n` +
+    const content =
+      `Generated content based on query: ${query}\n\n` +
       `This content is informed by ${contexts.length} sources.`;
 
     // Attribute sources
     return await this.attributeSources(content, contexts);
   }
-
 }
 
 export const ragEngine = new RAGEngine();

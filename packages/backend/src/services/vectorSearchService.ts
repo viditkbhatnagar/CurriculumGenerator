@@ -12,6 +12,8 @@ import { KNOWLEDGE_BASE_VECTOR_INDEX } from './vectorIndexProbe';
 
 export interface VectorSearchOptions {
   domain?: string;
+  /** Stored domain names to include. Takes precedence over `domain`. See kbDomains. */
+  domains?: string[];
   minSimilarity?: number;
   limit?: number;
   recencyWeight?: number;
@@ -55,6 +57,7 @@ export class VectorSearchService {
   async search(query: string, options: VectorSearchOptions = {}): Promise<VectorSearchResult[]> {
     const {
       domain,
+      domains,
       minSimilarity = 0.75,
       limit = 10,
       recencyWeight = 0.3,
@@ -99,7 +102,9 @@ export class VectorSearchService {
       };
 
       // Filter by domain if specified
-      if (domain) {
+      if (domains?.length) {
+        matchStage.domain = { $in: domains };
+      } else if (domain) {
         matchStage.domain = domain;
       }
 
