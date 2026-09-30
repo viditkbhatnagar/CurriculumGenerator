@@ -13,6 +13,9 @@
 export const KNOWLEDGE_BASE_COLLECTION = 'knowledgeBase';
 export const KNOWLEDGE_BASE_VECTOR_INDEX = 'knowledge_base_vector_index';
 const SELF_MATCH_MIN_SCORE = 0.99;
+// /health awaits the probe, and the MongoDB socket timeout is two hours, so a hung aggregate
+// would otherwise hang every health check until it gave up.
+export const PROBE_TIMEOUT_MS = 5000;
 
 export interface ProbeCollection {
   findOne(filter: object, options?: object): Promise<any>;
@@ -26,7 +29,30 @@ export interface VectorIndexProbeResult {
 
 export async function probeVectorIndex(
   collection: ProbeCollection,
-  indexName: string = KNOWLEDGE_BASE_VECTOR_INDEX
+  indexName: string = KNOWLEDGE_BASE_VECTOR_INDEX,
+  timeoutMs: number = PROBE_TIMEOUT_MS
+): Promise<VectorIndexProbeResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<VectorIndexProbeResult>((resolve) => {
+    timer = setTimeout(
+      () =>
+        resolve({
+          status: 'unhealthy',
+          message: `Vector index "${indexName}" did not answer within ${timeoutMs / 1000}s.`,
+        }),
+      timeoutMs
+    );
+  });
+  try {
+    return await Promise.race([runProbe(collection, indexName), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function runProbe(
+  collection: ProbeCollection,
+  indexName: string
 ): Promise<VectorIndexProbeResult> {
   try {
     const sample = await collection.findOne(

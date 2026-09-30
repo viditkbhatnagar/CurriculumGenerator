@@ -32,6 +32,16 @@ describe('probeVectorIndex', () => {
     expect(result.message).toMatch(/no embedded documents/);
   });
 
+  it('gives up on a query that never answers instead of hanging the health check', async () => {
+    const hung = {
+      findOne: async () => sample,
+      aggregate: () => ({ toArray: () => new Promise<any[]>(() => undefined) }),
+    };
+    const result = await probeVectorIndex(hung, 'knowledge_base_vector_index', 20);
+    expect(result.status).toBe('unhealthy');
+    expect(result.message).toMatch(/did not answer/);
+  });
+
   it('reports a failing query as unhealthy instead of throwing', async () => {
     const result = await probeVectorIndex(collection(sample, new Error('index not found')));
     expect(result.status).toBe('unhealthy');

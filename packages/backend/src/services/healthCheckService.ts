@@ -144,7 +144,10 @@ class HealthCheckService {
     const startTime = Date.now();
     const probe = await probeVectorIndex(database.collection(KNOWLEDGE_BASE_COLLECTION) as any);
     const health: ServiceHealth = {
-      status: probe.status,
+      // Degraded, not unhealthy: the app still serves without retrieval, and an unhealthy
+      // critical service would answer 503 and have Render restart a working container. Degraded
+      // still answers 200 but moves the top-level status, which is what a monitor reads.
+      status: probe.status === 'healthy' ? 'healthy' : 'degraded',
       responseTime: Date.now() - startTime,
       message: probe.message,
       lastChecked: new Date().toISOString(),
