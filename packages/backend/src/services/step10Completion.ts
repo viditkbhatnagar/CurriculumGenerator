@@ -137,6 +137,35 @@ export function lessonsHeld(plan: LessonPlanLike | undefined): number {
 }
 
 /**
+ * The most lessons the whole-programme Word and PDF documents write out in full. Beyond it,
+ * Step 10 lists each module's lessons, and the plans themselves are the Step 10 download, one
+ * Word document per module.
+ *
+ * Measured on 2026-09-30 against production data: a document costs about 1.3MB of memory per
+ * lesson written out, so the BBA's 1,380 lessons needed more than the 2GB the API container has
+ * (Step 10 alone measured 1.7GB on 2026-09-10), and its Word and PDF downloads restarted the
+ * backend. Listed instead, the BBA's document peaks at about 500MB. The next-largest programme,
+ * with 471 lessons, peaks at about 710MB for Word and 1.1GB converting that to PDF.
+ */
+export const FULL_DOCUMENT_LESSON_LIMIT = 500;
+
+/** Lessons held across a whole Step 10, whether or not the bodies are loaded. */
+export function programmeLessonsHeld(
+  step10: { moduleLessonPlans?: unknown } | null | undefined
+): number {
+  const plans = step10?.moduleLessonPlans;
+  if (!Array.isArray(plans)) return 0;
+  return (plans as LessonPlanLike[]).reduce((n, plan) => n + lessonsHeld(plan), 0);
+}
+
+/** Whether the whole-programme document lists Step 10's lessons rather than writing them out. */
+export function outlinesStep10(
+  step10: { moduleLessonPlans?: unknown } | null | undefined
+): boolean {
+  return programmeLessonsHeld(step10) > FULL_DOCUMENT_LESSON_LIMIT;
+}
+
+/**
  * The lesson count a plan is measured against: the count recorded on the plan itself, else the
  * module's expected count.
  *

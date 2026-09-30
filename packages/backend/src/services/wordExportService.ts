@@ -14,7 +14,7 @@ import OpenAI from 'openai';
 import { loggingService } from './loggingService';
 import { moduleLabelOf } from '../utils/moduleIdentity';
 import { bloomIndex, statedBloom } from './assessmentGeneratorService';
-import { modulesInDocument, validationFromPlans } from './step10Completion';
+import { modulesInDocument, outlinesStep10, validationFromPlans } from './step10Completion';
 import { PER_MODULE_ARRAYS } from '../utils/perModuleExport';
 import { entryRequirementsLabel } from '../utils/entryRequirements';
 import { step12ValidationFromPacks } from './deliverableValidation';
@@ -2055,7 +2055,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     step11?: any,
     // A per-module document (the archive's files and `?module=N`) holds one module's plan
     // beside the programme's whole module list, so its checks are the module's own.
-    options?: { moduleScoped?: boolean }
+    // `outline` lists each module's lessons instead of writing them out: the whole-programme
+    // document does this when the lessons are too many to build (FULL_DOCUMENT_LESSON_LIMIT).
+    options?: { moduleScoped?: boolean; outline?: boolean }
   ): Promise<void> {
     if (!step10) return;
     const moduleScoped = !!options?.moduleScoped;
@@ -2306,6 +2308,25 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     // Module Lesson Plans — rendered in Step 4 module order (see `plans` above).
     if (plans.length) {
       contentChildren.push(this.createH2('10.3 Module Lesson Plans'));
+      if (options?.outline) {
+        contentChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text:
+                  `This programme has ${liveLessonCount} lessons across ${plans.length} modules, ` +
+                  'too many for the server to build into one document. The full lesson plans ' +
+                  'are the Step 10 (Lesson Plans) download: one Word document per module. ' +
+                  "Each module's lessons are listed below.",
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+                italics: true,
+              }),
+            ],
+            spacing: { after: 150, line: LINE_SPACING },
+          })
+        );
+      }
 
       for (let modIdx = 0; modIdx < plans.length; modIdx++) {
         const modulePlan = plans[modIdx];
@@ -2529,8 +2550,25 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           );
         }
 
-        // Lessons for this module
-        if (modulePlan.lessons?.length) {
+        // Lessons for this module: listed, when the document is an outline, else written out.
+        if (options?.outline && modulePlan.lessons?.length) {
+          for (const lesson of modulePlan.lessons) {
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text:
+                      `Lesson ${lesson.lessonNumber}: ${lesson.lessonTitle || 'Untitled Lesson'}` +
+                      (lesson.duration ? ` (${lesson.duration} minutes)` : ''),
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
+                  }),
+                ],
+                spacing: { after: 60, line: LINE_SPACING },
+              })
+            );
+          }
+        } else if (modulePlan.lessons?.length) {
           for (const lesson of modulePlan.lessons) {
             // Lesson title and metadata
             contentChildren.push(
@@ -4209,6 +4247,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       addSection(9, (out) => this.generateStep9Section(workflow.step9, out));
     }
     if (workflow.step10) {
+      // Every lesson written out only while the document stays buildable: the BBA's 1,380
+      // lessons restarted the API container (see FULL_DOCUMENT_LESSON_LIMIT).
+      const outline = outlinesStep10(workflow.step10);
       addSection(10, (out) =>
         this.generateStep10Section(
           workflow.step10,
@@ -4217,7 +4258,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           workflow.step3,
           workflow.step2,
           workflow.step8,
-          workflow.step11
+          workflow.step11,
+          outline ? { outline: true } : undefined
         )
       );
     }

@@ -13,6 +13,9 @@ import {
   validationFromPlans,
   modulesInDocument,
   namedTopicCount,
+  programmeLessonsHeld,
+  outlinesStep10,
+  FULL_DOCUMENT_LESSON_LIMIT,
 } from '../services/step10Completion';
 
 const lessons = (n: number) => Array.from({ length: n }, (_, i) => ({ lessonNumber: i + 1 }));
@@ -556,5 +559,43 @@ describe('a module with no contact hours in the programme checks', () => {
     const v = validationFromPlans([{ id: 'proj', contactHours: 0, mlos: [] }], []);
     expect(v.allLessonDurationsValid).toBe(false);
     expect(v.caseStudiesIntegrated).toBe(false);
+  });
+});
+
+describe('programmeLessonsHeld', () => {
+  it('adds up the lessons of every module, from bodies or from stub counts', () => {
+    const step10 = {
+      moduleLessonPlans: [
+        { moduleId: 'a', lessons: lessons(30) },
+        { moduleId: 'b', lessons: [], totalLessons: 12 },
+        { moduleId: 'c' },
+      ],
+    };
+    expect(programmeLessonsHeld(step10)).toBe(42);
+  });
+
+  it('is zero for a missing or malformed Step 10', () => {
+    expect(programmeLessonsHeld(undefined)).toBe(0);
+    expect(programmeLessonsHeld({})).toBe(0);
+    expect(programmeLessonsHeld({ moduleLessonPlans: 'x' as unknown as [] })).toBe(0);
+  });
+});
+
+describe('outlinesStep10', () => {
+  const withLessons = (n: number) => ({
+    moduleLessonPlans: [{ moduleId: 'a', lessons: lessons(n) }],
+  });
+
+  it('writes every lesson out up to the limit', () => {
+    expect(outlinesStep10(withLessons(FULL_DOCUMENT_LESSON_LIMIT))).toBe(false);
+  });
+
+  it('lists the lessons instead above it, as for the BBA', () => {
+    expect(outlinesStep10(withLessons(FULL_DOCUMENT_LESSON_LIMIT + 1))).toBe(true);
+    expect(outlinesStep10(withLessons(1380))).toBe(true);
+  });
+
+  it('keeps the next-largest stored programme (471 lessons) in full', () => {
+    expect(outlinesStep10(withLessons(471))).toBe(false);
   });
 });
