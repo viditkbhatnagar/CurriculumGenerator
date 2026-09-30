@@ -1,5 +1,5 @@
 {
-  "count": 245,
+  "count": 241,
   "signatures": [
     "src/data/mockRepository.ts|TS2339|Property 'createdAt' does not exist on type 'T'.",
     "src/data/mockRepository.ts|TS2352|Conversion of type 'Omit<T, \"createdAt\" | \"updatedAt\" | \"_id\"> & { _id: string; createdAt: Date; updatedAt: Date; }' to type 'T' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.",
@@ -162,10 +162,6 @@
     "src/services/curriculumGeneratorService.ts|TS2339|Property 'modules' does not exist on type 'ParsedProgramData'.",
     "src/services/documentExportService.ts|TS2339|Property 'query' does not exist on type 'Database'.",
     "src/services/documentExportService.ts|TS2339|Property 'query' does not exist on type 'Database'.",
-    "src/services/lessonPlanService.ts|TS2741|Property 'ai_activity' is missing in type '{ mini_lecture: string; discussion: string; demonstration: string; practice: string; role_play: string; case_analysis: string; group_work: string; assessment: string; break: string; }' but required in type 'Record<\"break\" | \"assessment\" | \"mini_lecture\" | \"discussion\" | \"demonstration\" | \"practice\" | \"role_play\" | \"case_analysis\" | \"group_work\" | \"ai_activity\", string>'.",
-    "src/services/lessonPlanService.ts|TS2741|Property 'ai_activity' is missing in type '{ mini_lecture: string[]; discussion: string[]; demonstration: string[]; practice: string[]; role_play: string[]; case_analysis: string[]; group_work: string[]; assessment: string[]; break: string[]; }' but required in type 'Record<\"break\" | \"assessment\" | \"mini_lecture\" | \"discussion\" | \"demonstration\" | \"practice\" | \"role_play\" | \"case_analysis\" | \"group_work\" | \"ai_activity\", string[]>'.",
-    "src/services/lessonPlanService.ts|TS2741|Property 'ai_activity' is missing in type '{ mini_lecture: string[]; discussion: string[]; demonstration: string[]; practice: string[]; role_play: string[]; case_analysis: string[]; group_work: string[]; assessment: string[]; break: string[]; }' but required in type 'Record<\"break\" | \"assessment\" | \"mini_lecture\" | \"discussion\" | \"demonstration\" | \"practice\" | \"role_play\" | \"case_analysis\" | \"group_work\" | \"ai_activity\", string[]>'.",
-    "src/services/lessonPlanService.ts|TS2741|Property 'ai_activity' is missing in type '{ mini_lecture: string[]; discussion: string[]; demonstration: string[]; practice: string[]; role_play: string[]; case_analysis: string[]; group_work: string[]; assessment: string[]; break: undefined[]; }' but required in type 'Record<\"break\" | \"assessment\" | \"mini_lecture\" | \"discussion\" | \"demonstration\" | \"practice\" | \"role_play\" | \"case_analysis\" | \"group_work\" | \"ai_activity\", string[]>'.",
     "src/services/pptGenerationService.ts|TS2339|Property 'activitySequence' does not exist on type 'LessonPlan'.",
     "src/services/pptGenerationService.ts|TS2339|Property 'description' does not exist on type 'CaseStudyActivity'.",
     "src/services/pptGenerationService.ts|TS2339|Property 'discussionQuestions' does not exist on type 'CaseStudyActivity'.",
