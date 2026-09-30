@@ -96,11 +96,15 @@ async function failIfInterrupted(doc: IAguCourseDraft): Promise<void> {
 const ARTEFACTS_RUNNING_MESSAGE =
   'Assessments and the tutor pack are being drafted from this outline. Wait for that to finish before changing the outline.';
 
-/** Parse-time warnings stored with the artefacts. Everything else is recomputed on read. */
+/**
+ * Findings made while drafting (dropped items, parts that could not be drafted) are kept from
+ * the stored run. Everything else is recomputed on read.
+ */
 const ARTEFACT_PARSE_CODES = new Set([
   'RUBRIC_OUTCOME_UNKNOWN',
   'QUIZ_ITEM_UNTRACEABLE',
   'EXAM_QUESTION_UNTRACEABLE',
+  'ARTEFACT_PART_FAILED',
 ]);
 
 /**

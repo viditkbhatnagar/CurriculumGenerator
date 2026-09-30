@@ -5,8 +5,10 @@
  * quiz and practice items, one call per week run side by side; the final exam, told which quiz
  * and practice questions exist; the tutor pack, told the exam's questions. The result is
  * validated on the stored shape, and parts with problems the model can fix get at most two
- * repair rounds, as the outline does. Every call records a heartbeat, every phase a stage run,
- * and a failure leaves the artefacts 'failed' without touching the outline's status.
+ * repair rounds, as the outline does. Every call records a heartbeat and every phase a stage
+ * run. A part whose answer cannot be read becomes a blocking finding and the rest is kept, so
+ * one cut-off answer does not discard six good ones; only a run in which nothing could be
+ * drafted is 'failed'. The outline's status is never touched.
  *
  * Results are written with atomic updates rather than a save of the loaded document, so a
  * status sweep or read of the same draft while this runs cannot collide with it.
@@ -35,19 +37,41 @@ import {
   tutorPackFromAnswer,
 } from './artefactPrompts';
 import { FacultyInputs } from './outlinePrompt';
+import { partOf } from './artefactRepair';
 
 const MAX_REPAIR_ROUNDS = 2;
+/**
+ * Room for GPT-5's reasoning as well as its answer: reasoning tokens count against the same
+ * limit. At 16,000 the first CR08 run's answer was cut off mid-string and failed the run.
+ */
+const MAX_TOKENS = 32000;
 /** Used for a week the plan left out, so its items can still be written and checked. */
 const DEFAULT_QUIZ_PLAN = { items: 8, timeLimitMinutes: 20, attempts: 2, weight: 0 };
 
 type Prompt = { system: string; user: string };
 
-async function askModel(prompt: Prompt): Promise<any> {
-  const raw = await openaiService.generateContent(prompt.user, prompt.system, {
-    responseFormat: 'json_object',
-    maxTokens: 16000,
-  });
-  return JSON.parse(raw);
+async function askModel(prompt: Prompt, part: string): Promise<any> {
+  const ask = (p: Prompt) =>
+    openaiService.generateContent(p.user, p.system, {
+      responseFormat: 'json_object',
+      maxTokens: MAX_TOKENS,
+    });
+  try {
+    return JSON.parse(await ask(prompt));
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+  }
+  // An answer that is not JSON was almost always cut off at the limit; ask once more, shorter.
+  const retry = {
+    system: prompt.system,
+    user: `${prompt.user}\n\nYour previous answer was cut off before it finished. Answer again, complete, keeping every text field brief.`,
+  };
+  try {
+    return JSON.parse(await ask(retry));
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    throw new Error(`the answer for the ${part} was cut off or was not JSON, twice`);
+  }
 }
 
 function withRepair(prompt: Prompt, findings: Finding[], previous: unknown): Prompt {
@@ -72,31 +96,6 @@ async function heartbeat(draftId: string): Promise<void> {
 
 async function recordRun(draftId: string, run: StageRun): Promise<void> {
   await AguCourseDraft.updateOne({ _id: draftId }, { $push: { stageRuns: run } });
-}
-
-/** Which part of the artefacts a finding is about, so a repair re-asks only for that part. */
-export function partOf(finding: Finding, artefacts?: CourseArtefacts): string | null {
-  const path = finding.path || '';
-  const week = /week(\d+)|\bW(\d+)-[QP]/.exec(path);
-  if (/^(RUBRIC_|DISCUSSION_|WEEKLY_WEIGHTS|QUIZ_PLAN_WEEKS)/.test(finding.code)) return 'plan';
-  if (/^(QUIZ_ITEM_COUNT|QUIZ_ITEM_INVALID|PRACTICE_WEEK_EMPTY)$/.test(finding.code) && week) {
-    return `week${week[1] || week[2]}`;
-  }
-  if (finding.code.startsWith('EXAM_')) return 'exam';
-  if (finding.code === 'TUTOR_GUARDRAILS') return 'tutor';
-  if (finding.code === 'ARTEFACT_CLAIM') {
-    if (/^(rubrics|discussions)/.test(path)) return 'plan';
-    if (path.startsWith('quizBank')) {
-      // A claim in a quiz or practice item is repaired with that item's week.
-      const at = /quizBank\.(items|practice)\[(\d+)\]/.exec(path);
-      const list = at ? artefacts?.quizBank[at[1] as 'items' | 'practice'] : undefined;
-      const item = at && list ? list[Number(at[2])] : undefined;
-      return item ? `week${item.week}` : 'plan';
-    }
-    if (path.startsWith('finalExam')) return 'exam';
-    if (path.startsWith('tutorPack')) return 'tutor';
-  }
-  return null;
 }
 
 interface Parts {
@@ -159,11 +158,44 @@ export async function generateArtefacts(draftId: string): Promise<void> {
     { $set: { artefactStatus: 'generating', artefactHeartbeatAt: started } }
   );
 
+  // A part that cannot be drafted is recorded, by part, and the run carries on with the others.
+  // A later repair that drafts it clears the record.
+  const failures = new Map<string, Finding>();
+  let partsTried = 0;
+  const attempt = async <T>(
+    key: string,
+    label: string,
+    run: () => Promise<T>,
+    fallback: T
+  ): Promise<T> => {
+    partsTried++;
+    try {
+      const value = await run();
+      failures.delete(key);
+      return value;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      loggingService.warn('AGU artefacts: a part could not be drafted', { draftId, label, reason });
+      failures.set(key, {
+        code: 'ARTEFACT_PART_FAILED',
+        severity: 'blocking',
+        message: `The ${label} could not be drafted (${reason}). Redraft the assessments to try again.`,
+        path: key,
+      });
+      return fallback;
+    }
+  };
+
   try {
     const hasExam = draft.assessments.some((a) => a.component === 'final_exam');
     const planPrompt = buildPlanPrompt(course, draft, inputs);
     const parts: Parts = {
-      planAnswer: await askModel(planPrompt),
+      planAnswer: await attempt(
+        'plan',
+        'rubric, discussions and quiz plan',
+        () => askModel(planPrompt, 'rubric, discussions and quiz plan'),
+        {}
+      ),
       weekAnswers: new Map<number, any>(),
       examAnswer: null,
       tutorAnswer: null,
@@ -187,7 +219,11 @@ export async function generateArtefacts(draftId: string): Promise<void> {
     const weekAnswers = parts.weekAnswers;
     await Promise.all(
       draft.weeks.map(async (w) => {
-        weekAnswers.set(w.number, await askModel(weekPrompt(w.number)));
+        const label = `week ${w.number} quiz and practice items`;
+        weekAnswers.set(
+          w.number,
+          await attempt(`week${w.number}`, label, () => askModel(weekPrompt(w.number), label), {})
+        );
         await heartbeat(draftId);
       })
     );
@@ -198,13 +234,24 @@ export async function generateArtefacts(draftId: string): Promise<void> {
         ...(a?.practice || []).map((p: any) => String(p?.question || '')),
       ]);
     const examPrompt = () => buildExamPrompt(course, draft, inputs, askedQuestions());
-    parts.examAnswer = hasExam ? await askModel(examPrompt()) : null;
+    parts.examAnswer = hasExam
+      ? await attempt('exam', 'final exam', () => askModel(examPrompt(), 'final exam'), null)
+      : null;
     await heartbeat(draftId);
 
     const examQuestions = () =>
       ((parts.examAnswer?.questions || []) as any[]).map((q) => String(q?.question || ''));
     const tutorPrompt = () => buildTutorPackPrompt(course, draft, inputs, examQuestions());
-    parts.tutorAnswer = await askModel(tutorPrompt());
+    parts.tutorAnswer = await attempt(
+      'tutor',
+      'tutor pack',
+      () => askModel(tutorPrompt(), 'tutor pack'),
+      {}
+    );
+    // Nothing drafted at all is a failed run, not a draft of blocking findings.
+    if (failures.size === partsTried) {
+      throw new Error(Array.from(failures.values())[0].message);
+    }
     await heartbeat(draftId);
 
     let { artefacts, parseFindings } = assemble(draft, parts);
@@ -228,8 +275,11 @@ export async function generateArtefacts(draftId: string): Promise<void> {
       if (byPart.size === 0) break;
       const repairStarted = new Date();
       if (byPart.has('plan')) {
-        parts.planAnswer = await askModel(
-          withRepair(planPrompt, byPart.get('plan')!, parts.planAnswer)
+        parts.planAnswer = await attempt(
+          'plan',
+          'rubric, discussions and quiz plan',
+          () => askModel(withRepair(planPrompt, byPart.get('plan')!, parts.planAnswer), 'plan'),
+          parts.planAnswer
         );
         await heartbeat(draftId);
       }
@@ -238,8 +288,16 @@ export async function generateArtefacts(draftId: string): Promise<void> {
           .filter((w) => byPart.has(`week${w.number}`))
           .map(async (w) => {
             const previous = weekAnswers.get(w.number);
-            const repaired = await askModel(
-              withRepair(weekPrompt(w.number), byPart.get(`week${w.number}`)!, previous)
+            const label = `week ${w.number} quiz and practice items`;
+            const repaired = await attempt(
+              `week${w.number}`,
+              label,
+              () =>
+                askModel(
+                  withRepair(weekPrompt(w.number), byPart.get(`week${w.number}`)!, previous),
+                  label
+                ),
+              previous
             );
             weekAnswers.set(w.number, repaired);
             await heartbeat(draftId);
@@ -247,17 +305,25 @@ export async function generateArtefacts(draftId: string): Promise<void> {
       );
       const examChanged = hasExam && byPart.has('exam');
       if (examChanged) {
-        parts.examAnswer = await askModel(
-          withRepair(examPrompt(), byPart.get('exam')!, parts.examAnswer)
+        parts.examAnswer = await attempt(
+          'exam',
+          'final exam',
+          () =>
+            askModel(withRepair(examPrompt(), byPart.get('exam')!, parts.examAnswer), 'final exam'),
+          parts.examAnswer
         );
         await heartbeat(draftId);
       }
       // The tutor pack is told the exam's questions, so a new exam means a new pack.
       if (byPart.has('tutor') || examChanged) {
-        parts.tutorAnswer = await askModel(
-          byPart.has('tutor')
-            ? withRepair(tutorPrompt(), byPart.get('tutor')!, parts.tutorAnswer)
-            : tutorPrompt()
+        const tutorRequest = byPart.has('tutor')
+          ? withRepair(tutorPrompt(), byPart.get('tutor')!, parts.tutorAnswer)
+          : tutorPrompt();
+        parts.tutorAnswer = await attempt(
+          'tutor',
+          'tutor pack',
+          () => askModel(tutorRequest, 'tutor pack'),
+          parts.tutorAnswer
         );
         await heartbeat(draftId);
       }
@@ -274,7 +340,7 @@ export async function generateArtefacts(draftId: string): Promise<void> {
       });
     }
 
-    const allFindings = [...parseFindings, ...findings];
+    const allFindings = [...failures.values(), ...parseFindings, ...findings];
     await AguCourseDraft.updateOne(
       { _id: draftId },
       {
