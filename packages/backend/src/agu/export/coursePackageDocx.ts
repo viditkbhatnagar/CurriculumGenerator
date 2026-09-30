@@ -8,27 +8,13 @@
  * and the document closes with the evidence and disclosure record: what was sourced, what was
  * dropped, what is still blocking. Real Word headings and tables throughout.
  */
-import {
-  Document,
-  ExternalHyperlink,
-  HeadingLevel,
-  Packer,
-  Paragraph,
-  Table,
-  TableCell,
-  TableLayoutType,
-  TableRow,
-  TextRun,
-  WidthType,
-} from 'docx';
+import { Document, HeadingLevel, Packer, Paragraph, Table } from 'docx';
 import { CatalogueCourse, CatalogueEdition } from '../catalogue/types';
 import { DISCLOSURES } from '../rules/usUtahRules';
 import { CourseDraft, Finding } from '../draft/types';
-
-const FONT = 'Arial';
-const BODY = 20;
-// The text width of the default A4 page with one-inch margins, in twentieths of a point.
-const TEXT_WIDTH_DXA = 11906 - 2 * 1440;
+import { CourseArtefacts } from '../draft/artefactTypes';
+import { BODY, FONT, bullet, h, linkParagraph, p, sum, table } from './docxParts';
+import { artefactSections, draftedTemplates } from './artefactSections';
 
 export interface PackageInput {
   draft: CourseDraft;
@@ -46,57 +32,10 @@ export interface PackageInput {
     model?: string;
     error?: string;
   }[];
-}
-
-const t = (text: string, opts: { bold?: boolean; italics?: boolean } = {}) =>
-  new TextRun({ text, font: FONT, size: BODY, ...opts });
-const p = (text: string, opts: { bold?: boolean; italics?: boolean } = {}) =>
-  new Paragraph({ children: [t(text, opts)], spacing: { after: 100 } });
-const h = (text: string, level: (typeof HeadingLevel)[keyof typeof HeadingLevel]) =>
-  new Paragraph({ text, heading: level, spacing: { before: 240, after: 100 } });
-const bullet = (text: string) => new Paragraph({ children: [t(text)], bullet: { level: 0 } });
-
-type CellContent = string | Paragraph;
-
-/**
- * A table with header row and, optionally, column widths in percent. Equal widths squeezed a
- * six-column weekly plan into columns a few words wide, so a lecture's topics ran down the
- * page one word per line.
- */
-function table(header: string[], rows: CellContent[][], widths?: number[]): Table {
-  // Word and LibreOffice lay a table out from its column grid, not from per-cell percentages,
-  // so the widths are given as a fixed grid in twips.
-  const columns = widths?.map((pct) => Math.round((TEXT_WIDTH_DXA * pct) / 100));
-  const cell = (content: CellContent, column: number, bold = false) =>
-    new TableCell({
-      children: [
-        typeof content === 'string' ? new Paragraph({ children: [t(content, { bold })] }) : content,
-      ],
-      ...(columns?.[column] ? { width: { size: columns[column], type: WidthType.DXA } } : {}),
-    });
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    ...(columns ? { columnWidths: columns, layout: TableLayoutType.FIXED } : {}),
-    rows: [
-      new TableRow({ tableHeader: true, children: header.map((x, i) => cell(x, i, true)) }),
-      ...rows.map((r) => new TableRow({ children: r.map((x, i) => cell(x, i)) })),
-    ],
-  });
-}
-
-/** A clickable link for http(s) addresses; anything else is printed as text, never linked. */
-function linkParagraph(url: string | undefined): Paragraph {
-  if (!url || !/^https?:\/\//i.test(url)) return new Paragraph({ children: [t(url || '—')] });
-  return new Paragraph({
-    children: [
-      new ExternalHyperlink({
-        link: url,
-        children: [
-          new TextRun({ text: url, font: FONT, size: BODY, color: '0563C1', underline: {} }),
-        ],
-      }),
-    ],
-  });
+  /** T07-T11, when they have been drafted, with their findings and status. */
+  artefacts?: CourseArtefacts;
+  artefactFindings?: Finding[];
+  artefactStatus?: string;
 }
 
 /**
@@ -122,7 +61,6 @@ function briefParagraphs(brief: string | undefined): Paragraph[] {
   return [...(lead ? [p(lead)] : []), ...items.map((item) => bullet(item))];
 }
 
-const sum = (xs: number[]) => Math.round(xs.reduce((n, x) => n + (x || 0), 0) * 100) / 100;
 const disclosure = (id: string) => DISCLOSURES.find((d) => d.id === id)?.text || '';
 
 export function coursePackageDocument(input: PackageInput): Document {
@@ -138,17 +76,21 @@ export function coursePackageDocument(input: PackageInput): Document {
   const independent = sum(draft.weeks.flatMap((w) => w.independentStudy.map((m) => m.hours)));
   const blocking = findings.filter((f) => f.severity === 'blocking');
   const warnings = findings.filter((f) => f.severity === 'warning');
+  const artefactFindings = input.artefacts ? input.artefactFindings || [] : [];
+  const artefactBlocking = artefactFindings.filter((f) => f.severity === 'blocking');
+  const drafted = draftedTemplates(input.artefacts);
   const children: (Paragraph | Table)[] = [];
 
   children.push(
     new Paragraph({ text: `${course.code} ${course.title}`, heading: HeadingLevel.TITLE }),
-    p(`Course package, version ${input.version}: ${input.status.replace(/_/g, ' ')}`, {
-      bold: true,
-    }),
+    p(
+      `Course package, version ${input.version}. Outline: ${input.status.replace(/_/g, ' ')}. Assessments and tutor pack (T07-T11): ${input.artefacts ? (input.artefactStatus || 'drafted').replace(/_/g, ' ') : 'not drafted'}.`,
+      { bold: true }
+    ),
     p(disclosure('draft_status'), { italics: true }),
     p(
-      blocking.length
-        ? `${blocking.length} blocking finding(s) remain; see the evidence and disclosure record at the end. This draft is not faculty-review ready.`
+      blocking.length + artefactBlocking.length
+        ? `${blocking.length + artefactBlocking.length} blocking finding(s) remain; see the evidence and disclosure record at the end. This draft is not faculty-review ready.`
         : 'No blocking findings on the stored draft.',
       { italics: true }
     )
@@ -489,17 +431,20 @@ export function coursePackageDocument(input: PackageInput): Document {
     children.push(p('No applied assignment in this draft.'));
   }
 
-  children.push(h('Not drafted in this version', HeadingLevel.HEADING_1));
-  [
-    'T07 Marking rubric',
-    'T08 Quiz & practice bank',
-    'T09 Final exam blueprint & paper',
-    'T10 Discussion / seminar prompts',
-    'T11 AI tutor knowledge pack',
-    course.role === 'capstone' ? 'T13 Capstone assessment design' : '',
-  ]
-    .filter(Boolean)
-    .forEach((x) => children.push(bullet(x)));
+  if (input.artefacts) children.push(...artefactSections(input.artefacts, draft));
+
+  const notDrafted = [
+    ['T07', 'T07 Marking rubric'],
+    ['T08', 'T08 Quiz & practice bank'],
+    ['T09', 'T09 Final exam blueprint & paper'],
+    ['T10', 'T10 Discussion / seminar prompts'],
+    ['T11', 'T11 AI tutor knowledge pack'],
+    ...(course.role === 'capstone' ? [['T13', 'T13 Capstone assessment design']] : []),
+  ].filter(([code]) => !drafted.has(code));
+  if (notDrafted.length) {
+    children.push(h('Not drafted in this version', HeadingLevel.HEADING_1));
+    notDrafted.forEach(([, label]) => children.push(bullet(label)));
+  }
 
   // Evidence and disclosure record
   children.push(h('Evidence and disclosure record', HeadingLevel.HEADING_1));
@@ -518,10 +463,27 @@ export function coursePackageDocument(input: PackageInput): Document {
       `Cases: every generated case is a hypothetical teaching scenario, not a real company event.`
     )
   );
+  if (input.artefacts) {
+    children.push(
+      bullet(
+        'Assessments and tutor pack: rubric, quiz and practice items, exam questions and tutor content are proposals written from this outline for faculty review. The exam blueprint is counted from the paper.'
+      )
+    );
+  }
   children.push(h('Findings', HeadingLevel.HEADING_2));
   if (!findings.length) children.push(p('No findings.'));
   blocking.forEach((f) => children.push(bullet(`Blocking · ${f.code}: ${f.message}`)));
   warnings.forEach((f) => children.push(bullet(`Warning · ${f.code}: ${f.message}`)));
+  if (input.artefacts) {
+    children.push(h('Assessment and tutor-pack findings (T07-T11)', HeadingLevel.HEADING_3));
+    if (!artefactFindings.length) children.push(p('No findings.'));
+    [...artefactBlocking, ...artefactFindings.filter((f) => f.severity === 'warning')].forEach(
+      (f) =>
+        children.push(
+          bullet(`${f.severity === 'blocking' ? 'Blocking' : 'Warning'} · ${f.code}: ${f.message}`)
+        )
+    );
+  }
   children.push(h('Stage history', HeadingLevel.HEADING_2));
   input.stageRuns.forEach((r) =>
     children.push(
