@@ -12,6 +12,7 @@ import { isStepDone } from '@/lib/stepGating';
 import { orderByStep4 } from '@/lib/moduleOrder';
 import { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
+import FacultyGuideDownloadButton from './FacultyGuideDownloadButton';
 import { toast } from '@/stores/toastStore';
 import { formatAuthorList } from '@/lib/citation';
 
@@ -2222,6 +2223,12 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
               <StepDownloadButton
                 workflowId={workflow._id}
                 stepNumber={10}
+                programName={workflow.projectName || workflow.step1?.programTitle || ''}
+              />
+            )}
+            {!!workflow.step10 && (
+              <FacultyGuideDownloadButton
+                workflowId={workflow._id}
                 programName={workflow.projectName || workflow.step1?.programTitle || ''}
               />
             )}
