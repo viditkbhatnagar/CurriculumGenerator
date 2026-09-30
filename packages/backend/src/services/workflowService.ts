@@ -2739,8 +2739,24 @@ CRITICAL VALIDATION:
     if (!workflow || !workflow.step5) {
       throw new Error('Step 5 has not been generated for this workflow');
     }
-    const previous = workflow.step5 as any;
+    this.rebuildStep5InPlace(workflow);
+    await workflow.save();
 
+    loggingService.info('Step 5 aggregates recomputed', {
+      workflowId,
+      totalSources: (workflow.step5 as any).totalSources,
+      agiCompliant: (workflow.step5 as any).agiCompliant,
+    });
+    return workflow;
+  }
+
+  /**
+   * Replace a loaded workflow's Step 5 aggregates with ones rebuilt from its stored sources
+   * and Step 4 modules, without saving. For callers that hold the document and save it
+   * themselves, such as the canvas edit route, so that there is one set of Step 5 rules.
+   */
+  rebuildStep5InPlace(workflow: ICurriculumWorkflow): void {
+    const previous = workflow.step5 as any;
     workflow.step5 = this.buildStep5Summary(
       previous.sources || [],
       (workflow.step4 as any)?.modules || [],
@@ -2752,16 +2768,7 @@ CRITICAL VALIDATION:
     );
     (workflow.step5 as any).approvedAt = previous.approvedAt;
     (workflow.step5 as any).approvedBy = previous.approvedBy;
-
     workflow.markModified('step5');
-    await workflow.save();
-
-    loggingService.info('Step 5 aggregates recomputed', {
-      workflowId,
-      totalSources: (workflow.step5 as any).totalSources,
-      agiCompliant: (workflow.step5 as any).agiCompliant,
-    });
-    return workflow;
   }
 
   /**

@@ -8888,73 +8888,22 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
     }
 
     // =====================================================
-    // AUTO-RECALCULATE STEP 5 VALIDATION AFTER SOURCE CHANGES
+    // RECALCULATE STEP 5 VALIDATION AFTER A SOURCE OR OUTCOME EDIT
     // =====================================================
-    const step5Data = (workflow as any).step5;
-    if (step5Data?.sources && Array.isArray(step5Data.sources)) {
-      const sources = step5Data.sources;
-      const totalSources = sources.length;
-      const peerReviewedSources = sources.filter(
-        (s: any) => s.category === 'peer_reviewed_journal'
-      );
-      const academicSources = sources.filter((s: any) => s.type === 'academic');
-      const appliedSources = sources.filter((s: any) => s.type === 'applied');
-
-      // Get all MLO codes from Step 4
-      const step4Data = (workflow as any).step4;
-      const allMLOs: string[] = [];
-      if (step4Data?.modules) {
-        step4Data.modules.forEach((m: any) => {
-          (m.mlos || []).forEach((mlo: any) => {
-            if (mlo.code) allMLOs.push(mlo.code);
-          });
-        });
-      }
-
-      // Get covered MLOs from sources
-      const coveredMLOs = new Set<string>();
-      sources.forEach((src: any) => {
-        (src.linkedMLOs || []).forEach((mlo: string) => coveredMLOs.add(mlo));
-      });
-
-      // Calculate metrics
-      const peerReviewedPercent =
-        totalSources > 0 ? Math.round((peerReviewedSources.length / totalSources) * 100) : 0;
-      const hasBalance = academicSources.length > 0 && appliedSources.length > 0;
-      const allMLOsSupported = allMLOs.length === 0 || allMLOs.every((mlo) => coveredMLOs.has(mlo));
-
-      // Update Step 5 validation data
-      step5Data.totalSources = totalSources;
-      step5Data.totalPeerReviewed = peerReviewedSources.length;
-      step5Data.peerReviewedPercent = peerReviewedPercent;
-      step5Data.academicAppliedBalance = hasBalance;
-
-      // Update validation report
-      if (!step5Data.validationReport) step5Data.validationReport = {};
-      step5Data.validationReport.peerReviewRatio = peerReviewedPercent >= 50;
-      step5Data.validationReport.everyMLOSupported = allMLOsSupported;
-      step5Data.validationReport.academicAppliedBalance = hasBalance;
-
-      // Update compliance issues
-      const issues: string[] = [];
-      if (peerReviewedPercent < 50) issues.push('Peer-reviewed ratio below 50%');
-      if (!hasBalance) issues.push('Missing academic/applied source balance');
-      if (!allMLOsSupported) issues.push('Not all MLOs have supporting sources');
-      step5Data.complianceIssues = issues;
-
-      // Update AGI compliance status
-      step5Data.agiCompliant =
-        issues.length === 0 &&
-        step5Data.validationReport.allSourcesApproved !== false &&
-        step5Data.validationReport.recencyCompliance !== false;
-
-      workflow.markModified('step5');
-      loggingService.info('Step 5 validation recalculated', {
-        totalSources,
-        peerReviewedPercent,
-        allMLOsSupported,
-        hasBalance,
-        issues,
+    // Step 5's checks read its sources and the Step 4 module outcomes they support, so an
+    // edit to either step can change them and an edit to any other step cannot. This block
+    // used to run after every canvas edit with its own older copy of the rules: a 50%
+    // peer-review floor where the screen says 30%, outcome ids read from `mlo.code`, three
+    // hand-written issue messages. It overwrote the computed report, so editing a lesson plan
+    // could put "AGI Compliant" back on a programme failing two source checks. It now uses the
+    // same rebuild as generation and the source editor.
+    const editedStep = Number(stepNumber);
+    if ((editedStep === 4 || editedStep === 5) && Array.isArray((workflow as any).step5?.sources)) {
+      workflowService.rebuildStep5InPlace(workflow as any);
+      loggingService.info('Step 5 validation recalculated after an edit', {
+        workflowId: id,
+        editedStep,
+        agiCompliant: (workflow as any).step5?.agiCompliant,
       });
     }
 
