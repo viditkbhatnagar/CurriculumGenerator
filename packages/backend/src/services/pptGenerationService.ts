@@ -12,6 +12,7 @@ import {
 import { moduleCodeOf } from '../utils/moduleIdentity';
 import { normaliseTopic } from '../utils/topicShape';
 import { citationsVerified, unmatchedCitations } from './citationMatch';
+import { xmlSafeDeep } from '../utils/xmlSafe';
 
 /**
  * PPT Generation Service
@@ -508,6 +509,8 @@ Return ONLY valid JSON, no markdown formatting.`;
    * Create actual PowerPoint file from structure
    */
   async createPPTFile(pptContent: ModulePPTContent): Promise<Buffer> {
+    // PowerPoint files are XML too; see xmlSafe. A Maths deck held 26 such strings.
+    pptContent = xmlSafeDeep(pptContent);
     try {
       const ppt = new pptxgen();
 
@@ -2621,6 +2624,7 @@ Return ONLY valid JSON.`;
    * @returns Buffer containing PPTX file
    */
   async exportPPTX(deck: PPTDeck): Promise<Buffer> {
+    deck = xmlSafeDeep(deck);
     loggingService.info('Exporting PPT deck as PPTX', {
       deckId: deck.deckId,
       slideCount: deck.slideCount,

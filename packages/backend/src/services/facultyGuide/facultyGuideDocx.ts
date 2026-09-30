@@ -18,6 +18,7 @@ import {
   GuideSession,
   incompleteNote,
 } from './facultyGuideModel';
+import { xmlSafeDeep } from '../../utils/xmlSafe';
 
 const FONT = 'Arial';
 const BODY = 21; // half-points: 10.5pt
@@ -312,6 +313,9 @@ function sessionCountRequirement(guide: GuideModule): string {
 }
 
 export function facultyGuideDocument(guide: GuideModule, programmeTitle?: string): Document {
+  // A lesson held U+0014 and made the BBA M42 guide invalid XML. See xmlSafe.
+  guide = xmlSafeDeep(guide);
+  programmeTitle = programmeTitle && xmlSafeDeep(programmeTitle);
   const note = incompleteNote(guide);
   const title = `Faculty Delivery Guide: ${guide.code} ${guide.title}`.trim();
   const children: Paragraph[] = [

@@ -23,18 +23,25 @@ import {
   convertInchesToTwip,
 } from 'docx';
 import puppeteer from 'puppeteer';
-import { Curriculum, ProgramSpecification, UnitSpecification, AssessmentPackage } from '../types/curriculum';
+import {
+  Curriculum,
+  ProgramSpecification,
+  UnitSpecification,
+  AssessmentPackage,
+} from '../types/curriculum';
 import pool from '../db';
 import * as fs from 'fs';
 import * as path from 'path';
 import archiver from 'archiver';
+import { xmlSafeDeep } from '../utils/xmlSafe';
 
 export class DocumentExportService {
   /**
    * Export program specification as DOCX
    */
   async exportProgramSpecDOCX(programId: string): Promise<Buffer> {
-    const curriculum = await this.getCurriculum(programId);
+    // Office files are XML: a control character in the data makes the file corrupt. See xmlSafe.
+    const curriculum = xmlSafeDeep(await this.getCurriculum(programId));
     const programSpec = curriculum.programSpec;
     const programData = await this.getProgramData(programId);
 
@@ -230,7 +237,7 @@ export class DocumentExportService {
    * Export unit specification as DOCX
    */
   async exportUnitSpecDOCX(unitId: string): Promise<Buffer> {
-    const unitSpec = await this.getUnitSpecification(unitId);
+    const unitSpec = xmlSafeDeep(await this.getUnitSpecification(unitId));
 
     const doc = new Document({
       sections: [
@@ -387,7 +394,7 @@ export class DocumentExportService {
    * Export assessment package as DOCX
    */
   async exportAssessmentPackageDOCX(programId: string): Promise<Buffer> {
-    const curriculum = await this.getCurriculum(programId);
+    const curriculum = xmlSafeDeep(await this.getCurriculum(programId));
     const assessmentPackage = curriculum.assessmentPackage;
     const programData = await this.getProgramData(programId);
 
@@ -597,13 +604,16 @@ export class DocumentExportService {
     const paragraphs: Paragraph[] = [];
 
     // Group MCQs by module
-    const mcqsByModule = assessmentPackage.mcqs.reduce((acc, mcq) => {
-      if (!acc[mcq.moduleCode]) {
-        acc[mcq.moduleCode] = [];
-      }
-      acc[mcq.moduleCode].push(mcq);
-      return acc;
-    }, {} as Record<string, typeof assessmentPackage.mcqs>);
+    const mcqsByModule = assessmentPackage.mcqs.reduce(
+      (acc, mcq) => {
+        if (!acc[mcq.moduleCode]) {
+          acc[mcq.moduleCode] = [];
+        }
+        acc[mcq.moduleCode].push(mcq);
+        return acc;
+      },
+      {} as Record<string, typeof assessmentPackage.mcqs>
+    );
 
     Object.entries(mcqsByModule).forEach(([moduleCode, mcqs]) => {
       paragraphs.push(
@@ -859,10 +869,7 @@ export class DocumentExportService {
   private async getCurriculum(programId: string): Promise<Curriculum> {
     // This would fetch from the database - for now, return a mock structure
     // In production, this would query the generation_jobs table and related data
-    const result = await pool.query(
-      `SELECT * FROM programs WHERE id = $1`,
-      [programId]
-    );
+    const result = await pool.query(`SELECT * FROM programs WHERE id = $1`, [programId]);
 
     if (result.rows.length === 0) {
       throw new Error(`Program not found: ${programId}`);
@@ -879,10 +886,7 @@ export class DocumentExportService {
   }
 
   private async getProgramData(programId: string): Promise<any> {
-    const result = await pool.query(
-      `SELECT * FROM programs WHERE id = $1`,
-      [programId]
-    );
+    const result = await pool.query(`SELECT * FROM programs WHERE id = $1`, [programId]);
 
     if (result.rows.length === 0) {
       throw new Error(`Program not found: ${programId}`);
@@ -1231,15 +1235,21 @@ export class DocumentExportService {
   /**
    * Generate HTML for assessment package
    */
-  private generateAssessmentPackageHTML(assessmentPackage: AssessmentPackage, programData: any): string {
+  private generateAssessmentPackageHTML(
+    assessmentPackage: AssessmentPackage,
+    programData: any
+  ): string {
     // Group MCQs by module
-    const mcqsByModule = assessmentPackage.mcqs.reduce((acc, mcq) => {
-      if (!acc[mcq.moduleCode]) {
-        acc[mcq.moduleCode] = [];
-      }
-      acc[mcq.moduleCode].push(mcq);
-      return acc;
-    }, {} as Record<string, typeof assessmentPackage.mcqs>);
+    const mcqsByModule = assessmentPackage.mcqs.reduce(
+      (acc, mcq) => {
+        if (!acc[mcq.moduleCode]) {
+          acc[mcq.moduleCode] = [];
+        }
+        acc[mcq.moduleCode].push(mcq);
+        return acc;
+      },
+      {} as Record<string, typeof assessmentPackage.mcqs>
+    );
 
     const mcqsHTML = Object.entries(mcqsByModule)
       .map(
@@ -1334,7 +1344,10 @@ export class DocumentExportService {
           <h3>Breakdown</h3>
           <ul>
             ${scheme.breakdown
-              .map((item) => `<li><strong>${item.section}:</strong> ${item.marks} marks - ${item.description}</li>`)
+              .map(
+                (item) =>
+                  `<li><strong>${item.section}:</strong> ${item.marks} marks - ${item.description}</li>`
+              )
               .join('')}
           </ul>
         </div>
@@ -1456,7 +1469,7 @@ export class DocumentExportService {
 
     // Create SCORM package structure
     const scormPackage = await this.createSCORMPackage(curriculum, programData);
-    
+
     return scormPackage;
   }
 
@@ -1465,7 +1478,7 @@ export class DocumentExportService {
    */
   private async createSCORMPackage(curriculum: Curriculum, programData: any): Promise<Buffer> {
     const tmpDir = path.join('/tmp', `scorm-${curriculum.programId}-${Date.now()}`);
-    
+
     try {
       // Create temporary directory structure
       await fs.promises.mkdir(tmpDir, { recursive: true });
@@ -1473,11 +1486,7 @@ export class DocumentExportService {
 
       // Generate imsmanifest.xml
       const manifest = this.generateSCORMManifest(curriculum, programData);
-      await fs.promises.writeFile(
-        path.join(tmpDir, 'imsmanifest.xml'),
-        manifest,
-        'utf-8'
-      );
+      await fs.promises.writeFile(path.join(tmpDir, 'imsmanifest.xml'), manifest, 'utf-8');
 
       // Generate content HTML files for each unit
       for (let i = 0; i < curriculum.unitSpecs.length; i++) {
@@ -1492,11 +1501,7 @@ export class DocumentExportService {
 
       // Generate index.html (course overview)
       const indexHTML = this.generateCourseIndexHTML(curriculum, programData);
-      await fs.promises.writeFile(
-        path.join(tmpDir, 'content', 'index.html'),
-        indexHTML,
-        'utf-8'
-      );
+      await fs.promises.writeFile(path.join(tmpDir, 'content', 'index.html'), indexHTML, 'utf-8');
 
       // Generate assessment HTML
       const assessmentHTML = this.generateAssessmentContentHTML(curriculum.assessmentPackage);
@@ -1516,11 +1521,7 @@ export class DocumentExportService {
 
       // Create CSS file
       const cssContent = this.generateSCORMCSS();
-      await fs.promises.writeFile(
-        path.join(tmpDir, 'content', 'styles.css'),
-        cssContent,
-        'utf-8'
-      );
+      await fs.promises.writeFile(path.join(tmpDir, 'content', 'styles.css'), cssContent, 'utf-8');
 
       // Zip the package
       const zipBuffer = await this.zipDirectory(tmpDir);
@@ -1782,13 +1783,16 @@ export class DocumentExportService {
    * Generate assessment content HTML
    */
   private generateAssessmentContentHTML(assessmentPackage: AssessmentPackage): string {
-    const mcqsByModule = assessmentPackage.mcqs.reduce((acc, mcq) => {
-      if (!acc[mcq.moduleCode]) {
-        acc[mcq.moduleCode] = [];
-      }
-      acc[mcq.moduleCode].push(mcq);
-      return acc;
-    }, {} as Record<string, typeof assessmentPackage.mcqs>);
+    const mcqsByModule = assessmentPackage.mcqs.reduce(
+      (acc, mcq) => {
+        if (!acc[mcq.moduleCode]) {
+          acc[mcq.moduleCode] = [];
+        }
+        acc[mcq.moduleCode].push(mcq);
+        return acc;
+      },
+      {} as Record<string, typeof assessmentPackage.mcqs>
+    );
 
     const mcqsHTML = Object.entries(mcqsByModule)
       .map(

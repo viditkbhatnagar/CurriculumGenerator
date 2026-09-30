@@ -11,12 +11,15 @@ import {
   WidthType,
 } from 'docx';
 import { loggingService } from './loggingService';
+import { xmlSafeDeep } from '../utils/xmlSafe';
 
 export class DocxGenerationService {
   /**
    * Generate a comprehensive Word document from curriculum package
    */
   async generateCurriculumDocument(fullPackage: any): Promise<Buffer> {
+    // Office files are XML: a control character in the data makes the file corrupt. See xmlSafe.
+    fullPackage = xmlSafeDeep(fullPackage);
     try {
       const sections = [];
 

@@ -27,6 +27,7 @@ import type {
 } from '../models/CurriculumWorkflow';
 import { loggingService } from './loggingService';
 import JSZip from 'jszip';
+import { xmlSafeDeep } from '../utils/xmlSafe';
 
 const FONT_FAMILY = 'Arial';
 const FONT_SIZES = {
@@ -42,6 +43,8 @@ const PARA_SPACING = { before: 120, after: 120 };
 
 class SyllabusExportService {
   async generateSyllabusDocument(workflow: ICurriculumWorkflow): Promise<Buffer> {
+    // Office files are XML: a control character in the data makes the file corrupt. See xmlSafe.
+    workflow = xmlSafeDeep(workflow);
     const step14 = workflow.step14 as Step14Syllabus | undefined;
     if (!step14?.generatedSections) {
       throw new Error('Syllabus has not been generated yet');
@@ -167,6 +170,7 @@ class SyllabusExportService {
     workflow: ICurriculumWorkflow,
     moduleId: string
   ): Promise<Buffer> {
+    workflow = xmlSafeDeep(workflow);
     const step14 = workflow.step14 as Step14Syllabus | undefined;
     const sections = step14?.generatedSections;
     if (!sections) throw new Error('Syllabus has not been generated yet');
@@ -263,6 +267,7 @@ class SyllabusExportService {
    * times when they want every module's syllabus.
    */
   async generateAllModuleSyllabiZip(workflow: ICurriculumWorkflow): Promise<Buffer> {
+    workflow = xmlSafeDeep(workflow);
     const step14 = workflow.step14 as Step14Syllabus | undefined;
     const moduleSyllabi = step14?.generatedSections?.moduleSyllabi || [];
     if (moduleSyllabi.length === 0) {

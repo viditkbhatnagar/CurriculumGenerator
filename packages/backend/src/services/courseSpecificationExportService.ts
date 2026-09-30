@@ -35,6 +35,7 @@ import {
 import type { ICurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { entryRequirementsLabel } from '../utils/entryRequirements';
 import { loggingService } from './loggingService';
+import { xmlSafeDeep } from '../utils/xmlSafe';
 
 const FONT_FAMILY = 'Calibri';
 const FONT_SIZES = {
@@ -61,6 +62,8 @@ interface UnitDescriptor {
 
 class CourseSpecificationExportService {
   async generateDocument(workflow: ICurriculumWorkflow): Promise<Buffer> {
+    // Office files are XML: a control character in the data makes the file corrupt. See xmlSafe.
+    workflow = xmlSafeDeep(workflow);
     const step1 = (workflow as any).step1 || {};
     const step3 = (workflow as any).step3 || {};
     const step4 = (workflow as any).step4 || {};

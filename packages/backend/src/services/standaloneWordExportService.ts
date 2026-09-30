@@ -22,6 +22,7 @@ import {
   convertInchesToTwip,
 } from 'docx';
 import { loggingService } from './loggingService';
+import { xmlSafeDeep } from '../utils/xmlSafe';
 
 // Font specifications
 const FONT_FAMILY = 'Arial';
@@ -56,6 +57,8 @@ class StandaloneWordExportService {
    * Requirements: 6.2, 6.3, 6.4, 6.5
    */
   async generateStepDocument(data: StandaloneExportData): Promise<Buffer> {
+    // Office files are XML: a control character in the data makes the file corrupt. See xmlSafe.
+    data = xmlSafeDeep(data);
     try {
       const children: Paragraph[] = [];
 

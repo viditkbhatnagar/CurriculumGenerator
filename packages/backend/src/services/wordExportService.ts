@@ -18,6 +18,7 @@ import { modulesInDocument, validationFromPlans } from './step10Completion';
 import { entryRequirementsLabel } from '../utils/entryRequirements';
 import { step12ValidationFromPacks } from './deliverableValidation';
 import { normaliseTopic } from '../utils/topicShape';
+import { xmlSafeDeep } from '../utils/xmlSafe';
 
 interface WorkflowData {
   projectName: string;
@@ -4023,6 +4024,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     workflow: WorkflowData,
     progressCallback?: ProgressCallback
   ): Promise<Buffer> {
+    // Office files are XML: a control character in the data makes the file corrupt. See xmlSafe.
+    workflow = xmlSafeDeep(workflow);
     const sections: any[] = [];
     const step1 = workflow.step1 || {};
 
@@ -4292,6 +4295,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     // module's own.
     options?: { moduleIndex?: number; moduleScoped?: boolean }
   ): Promise<Buffer> {
+    // Office files are XML: a control character in the data makes the file corrupt. See xmlSafe.
+    workflow = xmlSafeDeep(workflow);
     const STEP_TITLES: Record<number, string> = {
       1: 'Program Foundation',
       2: 'Competency Framework (KSC)',

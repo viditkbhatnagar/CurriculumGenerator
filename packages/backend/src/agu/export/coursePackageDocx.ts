@@ -15,6 +15,7 @@ import { CourseDraft, Finding } from '../draft/types';
 import { CourseArtefacts } from '../draft/artefactTypes';
 import { BODY, FONT, bullet, h, linkParagraph, p, sum, table } from './docxParts';
 import { artefactSections, draftedTemplates } from './artefactSections';
+import { xmlSafeDeep } from '../../utils/xmlSafe';
 
 export interface PackageInput {
   draft: CourseDraft;
@@ -64,6 +65,8 @@ function briefParagraphs(brief: string | undefined): Paragraph[] {
 const disclosure = (id: string) => DISCLOSURES.find((d) => d.id === id)?.text || '';
 
 export function coursePackageDocument(input: PackageInput): Document {
+  // Office files are XML: a control character in model output makes the file corrupt.
+  input = xmlSafeDeep(input);
   const { draft, course, catalogue, findings } = input;
   const outcomes = draft.outcomes;
   const assessedBy = (id: string) =>
