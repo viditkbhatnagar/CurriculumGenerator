@@ -15,6 +15,12 @@ describe('step8ApprovalBlocker', () => {
     expect(step8ApprovalBlocker({ caseStudies: [] }, true)).toBeNull();
   });
 
+  it('lets the author record no case studies without generating first', () => {
+    // A programme that uses no case studies should not have to spend a model run producing
+    // nothing before it can say so.
+    expect(step8ApprovalBlocker(undefined, true)).toBeNull();
+  });
+
   it('allows approval when case studies exist', () => {
     expect(step8ApprovalBlocker({ caseStudies: [{ id: 'c1' }] }, false)).toBeNull();
   });

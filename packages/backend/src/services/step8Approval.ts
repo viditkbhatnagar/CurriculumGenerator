@@ -22,14 +22,16 @@ export function step8ApprovalBlocker(
   step8: Step8Like | undefined | null,
   markedNotRequired: boolean
 ): ApprovalBlocker | null {
-  if (!step8) {
+  // An author may record that the programme needs no case studies without running a
+  // generation first; spending a model run to produce nothing is not a precondition.
+  if (!step8 && !markedNotRequired) {
     return {
       code: 'STEP8_NOT_GENERATED',
       message:
         'Case studies have not been generated yet. Generate them first; if generation failed, run it again.',
     };
   }
-  if ((step8.caseStudies || []).length === 0 && !markedNotRequired) {
+  if ((step8?.caseStudies || []).length === 0 && !markedNotRequired) {
     return {
       code: 'NO_CASE_STUDIES',
       message:

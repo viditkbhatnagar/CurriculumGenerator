@@ -959,6 +959,36 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
   const isApproved = !!workflow.step8?.approvedAt;
   const validation = workflow.step8?.validationReport;
 
+  // The server refuses to approve a Step 8 with no case studies unless the author records that
+  // the programme does not require them. Shown in both views: a generation that produced
+  // nothing leaves the page in its pre-generation view, where this control never rendered, so
+  // the one remedy the server offers could not be reached.
+  const notRequiredControl =
+    !isApproved && !isCurrentlyGenerating && (workflow.step8?.caseStudies?.length ?? 0) === 0 ? (
+      <div className="text-center space-y-2">
+        <p className="text-xs text-amber-500">
+          {workflow.step8
+            ? 'The last generation produced no case studies, so Step 8 cannot be approved as complete. Generate them again, or record that this programme does not require case studies.'
+            : 'If this programme does not use case studies, record that instead of generating them.'}
+        </p>
+        <button
+          onClick={() => {
+            if (
+              window.confirm(
+                'Approve Step 8 with no case studies? This is recorded as "case studies not required" for this programme.'
+              )
+            ) {
+              handleApprove(true);
+            }
+          }}
+          disabled={approveStep8.isPending}
+          className="text-xs text-teal-600 underline hover:text-teal-700 disabled:opacity-50"
+        >
+          Case studies are not required for this programme
+        </button>
+      </div>
+    ) : null;
+
   // Filter cases by type
   const displayedCases =
     filterType === 'all'
@@ -1084,6 +1114,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
               'Generate Case Studies'
             )}
           </button>
+          {notRequiredControl}
         </div>
       ) : (
         // Display Generated Content
@@ -1262,31 +1293,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
             </div>
           </div>
 
-          {/* The server refuses to approve a Step 8 with no case studies unless the author
-              records that the programme does not require them. */}
-          {!isApproved && (workflow.step8?.caseStudies?.length ?? 0) === 0 && (
-            <div className="text-center space-y-2">
-              <p className="text-xs text-amber-500">
-                No case studies exist yet, so Step 8 cannot be approved as complete. Generate them
-                again, or record that this programme does not require case studies.
-              </p>
-              <button
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      'Approve Step 8 with no case studies? This is recorded as "case studies not required" for this programme.'
-                    )
-                  ) {
-                    handleApprove(true);
-                  }
-                }}
-                disabled={approveStep8.isPending}
-                className="text-xs text-teal-600 underline hover:text-teal-700 disabled:opacity-50"
-              >
-                Case studies are not required for this programme
-              </button>
-            </div>
-          )}
+          {notRequiredControl}
           {!workflow.step8?.isValid &&
             !isApproved &&
             (workflow.step8?.caseStudies?.length ?? 0) > 0 && (

@@ -4412,6 +4412,11 @@ router.post('/:id/step8/approve', validateJWT, loadUser, async (req: Request, re
       return res.status(400).json({ success: false, error: blocker.message, code: blocker.code });
     }
 
+    if (!workflow.step8) {
+      // Recorded as not required before any generation ran: there is nothing to approve but
+      // the author's decision, which is what the empty step below holds.
+      (workflow as { step8?: unknown }).step8 = { caseStudies: [] };
+    }
     if (markedNotRequired && !(workflow.step8.caseStudies || []).length) {
       // step8 is a Mixed path; its TypeScript interface has drifted from what is stored.
       (workflow.step8 as { notRequired?: { by?: string; at: Date } }).notRequired = {
