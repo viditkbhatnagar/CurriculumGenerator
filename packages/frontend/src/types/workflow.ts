@@ -1189,7 +1189,8 @@ export interface Step8CaseStudies {
     allMappedToMLO: boolean; // Each case maps to ≥1 MLO
     wordCountValid: boolean; // 400-800 words
     ethicsCompliant: boolean; // No PII, brands anonymized
-    hooksComplete: boolean; // Assessment-Ready cases have hooks
+    // null when there are no assessment-ready cases, so there are no hooks to check.
+    hooksComplete: boolean | null; // Assessment-Ready cases have hooks
     noAssessmentQuestions: boolean; // Hooks only, no MCQs
   };
 
@@ -1290,7 +1291,9 @@ export interface Step9Glossary {
 
   // Validation per workflow v2.2
   validationReport: {
-    allAssessmentTermsIncluded: boolean; // 100% of assessment terms
+    hasTerms?: boolean;
+    // null: not checked. There is no independent list of assessment terms to compare with.
+    allAssessmentTermsIncluded: boolean | null; // 100% of assessment terms
     definitionLengthValid: boolean; // All 20-40 words
     noCircularDefinitions: boolean;
     allCrossReferencesValid: boolean;

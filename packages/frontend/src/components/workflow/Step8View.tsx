@@ -1178,9 +1178,13 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
                 <span className={validation.ethicsCompliant ? 'text-emerald-400' : 'text-red-400'}>
                   {validation.ethicsCompliant ? '✓' : '✗'} Ethics Compliant
                 </span>
-                <span className={validation.hooksComplete ? 'text-emerald-400' : 'text-red-400'}>
-                  {validation.hooksComplete ? '✓' : '✗'} Hooks Complete
-                </span>
+                {validation.hooksComplete === null ? (
+                  <span className="text-slate-400">— Hooks (no assessment-ready cases)</span>
+                ) : (
+                  <span className={validation.hooksComplete ? 'text-emerald-400' : 'text-red-400'}>
+                    {validation.hooksComplete ? '✓' : '✗'} Hooks Complete
+                  </span>
+                )}
                 <span
                   className={validation.noAssessmentQuestions ? 'text-emerald-400' : 'text-red-400'}
                 >

@@ -1074,13 +1074,22 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
                 Validation Report
               </h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                <span
-                  className={
-                    validation.allAssessmentTermsIncluded ? 'text-emerald-400' : 'text-red-400'
-                  }
-                >
-                  {validation.allAssessmentTermsIncluded ? '✓' : '✗'} 100% Assessment Terms
-                </span>
+                {validation.allAssessmentTermsIncluded === null ? (
+                  <span
+                    className="text-slate-400"
+                    title="There is no independent list of assessment terms to check the glossary against."
+                  >
+                    — Assessment terms not checked
+                  </span>
+                ) : (
+                  <span
+                    className={
+                      validation.allAssessmentTermsIncluded ? 'text-emerald-400' : 'text-red-400'
+                    }
+                  >
+                    {validation.allAssessmentTermsIncluded ? '✓' : '✗'} 100% Assessment Terms
+                  </span>
+                )}
                 <span
                   className={validation.definitionLengthValid ? 'text-emerald-400' : 'text-red-400'}
                 >

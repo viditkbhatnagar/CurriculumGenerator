@@ -35,6 +35,8 @@ import {
   MIN_SOURCES_PER_OUTCOME,
 } from './step5Validation';
 import { step11ValidationFromDecks, step12ValidationFromPacks } from './deliverableValidation';
+import { circularDefinitions, usSpellings } from './glossaryValidation';
+import { casesWithAssessmentQuestions } from './caseStudyValidation';
 import {
   scenarioProfileFor,
   scenarioDirective,
@@ -3942,6 +3944,8 @@ CRITICAL VALIDATION:
     const modulesWithoutCases = modulesNeedingCases.filter(
       (id: string) => !moduleCoverage[id]?.length
     );
+    const casesWithQuestions = casesWithAssessmentQuestions(caseStudies);
+    const assessmentReadyCases: any[] = casesByType.assessment_ready || [];
     const validationReport = {
       // Every other check below is `caseStudies.every(...)`, and `.every()` over an empty
       // array is true — so a run that produced nothing at all passed every one of them and
@@ -3967,15 +3971,20 @@ CRITICAL VALIDATION:
       ethicsCompliant: caseStudies.every(
         (cs: any) => cs.ethicsCompliant !== false && cs.noPII !== false
       ),
+      // With no assessment-ready cases there are no hooks to check, which is not the same as
+      // complete hooks: reported as null (not applicable) instead of the `true` it used to be.
       hooksComplete:
-        casesByType.assessment_ready?.every(
-          (cs: any) =>
-            cs.assessmentHooks &&
-            cs.assessmentHooks.keyFacts?.length >= 10 &&
-            cs.assessmentHooks.misconceptions?.length >= 5 &&
-            cs.assessmentHooks.decisionPoints?.length >= 3
-        ) ?? true,
-      noAssessmentQuestions: true, // Hooks only, no MCQs
+        assessmentReadyCases.length > 0
+          ? assessmentReadyCases.every(
+              (cs: any) =>
+                cs.assessmentHooks &&
+                cs.assessmentHooks.keyFacts?.length >= 10 &&
+                cs.assessmentHooks.misconceptions?.length >= 5 &&
+                cs.assessmentHooks.decisionPoints?.length >= 3
+            )
+          : null,
+      // Was the constant `true`. Measured on the case text: see caseStudyValidation.
+      noAssessmentQuestions: casesWithQuestions.length === 0,
     };
 
     const modulesWithOneCase = modulesNeedingCases.filter(
@@ -4009,10 +4018,15 @@ CRITICAL VALIDATION:
       validationIssues.push('Some cases outside 400-800 word range');
     if (!validationReport.ethicsCompliant)
       validationIssues.push('Ethics compliance issues detected');
-    if (!validationReport.hooksComplete)
+    if (validationReport.hooksComplete === false)
       validationIssues.push('Assessment-Ready cases missing complete hooks');
+    if (casesWithQuestions.length > 0)
+      validationIssues.push(
+        `${casesWithQuestions.length} case(s) contain question-bank material (lettered options or an answer key), which belongs in assessments: ${casesWithQuestions.slice(0, 5).join('; ')}${casesWithQuestions.length > 5 ? '…' : ''}`
+      );
 
-    const isValid = Object.values(validationReport).every((v) => v === true);
+    // `null` is a check that does not apply (no assessment-ready cases), not a failure.
+    const isValid = Object.values(validationReport).every((v) => v === true || v === null);
 
     workflow.step8 = {
       stage: 'complete',
@@ -4122,17 +4136,25 @@ CRITICAL VALIDATION:
           )
         : 0;
 
-    // Validation report per workflow v2.2
+    // Validation report per workflow v2.2. Three of these were constants ("Assumed") shown as
+    // passed for every glossary; two are now measured, and the one with nothing independent
+    // to measure against is reported as not checked. See glossaryValidation.
+    const circular = circularDefinitions(terms);
+    const usSpelt = usSpellings(terms);
     const validationReport = {
-      allAssessmentTermsIncluded: true, // Assumed true from generation
+      // `.every()` below passes on an empty list, so an empty glossary passed everything.
+      hasTerms: terms.length > 0,
+      // The generator marks its own terms as assessment terms, so there is no independent
+      // list to check them against: null (not checked), never a pass.
+      allAssessmentTermsIncluded: null,
       definitionLengthValid: terms.every((t: any) => t.wordCount >= 20 && t.wordCount <= 40),
-      noCircularDefinitions: true, // Assumed
+      noCircularDefinitions: circular.length === 0,
       allCrossReferencesValid: terms.every(
         (t: any) =>
           !t.relatedTerms?.length ||
           t.relatedTerms.every((rt: string) => terms.some((term: any) => term.term === rt))
       ),
-      ukEnglishConsistent: true, // Assumed
+      ukEnglishConsistent: usSpelt.length === 0,
       allTermsMappedToModule: terms.every((t: any) => t.sourceModules?.length > 0),
       noDuplicateEntries:
         new Set(terms.map((t: any) => t.term.toLowerCase())).size === terms.length,
@@ -4147,8 +4169,21 @@ CRITICAL VALIDATION:
       validationIssues.push('Some terms not mapped to any module');
     if (!validationReport.noDuplicateEntries)
       validationIssues.push('Duplicate term entries detected');
+    if (!validationReport.hasTerms) validationIssues.push('No glossary terms were generated');
+    if (circular.length > 0)
+      validationIssues.push(
+        `${circular.length} definition(s) use the term they define: ${circular.slice(0, 5).join(', ')}${circular.length > 5 ? '…' : ''}`
+      );
+    if (usSpelt.length > 0)
+      validationIssues.push(
+        `${usSpelt.length} definition(s) use US spellings: ${usSpelt
+          .slice(0, 5)
+          .map((u) => `${u.term} (${u.words.join(', ')})`)
+          .join('; ')}${usSpelt.length > 5 ? '…' : ''}`
+      );
 
-    const isValid = Object.values(validationReport).every((v) => v === true);
+    // `null` is a check that was not run, which neither passes nor fails the glossary.
+    const isValid = Object.values(validationReport).every((v) => v === true || v === null);
 
     // Determine program type and typical size
     const totalCredits = workflow.step1?.creditSystem?.totalCredits || 0;
