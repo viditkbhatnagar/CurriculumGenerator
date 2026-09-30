@@ -24,12 +24,15 @@ import { wordExportService } from './wordExportService';
 import { loadModulePlan } from './step10Store';
 import { guideContextFromWorkflow, guideModule } from './facultyGuide/facultyGuideModel';
 import { facultyGuideBuffer } from './facultyGuide/facultyGuideDocx';
+import { expectedLessonCount, isPlanComplete, plannedLessonTarget } from './step10Completion';
 
 /**
  * Bumped whenever the faculty guide's layout changes, so the export cache cannot keep serving
  * the previous layout for unchanged lessons.
+ *
+ * 2: keeps check answers, case activities and pacing; labels checks by type; flags partial modules.
  */
-export const FACULTY_GUIDE_FORMAT_VERSION = 1;
+export const FACULTY_GUIDE_FORMAT_VERSION = 2;
 
 /** How a module is named in its file inside the archive. */
 function moduleFileName(stepNumber: number, index: number, stub: any, step4Module: any): string {
@@ -154,7 +157,13 @@ export async function generateStep10Zip(workflowId: string, workflow: any): Prom
   return zip;
 }
 
-/** One module's faculty delivery guide as a Word document, or null if it holds no lessons. */
+/**
+ * One module's faculty delivery guide as a Word document, or null if it holds no lessons.
+ *
+ * A module holding only some of its lessons still gets a guide, but one that says so in its
+ * title and its file name. The download button appears as soon as Step 10 has started, and the
+ * guide used to open "Teach all 7 sessions below" for a module with 7 of its 30 lessons.
+ */
 export async function facultyGuideForModule(
   workflowId: string,
   workflow: any,
@@ -168,6 +177,17 @@ export async function facultyGuideForModule(
   const step4Module = step4Modules.find((m) => m.id === stub.moduleId);
   const plan = await loadModulePlan(workflowId, stub.moduleId);
   if (!plan || (plan.lessons || []).length === 0) return null;
+
+  // Measured against the lesson count the generator planned, by the rule the queue and the
+  // screen use, so the guide and the Step 10 tick cannot disagree about a module.
+  const expected = expectedLessonCount(
+    step4Module ?? { id: stub.moduleId },
+    workflow?.step10?.plannedLessonCounts
+  );
+  const plannedSessions = isPlanComplete(plan, expected)
+    ? undefined
+    : plannedLessonTarget(plan, expected);
+
   const guide = guideModule(
     {
       code: step4Module?.code || stub.moduleCode,
@@ -176,11 +196,39 @@ export async function facultyGuideForModule(
       mlos: step4Module?.mlos,
     },
     plan.lessons,
-    guideContextFromWorkflow(workflow, step4Module)
+    guideContextFromWorkflow(workflow, step4Module),
+    plannedSessions
   );
   const buffer = await facultyGuideBuffer(guide, workflow?.step1?.programTitle);
-  const name = moduleFileName(10, index, stub, step4Module).replace(/^Step10-/, 'Faculty-Guide-');
+  const name = moduleFileName(10, index, stub, step4Module)
+    .replace(/^Step10-/, 'Faculty-Guide-')
+    .replace(/\.docx$/, `${plannedSessions ? '-INCOMPLETE' : ''}.docx`);
   return { name, buffer };
+}
+
+/** How a module is named in the archive's note: code and title, else whatever identifies it. */
+function moduleLabel(code?: string, title?: string, id?: string): string {
+  return [code, title].filter(Boolean).join(' ') || id || 'unnamed module';
+}
+
+function missingModulesNote(noPlan: string[], failed: string[]): string {
+  const list = (items: string[]) => items.map((m) => `  - ${m}`).join('\n');
+  const sections = [
+    ...(noPlan.length > 0
+      ? [
+          `No lesson plan has been generated for these modules yet, so they have no faculty ` +
+            `guide:\n\n${list(noPlan)}`,
+        ]
+      : []),
+    ...(failed.length > 0
+      ? [`These modules have a lesson plan, but their guide could not be built:\n\n${list(failed)}`]
+      : []),
+  ];
+  return (
+    `${sections.join('\n\n')}\n\n` +
+    `Every other module's guide is included. A guide whose title says it is incomplete covers ` +
+    `only the sessions generated so far.\n`
+  );
 }
 
 /**
@@ -192,7 +240,8 @@ export async function generateFacultyGuideZip(workflowId: string, workflow: any)
   if (stubs.length === 0) {
     throw new Error('Step 10 has no module lesson plans to build a faculty guide from');
   }
-  const ordered = stubsInStep4Order(stubs, workflow?.step4?.modules || []);
+  const step4Modules: any[] = workflow?.step4?.modules || [];
+  const ordered = stubsInStep4Order(stubs, step4Modules);
 
   const archive = archiver('zip', { zlib: { level: 9 } });
   const chunks: Buffer[] = [];
@@ -202,17 +251,24 @@ export async function generateFacultyGuideZip(workflowId: string, workflow: any)
     archive.on('end', () => resolve());
   });
 
+  const noPlan: string[] = [];
   const failed: string[] = [];
   for (const stub of ordered) {
+    const step4Module = step4Modules.find((m) => m.id === stub.moduleId);
+    const label = moduleLabel(
+      stub.moduleCode || step4Module?.code,
+      stub.moduleTitle || step4Module?.title,
+      stub.moduleId
+    );
     try {
       const doc = await facultyGuideForModule(workflowId, workflow, stub);
       if (!doc) {
-        failed.push(stub.moduleCode || stub.moduleId);
+        noPlan.push(label);
         continue;
       }
       archive.append(doc.buffer, { name: doc.name });
     } catch (error) {
-      failed.push(stub.moduleCode || stub.moduleId);
+      failed.push(label);
       loggingService.error('Could not add a module to the faculty guide archive', {
         workflowId,
         moduleId: stub.moduleId,
@@ -220,12 +276,20 @@ export async function generateFacultyGuideZip(workflowId: string, workflow: any)
       });
     }
   }
-  if (failed.length > 0) {
+
+  // Modules Step 4 lists that Step 10 has no entry for at all. Looping over the stubs alone
+  // left them out of the archive without a word. One with no contact hours has nothing to teach
+  // and no plan by design, so it is not missing.
+  const stubbed = new Set(stubs.map((s) => s.moduleId));
+  for (const m of step4Modules) {
+    if (!m?.id || stubbed.has(m.id)) continue;
+    if (expectedLessonCount(m, workflow?.step10?.plannedLessonCounts) <= 0) continue;
+    noPlan.push(moduleLabel(m.code, m.title, m.id));
+  }
+
+  if (noPlan.length > 0 || failed.length > 0) {
     // Named in the archive, because a silently shorter zip reads as "that is all there was".
-    archive.append(
-      `These modules have no faculty guide in this archive because their lessons could not be loaded:\n${failed.join('\n')}\n`,
-      { name: 'MISSING-MODULES.txt' }
-    );
+    archive.append(missingModulesNote(noPlan, failed), { name: 'MISSING-MODULES.txt' });
   }
   await archive.finalize();
   await finished;

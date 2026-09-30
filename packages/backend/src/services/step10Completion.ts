@@ -112,6 +112,18 @@ export function lessonsHeld(plan: LessonPlanLike | undefined): number {
 }
 
 /**
+ * The lesson count a plan is measured against: the count recorded on the plan itself, else the
+ * module's expected count.
+ *
+ * Kept apart from `isPlanComplete` so anything that reports "7 of 30 planned" prints the same
+ * 30 that decided the module was unfinished. The faculty guide does, and two copies of this
+ * `||` are two chances for the figure and the verdict to disagree.
+ */
+export function plannedLessonTarget(plan: LessonPlanLike | undefined, expected: number): number {
+  return plan?.plannedLessonCount || expected || 0;
+}
+
+/**
  * Whether a module's plan is finished.
  *
  * `>=` rather than `===`: a module that legitimately holds more lessons than the derived
@@ -122,8 +134,8 @@ export function isPlanComplete(plan: LessonPlanLike | undefined, expected: numbe
   if (!plan) return false;
   const held = lessonsHeld(plan);
   if (held === 0) return false;
-  const target = plan.plannedLessonCount || expected;
-  if (!target || target <= 0) return held > 0;
+  const target = plannedLessonTarget(plan, expected);
+  if (target <= 0) return held > 0;
   return held >= target;
 }
 

@@ -2,6 +2,7 @@ import {
   plannedLessonCountFor,
   expectedLessonCount,
   isPlanComplete,
+  plannedLessonTarget,
   completedModuleIds,
   nextIncompleteModuleIndex,
   moduleStub,
@@ -66,6 +67,36 @@ describe('isPlanComplete', () => {
     expect(isPlanComplete({ lessons: lessons(5) }, 30)).toBe(false);
     expect(isPlanComplete({ lessons: lessons(30) }, 30)).toBe(true);
   });
+});
+
+describe('plannedLessonTarget', () => {
+  it('prefers the count recorded on the plan over the expectation', () => {
+    expect(plannedLessonTarget({ lessons: lessons(7), plannedLessonCount: 40 }, 30)).toBe(40);
+  });
+
+  it('falls back to the expectation when the plan never recorded a count', () => {
+    expect(plannedLessonTarget({ lessons: lessons(7) }, 30)).toBe(30);
+    expect(plannedLessonTarget(undefined, 30)).toBe(30);
+  });
+
+  it('is zero when neither the plan nor the module names a count', () => {
+    expect(plannedLessonTarget({ lessons: lessons(7) }, 0)).toBe(0);
+    expect(plannedLessonTarget(undefined, NaN)).toBe(0);
+  });
+
+  it.each([
+    [7, 40, 30],
+    [30, 40, 30],
+    [30, undefined, 30],
+    [45, 40, 30],
+  ])(
+    'is the figure isPlanComplete measures against: %i held, %s recorded, %i expected',
+    (held, recorded, expected) => {
+      const plan = { lessons: lessons(held), plannedLessonCount: recorded };
+
+      expect(isPlanComplete(plan, expected)).toBe(held >= plannedLessonTarget(plan, expected));
+    }
+  );
 });
 
 describe('completedModuleIds', () => {

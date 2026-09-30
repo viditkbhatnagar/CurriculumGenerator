@@ -7,7 +7,16 @@
  * and navigation problem.
  */
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
-import { GuideModule, GuideSession } from './facultyGuideModel';
+import {
+  GuideActivity,
+  GuideCaseActivity,
+  GuideCharacter,
+  GuideCheck,
+  GuideModule,
+  GuideRolePlay,
+  GuideSession,
+  incompleteNote,
+} from './facultyGuideModel';
 
 const FONT = 'Arial';
 const BODY = 21; // half-points: 10.5pt
@@ -16,7 +25,7 @@ const NONE = 'Not recorded for this session.';
 const text = (t: string, opts: { bold?: boolean; italics?: boolean } = {}) =>
   new TextRun({ text: t, font: FONT, size: BODY, ...opts });
 
-const para = (t: string, opts: { italics?: boolean } = {}) =>
+const para = (t: string, opts: { bold?: boolean; italics?: boolean } = {}) =>
   new Paragraph({ children: [text(t, opts)], spacing: { after: 80 } });
 
 const bullet = (t: string, level = 0) =>
@@ -30,135 +39,267 @@ const labelled = (label: string, value: string, level = 0) =>
     spacing: { after: 40 },
   });
 
+/** A bold label that introduces the bullets beneath it. */
+const caption = (label: string, level = 0) =>
+  new Paragraph({
+    children: [text(`${label}:`, { bold: true })],
+    bullet: { level },
+    spacing: { after: 40 },
+  });
+
 const heading = (t: string, level: (typeof HeadingLevel)[keyof typeof HeadingLevel]) =>
   new Paragraph({ text: t, heading: level, spacing: { before: 200, after: 80 } });
 
-function bulletsOrNone(items: string[], level = 0): Paragraph[] {
-  return items.length ? items.map((i) => bullet(i, level)) : [para(NONE, { italics: true })];
+const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+
+/** "Label: value" when there is a value, and nothing when there is not. */
+const optional = (label: string, value: string | undefined, level = 0): Paragraph[] =>
+  value ? [labelled(label, value, level)] : [];
+
+/** One item reads "Label: item"; several read as the label with a bullet for each. */
+function labelledList(label: string, items: string[], level = 0): Paragraph[] {
+  if (items.length === 0) return [];
+  if (items.length === 1) return [labelled(label, items[0], level)];
+  return [caption(label, level), ...items.map((i) => bullet(i, level + 1))];
+}
+
+/** A label carrying the number of items, with the items beneath it. */
+function countedList(label: string, noun: string, items: string[]): Paragraph[] {
+  if (items.length === 0) return [];
+  return [labelled(label, `${items.length} ${noun}`), ...items.map((i) => bullet(i, 1))];
+}
+
+/** A section with nothing behind it says so rather than vanishing. */
+const orNone = (paragraphs: Paragraph[]): Paragraph[] =>
+  paragraphs.length ? paragraphs : [para(NONE, { italics: true })];
+
+const section = (title: string) => heading(title, HeadingLevel.HEADING_3);
+
+function focusSection(s: GuideSession): Paragraph[] {
+  const { keyConcepts, whyItMatters, connectionToPrevious } = s.focus;
+  return [
+    section('1. Session Focus'),
+    labelled('Main topic', s.topic),
+    ...(keyConcepts.length ? [labelled('Key concepts', keyConcepts.join('; '))] : []),
+    ...(whyItMatters.length
+      ? [
+          labelled('Why this topic matters', 'it builds towards'),
+          ...whyItMatters.map((w) => bullet(w, 1)),
+        ]
+      : []),
+    ...optional(
+      'Connection to previous learning',
+      connectionToPrevious?.replace(/^Builds on the previous session: /, '')
+    ),
+  ];
+}
+
+function alignmentSection(s: GuideSession): Paragraph[] {
+  const a = s.alignment;
+  return [
+    section('2. Alignment'),
+    labelled('MLO', a.mlos.join(', ') || 'none recorded'),
+    labelled('PLO', a.plos.join(', ') || 'none recorded'),
+    labelled('Assessment link', a.assessment.join(', ') || 'none recorded'),
+    ...optional('Reference', a.reference),
+  ];
+}
+
+function guidanceSection(s: GuideSession): Paragraph[] {
+  return [
+    section('3. Faculty Teaching Guidance'),
+    ...orNone([...s.teachingGuidance.map((g) => bullet(g)), ...labelledList('Pacing', s.pacing)]),
+  ];
+}
+
+function conceptsSection(s: GuideSession): Paragraph[] {
+  return [
+    section('4. Key Concepts to Cover'),
+    ...orNone(
+      s.keyConcepts.flatMap((c) => [bullet(c.name), ...optional('Definition', c.definition, 1)])
+    ),
+  ];
+}
+
+function activityBlock(a: GuideActivity): Paragraph[] {
+  const mins = a.minutes ? ` (${a.minutes} min)` : '';
+  return [
+    labelled(`${a.label}${mins}`, a.title),
+    ...(a.description ? [bullet(a.description, 1)] : []),
+    ...optional('Teaching method', a.teachingMethod, 1),
+    ...(a.usesAI
+      ? [labelled('Applied AI', 'students use a generative AI tool in this activity', 1)]
+      : []),
+    ...a.steps.map((step) => bullet(step, 1)),
+    ...labelledList('Students', a.studentActions, 1),
+  ];
+}
+
+function characterLine(c: GuideCharacter): string {
+  const role = c.role ? ` (${c.role})` : '';
+  return `${c.name}${role}${c.background ? `: ${c.background}` : ''}`;
+}
+
+function rolePlayBlock(rolePlay: GuideRolePlay): Paragraph[] {
+  return [
+    ...rolePlay.characters.flatMap((c) => [
+      labelled('Role-play character', characterLine(c), 1),
+      ...labelledList('Objectives', c.objectives, 2),
+    ]),
+    ...labelledList('Role-play decision prompts', rolePlay.decisionPrompts, 1),
+    ...labelledList('Role-play debrief questions', rolePlay.debriefQuestions, 1),
+  ];
+}
+
+function caseActivityBlock(c: GuideCaseActivity): Paragraph[] {
+  const meta = [c.kind, c.minutes ? `${c.minutes} min` : ''].filter(Boolean).join(', ');
+  const hooks = [
+    ...labelledList('Key facts', c.hooks.keyFacts, 2),
+    ...labelledList('Misconceptions', c.hooks.misconceptions, 2),
+    ...labelledList('Decision points', c.hooks.decisionPoints, 2),
+  ];
+  return [
+    labelled(`Case activity${meta ? ` (${meta})` : ''}`, c.title),
+    ...optional('Purpose', c.purpose, 1),
+    ...labelledList('Instructions', c.instructions, 1),
+    ...labelledList('Students produce', c.expectedOutputs, 1),
+    ...(hooks.length ? [caption('Assessment hooks', 1), ...hooks] : []),
+    ...(c.rolePlay ? rolePlayBlock(c.rolePlay) : []),
+  ];
+}
+
+function activitiesSection(s: GuideSession): Paragraph[] {
+  return [
+    section('5. Teaching & Learning Activities'),
+    ...orNone([
+      ...optional('Practical / AI / case activity', s.practicalActivity),
+      ...s.activities.flatMap(activityBlock),
+      ...(s.caseActivity ? caseActivityBlock(s.caseActivity) : []),
+    ]),
+  ];
+}
+
+function promptsSection(s: GuideSession): Paragraph[] {
+  return [
+    section('6. Faculty Facilitation Prompts'),
+    ...orNone([
+      ...s.prompts.ask.map((q) => labelled('Ask', q)),
+      ...s.prompts.watchFor.map((m) => labelled('Watch for the misconception', m)),
+    ]),
+  ];
+}
+
+function checkBlock(c: GuideCheck): Paragraph[] {
+  const kind = `${c.label}${c.minutes ? ` (${c.minutes} min)` : ''}`;
+  return [
+    c.question ? labelled(kind, c.question) : bullet(kind),
+    ...c.options.map((option) => bullet(option, 1)),
+    ...optional('Correct answer', c.correctAnswer, 1),
+    ...optional('Explanation', c.explanation, 1),
+    ...optional('Outcome checked', c.mlo, 1),
+  ];
+}
+
+function checksSection(s: GuideSession): Paragraph[] {
+  return [
+    section('7. Check for Learning'),
+    ...orNone([
+      ...s.checks.flatMap(checkBlock),
+      ...optional('Evidence of learning', s.evidenceOfLearning),
+    ]),
+  ];
+}
+
+function resourcesSection(s: GuideSession): Paragraph[] {
+  const r = s.resources;
+  const effort = r.independentStudyMinutes ? `${r.independentStudyMinutes} minutes` : undefined;
+  return [
+    section('8. Resources / Preparation'),
+    ...orNone([
+      ...countedList('Essential reading', 'item(s)', r.readings),
+      ...countedList('Supplementary reading', 'item(s)', r.supplementaryReadings),
+      ...optional('Estimated independent study', effort),
+      ...(r.cases.length ? [labelled('Case study', r.cases.join('; '))] : []),
+      ...(r.materials.length ? [labelled('Slides / resources', r.materials.join('; '))] : []),
+      ...optional('Student preparation and independent task', r.studentPreparation),
+      ...optional('Source material for the independent task', r.sourceMapping),
+      ...optional('Evidence students submit from the independent task', r.studentEvidence),
+      ...optional('AI use', r.aiUse),
+      ...countedList('Adaptations', 'option(s)', r.adaptations),
+    ]),
+  ];
+}
+
+function takeawaysSection(s: GuideSession): Paragraph[] {
+  return [
+    section('9. Session Takeaways'),
+    ...(s.takeaways.length
+      ? [
+          para('By the end of the session, students should be able to:'),
+          ...s.takeaways.map((t) => bullet(t)),
+        ]
+      : [para(NONE, { italics: true })]),
+  ];
 }
 
 function sessionBlock(s: GuideSession): Paragraph[] {
-  const out: Paragraph[] = [];
   const duration = s.durationMinutes ? ` (${s.durationMinutes} min)` : '';
-  out.push(heading(`Session ${s.number}: ${s.topic}${duration}`, HeadingLevel.HEADING_2));
+  return [
+    heading(`Session ${s.number}: ${s.topic}${duration}`, HeadingLevel.HEADING_2),
+    ...focusSection(s),
+    ...alignmentSection(s),
+    ...guidanceSection(s),
+    ...conceptsSection(s),
+    ...activitiesSection(s),
+    ...promptsSection(s),
+    ...checksSection(s),
+    ...resourcesSection(s),
+    ...takeawaysSection(s),
+  ];
+}
 
-  out.push(heading('1. Session Focus', HeadingLevel.HEADING_3));
-  out.push(labelled('Main topic', s.topic));
-  if (s.focus.keyConcepts.length)
-    out.push(labelled('Key concepts', s.focus.keyConcepts.join('; ')));
-  if (s.focus.whyItMatters.length) {
-    out.push(labelled('Why this topic matters', 'it builds towards'));
-    s.focus.whyItMatters.forEach((w) => out.push(bullet(w, 1)));
-  }
-  if (s.focus.connectionToPrevious) {
-    out.push(
-      labelled(
-        'Connection to previous learning',
-        s.focus.connectionToPrevious.replace(/^Builds on the previous session: /, '')
-      )
+/**
+ * The first requirement: how many sessions to teach.
+ *
+ * A partly generated module must not say "all", and must not quote the module's contact hours,
+ * which the sessions present do not add up to.
+ */
+function sessionCountRequirement(guide: GuideModule): string {
+  const held = guide.sessions.length;
+  if (incompleteNote(guide) && guide.plannedSessions) {
+    const missing = guide.plannedSessions - held;
+    return (
+      `Teach the ${plural(held, 'session')} below. A further ` +
+      `${plural(missing, 'planned session')} ${missing === 1 ? 'is' : 'are'} not yet available.`
     );
   }
-
-  out.push(heading('2. Alignment', HeadingLevel.HEADING_3));
-  out.push(labelled('MLO', s.alignment.mlos.join(', ') || 'none recorded'));
-  out.push(labelled('PLO', s.alignment.plos.join(', ') || 'none recorded'));
-  out.push(labelled('Assessment link', s.alignment.assessment.join(', ') || 'none recorded'));
-  if (s.alignment.reference) out.push(labelled('Reference', s.alignment.reference));
-
-  out.push(heading('3. Faculty Teaching Guidance', HeadingLevel.HEADING_3));
-  out.push(...bulletsOrNone(s.teachingGuidance));
-
-  out.push(heading('4. Key Concepts to Cover', HeadingLevel.HEADING_3));
-  if (s.keyConcepts.length) {
-    for (const c of s.keyConcepts) {
-      out.push(bullet(c.name));
-      if (c.definition) out.push(labelled('Definition', c.definition, 1));
-    }
-  } else {
-    out.push(para(NONE, { italics: true }));
-  }
-
-  out.push(heading('5. Teaching & Learning Activities', HeadingLevel.HEADING_3));
-  if (s.activities.length) {
-    for (const a of s.activities) {
-      const mins = a.minutes ? ` (${a.minutes} min)` : '';
-      out.push(labelled(`${a.label}${mins}`, a.title));
-      a.steps.forEach((step) => out.push(bullet(step, 1)));
-      if (a.detail) out.push(bullet(a.detail, 1));
-    }
-  } else {
-    out.push(para(NONE, { italics: true }));
-  }
-
-  out.push(heading('6. Faculty Facilitation Prompts', HeadingLevel.HEADING_3));
-  if (s.prompts.ask.length || s.prompts.watchFor.length) {
-    s.prompts.ask.forEach((q) => out.push(labelled('Ask', q)));
-    s.prompts.watchFor.forEach((m) => out.push(labelled('Watch for the misconception', m)));
-  } else {
-    out.push(para(NONE, { italics: true }));
-  }
-
-  out.push(heading('7. Check for Learning', HeadingLevel.HEADING_3));
-  out.push(...bulletsOrNone(s.checks));
-
-  out.push(heading('8. Resources / Preparation', HeadingLevel.HEADING_3));
-  const r = s.resources;
-  const any =
-    r.readings.length ||
-    r.cases.length ||
-    r.materials.length ||
-    r.adaptations.length ||
-    r.studentPreparation ||
-    r.aiUse;
-  if (r.readings.length) {
-    out.push(labelled('Essential reading', `${r.readings.length} item(s)`));
-    r.readings.forEach((c) => out.push(bullet(c, 1)));
-  }
-  if (r.cases.length) out.push(labelled('Case study', r.cases.join('; ')));
-  if (r.materials.length) out.push(labelled('Slides / resources', r.materials.join('; ')));
-  if (r.studentPreparation)
-    out.push(labelled('Student preparation and independent task', r.studentPreparation));
-  if (r.aiUse) out.push(labelled('AI use', r.aiUse));
-  if (r.adaptations.length) {
-    out.push(labelled('Adaptations', `${r.adaptations.length} option(s)`));
-    r.adaptations.forEach((a) => out.push(bullet(a, 1)));
-  }
-  if (!any) out.push(para(NONE, { italics: true }));
-
-  out.push(heading('9. Session Takeaways', HeadingLevel.HEADING_3));
-  if (s.takeaways.length) {
-    out.push(para('By the end of the session, students should be able to:'));
-    s.takeaways.forEach((t) => out.push(bullet(t)));
-  } else {
-    out.push(para(NONE, { italics: true }));
-  }
-  return out;
+  const hours = guide.contactHours ? `, ${guide.contactHours} contact hours` : '';
+  return `Teach all ${plural(held, 'session')} below${hours}.`;
 }
 
 export function facultyGuideDocument(guide: GuideModule, programmeTitle?: string): Document {
-  const children: Paragraph[] = [];
-  children.push(
-    heading(`Faculty Delivery Guide: ${guide.code} ${guide.title}`.trim(), HeadingLevel.TITLE)
-  );
-  if (programmeTitle) children.push(para(programmeTitle, { italics: true }));
-  children.push(
+  const note = incompleteNote(guide);
+  const title = `Faculty Delivery Guide: ${guide.code} ${guide.title}`.trim();
+  const children: Paragraph[] = [
+    heading(note ? `${title} (incomplete)` : title, HeadingLevel.TITLE),
+    ...(programmeTitle ? [para(programmeTitle, { italics: true })] : []),
+    ...(note ? [para(`This guide is incomplete: ${note}`, { bold: true })] : []),
     para(
       'This guide sets the minimum teaching and learning each session must cover. Slides and ' +
         'delivery style are the lecturer’s own choice, provided these requirements and the ' +
         'intended learning outcomes are met.'
-    )
-  );
-
-  children.push(heading('Minimum Teaching Requirements', HeadingLevel.HEADING_1));
-  const hours = guide.contactHours ? `, ${guide.contactHours} contact hours` : '';
-  children.push(bullet(`Teach all ${guide.sessions.length} sessions below${hours}.`));
-  if (guide.minimumRequirements.length) {
-    children.push(bullet('Every module learning outcome must be taught and checked:'));
-    guide.minimumRequirements.forEach((m) => children.push(bullet(m, 1)));
-  }
-
-  children.push(heading('Sessions', HeadingLevel.HEADING_1));
-  for (const s of guide.sessions) children.push(...sessionBlock(s));
+    ),
+    heading('Minimum Teaching Requirements', HeadingLevel.HEADING_1),
+    bullet(sessionCountRequirement(guide)),
+    ...(guide.minimumRequirements.length
+      ? [
+          bullet('Every module learning outcome must be taught and checked:'),
+          ...guide.minimumRequirements.map((m) => bullet(m, 1)),
+        ]
+      : []),
+    heading('Sessions', HeadingLevel.HEADING_1),
+    ...guide.sessions.flatMap(sessionBlock),
+  ];
 
   return new Document({
     creator: 'Curriculum Generator',
