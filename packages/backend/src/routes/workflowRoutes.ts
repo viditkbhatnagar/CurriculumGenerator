@@ -54,6 +54,7 @@ import {
   validationFromStubs,
 } from '../services/step10Completion';
 import { step11ValidationFromDecks } from '../services/deliverableValidation';
+import { step8ApprovalBlocker } from '../services/step8Approval';
 import {
   withLessons,
   saveModulePlan,
@@ -4393,12 +4394,28 @@ router.post('/:id/step8/approve', validateJWT, loadUser, async (req: Request, re
     const userId = (req as any).user?.id || (req as any).user?.userId;
     const workflow = await CurriculumWorkflow.findById(req.params.id);
 
-    if (!workflow || !workflow.step8) {
-      return res.status(404).json({ success: false, error: 'Workflow or Step 8 not found' });
+    if (!workflow) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
 
+    // Case studies are complete only when they exist, or when the author records that the
+    // programme does not require them. See step8Approval.
+    const markedNotRequired = req.body?.notRequired === true;
+    const blocker = step8ApprovalBlocker(workflow.step8 as any, markedNotRequired);
+    if (blocker) {
+      return res.status(400).json({ success: false, error: blocker.message, code: blocker.code });
+    }
+
+    if (markedNotRequired && !(workflow.step8.caseStudies || []).length) {
+      // step8 is a Mixed path; its TypeScript interface has drifted from what is stored.
+      (workflow.step8 as { notRequired?: { by?: string; at: Date } }).notRequired = {
+        by: userId,
+        at: new Date(),
+      };
+    }
     workflow.step8.approvedAt = new Date();
     workflow.step8.approvedBy = userId;
+    workflow.markModified('step8');
 
     await workflow.advanceStep(8);
 
