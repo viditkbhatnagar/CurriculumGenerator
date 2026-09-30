@@ -74,7 +74,7 @@ function rubricSection(artefacts: CourseArtefacts, draft: CourseDraft): (Paragra
           r.good,
           r.belowStandard,
         ]),
-        [22, 8, 24, 24, 22]
+        [20, 10, 24, 24, 22]
       )
     );
   }
@@ -114,13 +114,13 @@ function quizSection(artefacts: CourseArtefacts, weeklyWeight: number): (Paragra
         optionsCell(i),
         i.rationale,
       ]),
-      [11, 7, 9, 29, 25, 19]
+      [11, 9, 9, 28, 25, 18]
     ),
     h('Part 2: Practice bank (unlimited attempts, ungraded)', HeadingLevel.HEADING_2),
     table(
       ['ID', 'Week', 'CLO', 'Question', 'Answer', 'Feedback shown'],
       practice.map((q) => [q.id, String(q.week), q.outcomeId, q.question, q.answer, q.feedback]),
-      [11, 7, 9, 29, 24, 20]
+      [11, 9, 9, 28, 24, 19]
     ),
   ];
 }

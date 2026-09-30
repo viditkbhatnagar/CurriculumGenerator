@@ -30,7 +30,7 @@ import {
 } from '../draft/artefactTypes';
 import { FacultyInputs } from './outlinePrompt';
 
-export const ARTEFACT_PROMPT_VERSION = 'agu-artefacts-1';
+export const ARTEFACT_PROMPT_VERSION = 'agu-artefacts-2';
 
 /** Every exam paper is marked out of this, so the blueprint's percentages read directly. */
 export const EXAM_TOTAL_MARKS = 100;
@@ -153,7 +153,8 @@ Graded items:
 - mostly "mcq" with four options, with some "multiple_select", "true_false" and "short_answer";
 - scenario-based where the outcome allows; a quiz checks understanding at or below the outcome's level, the exam is the test;
 - "answers" holds the exact text of the correct option (all correct options for multiple_select); for short_answer, a model answer;
-- options are plausible, of similar length and grammar; never "all of the above" or "none of the above"; vary which position holds the correct answer;
+- options are plausible and parallel in grammar. Write each wrong option as specific and as long as the correct one: the correct option must not be the longest in most items (in the first CR08 draft it was the longest in 15 of 23, so length gave the answer away);
+- never "all of the above" or "none of the above"; put the correct answer in each position about equally often;
 - "rationale" says why the answer is right and why the likeliest wrong option is wrong, in one to three sentences.
 Practice items are ungraded with unlimited attempts: different questions from the graded ones, each with an answer and the feedback the student sees.
 ${toolsClause(inputs)}
