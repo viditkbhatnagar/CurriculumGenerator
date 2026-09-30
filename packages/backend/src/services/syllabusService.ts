@@ -19,6 +19,7 @@ import type {
 } from '../models/CurriculumWorkflow';
 import { openaiService } from './openaiService';
 import { loggingService } from './loggingService';
+import { topicTitle } from '../utils/topicShape';
 
 // Default policy text — used when the user doesn't provide overrides.
 // Phrased generically so it works for most academic settings; the user can
@@ -211,7 +212,7 @@ ${raw}`;
         topicsFlat.push({
           moduleId: m.id,
           moduleCode,
-          title: t.title || t.name || '',
+          title: topicTitle(t),
         });
       });
     });

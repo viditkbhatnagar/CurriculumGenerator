@@ -16,6 +16,7 @@ import { moduleLabelOf } from '../utils/moduleIdentity';
 import { bloomIndex, statedBloom } from './assessmentGeneratorService';
 import { validationFromPlans } from './step10Completion';
 import { step12ValidationFromPacks } from './deliverableValidation';
+import { normaliseTopic } from '../utils/topicShape';
 
 interface WorkflowData {
   projectName: string;
@@ -832,8 +833,11 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             spacing: { before: 100, after: 50, line: LINE_SPACING },
           })
         );
-        module.topics.forEach((topic: any, idx: number) => {
-          const seq = topic.sequence ?? idx + 1;
+        module.topics.forEach((raw: any, idx: number) => {
+          // Topics are stored as strings; reading `.title` off a string printed every named
+          // topic as "Untitled topic". See topicShape.
+          const topic = normaliseTopic(raw, idx);
+          const seq = topic.sequence;
           const hoursPart =
             typeof topic.hours === 'number' && topic.hours > 0 ? ` (${topic.hours}h)` : '';
           contentChildren.push(

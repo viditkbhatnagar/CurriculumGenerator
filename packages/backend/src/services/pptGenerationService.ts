@@ -10,6 +10,7 @@ import {
   FormativeCheck,
 } from '../models/CurriculumWorkflow';
 import { moduleCodeOf } from '../utils/moduleIdentity';
+import { normaliseTopic } from '../utils/topicShape';
 
 /**
  * PPT Generation Service
@@ -251,7 +252,10 @@ export class PPTGenerationService {
 
     // Get module topics - ensure it's always an array
     const topics = Array.isArray(moduleData.topics)
-      ? moduleData.topics.map((t: any) => `${t.title} (${t.hours}h)`)
+      ? moduleData.topics
+          .map((t: any, i: number) => normaliseTopic(t, i))
+          .filter((t) => t.title)
+          .map((t) => (typeof t.hours === 'number' ? `${t.title} (${t.hours}h)` : t.title))
       : [];
 
     // Step 10 lesson plans for THIS module — the PPT must convert these

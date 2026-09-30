@@ -75,6 +75,7 @@ import {
   DeliveryMode,
   BloomLevel,
 } from '../types/newWorkflow';
+import { normaliseTopic } from '../utils/topicShape';
 
 // ============================================================================
 // CREDIT CALCULATION UTILITIES
@@ -8893,13 +8894,7 @@ Return ONLY valid JSON:
             linkedPLOs: lo.linkedPLOs,
             linkedKSCs: lo.linkedKSCs,
           })),
-          topics: m.topics?.map((t: any) => ({
-            id: t.id,
-            title: t.title,
-            description: t.description,
-            hours: t.hours,
-            sequence: t.sequence,
-          })),
+          topics: m.topics?.map((t: any, i: number) => normaliseTopic(t, i)),
           contactActivities: m.contactActivities,
           independentActivities: m.independentActivities,
         })),
