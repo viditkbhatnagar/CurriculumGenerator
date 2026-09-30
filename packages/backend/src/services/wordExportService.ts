@@ -20,6 +20,7 @@ import { entryRequirementsLabel } from '../utils/entryRequirements';
 import { step12ValidationFromPacks } from './deliverableValidation';
 import { normaliseTopic } from '../utils/topicShape';
 import { cleanModelOutput, xmlSafeDeep } from '../utils/xmlSafe';
+import { buildWithReflows, inReflowSlot, reflowFromScope, Reflowed } from './reflowScope';
 
 interface WorkflowData {
   projectName: string;
@@ -94,17 +95,21 @@ export class WordExportService {
    * - Detects and converts appropriate content to bullet lists
    * - Removes duplicates and improves readability
    */
-  private async formatTextIntelligently(
-    text: string,
-    context: string
-  ): Promise<{ paragraphs: string[]; bullets: string[] }> {
+  private async formatTextIntelligently(text: string, context: string): Promise<Reflowed> {
     if (!text || text.trim().length === 0) {
       return { paragraphs: [], bullets: [] };
     }
     if (text.trim().length <= SINGLE_PARAGRAPH_CHARS) {
       return { paragraphs: [text.trim()], bullets: [] };
     }
+    // Inside a section build the passage is fetched with the section's others (reflowScope).
+    return (
+      reflowFromScope(text, context) ?? inReflowSlot(() => this.reflowWithModel(text, context))
+    );
+  }
 
+  /** One model reflow of a long passage. Never throws: on failure, the text as written. */
+  private async reflowWithModel(text: string, context: string): Promise<Reflowed> {
     try {
       const prompt = `You are formatting curriculum content for a professional academic document.
 
@@ -4306,8 +4311,14 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           `Step ${step}: ${stepNames[step]}`,
           `Formatting ${stepNames[step].toLowerCase()}...`
         );
-        const children: any[] = [];
-        await build(children);
+        const children = await buildWithReflows(
+          async () => {
+            const out: any[] = [];
+            await build(out);
+            return out;
+          },
+          (text, context) => this.reflowWithModel(text, context)
+        );
         sectionsCompleted++;
         reportProgress(
           `Step ${step}: ${stepNames[step]}`,
@@ -4475,7 +4486,6 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     };
 
     // Content section
-    const contentChildren: any[] = [];
     const stepKey = `step${stepNumber}` as keyof WorkflowData;
     let stepData = workflow[stepKey];
 
@@ -4495,64 +4505,75 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       }
     }
 
-    // Call the appropriate section generator
-    switch (stepNumber) {
-      case 1:
-        await this.generateStep1Section(stepData, contentChildren);
-        break;
-      case 2:
-        await this.generateStep2Section(stepData, contentChildren);
-        break;
-      case 3:
-        await this.generateStep3Section(stepData, contentChildren, kscMap);
-        break;
-      case 4:
-        await this.generateStep4Section(stepData, contentChildren, kscMap);
-        break;
-      case 5:
-        await this.generateStep5Section(stepData, contentChildren, workflow.step4);
-        break;
-      case 6:
-        await this.generateStep6Section(stepData, contentChildren, workflow.step4);
-        break;
-      case 7:
-        await this.generateStep7Section(
-          stepData,
-          contentChildren,
-          workflow.step4,
-          (workflow as any).step1?.creditFramework
-        );
-        break;
-      case 8:
-        await this.generateStep8Section(stepData, contentChildren, workflow.step4);
-        break;
-      case 9:
-        await this.generateStep9Section(stepData, contentChildren);
-        break;
-      case 10:
-        await this.generateStep10Section(
-          stepData,
-          contentChildren,
-          workflow.step4,
-          workflow.step3,
-          workflow.step2,
-          workflow.step8,
-          workflow.step11,
-          { moduleScoped }
-        );
-        break;
-      case 11:
-        await this.generateStep11Section(stepData, contentChildren);
-        break;
-      case 12:
-        await this.generateStep12Section(stepData, contentChildren, workflow.step4, {
-          moduleScoped,
-        });
-        break;
-      case 13:
-        await this.generateStep13Section(stepData, contentChildren);
-        break;
-    }
+    // Call the appropriate section generator, into a fresh list each time: the step is built
+    // with its model reflows fetched together (see reflowScope).
+    const renderStep = async (children: any[]) => {
+      switch (stepNumber) {
+        case 1:
+          await this.generateStep1Section(stepData, children);
+          break;
+        case 2:
+          await this.generateStep2Section(stepData, children);
+          break;
+        case 3:
+          await this.generateStep3Section(stepData, children, kscMap);
+          break;
+        case 4:
+          await this.generateStep4Section(stepData, children, kscMap);
+          break;
+        case 5:
+          await this.generateStep5Section(stepData, children, workflow.step4);
+          break;
+        case 6:
+          await this.generateStep6Section(stepData, children, workflow.step4);
+          break;
+        case 7:
+          await this.generateStep7Section(
+            stepData,
+            children,
+            workflow.step4,
+            (workflow as any).step1?.creditFramework
+          );
+          break;
+        case 8:
+          await this.generateStep8Section(stepData, children, workflow.step4);
+          break;
+        case 9:
+          await this.generateStep9Section(stepData, children);
+          break;
+        case 10:
+          await this.generateStep10Section(
+            stepData,
+            children,
+            workflow.step4,
+            workflow.step3,
+            workflow.step2,
+            workflow.step8,
+            workflow.step11,
+            { moduleScoped }
+          );
+          break;
+        case 11:
+          await this.generateStep11Section(stepData, children);
+          break;
+        case 12:
+          await this.generateStep12Section(stepData, children, workflow.step4, {
+            moduleScoped,
+          });
+          break;
+        case 13:
+          await this.generateStep13Section(stepData, children);
+          break;
+      }
+    };
+    const contentChildren = await buildWithReflows(
+      async () => {
+        const children: any[] = [];
+        await renderStep(children);
+        return children;
+      },
+      (text, context) => this.reflowWithModel(text, context)
+    );
 
     const doc = new Document({
       sections: [titleSection, { properties: {}, children: contentChildren }],
