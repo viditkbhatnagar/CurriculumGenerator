@@ -381,9 +381,13 @@ export const preventSQLInjection = (req: Request, res: Response, next: NextFunct
     '/api/v2/projects', // Old workflow (curriculum content)
     '/api/curriculum', // Curriculum generation
     '/api/knowledge-base', // Knowledge base content
+    // AGU course drafts: a save sends the whole draft, so one "sp_", "/*" or SQL example in
+    // a data course's lesson would refuse every edit to that course.
+    '/api/agu',
   ];
 
-  const isExempt = exemptPaths.some((path) => req.path.startsWith(path));
+  // Whole path segments: '/api/agu' exempts '/api/agu/...' but not '/api/aguXYZ'.
+  const isExempt = exemptPaths.some((path) => req.path === path || req.path.startsWith(`${path}/`));
   if (isExempt) {
     return next();
   }
@@ -452,21 +456,38 @@ export const preventSQLInjection = (req: Request, res: Response, next: NextFunct
 };
 
 /**
+ * What the XSS check refuses: markup that could run script if a stored string were ever rendered
+ * as HTML. Stored text is rendered as text (React escapes it and the exports write plain runs),
+ * so this is a tripwire, not the boundary; links are checked where they are rendered.
+ *
+ * - An event handler counts only inside a tag (`<img onerror=...>`, `<svg/onload=...>`,
+ *   `<img src="x"onerror=...>`). The old rule, any word ending in "on" followed by "=",
+ *   refused curriculum prose such as "Conversion = orders / visits" and "Cancellations=72".
+ * - Opening tags only, and every gap bounded. These run on every request before routing, and an
+ *   unbounded `[^>]*` or a lazy match to a closing tag is quadratic: a 200,000-character
+ *   "<a<a<a..." took 9.5 s, stalling the whole API. Each pattern here is linear.
+ * - No `g` or `y` flag: the patterns are shared, and a sticky or global pattern keeps its
+ *   position between `.test()` calls, so the next request could slip past it.
+ */
+export const XSS_PATTERNS: readonly RegExp[] = Object.freeze([
+  /<script[\s/>]/i,
+  /javascript:/i,
+  /<[a-z][^>]{0,300}[\s/"']on[a-z]+\s*=/i,
+  /<(?:iframe|object|embed)[\s/>]/i,
+]);
+
+/** Whether a string holds markup the XSS check refuses. */
+export function containsXSS(text: string): boolean {
+  return XSS_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+/**
  * Prevent XSS attacks by checking for script tags and event handlers
  */
 export const preventXSS = (req: Request, res: Response, next: NextFunction): void => {
-  const xssPatterns = [
-    /<script[^>]*>.*?<\/script>/gi,
-    /javascript:/gi,
-    /on\w+\s*=/gi, // Event handlers like onclick=
-    /<iframe/gi,
-    /<object/gi,
-    /<embed/gi,
-  ];
-
   const checkForXSS = (obj: any): boolean => {
     if (typeof obj === 'string') {
-      return xssPatterns.some((pattern) => pattern.test(obj));
+      return containsXSS(obj);
     }
 
     if (Array.isArray(obj)) {
