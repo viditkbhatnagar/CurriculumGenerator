@@ -407,6 +407,23 @@ function checkResources(draft: CourseDraft): Finding[] {
       });
     }
   });
+  // The same source assigned twice reads as more coverage than there is.
+  const seenSources = new Map<string, number>();
+  draft.readings.forEach((r) => {
+    const key = r.sourceId || r.citation;
+    seenSources.set(key, (seenSources.get(key) || 0) + 1);
+  });
+  for (const [key, count] of seenSources) {
+    if (count > 1) {
+      const citation =
+        draft.readings.find((r) => (r.sourceId || r.citation) === key)?.citation || key;
+      out.push({
+        code: 'READING_DUPLICATE',
+        severity: 'warning',
+        message: `"${citation.slice(0, 80)}" is assigned ${count} times; use it once or say why it recurs.`,
+      });
+    }
+  }
   const weeksWithReading = new Set(required.map((r) => r.week));
   for (const w of draft.weeks) {
     if (!weeksWithReading.has(w.number))

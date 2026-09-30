@@ -170,6 +170,13 @@ describe('validateDraft', () => {
     expect(codes(d)).toContain('READING_ACCESS');
   });
 
+  it('warns when the same source is assigned twice', () => {
+    const d = validDraft();
+    d.readings[1] = { ...d.readings[1], citation: d.readings[0].citation, sourceId: 'W1' };
+    d.readings[0] = { ...d.readings[0], sourceId: 'W1' };
+    expect(codes(d)).toContain('READING_DUPLICATE');
+  });
+
   it('blocks accreditation and placement claims in the narrative', () => {
     const d = validDraft();
     d.narrative.push({
