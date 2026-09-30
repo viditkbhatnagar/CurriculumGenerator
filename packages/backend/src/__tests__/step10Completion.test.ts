@@ -341,6 +341,23 @@ describe('validation reports only what the lessons hold', () => {
     expect(v.assessmentsIntegrated).toBe(false);
   });
 
+  it('computes a legacy module from its inline lessons when it has no stored stats', () => {
+    // Workflows generated before lesson bodies moved to their own collection keep the lessons
+    // on the stub and never recorded stats. Skipping them reported real lessons as failing.
+    const legacy = [
+      {
+        moduleId: 'a',
+        lessons: [
+          { duration: 90, linkedMLOs: ['m1'], caseStudyActivity: {}, formativeChecks: [1] },
+        ],
+      },
+    ];
+    const v = validationFromStubs([{ id: 'a', contactHours: 1.5, mlos: [{ id: 'm1' }] }], {
+      moduleLessonPlans: legacy,
+    });
+    expect(Object.values(v)).toEqual(Array(6).fill(true));
+  });
+
   it('passes nothing for a programme with no modules', () => {
     expect(Object.values(validationFromStubs([], { moduleLessonPlans: [] }))).toEqual(
       Array(6).fill(false)

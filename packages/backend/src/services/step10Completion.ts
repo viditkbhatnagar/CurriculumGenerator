@@ -338,9 +338,16 @@ export function validationFromStubs(
     | undefined
 ): Step10ValidationFlags {
   const byId = new Map((step10?.moduleLessonPlans || []).map((s) => [s.moduleId, s]));
+  const moduleById = new Map((modules || []).map((m) => [m?.id, m]));
   return combineModuleStats(
     modules,
-    (id) => (id ? byId.get(id)?.stats : undefined),
+    (id) => {
+      const stub = id ? byId.get(id) : undefined;
+      if (stub?.stats) return stub.stats;
+      // Workflows generated before lesson bodies moved out of the workflow document keep the
+      // lessons on the stub and never recorded stats; compute them from those lessons.
+      return stub?.lessons?.length ? moduleStats(stub, moduleById.get(id)) : undefined;
+    },
     completedModuleIds(modules, step10)
   );
 }
