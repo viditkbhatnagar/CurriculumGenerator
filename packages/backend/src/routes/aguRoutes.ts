@@ -21,6 +21,31 @@ const router = Router();
 const userOf = (req: Request): string | undefined =>
   (req as any).user?.id || (req as any).user?.userId || (req as any).user?.sub;
 
+/**
+ * A generation runs in the web process, so a deploy or restart kills it mid-flight and its
+ * draft would say "generating" forever. After this long with no update it is recorded as
+ * failed, with the reason, so faculty can regenerate instead of waiting on nothing.
+ */
+const GENERATION_STALE_MS = 15 * 60 * 1000;
+
+async function failIfInterrupted(doc: any): Promise<void> {
+  const last = new Date(doc.updatedAt || doc.createdAt).getTime();
+  if (doc.status !== 'generating' || Date.now() - last < GENERATION_STALE_MS) return;
+  doc.status = 'failed';
+  doc.stageRuns = [
+    ...(doc.stageRuns || []),
+    {
+      stage: 'outline',
+      status: 'failed',
+      startedAt: new Date(last),
+      finishedAt: new Date(),
+      error:
+        'Generation was interrupted (the server restarted before it finished). Regenerate to try again.',
+    },
+  ];
+  await doc.save();
+}
+
 /** Start an outline generation without holding the request open for the model call. */
 function startGeneration(draftId: string): void {
   generateOutline(draftId).catch((error) =>
@@ -93,9 +118,10 @@ router.post('/courses/:code/drafts', validateJWT, loadUser, async (req: Request,
 /** GET /api/agu/drafts/:id — the full draft with its findings and stage history. */
 router.get('/drafts/:id', async (req: Request, res: Response) => {
   try {
-    const doc = await AguCourseDraft.findById(req.params.id).lean();
+    const doc = await AguCourseDraft.findById(req.params.id);
     if (!doc) return res.status(404).json({ success: false, error: 'Draft not found' });
-    res.json({ success: true, data: doc });
+    await failIfInterrupted(doc);
+    res.json({ success: true, data: doc.toObject() });
   } catch (error) {
     res.status(400).json({ success: false, error: 'Invalid draft id' });
   }
