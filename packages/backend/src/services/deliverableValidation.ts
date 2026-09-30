@@ -18,6 +18,7 @@ export const MIN_SLIDES_PER_DECK = 8;
 export const MAX_SLIDES_PER_DECK = 15;
 
 export interface DeckLike {
+  lessonId?: string;
   slideCount?: number;
   validation?: { mlosCovered?: boolean; citationsValid?: boolean };
 }
@@ -35,8 +36,11 @@ export function step11ValidationFromDecks(
 ): Step11ValidationFlags {
   const list = decks || [];
   const every = (test: (d: DeckLike) => boolean) => list.length > 0 && list.every(test);
+  // Distinct lessons, not deck records: a lesson regenerated twice holds two decks, and
+  // counting records let that duplicate stand in for a lesson with no deck at all.
+  const lessonsWithDecks = new Set(list.map((d, i) => d?.lessonId || `deck-${i}`)).size;
   return {
-    allLessonsHavePPTs: lessonCount > 0 && list.length >= lessonCount,
+    allLessonsHavePPTs: lessonCount > 0 && lessonsWithDecks >= lessonCount,
     allSlideCountsValid: every(
       (d) =>
         (d.slideCount || 0) >= MIN_SLIDES_PER_DECK && (d.slideCount || 0) <= MAX_SLIDES_PER_DECK
@@ -47,6 +51,7 @@ export function step11ValidationFromDecks(
 }
 
 export interface PackVariantLike {
+  assignmentId?: string;
   rubric?: { linkedMLOs?: string[] }[];
   assessedOutcomes?: { mloId?: string }[];
 }
@@ -77,10 +82,23 @@ function variantsOf(pack: PackLike): (PackVariantLike | undefined)[] {
   return [v.in_person, v.self_study, v.hybrid];
 }
 
+/**
+ * A variant whose generation failed is stored as a placeholder so the other variants are not
+ * lost. It lists every module outcome as assessed and has an empty rubric and the brief
+ * "Generation failed - please retry", so counting it reported outcomes covered, and the
+ * variant generated, for work that was never done.
+ */
+export function isPlaceholderVariant(variant: PackVariantLike | undefined): boolean {
+  return /-placeholder$/.test(String(variant?.assignmentId || ''));
+}
+
+const generated = (variant: PackVariantLike | undefined): variant is PackVariantLike =>
+  !!variant && !isPlaceholderVariant(variant);
+
 /** Outcome ids a pack assesses: named in a rubric criterion or listed as an assessed outcome. */
 function outcomesAssessed(pack: PackLike): Set<string> {
   const ids = new Set<string>();
-  for (const variant of variantsOf(pack)) {
+  for (const variant of variantsOf(pack).filter(generated)) {
     for (const criterion of variant?.rubric || []) {
       for (const id of criterion?.linkedMLOs || []) ids.add(id);
     }
@@ -102,7 +120,7 @@ export function step12ValidationFromPacks(
 
   return {
     allModulesHaveAssignments: mods.length > 0 && mods.every((m) => byModule.has(m.id)),
-    allVariantsGenerated: every((p) => variantsOf(p).every((v) => !!v)),
+    allVariantsGenerated: every((p) => variantsOf(p).every(generated)),
     // "All module learning outcomes covered" in the export: every outcome of every module is
     // assessed by that module's pack.
     allMLOsCovered:

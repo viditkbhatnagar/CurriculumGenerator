@@ -34,6 +34,11 @@ describe('step11ValidationFromDecks', () => {
     expect(v.allSlideCountsValid).toBe(false);
     expect(v.allLessonsHavePPTs).toBe(false);
   });
+
+  it('does not let two decks for one lesson stand in for a lesson with none', () => {
+    const v = step11ValidationFromDecks([deck({ lessonId: 'L1' }), deck({ lessonId: 'L1' })], 2);
+    expect(v.allLessonsHavePPTs).toBe(false);
+  });
 });
 
 describe('step12ValidationFromPacks', () => {
@@ -60,6 +65,32 @@ describe('step12ValidationFromPacks', () => {
     const p = pack(['a', 'b']);
     p.variants.hybrid = { rubric: [] };
     expect(step12ValidationFromPacks([p], modules).allRubricsComplete).toBe(false);
+  });
+
+  // A variant whose generation failed is stored as a placeholder listing every outcome as
+  // assessed, with an empty rubric. It is not an assignment.
+  const placeholder = () => ({
+    assignmentId: 'M1-hybrid-placeholder',
+    rubric: [],
+    assessedOutcomes: [{ mloId: 'a' }, { mloId: 'b' }],
+  });
+
+  it('does not count placeholder variants from failed generations as assessing anything', () => {
+    const p = {
+      moduleId: 'm1',
+      variants: { in_person: placeholder(), self_study: placeholder(), hybrid: placeholder() },
+    };
+    const v = step12ValidationFromPacks([p], modules);
+    expect(v.allMLOsCovered).toBe(false);
+    expect(v.allVariantsGenerated).toBe(false);
+  });
+
+  it('fails variants generated when one of three failed, even with the others real', () => {
+    const p: any = pack(['a', 'b']);
+    p.variants.hybrid = placeholder();
+    const v = step12ValidationFromPacks([p], modules);
+    expect(v.allVariantsGenerated).toBe(false);
+    expect(v.allMLOsCovered).toBe(true);
   });
 
   it('fails every module having an assignment when one module has no pack', () => {
