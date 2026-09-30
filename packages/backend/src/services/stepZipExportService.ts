@@ -31,8 +31,9 @@ import { expectedLessonCount, isPlanComplete, plannedLessonTarget } from './step
  * the previous layout for unchanged lessons.
  *
  * 2: keeps check answers, case activities and pacing; labels checks by type; flags partial modules.
+ * 3: an appendix sets out each Step 7 formative check with its questions and model answers.
  */
-export const FACULTY_GUIDE_FORMAT_VERSION = 2;
+export const FACULTY_GUIDE_FORMAT_VERSION = 3;
 
 /** How a module is named in its file inside the archive. */
 function moduleFileName(stepNumber: number, index: number, stub: any, step4Module: any): string {

@@ -6966,6 +6966,8 @@ router.get('/:id/export/faculty-guide', async (req: Request, res: Response) => {
         glossary: (workflow.step9?.terms || []).map((t: any) => [t.term, t.definition]),
         // Whether a module's guide is marked incomplete depends on its planned lesson count.
         plannedLessonCounts: workflow.step10?.plannedLessonCounts,
+        // The appendix prints each Step 7 formative check in full.
+        formatives: workflow.step7?.formativeAssessments,
         plans: await lessonPlansSignature(String(workflow._id)),
       }),
       contentType: 'application/zip',

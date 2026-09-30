@@ -1,6 +1,10 @@
 import JSZip from 'jszip';
 import mammoth from 'mammoth';
-import { GuideContext, guideModule } from '../services/facultyGuide/facultyGuideModel';
+import {
+  GuideContext,
+  guideContextFromWorkflow,
+  guideModule,
+} from '../services/facultyGuide/facultyGuideModel';
 import { facultyGuideBuffer } from '../services/facultyGuide/facultyGuideDocx';
 import { loadModulePlan } from '../services/step10Store';
 import { facultyGuideForModule, generateFacultyGuideZip } from '../services/stepZipExportService';
@@ -219,5 +223,69 @@ describe('generateFacultyGuideZip', () => {
     await expect(generateFacultyGuideZip('wf', workflowWith([]))).rejects.toThrow(
       'Step 10 has no module lesson plans'
     );
+  });
+});
+
+describe('the formative checks appendix', () => {
+  // A lesson's check stores only a Step 7 assessment's title and id; the task itself, with its
+  // questions and model answers, is in Step 7. The guide sets each task out once and points to it.
+  const workflow = {
+    step7: {
+      formativeAssessments: [
+        {
+          id: 'form-1',
+          title: 'Manager-in-Action Worksheet',
+          assessmentType: 'Worksheets / problem sets',
+          description: 'Apply team models to short cases.',
+          instructions: 'Setting: a junior manager.\nTime: 60 minutes.',
+          questions: [
+            {
+              questionNumber: 1,
+              questionText: 'Identify the Tuckman stage.\n- Heated debates\n- Unclear roles',
+              questionType: 'scenario',
+              correctAnswer: 'Storming: visible conflict and unclear ownership.',
+              rationale: 'Conflict over priorities marks storming.',
+            },
+          ],
+          assessmentCriteria: ['Applies Tuckman to case details.'],
+          feedbackGuidance: 'Surfaces confusion between stages.',
+          selfCheckCriteria: ['Did I cite evidence from the case?'],
+        },
+      ],
+    },
+  };
+  const withCheck = (n: number) =>
+    lessons(n).map((l) => ({
+      ...l,
+      formativeChecks: [
+        { checkId: 'form-1', type: 'mcq', question: 'Manager-in-Action Worksheet', duration: 3 },
+      ],
+    }));
+  const guideFor = (n: number) =>
+    guideModule(
+      { code: 'M01', title: 'Management' },
+      withCheck(n),
+      guideContextFromWorkflow(workflow, { mlos: [] })
+    );
+
+  it('numbers a check once, however many sessions use it', () => {
+    const guide = guideFor(3);
+    expect(guide.formatives.map((f) => f.ref)).toEqual(['F1']);
+    expect(guide.sessions.map((s) => s.checks[0].ref)).toEqual(['F1', 'F1', 'F1']);
+  });
+
+  it('prints the task with its questions and model answers, and points sessions to it', async () => {
+    const text = await textOf(await facultyGuideBuffer(guideFor(2)));
+    expect(text).toContain('Appendix: Formative Checks Used in This Module');
+    expect(text).toContain('F1. Manager-in-Action Worksheet');
+    expect(text).toContain('Storming: visible conflict and unclear ownership.');
+    expect(text).toContain('Did I cite evidence from the case?');
+    expect(text).toContain('Appendix, F1');
+  });
+
+  it('leaves the appendix out when no check names a Step 7 task', async () => {
+    const guide = guideModule({ code: 'M01', title: 'Management' }, lessons(2), context);
+    expect(guide.formatives).toEqual([]);
+    expect(await textOf(await facultyGuideBuffer(guide))).not.toContain('Appendix:');
   });
 });

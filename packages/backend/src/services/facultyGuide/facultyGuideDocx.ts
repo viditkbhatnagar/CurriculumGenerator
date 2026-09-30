@@ -12,6 +12,7 @@ import {
   GuideCaseActivity,
   GuideCharacter,
   GuideCheck,
+  GuideFormative,
   GuideModule,
   GuideRolePlay,
   GuideSession,
@@ -197,6 +198,7 @@ function checkBlock(c: GuideCheck): Paragraph[] {
     ...optional('Correct answer', c.correctAnswer, 1),
     ...optional('Explanation', c.explanation, 1),
     ...optional('Outcome checked', c.mlo, 1),
+    ...optional('Full task and model answers', c.ref ? `Appendix, ${c.ref}` : undefined, 1),
   ];
 }
 
@@ -258,6 +260,38 @@ function sessionBlock(s: GuideSession): Paragraph[] {
   ];
 }
 
+/** Several lines under one label; one line reads "Label: line". */
+function linesUnder(label: string, lines: string[], level: number): Paragraph[] {
+  if (lines.length === 0) return [];
+  if (lines.length === 1) return [labelled(label, lines[0], level)];
+  return [caption(label, level), ...lines.map((l) => bullet(l, level + 1))];
+}
+
+const splitLines = (t: string | undefined) =>
+  (t || '')
+    .split(/\n+/)
+    .map((l) => l.replace(/^\s*[-•]\s*/, '').trim())
+    .filter(Boolean);
+
+/** One Step 7 formative assessment, in full, for the appendix. */
+function formativeBlock(f: GuideFormative): Paragraph[] {
+  return [
+    heading(`${f.ref}. ${f.title}`, HeadingLevel.HEADING_2),
+    ...optional('Type', f.type),
+    ...optional('Purpose', f.purpose),
+    ...linesUnder('How to run it', f.instructions, 0),
+    ...f.questions.flatMap((q) => [
+      ...linesUnder(`Q${q.number}${q.type ? ` (${q.type})` : ''}`, splitLines(q.text), 0),
+      ...q.options.map((o) => bullet(o, 1)),
+      ...linesUnder('Model answer', splitLines(q.answer), 1),
+      ...optional('Why', q.rationale, 1),
+    ]),
+    ...labelledList('Success criteria', f.criteria),
+    ...optional('Feedback guidance', f.feedbackGuidance),
+    ...labelledList('Student self-check', f.selfCheck),
+  ];
+}
+
 /**
  * The first requirement: how many sessions to teach.
  *
@@ -299,6 +333,17 @@ export function facultyGuideDocument(guide: GuideModule, programmeTitle?: string
       : []),
     heading('Sessions', HeadingLevel.HEADING_1),
     ...guide.sessions.flatMap(sessionBlock),
+    ...(guide.formatives.length
+      ? [
+          heading('Appendix: Formative Checks Used in This Module', HeadingLevel.HEADING_1),
+          para(
+            'Each check is set out once here, with its questions and model answers; sessions ' +
+              'refer to it by number. From the module’s Step 7 formative assessments.',
+            { italics: true }
+          ),
+          ...guide.formatives.flatMap(formativeBlock),
+        ]
+      : []),
   ];
 
   return new Document({

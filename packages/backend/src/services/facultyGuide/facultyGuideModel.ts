@@ -34,6 +34,38 @@ export interface GuideContext {
   glossary: ReadonlyMap<string, string>;
   /** Case study id -> title, from Step 8. */
   caseTitles: ReadonlyMap<string, string>;
+  /**
+   * Formative assessment id -> its full task, from Step 7. A lesson's check stores only the
+   * assessment's title and id (`checkId`); the questions, model answers and criteria are here.
+   */
+  formatives?: ReadonlyMap<string, GuideFormativeTask>;
+}
+
+export interface GuideFormativeQuestion {
+  number: number;
+  text: string;
+  type?: string;
+  options: string[];
+  answer?: string;
+  rationale?: string;
+}
+
+/** A Step 7 formative assessment as the guide's appendix sets it out. */
+export interface GuideFormativeTask {
+  id: string;
+  title: string;
+  type?: string;
+  purpose?: string;
+  instructions: string[];
+  questions: GuideFormativeQuestion[];
+  criteria: string[];
+  feedbackGuidance?: string;
+  selfCheck: string[];
+}
+
+export interface GuideFormative extends GuideFormativeTask {
+  /** "F1", "F2"...: numbered in the order the module's sessions first use them. */
+  ref: string;
 }
 
 export interface GuideActivity {
@@ -54,6 +86,10 @@ export interface GuideActivity {
 export interface GuideCheck {
   /** The kind of check, from its stored type and whether it has options to choose between. */
   label: string;
+  /** The Step 7 formative assessment this check is, when it names one. */
+  formativeId?: string;
+  /** Its number in the module's appendix, set once the module is assembled. */
+  ref?: string;
   question?: string;
   minutes?: number;
   /** The module outcome the check tests. */
@@ -126,6 +162,12 @@ export interface GuideModule {
   title: string;
   contactHours?: number;
   minimumRequirements: string[];
+  /**
+   * The Step 7 formative assessments the sessions use, each set out once with its questions and
+   * model answers. Repeating them under every session that uses them would bury the concise
+   * session guidance the SME asked for; sessions refer to them by number instead.
+   */
+  formatives: GuideFormative[];
   /**
    * How many sessions the module is planned to hold. Set only when `sessions` holds fewer, so
    * its presence is what marks the guide as incomplete.
@@ -332,6 +374,7 @@ function guideChecks(raw: unknown): GuideCheck[] {
     return [
       {
         label: checkLabel(c?.type, options),
+        formativeId: str(c?.checkId),
         question,
         minutes: positive(c?.duration),
         mlo: mlo && mlo !== UNLINKED_MLO ? mlo : undefined,
@@ -503,6 +546,19 @@ export function guideModule(
   ordered.forEach((lesson, i) => {
     sessions.push(guideSession(lesson, i, context, i > 0 ? sessions[i - 1].topic : undefined));
   });
+  // Number each formative the first time a session uses it, and point every use at that number.
+  const formatives: GuideFormative[] = [];
+  const refs = new Map<string, string>();
+  for (const check of sessions.flatMap((s) => s.checks)) {
+    const task = check.formativeId ? context.formatives?.get(check.formativeId) : undefined;
+    if (!task) continue;
+    if (!refs.has(task.id)) {
+      const ref = `F${formatives.length + 1}`;
+      refs.set(task.id, ref);
+      formatives.push({ ...task, ref });
+    }
+    check.ref = refs.get(task.id);
+  }
   return {
     code: module.code || '',
     title: module.title || '',
@@ -510,9 +566,47 @@ export function guideModule(
     minimumRequirements: (module.mlos || [])
       .filter((m) => m?.id && m?.statement)
       .map((m) => `${m.id}: ${m.statement}`),
+    formatives,
     plannedSessions:
       plannedSessions && plannedSessions > sessions.length ? plannedSessions : undefined,
     sessions,
+  };
+}
+
+/** Text the model wrote with line breaks and "- " bullets, as separate lines. */
+function textLines(v: unknown): string[] {
+  return (str(v) || '')
+    .split(/\n+/)
+    .map((line) => line.replace(/^\s*[-•]\s*/, '').trim())
+    .filter(Boolean);
+}
+
+/** A stored Step 7 formative assessment, reduced to what the appendix prints. */
+export function formativeTask(raw: any): GuideFormativeTask | undefined {
+  const id = str(raw?.id);
+  const title = str(raw?.title);
+  if (!id || !title) return undefined;
+  return {
+    id,
+    title,
+    type: str(raw?.assessmentType),
+    purpose: str(raw?.purpose) || str(raw?.description),
+    instructions: textLines(raw?.instructions),
+    questions: (Array.isArray(raw?.questions) ? raw.questions : [])
+      .map(
+        (q: any, i: number): GuideFormativeQuestion => ({
+          number: typeof q?.questionNumber === 'number' ? q.questionNumber : i + 1,
+          text: str(q?.questionText) || str(q?.question) || '',
+          type: str(q?.questionType),
+          options: strings(q?.options),
+          answer: str(q?.correctAnswer),
+          rationale: str(q?.rationale),
+        })
+      )
+      .filter((q: GuideFormativeQuestion) => q.text),
+    criteria: strings(raw?.assessmentCriteria),
+    feedbackGuidance: str(raw?.feedbackGuidance),
+    selfCheck: strings(raw?.selfCheckCriteria),
   };
 }
 
@@ -546,5 +640,10 @@ export function guideContextFromWorkflow(workflow: any, step4Module: any): Guide
     const title = str(c?.title);
     if (c?.id && title) caseTitles.set(String(c.id), title);
   }
-  return { mloStatements, glossary, caseTitles };
+  const formatives = new Map<string, GuideFormativeTask>();
+  for (const raw of workflow?.step7?.formativeAssessments || []) {
+    const task = formativeTask(raw);
+    if (task) formatives.set(task.id, task);
+  }
+  return { mloStatements, glossary, caseTitles, formatives };
 }
