@@ -49,7 +49,10 @@ import { loggingService } from './loggingService';
 //      Step 4 names topics stored as strings; entry requirements are labelled a proposal;
 //      Step 10 lists a slide deck only when Step 11 holds one.
 // v21: Step 12 outcome coverage resolves packs' positional "MLO n" labels to stored ids.
-const EXPORT_FORMAT_VERSION = 'v21';
+// v22: every Word and PowerPoint export strips the characters XML 1.0 forbids. Copies cached
+//      before that keep them as stored: the BBA faculty-guide zip went on serving an M42 guide
+//      that Word cannot open, from cache, after the fix was deployed.
+const EXPORT_FORMAT_VERSION = 'v22';
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {
