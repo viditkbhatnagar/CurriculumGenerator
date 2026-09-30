@@ -321,6 +321,9 @@ export interface Module {
   totalHours: number; // Portion of program total
   contactHours: number; // Based on Step 1 percentage (default 30%)
   selfStudyHours: number; // Independent study & assessment (remaining %)
+  // Some generation paths store the same figure as `independentHours` instead. Read hours
+  // through independentHoursOf() so neither shape renders as "undefined".
+  independentHours?: number;
 
   // Credits
   credits: number;
@@ -333,7 +336,9 @@ export interface Module {
   mlos: MLO[]; // 2-4 MLOs per module typically
 
   // Topics
-  topics: Topic[];
+  // Step 4 stores topics as plain strings on most generation paths; read them through
+  // topicView() so both shapes render with a name.
+  topics: Array<Topic | string>;
 
   // Activity strings. Free-text — SMEs write things like:
   //   "Lecture: Programme orientation and the fashion retail landscape (4h)"
@@ -2316,4 +2321,31 @@ export function calculateContactHours(
   const independentHours = totalHours - contactHours;
 
   return { contactHours, independentHours, contactPercent };
+}
+
+/**
+ * A module's independent-study hours, whichever field it was stored under. The Logistics
+ * programme stored `independentHours` and the Step 4 screen read `selfStudyHours`, so the
+ * reviewer saw "Independent: undefinedh" and editing the module would have saved 0.
+ */
+export function independentHoursOf(
+  module: Pick<Module, 'selfStudyHours' | 'independentHours'>
+): number {
+  return module.selfStudyHours ?? module.independentHours ?? 0;
+}
+
+/** A Step 4 topic for display, whichever shape it was stored in. */
+export function topicView(
+  topic: Topic | string,
+  index: number
+): { key: string; title: string; sequence: number; hours?: number } {
+  if (typeof topic === 'string') {
+    return { key: `topic-${index}`, title: topic.trim(), sequence: index + 1 };
+  }
+  return {
+    key: topic.id || `topic-${index}`,
+    title: (topic.title || '').trim(),
+    sequence: topic.sequence ?? index + 1,
+    hours: typeof topic.hours === 'number' ? topic.hours : undefined,
+  };
 }

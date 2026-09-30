@@ -17,6 +17,8 @@ import {
   BloomLevel,
   BLOOM_LEVELS,
   ModulePhase,
+  independentHoursOf,
+  topicView,
 } from '@/types/workflow';
 import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
@@ -73,7 +75,7 @@ function ModuleEditModal({
   const [description, setDescription] = useState(module.description || '');
   const [totalHours, setTotalHours] = useState(module.totalHours || 0);
   const [contactHours, setContactHours] = useState(module.contactHours || 0);
-  const [selfStudyHours, setSelfStudyHours] = useState(module.selfStudyHours || 0);
+  const [selfStudyHours, setSelfStudyHours] = useState(independentHoursOf(module));
   const [credits, setCredits] = useState(module.credits || 0);
   const [phase, setPhase] = useState<ModulePhase>(module.phase || 'middle');
 
@@ -862,7 +864,7 @@ function ModuleCard({
             <p className="text-xs text-teal-500">Contact ({contactPercent}%)</p>
           </div>
           <div>
-            <p className="text-lg font-semibold text-amber-400">{module.selfStudyHours}h</p>
+            <p className="text-lg font-semibold text-amber-400">{independentHoursOf(module)}h</p>
             <p className="text-xs text-teal-500">Independent ({100 - contactPercent}%)</p>
           </div>
         </div>
@@ -877,7 +879,7 @@ function ModuleCard({
           <div
             className="bg-amber-500"
             style={{ width: `${100 - contactPercent}%` }}
-            title={`Independent: ${module.selfStudyHours}h`}
+            title={`Independent: ${independentHoursOf(module)}h`}
           />
         </div>
       </div>
@@ -1042,18 +1044,23 @@ function ModuleCard({
                 Topics ({module.topics.length})
               </h5>
               <div className="grid gap-2">
-                {module.topics.map((topic) => (
-                  <div
-                    key={topic.id}
-                    className="flex items-center justify-between p-2 bg-teal-50 rounded-lg"
-                  >
-                    <div>
-                      <span className="text-xs text-teal-500 mr-2">#{topic.sequence}</span>
-                      <span className="text-sm text-teal-800">{topic.title}</span>
+                {module.topics.map((raw, i) => {
+                  const topic = topicView(raw, i);
+                  return (
+                    <div
+                      key={topic.key}
+                      className="flex items-center justify-between p-2 bg-teal-50 rounded-lg"
+                    >
+                      <div>
+                        <span className="text-xs text-teal-500 mr-2">#{topic.sequence}</span>
+                        <span className="text-sm text-teal-800">{topic.title}</span>
+                      </div>
+                      {topic.hours !== undefined && (
+                        <span className="text-xs text-teal-600">{topic.hours}h</span>
+                      )}
                     </div>
-                    <span className="text-xs text-teal-600">{topic.hours}h</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
