@@ -542,7 +542,11 @@ export class LessonPlanService {
     // finished. Two copies of this arithmetic would be two chances for "how many to
     // generate" and "how many mean done" to disagree — and they disagree silently, by
     // leaving a module one lesson short of complete for ever.
-    const numLessons = plannedLessonCountFor(contactHours, plannedLessonCount);
+    const numLessons = plannedLessonCountFor(
+      contactHours,
+      plannedLessonCount,
+      (moduleTopics || []).map(topicTitle).filter(Boolean).length
+    );
     let maxDuration = MAX_DURATION;
     if (plannedLessonCount && plannedLessonCount > 0) {
       // Honour the agreed lesson count even where that makes lessons longer

@@ -60,6 +60,17 @@ export interface CountableModule {
   id?: string;
   contactHours?: number;
   mlos?: { id?: string }[];
+  /** The agreed syllabus: strings, or { title } objects after a Step 4 re-upload. */
+  topics?: unknown[];
+}
+
+/** How many named topics a module's syllabus holds, whichever shape they are stored in. */
+export function namedTopicCount(topics: unknown[] | undefined): number {
+  return (topics || []).filter((t) => {
+    if (typeof t === 'string') return t.trim().length > 0;
+    const o = t as { title?: unknown; name?: unknown } | null;
+    return !!o && [o.title, o.name].some((v) => typeof v === 'string' && v.trim().length > 0);
+  }).length;
 }
 
 const MIN_LESSON_MINUTES = 60;
@@ -73,7 +84,11 @@ const PREFERRED_LESSON_MINUTES = 90;
  * copy of the rule is a second chance for "finished" and "how many to generate" to disagree —
  * and they disagree silently, by leaving a module one lesson short forever.
  */
-export function plannedLessonCountFor(contactHours: number, plannedLessonCount?: number): number {
+export function plannedLessonCountFor(
+  contactHours: number,
+  plannedLessonCount?: number,
+  topicCount = 0
+): number {
   if (plannedLessonCount && plannedLessonCount > 0) return plannedLessonCount;
 
   const totalMinutes = (contactHours || 0) * 60;
@@ -85,6 +100,16 @@ export function plannedLessonCountFor(contactHours: number, plannedLessonCount?:
     numLessons = Math.ceil(totalMinutes / MAX_LESSON_MINUTES);
   } else if (avgDuration < MIN_LESSON_MINUTES) {
     numLessons = Math.max(1, Math.floor(totalMinutes / MIN_LESSON_MINUTES));
+  }
+
+  // A syllabus caps the count: no more lessons than it has topics, unless that would make a
+  // lesson longer than three hours. The 90-minute quota alone asked for 12 lessons of a module
+  // whose syllabus named 8 topics, and the generator filled the other 4 with re-worded copies
+  // ("<topic>: Practical Evidence Build"), which is how the 21 Sep Logistics run produced
+  // 120 filler lessons. Fewer, longer lessons carry the same contact hours.
+  if (topicCount > 0) {
+    const fewestWithinLimit = Math.ceil(totalMinutes / MAX_LESSON_MINUTES);
+    numLessons = Math.min(numLessons, Math.max(topicCount, fewestWithinLimit));
   }
   return numLessons;
 }
@@ -101,7 +126,7 @@ export function expectedLessonCount(
   plannedLessonCounts?: Record<string, number>
 ): number {
   const agreed = module?.id ? plannedLessonCounts?.[module.id] : undefined;
-  return plannedLessonCountFor(module?.contactHours || 0, agreed);
+  return plannedLessonCountFor(module?.contactHours || 0, agreed, namedTopicCount(module?.topics));
 }
 
 /** How many lessons a stored plan actually holds, whether or not bodies are loaded. */

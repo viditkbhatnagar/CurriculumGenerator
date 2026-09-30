@@ -12,6 +12,7 @@ import {
   validationFromStubs,
   validationFromPlans,
   modulesInDocument,
+  namedTopicCount,
 } from '../services/step10Completion';
 
 const lessons = (n: number) => Array.from({ length: n }, (_, i) => ({ lessonNumber: i + 1 }));
@@ -32,6 +33,39 @@ describe('plannedLessonCountFor', () => {
 
   it('returns nothing to generate for a module with no contact hours', () => {
     expect(plannedLessonCountFor(0)).toBe(0);
+  });
+
+  // The 21 Sep Logistics run: 18 contact hours asked for 12 lessons of a syllabus naming 8
+  // topics, and the other 4 came back as re-worded filler.
+  it('plans no more lessons than the syllabus has topics', () => {
+    expect(plannedLessonCountFor(18)).toBe(12);
+    expect(plannedLessonCountFor(18, undefined, 8)).toBe(8);
+  });
+
+  it('still splits a topic when one lesson would run past three hours', () => {
+    const count = plannedLessonCountFor(45, undefined, 5);
+    expect(count).toBe(15);
+    expect((45 * 60) / count).toBeLessThanOrEqual(180);
+  });
+
+  it('never plans more lessons than the contact hours allow', () => {
+    expect(plannedLessonCountFor(45, undefined, 40)).toBe(30);
+  });
+
+  it('lets an agreed count win over the syllabus too', () => {
+    expect(plannedLessonCountFor(18, 12, 8)).toBe(12);
+  });
+});
+
+describe('expectedLessonCount with a syllabus', () => {
+  it('counts named topics in either stored shape', () => {
+    const module = {
+      id: 'm1',
+      contactHours: 18,
+      topics: ['Port operations', { title: 'Customs' }, '', { title: '' }, 'Warehousing'],
+    };
+    expect(namedTopicCount(module.topics)).toBe(3);
+    expect(expectedLessonCount(module)).toBe(6);
   });
 });
 
