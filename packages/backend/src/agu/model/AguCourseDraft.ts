@@ -9,6 +9,7 @@
  */
 import mongoose, { Document, Schema } from 'mongoose';
 import { CourseDraft, Finding } from '../draft/types';
+import { ArtefactStatus, CourseArtefacts } from '../draft/artefactTypes';
 import { FacultyInputs, OfferedSource } from '../generation/outlinePrompt';
 
 export type DraftStatus =
@@ -20,7 +21,7 @@ export type DraftStatus =
   | 'faculty_accepted';
 
 export interface StageRun {
-  stage: 'outline' | 'repair' | 'faculty_edit';
+  stage: 'outline' | 'repair' | 'faculty_edit' | 'artefacts' | 'artefact_repair';
   status: 'running' | 'succeeded' | 'failed';
   startedAt: Date;
   finishedAt?: Date;
@@ -50,6 +51,16 @@ export interface IAguCourseDraft extends Document {
   heartbeatAt?: Date;
   acceptedBy?: string;
   acceptedAt?: Date;
+  /**
+   * T07-T11, drafted from the outline in a second stage with its own status, so a failed or
+   * stale artefact run never changes what the outline's status says.
+   */
+  artefacts?: CourseArtefacts;
+  artefactFindings: Finding[];
+  artefactStatus: ArtefactStatus;
+  artefactHeartbeatAt?: Date;
+  artefactsAcceptedBy?: string;
+  artefactsAcceptedAt?: Date;
   createdBy?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -86,6 +97,12 @@ const AguCourseDraftSchema = new Schema<IAguCourseDraft>(
     heartbeatAt: Date,
     acceptedBy: String,
     acceptedAt: Date,
+    artefacts: { type: Schema.Types.Mixed },
+    artefactFindings: { type: Schema.Types.Mixed, default: [] },
+    artefactStatus: { type: String, default: 'not_started' },
+    artefactHeartbeatAt: Date,
+    artefactsAcceptedBy: String,
+    artefactsAcceptedAt: Date,
     createdBy: String,
   },
   { timestamps: true, collection: 'agucoursedrafts' }

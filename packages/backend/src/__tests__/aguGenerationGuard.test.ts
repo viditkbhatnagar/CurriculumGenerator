@@ -9,6 +9,8 @@ import {
   lastActivityAt,
   MAX_GENERATIONS_PER_WINDOW,
   releaseGenerationStart,
+  artefactRunRefusal,
+  isArtefactRunStale,
 } from '../agu/generation/generationGuard';
 
 const NOW = Date.UTC(2026, 8, 30, 12, 0, 0);
@@ -269,5 +271,25 @@ describe('the start slot: one request at a time starts a generation for a course
     releaseGenerationStart('SLOT-D');
     expect(claimGenerationStart('SLOT-D')).toBe(true);
     releaseGenerationStart('SLOT-D');
+  });
+});
+
+describe('artefact runs', () => {
+  const run = (minutes: number) => ({ stage: 'artefacts', startedAt: minutesAgo(minutes) });
+
+  it('refuses a second run while one is reporting in, and not once it has gone quiet', () => {
+    const live = { artefactStatus: 'generating', artefactHeartbeatAt: minutesAgo(3) };
+    const dead = { artefactStatus: 'generating', artefactHeartbeatAt: hoursAgo(2) };
+    expect(artefactRunRefusal([live], NOW)?.status).toBe(409);
+    expect(artefactRunRefusal([dead], NOW)).toBeNull();
+    expect(isArtefactRunStale(dead, NOW)).toBe(true);
+    expect(isArtefactRunStale(live, NOW)).toBe(false);
+  });
+
+  it('caps a course at ten artefact runs a day, counting failed ones', () => {
+    const drafts = [{ stageRuns: Array.from({ length: 10 }, (_, i) => run(i * 30)) }];
+    expect(artefactRunRefusal(drafts, NOW)?.status).toBe(429);
+    const older = [{ stageRuns: Array.from({ length: 10 }, () => run(25 * 60)) }];
+    expect(artefactRunRefusal(older, NOW)).toBeNull();
   });
 });

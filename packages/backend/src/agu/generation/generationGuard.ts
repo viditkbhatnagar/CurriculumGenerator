@@ -135,3 +135,60 @@ export function claimGenerationStart(courseCode: string): boolean {
 export function releaseGenerationStart(courseCode: string): void {
   starting.delete(courseCode);
 }
+
+/**
+ * The same limits for the artefact stage (T07-T11), which spends more than an outline: about
+ * seven model calls. One run per draft at a time, judged by its own heartbeat, and a daily cap
+ * per course counted from the artefact stage runs.
+ */
+export const MAX_ARTEFACT_RUNS_PER_WINDOW = 10;
+
+export interface ArtefactActivity extends DraftActivity {
+  artefactStatus?: string;
+  artefactHeartbeatAt?: Time;
+}
+
+const lastArtefactActivityAt = (draft: ArtefactActivity): number => {
+  const at = millis(draft.artefactHeartbeatAt ?? draft.updatedAt ?? draft.createdAt);
+  return Number.isFinite(at) ? at : 0;
+};
+
+/** Whether an artefact run that says it is generating has gone quiet for too long. */
+export function isArtefactRunStale(draft: ArtefactActivity, now: number = Date.now()): boolean {
+  return (
+    draft.artefactStatus === 'generating' &&
+    now - lastArtefactActivityAt(draft) >= GENERATION_STALE_MS
+  );
+}
+
+export function isArtefactRunInFlight(draft: ArtefactActivity, now: number = Date.now()): boolean {
+  return (
+    draft.artefactStatus === 'generating' &&
+    now - lastArtefactActivityAt(draft) < GENERATION_STALE_MS
+  );
+}
+
+/** Why a course may not start another artefact run now, or null when it may. */
+export function artefactRunRefusal(
+  drafts: ArtefactActivity[],
+  now: number = Date.now()
+): GenerationRefusal | null {
+  if (drafts.some((d) => isArtefactRunInFlight(d, now))) {
+    return {
+      status: 409,
+      error:
+        'Artefacts for this course are already being drafted. Wait for that run to finish, or to be marked failed if it was interrupted.',
+    };
+  }
+  const since = now - GENERATION_WINDOW_MS;
+  const started = drafts
+    .flatMap((d) => d.stageRuns ?? [])
+    .filter((run) => run.stage === 'artefacts' && millis(run.startedAt) >= since).length;
+  if (started >= MAX_ARTEFACT_RUNS_PER_WINDOW) {
+    return {
+      status: 429,
+      error: `This course has already started ${started} artefact runs in the last 24 hours, the most allowed (${MAX_ARTEFACT_RUNS_PER_WINDOW}). Each one spends about seven model calls. Try again later.`,
+    };
+  }
+  return null;
+}

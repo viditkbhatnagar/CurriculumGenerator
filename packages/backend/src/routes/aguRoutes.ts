@@ -17,8 +17,12 @@ import { AguCourseDraft, IAguCourseDraft } from '../agu/model/AguCourseDraft';
 import { generateOutline } from '../agu/generation/generateOutline';
 import { facultyInputsFrom } from '../agu/generation/facultyInputs';
 import {
+  ArtefactActivity,
+  artefactRunRefusal,
   claimGenerationStart,
   DraftActivity,
+  isArtefactRunInFlight,
+  isArtefactRunStale,
   generationRefusal,
   isGenerationInFlight,
   isGenerationStale,
@@ -27,8 +31,10 @@ import {
 } from '../agu/generation/generationGuard';
 import { checkDraftShape } from '../agu/validation/draftShape';
 import { reviewStatus, validateDraft } from '../agu/validation/validateDraft';
-import { CourseDraft } from '../agu/draft/types';
+import { validateArtefacts } from '../agu/validation/validateArtefacts';
+import { CourseDraft, Finding } from '../agu/draft/types';
 import { coursePackageBuffer } from '../agu/export/coursePackageDocx';
+import { generateArtefacts } from '../agu/generation/generateArtefacts';
 
 const router = Router();
 
@@ -82,6 +88,56 @@ async function failIfInterrupted(doc: IAguCourseDraft): Promise<void> {
       finishedAt: new Date(),
       error:
         'Generation was interrupted (the server restarted before it finished). Regenerate to try again.',
+    },
+  ];
+  await doc.save();
+}
+
+const ARTEFACTS_RUNNING_MESSAGE =
+  'Assessments and the tutor pack are being drafted from this outline. Wait for that to finish before changing the outline.';
+
+/** Parse-time warnings stored with the artefacts. Everything else is recomputed on read. */
+const ARTEFACT_PARSE_CODES = new Set([
+  'RUBRIC_OUTCOME_UNKNOWN',
+  'QUIZ_ITEM_UNTRACEABLE',
+  'EXAM_QUESTION_UNTRACEABLE',
+]);
+
+/**
+ * The artefacts' findings against the outline as it stands now, so artefacts drafted before an
+ * outline edit or regeneration are reported stale rather than shown with their old verdict.
+ */
+function currentArtefactFindings(
+  doc: Pick<IAguCourseDraft, 'artefacts' | 'draft' | 'artefactFindings'>
+): Finding[] {
+  if (!doc.artefacts || !doc.draft) return doc.artefactFindings || [];
+  return [
+    ...(doc.artefactFindings || []).filter((f) => ARTEFACT_PARSE_CODES.has(f.code)),
+    ...validateArtefacts(doc.artefacts, doc.draft),
+  ];
+}
+
+/** What the artefact status says now: a review verdict follows the current findings. */
+function currentArtefactStatus(doc: IAguCourseDraft, findings: Finding[]): string {
+  const stored = doc.artefactStatus || 'not_started';
+  return stored === 'ready_for_review' || stored === 'needs_faculty'
+    ? reviewStatus(findings)
+    : stored;
+}
+
+/** An artefact run left "generating" by a restart is recorded as failed, as outlines are. */
+async function failArtefactsIfInterrupted(doc: IAguCourseDraft): Promise<void> {
+  if (!isArtefactRunStale(doc as unknown as ArtefactActivity)) return;
+  doc.artefactStatus = 'failed';
+  doc.stageRuns = [
+    ...(doc.stageRuns || []),
+    {
+      stage: 'artefacts',
+      status: 'failed',
+      startedAt: new Date(doc.artefactHeartbeatAt || doc.updatedAt),
+      finishedAt: new Date(),
+      error:
+        'Drafting the assessments was interrupted (the server restarted before it finished). Draft them again.',
     },
   ];
   await doc.save();
@@ -201,7 +257,16 @@ router.get('/drafts/:id', async (req: Request, res: Response) => {
     const doc = await AguCourseDraft.findById(req.params.id);
     if (!doc) return res.status(404).json({ success: false, error: 'Draft not found' });
     await failIfInterrupted(doc);
-    res.json({ success: true, data: doc.toObject() });
+    await failArtefactsIfInterrupted(doc);
+    const artefactFindings = currentArtefactFindings(doc);
+    res.json({
+      success: true,
+      data: {
+        ...doc.toObject(),
+        artefactFindings,
+        artefactStatus: currentArtefactStatus(doc, artefactFindings),
+      },
+    });
   } catch (error) {
     respondToFailure(
       res,
@@ -223,8 +288,11 @@ router.post(
       const doc = await AguCourseDraft.findById(req.params.id);
       if (!doc) return res.status(404).json({ success: false, error: 'Draft not found' });
       await failIfInterrupted(doc);
+      await failArtefactsIfInterrupted(doc);
       if (isGenerationInFlight(doc))
         return res.status(409).json({ success: false, error: 'Already generating' });
+      if (isArtefactRunInFlight(doc as unknown as ArtefactActivity))
+        return res.status(409).json({ success: false, error: ARTEFACTS_RUNNING_MESSAGE });
       if (doc.status === 'faculty_accepted') {
         return res.status(409).json({
           success: false,
@@ -272,6 +340,10 @@ router.patch('/drafts/:id', validateJWT, loadUser, async (req: Request, res: Res
     // One that has been created and is about to start counts: it would do the same.
     if (isGenerationInFlight(doc)) {
       return res.status(409).json({ success: false, error: GENERATING_MESSAGE });
+    }
+    await failArtefactsIfInterrupted(doc);
+    if (isArtefactRunInFlight(doc as unknown as ArtefactActivity)) {
+      return res.status(409).json({ success: false, error: ARTEFACTS_RUNNING_MESSAGE });
     }
     if (doc.status === 'faculty_accepted') {
       return res.status(409).json({
@@ -370,6 +442,141 @@ router.post('/drafts/:id/accept', validateJWT, loadUser, async (req: Request, re
   }
 });
 
+/**
+ * POST /api/agu/drafts/:id/artefacts — draft T07-T11 (rubric, quiz and practice bank, final
+ * exam, discussion prompts, AI tutor pack) from the outline. The outline must have no blocking
+ * finding: artefacts written against a broken outline would inherit its gaps.
+ */
+router.post('/drafts/:id/artefacts', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const doc = await AguCourseDraft.findById(req.params.id);
+    if (!doc) return res.status(404).json({ success: false, error: 'Draft not found' });
+    await failIfInterrupted(doc);
+    await failArtefactsIfInterrupted(doc);
+    if (isGenerationInFlight(doc)) {
+      return res.status(409).json({ success: false, error: GENERATING_MESSAGE });
+    }
+    if (!doc.draft) {
+      return res.status(400).json({ success: false, error: 'Draft the course outline first' });
+    }
+    const outlineBlocking = validateDraft(doc.draft, AGU_CATALOGUE_V1_4).filter(
+      (f) => f.severity === 'blocking'
+    );
+    if (outlineBlocking.length) {
+      return res.status(400).json({
+        success: false,
+        error: "Resolve the outline's blocking findings before drafting the assessments",
+        data: { blocking: outlineBlocking },
+      });
+    }
+    if (doc.artefactStatus === 'faculty_accepted') {
+      return res.status(409).json({
+        success: false,
+        error: 'These artefacts have been accepted; create a new version to redraft them',
+      });
+    }
+    const slot = `${doc.courseCode}:artefacts`;
+    if (!claimGenerationStart(slot)) {
+      return res.status(409).json({
+        success: false,
+        error: 'Assessments for this course are being started. Try again in a moment.',
+      });
+    }
+    try {
+      const drafts = await AguCourseDraft.find(
+        { courseCode: doc.courseCode },
+        {
+          artefactStatus: 1,
+          artefactHeartbeatAt: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          'stageRuns.stage': 1,
+          'stageRuns.startedAt': 1,
+        }
+      ).lean();
+      const refusal = artefactRunRefusal(drafts as ArtefactActivity[], Date.now());
+      if (refusal) return res.status(refusal.status).json({ success: false, error: refusal.error });
+      await AguCourseDraft.updateOne(
+        { _id: doc._id },
+        { $set: { artefactStatus: 'generating', artefactHeartbeatAt: new Date() } }
+      );
+      generateArtefacts(String(doc._id)).catch((error) =>
+        loggingService.error('AGU artefact generation crashed', {
+          draftId: String(doc._id),
+          error: String(error),
+        })
+      );
+      res
+        .status(202)
+        .json({ success: true, data: { draftId: doc._id, artefactStatus: 'generating' } });
+    } finally {
+      releaseGenerationStart(slot);
+    }
+  } catch (error) {
+    respondToFailure(
+      res,
+      error,
+      'AGU artefact start failed',
+      { id: req.params.id },
+      'Could not start drafting the assessments'
+    );
+  }
+});
+
+/**
+ * POST /api/agu/drafts/:id/artefacts/accept — faculty accepts the artefacts. The outline must be
+ * accepted first, since the artefacts are checked against it; an accepted outline cannot be
+ * edited, so accepted artefacts cannot go stale.
+ */
+router.post(
+  '/drafts/:id/artefacts/accept',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      const doc = await AguCourseDraft.findById(req.params.id);
+      if (!doc) return res.status(404).json({ success: false, error: 'Draft not found' });
+      await failArtefactsIfInterrupted(doc);
+      if (isArtefactRunInFlight(doc as unknown as ArtefactActivity)) {
+        return res.status(409).json({ success: false, error: ARTEFACTS_RUNNING_MESSAGE });
+      }
+      if (!doc.artefacts) {
+        return res.status(404).json({ success: false, error: 'No artefacts have been drafted' });
+      }
+      if (doc.status !== 'faculty_accepted') {
+        return res.status(400).json({
+          success: false,
+          error: 'Accept the outline first: the assessments are checked against it',
+        });
+      }
+      const findings = currentArtefactFindings(doc);
+      const blocking = findings.filter((f) => f.severity === 'blocking');
+      if (blocking.length) {
+        return res.status(400).json({
+          success: false,
+          error: 'Resolve the blocking findings in the assessments before accepting them',
+          data: { blocking },
+        });
+      }
+      doc.artefactFindings = findings;
+      doc.artefactStatus = 'faculty_accepted';
+      doc.artefactsAcceptedBy = userOf(req);
+      doc.artefactsAcceptedAt = new Date();
+      doc.markModified('artefactFindings');
+      await doc.save();
+      res.json({ success: true, data: doc });
+    } catch (error) {
+      respondToFailure(
+        res,
+        error,
+        'AGU artefact acceptance failed',
+        { id: req.params.id },
+        'Could not accept the assessments'
+      );
+    }
+  }
+);
+
 /** GET /api/agu/drafts/:id/export — the draft rendered into AGU's templates as Word. */
 router.get('/drafts/:id/export', async (req: Request, res: Response) => {
   try {
@@ -378,6 +585,7 @@ router.get('/drafts/:id/export', async (req: Request, res: Response) => {
     if (!doc || !doc.draft || !course) {
       return res.status(404).json({ success: false, error: 'No drafted content to export yet' });
     }
+    const artefactFindings = currentArtefactFindings(doc);
     const buffer = await coursePackageBuffer({
       draft: doc.draft,
       course,
@@ -388,6 +596,9 @@ router.get('/drafts/:id/export', async (req: Request, res: Response) => {
       tools: doc.facultyInputs?.tools,
       sourcesOffered: (doc.sourcesOffered || []).length,
       stageRuns: doc.stageRuns || [],
+      artefacts: doc.artefacts,
+      artefactFindings,
+      artefactStatus: currentArtefactStatus(doc as unknown as IAguCourseDraft, artefactFindings),
     });
     const name = `${course.code}-Course-Package-v${doc.version}.docx`;
     res.setHeader(
