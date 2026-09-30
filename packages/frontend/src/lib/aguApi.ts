@@ -237,3 +237,8 @@ export async function draftAguArtefacts(id: string): Promise<void> {
 export async function acceptAguArtefacts(id: string): Promise<void> {
   await fetchAPI(`/api/agu/drafts/${id}/artefacts/accept`, { method: 'POST', body: '{}' });
 }
+
+/** Save faculty edits to the outline. The server re-checks them and derives the status. */
+export async function saveAguDraft(id: string, draft: AguDraftContent): Promise<void> {
+  await fetchAPI(`/api/agu/drafts/${id}`, { method: 'PATCH', body: JSON.stringify({ draft }) });
+}

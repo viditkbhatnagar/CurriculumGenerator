@@ -14,6 +14,7 @@ import {
   getAguCourse,
   draftAguArtefacts,
   getAguDraft,
+  saveAguDraft,
   regenerateAguDraft,
 } from '@/lib/aguApi';
 
@@ -90,13 +91,16 @@ export default function AguCoursePage() {
     };
   }, [draft?._id, running, loadDraft]);
 
-  const run = async (action: () => Promise<void>) => {
+  /** Runs an action with the page busy; resolves true when it succeeded. */
+  const run = async (action: () => Promise<void>): Promise<boolean> => {
     setBusy(true);
     setError(null);
     try {
       await action();
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -227,6 +231,12 @@ export default function AguCoursePage() {
             onAcceptArtefacts={() =>
               run(async () => {
                 await acceptAguArtefacts(draft._id);
+                await loadDraft(draft._id);
+              })
+            }
+            onSaveOutline={(content) =>
+              run(async () => {
+                await saveAguDraft(draft._id, content);
                 await loadDraft(draft._id);
               })
             }

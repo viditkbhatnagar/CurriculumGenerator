@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AguDraft } from '@/lib/aguApi';
+import { AguDraft, AguDraftContent } from '@/lib/aguApi';
 import Findings from './Findings';
 import ArtefactsPanel from './ArtefactsPanel';
+import OutlineEditor from './OutlineEditor';
 import { downloadFile } from '@/lib/download';
 
 /**
@@ -30,6 +31,7 @@ export default function DraftView({
   onAccept,
   onDraftArtefacts,
   onAcceptArtefacts,
+  onSaveOutline,
   busy,
 }: {
   draft: AguDraft;
@@ -37,8 +39,11 @@ export default function DraftView({
   onAccept: () => void;
   onDraftArtefacts: () => void;
   onAcceptArtefacts: () => void;
+  /** Resolves true when the edit was saved. */
+  onSaveOutline: (content: AguDraftContent) => Promise<boolean>;
   busy: boolean;
 }) {
+  const [editing, setEditing] = useState(false);
   const status = STATUS_LABEL[draft.status];
   const content = draft.draft;
   const blocking = draft.findings.filter((f) => f.severity === 'blocking').length;
@@ -46,8 +51,17 @@ export default function DraftView({
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
-  // An error belongs to the version it happened on.
-  useEffect(() => setDownloadError(null), [draft._id]);
+  // An error belongs to the version it happened on, and so does an open editor.
+  useEffect(() => {
+    setDownloadError(null);
+    setEditing(false);
+  }, [draft._id]);
+  const canEdit =
+    !!content &&
+    draft.status !== 'faculty_accepted' &&
+    draft.status !== 'generating' &&
+    draft.status !== 'created' &&
+    draft.artefactStatus !== 'generating';
 
   const download = async () => {
     setDownloading(true);
@@ -80,6 +94,15 @@ export default function DraftView({
               className="px-3 py-2 text-sm rounded-lg border border-teal-300 text-teal-700 hover:bg-teal-50 disabled:opacity-50"
             >
               {downloading ? 'Preparing download…' : 'Download course package (Word)'}
+            </button>
+          )}
+          {canEdit && !editing && (
+            <button
+              onClick={() => setEditing(true)}
+              disabled={busy}
+              className="px-3 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Edit outline
             </button>
           )}
           <button
@@ -129,7 +152,18 @@ export default function DraftView({
         <Findings findings={draft.findings} />
       </section>
 
-      {content && (
+      {editing && content && (
+        <OutlineEditor
+          initial={content}
+          saving={busy}
+          onCancel={() => setEditing(false)}
+          onSave={async (edited) => {
+            if (await onSaveOutline(edited)) setEditing(false);
+          }}
+        />
+      )}
+
+      {content && !editing && (
         <>
           <section aria-labelledby="outcomes">
             <h3 id="outcomes" className="text-lg font-semibold text-slate-900 mb-2">
