@@ -1,7 +1,15 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { AguDraft, AguFinding } from '@/lib/aguApi';
 import { downloadFile } from '@/lib/download';
+
+/**
+ * A reading is linked only when its address is a web address. The draft can be edited through
+ * the API, so a stored link can be anything, and a `javascript:` href would run in this page's
+ * origin when someone clicked the citation. Anything else is shown as plain text.
+ */
+const WEB_LINK = /^https?:\/\//i;
 
 const STATUS_LABEL: Record<AguDraft['status'], { text: string; tone: string }> = {
   created: { text: 'Created', tone: 'bg-slate-100 text-slate-700' },
@@ -73,6 +81,27 @@ export default function DraftView({
   const content = draft.draft;
   const blocking = draft.findings.filter((f) => f.severity === 'blocking').length;
   const lastRun = draft.stageRuns[draft.stageRuns.length - 1];
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  // An error belongs to the version it happened on.
+  useEffect(() => setDownloadError(null), [draft._id]);
+
+  const download = async () => {
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      await downloadFile(
+        `/api/agu/drafts/${draft._id}/export`,
+        `${draft.courseCode}-Course-Package-v${draft.version}.docx`
+      );
+    } catch (e) {
+      const reason = e instanceof Error ? `: ${e.message}` : '';
+      setDownloadError(`Could not download the course package${reason}`);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -84,15 +113,11 @@ export default function DraftView({
         <div className="ml-auto flex gap-2">
           {content && (
             <button
-              onClick={() =>
-                downloadFile(
-                  `/api/agu/drafts/${draft._id}/export`,
-                  `${draft.courseCode}-Course-Package-v${draft.version}.docx`
-                ).catch(() => undefined)
-              }
-              className="px-3 py-2 text-sm rounded-lg border border-teal-300 text-teal-700 hover:bg-teal-50"
+              onClick={download}
+              disabled={downloading}
+              className="px-3 py-2 text-sm rounded-lg border border-teal-300 text-teal-700 hover:bg-teal-50 disabled:opacity-50"
             >
-              Download course package (Word)
+              {downloading ? 'Preparing download…' : 'Download course package (Word)'}
             </button>
           )}
           <button
@@ -114,6 +139,15 @@ export default function DraftView({
           </button>
         </div>
       </div>
+
+      {downloadError && (
+        <p
+          role="alert"
+          className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3"
+        >
+          {downloadError}
+        </p>
+      )}
 
       {draft.status === 'failed' && lastRun?.error && (
         <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3">
@@ -223,7 +257,7 @@ export default function DraftView({
                 {content.readings.map((r) => (
                   <li key={r.id} className="text-sm text-slate-800">
                     <span className="text-xs text-slate-500 mr-2">Week {r.week}</span>
-                    {r.link ? (
+                    {r.link && WEB_LINK.test(r.link) ? (
                       <a
                         href={r.link}
                         target="_blank"
