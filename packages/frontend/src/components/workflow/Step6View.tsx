@@ -19,6 +19,8 @@ import { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
 import { formatAuthorList } from '@/lib/citation';
 import { safeHref } from '@/lib/safeHref';
+import { validationFrame } from '@/lib/validationFrame';
+import { ValidationChecks } from './ValidationChecks';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1083,7 +1085,9 @@ function ReadingCard({
 
 // Module Reading Summary Card
 function ModuleSummaryCard({ summary }: { summary: ModuleReadingSummary }) {
-  const isTimeValid = summary.readingTimePercent <= 100;
+  // null when the module's independent hours are not set: nothing to measure against.
+  const timeKnown = summary.readingTimePercent !== null && summary.readingTimePercent !== undefined;
+  const isTimeValid = timeKnown && (summary.readingTimePercent as number) <= 100;
   const isCoreValid = summary.coreCount >= 3 && summary.coreCount <= 6;
   const isSupplementaryValid = summary.supplementaryCount >= 4 && summary.supplementaryCount <= 8;
 
@@ -1152,11 +1156,15 @@ function ModuleSummaryCard({ summary }: { summary: ModuleReadingSummary }) {
         <div className="h-2 bg-teal-100 rounded-full overflow-hidden">
           <div
             className={`h-full ${isTimeValid ? 'bg-emerald-500' : 'bg-red-500'}`}
-            style={{ width: `${Math.min(summary.readingTimePercent, 100)}%` }}
+            style={{ width: `${Math.min(summary.readingTimePercent ?? 0, 100)}%` }}
           />
         </div>
-        <p className={`text-xs text-right mt-1 ${isTimeValid ? 'text-teal-500' : 'text-red-400'}`}>
-          {summary.readingTimePercent}% of independent study
+        <p
+          className={`text-xs text-right mt-1 ${!timeKnown ? 'text-slate-400' : isTimeValid ? 'text-teal-500' : 'text-red-400'}`}
+        >
+          {timeKnown
+            ? `${summary.readingTimePercent}% of independent study`
+            : 'Independent hours not set: not checked'}
         </p>
       </div>
 
@@ -1370,6 +1378,18 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
     workflow.step6 && (workflow.step6.readings?.length > 0 || workflow.step6.totalReadings > 0);
   const isApproved = !!workflow.step6?.approvedAt;
   const validation = workflow.step6?.validationReport;
+  const step6Checks: [string, boolean | null | undefined][] = validation
+    ? [
+        ['Core Count (3-6)', validation.coreCountValid],
+        ['Supplementary (4-8)', validation.supplementaryCountValid],
+        ['Core → MLO', validation.allCoreMapToMLO],
+        ['AGI Compliant', validation.allAGICompliant],
+        ['Academic/Applied Mix', validation.academicAppliedMix],
+        ['Time Within Budget', validation.readingTimeWithinBudget],
+        ['All Accessible', validation.allAccessible],
+      ]
+    : [];
+  const step6Frame = validationFrame(step6Checks.map(([, value]) => value));
 
   // Get readings for selected module or all
   const displayedReadings =
@@ -1547,47 +1567,9 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Validation Report */}
           {validation && (
-            <div
-              className={`rounded-lg p-4 border ${workflow.step6?.isValid ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}
-            >
-              <h4
-                className={`font-medium mb-3 ${workflow.step6?.isValid ? 'text-emerald-400' : 'text-amber-400'}`}
-              >
-                Validation Report
-              </h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                <span className={validation.coreCountValid ? 'text-emerald-400' : 'text-red-400'}>
-                  {validation.coreCountValid ? '✓' : '✗'} Core Count (3-6)
-                </span>
-                <span
-                  className={
-                    validation.supplementaryCountValid ? 'text-emerald-400' : 'text-red-400'
-                  }
-                >
-                  {validation.supplementaryCountValid ? '✓' : '✗'} Supplementary (4-8)
-                </span>
-                <span className={validation.allCoreMapToMLO ? 'text-emerald-400' : 'text-red-400'}>
-                  {validation.allCoreMapToMLO ? '✓' : '✗'} Core → MLO
-                </span>
-                <span className={validation.allAGICompliant ? 'text-emerald-400' : 'text-red-400'}>
-                  {validation.allAGICompliant ? '✓' : '✗'} AGI Compliant
-                </span>
-                <span
-                  className={validation.academicAppliedMix ? 'text-emerald-400' : 'text-red-400'}
-                >
-                  {validation.academicAppliedMix ? '✓' : '✗'} Academic/Applied Mix
-                </span>
-                <span
-                  className={
-                    validation.readingTimeWithinBudget ? 'text-emerald-400' : 'text-red-400'
-                  }
-                >
-                  {validation.readingTimeWithinBudget ? '✓' : '✗'} Time Within Budget
-                </span>
-                <span className={validation.allAccessible ? 'text-emerald-400' : 'text-red-400'}>
-                  {validation.allAccessible ? '✓' : '✗'} All Accessible
-                </span>
-              </div>
+            <div className={`rounded-lg p-4 border ${step6Frame.frame}`}>
+              <h4 className={`font-medium mb-3 ${step6Frame.heading}`}>{step6Frame.title}</h4>
+              <ValidationChecks checks={step6Checks} />
 
               {/* Validation Issues */}
               {workflow.step6?.validationIssues && workflow.step6.validationIssues.length > 0 && (

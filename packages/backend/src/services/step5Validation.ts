@@ -26,6 +26,7 @@ export interface Step5SourceLike {
   authors?: string[];
   title?: string;
   accessStatus?: string;
+  userAdded?: boolean;
   complianceBadges?: { peerReviewed?: boolean; freeAccess?: boolean; fullTextAvailable?: boolean };
 }
 
@@ -86,6 +87,30 @@ export function isFreeAccess(s: Step5SourceLike): boolean {
   );
 }
 
+const isRecentOrJustified = (s: Step5SourceLike, currentYear: number) =>
+  currentYear - (s.year || 0) <= RECENT_YEARS ||
+  (!!s.isSeminal && !!s.seminalJustification && !!s.pairedRecentSourceId);
+
+const hasCompleteCitation = (s: Step5SourceLike) =>
+  !!s.citation && (s.authors || []).length > 0 && !!s.year && !!s.title;
+
+/**
+ * Whether one source meets the source rules the programme-level checks apply: an approved
+ * category, recent or a justified seminal work, a complete citation, and not rejected for
+ * access. Looked-up sources were stored as compliant with no test at all, and the model's
+ * sources as compliant unless the model said otherwise. A source an author added by hand is
+ * not compliant until someone reviews it, as before.
+ */
+export function sourceCompliant(s: Step5SourceLike, currentYear: number): boolean {
+  return (
+    !s.userAdded &&
+    APPROVED_SOURCE_CATEGORIES.includes(s.category || '') &&
+    isRecentOrJustified(s, currentYear) &&
+    hasCompleteCitation(s) &&
+    s.accessStatus !== 'rejected'
+  );
+}
+
 /** How many of a module's own sources are linked to each of its outcomes. */
 function sourcesPerOutcome(
   sources: Step5SourceLike[],
@@ -135,20 +160,14 @@ export function step5ValidationReport(
 
   return {
     allSourcesApproved: all((s) => APPROVED_SOURCE_CATEGORIES.includes(s.category || '')),
-    recencyCompliance: all(
-      (s) =>
-        currentYear - (s.year || 0) <= RECENT_YEARS ||
-        (!!s.isSeminal && !!s.seminalJustification && !!s.pairedRecentSourceId)
-    ),
+    recencyCompliance: all((s) => isRecentOrJustified(s, currentYear)),
     minimumSourcesPerTopic:
       any && everyModuleHasOutcomes && outcomes.every((o) => o.count >= MIN_SOURCES_PER_OUTCOME),
     academicAppliedBalance:
       list.some((s) => s.type === 'academic') &&
       list.some((s) => s.type === 'applied' || s.type === 'industry'),
     peerReviewRatio: any && share(isPeerReviewed) >= MIN_PEER_REVIEWED_SHARE,
-    completeCitations: all(
-      (s) => !!s.citation && (s.authors || []).length > 0 && !!s.year && !!s.title
-    ),
+    completeCitations: all(hasCompleteCitation),
     // No check compares citations with APA rules yet. It was reported as passed regardless.
     apaAccuracy: null,
     verifiedAccess: all((s) => s.accessStatus !== 'rejected'),

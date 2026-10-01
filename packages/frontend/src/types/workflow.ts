@@ -655,7 +655,7 @@ export interface ModuleReadingSummary {
   supplementaryReadingMinutes: number;
   totalReadingMinutes: number;
   independentStudyMinutes: number; // Allocated from module hours
-  readingTimePercent: number; // Should be ≤100% of independent study
+  readingTimePercent: number | null; // ≤100% of independent study; null when hours are unset
   allCoreMapToMLO: boolean;
   academicAppliedBalance: boolean;
   agiCompliant: boolean;
@@ -684,7 +684,7 @@ export interface Step6ReadingLists {
     allCoreMapToMLO: boolean; // All Core readings map to ≥1 MLO
     allAGICompliant: boolean; // All sources AGI Standards compliant
     academicAppliedMix: boolean; // Mix of academic and applied
-    readingTimeWithinBudget: boolean; // Total ≤ independent study hours
+    readingTimeWithinBudget: boolean | null; // Total ≤ independent study hours; null if unset
     allAccessible: boolean; // All sources accessible with verified links
   };
 

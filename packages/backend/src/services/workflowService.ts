@@ -19,6 +19,7 @@ import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
 import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
 import { step7Passed, step7Validation } from './step7Validation';
+import { step6Checks, step6Issues, step6Passed } from './step6Validation';
 import { approvedSummativeFor, step7SpecifiesExam } from './step7Authority';
 import config from '../config';
 import {
@@ -35,6 +36,7 @@ import {
   isFreeAccess,
   MIN_SOURCES_PER_OUTCOME,
   outcomesBelowSourceFloor,
+  sourceCompliant,
 } from './step5Validation';
 import {
   step11ValidationFromDecks,
@@ -2845,7 +2847,11 @@ CRITICAL VALIDATION:
    * generation would, with no LLM call. Without it, filling one gap would leave the counts
    * and compliance report describing the reading list as it was before.
    */
-  buildStep6Summary(readings: any[], modules: any[], extras: { failedModules?: any[] } = {}): any {
+  buildStep6Summary(
+    readings: any[],
+    modules: any[],
+    extras: { failedModules?: any[]; sources?: any[] } = {}
+  ): any {
     const moduleReadings: Record<string, any[]> = {};
     for (const reading of readings) {
       const modId = reading.moduleId || 'unassigned';
@@ -2853,41 +2859,13 @@ CRITICAL VALIDATION:
       moduleReadings[modId].push(reading);
     }
 
-    // Calculate module summaries
-    const moduleSummaries = modules.map((mod: any) => {
-      const modReadings = moduleReadings[mod.id] || [];
-      const coreReadings = modReadings.filter((r: any) => r.category === 'core');
-      const supplementaryReadings = modReadings.filter((r: any) => r.category === 'supplementary');
-
-      const coreMinutes = coreReadings.reduce(
-        (sum: number, r: any) => sum + (r.estimatedReadingMinutes || 0),
-        0
-      );
-      const suppMinutes = supplementaryReadings.reduce(
-        (sum: number, r: any) => sum + (r.estimatedReadingMinutes || 0),
-        0
-      );
-      const totalMinutes = coreMinutes + suppMinutes;
-      const independentMinutes = (mod.selfStudyHours || mod.independentHours || 10) * 60;
-
-      return {
-        moduleId: mod.id,
-        moduleTitle: mod.title,
-        coreCount: coreReadings.length,
-        supplementaryCount: supplementaryReadings.length,
-        totalReadings: modReadings.length,
-        coreReadingMinutes: coreMinutes,
-        supplementaryReadingMinutes: suppMinutes,
-        totalReadingMinutes: totalMinutes,
-        independentStudyMinutes: independentMinutes,
-        readingTimePercent:
-          independentMinutes > 0 ? Math.round((totalMinutes / independentMinutes) * 100) : 0,
-        allCoreMapToMLO: coreReadings.every((r: any) => r.linkedMLOs && r.linkedMLOs.length > 0),
-        academicAppliedBalance:
-          modReadings.some((r: any) => r.type === 'academic') &&
-          modReadings.some((r: any) => r.type === 'applied' || r.type === 'industry'),
-        agiCompliant: modReadings.every((r: any) => r.agiCompliant !== false),
-      };
+    // Module summaries and the validation report, computed from the Step 5 source each
+    // reading cites: see step6Validation.
+    const { moduleSummaries, validationReport } = step6Checks({
+      readings,
+      modules,
+      sources: extras.sources || [],
+      currentYear: new Date().getFullYear(),
     });
 
     // Overall counts
@@ -2900,30 +2878,9 @@ CRITICAL VALIDATION:
       .filter((r: any) => r.category === 'supplementary')
       .reduce((sum: number, r: any) => sum + (r.estimatedReadingMinutes || 0), 0);
 
-    // Validation report per workflow v2.2
-    const validationReport = {
-      coreCountValid: moduleSummaries.every((m: any) => m.coreCount >= 3 && m.coreCount <= 6),
-      supplementaryCountValid: moduleSummaries.every(
-        (m: any) => m.supplementaryCount >= 4 && m.supplementaryCount <= 8
-      ),
-      allCoreMapToMLO: moduleSummaries.every((m: any) => m.allCoreMapToMLO),
-      allAGICompliant: readings.every((r: any) => r.agiCompliant !== false),
-      academicAppliedMix: moduleSummaries.every((m: any) => m.academicAppliedBalance),
-      readingTimeWithinBudget: moduleSummaries.every((m: any) => m.readingTimePercent <= 100),
-      allAccessible: readings.every((r: any) => r.accessStatus !== 'rejected'),
-    };
+    const validationIssues = step6Issues(validationReport);
 
-    const validationIssues: string[] = [];
-    if (!validationReport.coreCountValid)
-      validationIssues.push('Some modules have incorrect Core reading count (should be 3-6)');
-    if (!validationReport.supplementaryCountValid)
-      validationIssues.push('Some modules have incorrect Supplementary count (should be 4-8)');
-    if (!validationReport.allCoreMapToMLO)
-      validationIssues.push('Some Core readings are not mapped to MLOs');
-    if (!validationReport.readingTimeWithinBudget)
-      validationIssues.push('Some modules exceed independent study hours with reading time');
-
-    const isValid = Object.values(validationReport).every((v) => v === true);
+    const isValid = step6Passed(validationReport);
 
     return {
       readings,
@@ -3028,6 +2985,7 @@ CRITICAL VALIDATION:
 
     workflow.step6 = this.buildStep6Summary([...existing, ...added], modules, {
       failedModules: remaining,
+      sources: (workflow.step5 as any)?.sources || [],
     });
     workflow.markModified('step6');
     await workflow.save();
@@ -3076,6 +3034,7 @@ CRITICAL VALIDATION:
     // Organize readings by module
     workflow.step6 = this.buildStep6Summary(readings, modules, {
       failedModules: readingContent.failedModules || [],
+      sources,
     });
 
     workflow.currentStep = 6;
@@ -5668,7 +5627,11 @@ CRITICAL VALIDATION:
           relevantTopics: (module.topics || []).slice(0, 3),
           complexityLevel: 'intermediate',
           estimatedReadingHours: 1.5,
-          agiCompliant: true,
+        }));
+        // Was hard-set to true. Measured against the same rules the programme-level checks use.
+        verified = verified.map((v: any) => ({
+          ...v,
+          agiCompliant: sourceCompliant(v, new Date().getFullYear()),
         }));
 
         await this.linkSourcesToMLOs(
@@ -6148,7 +6111,8 @@ Return ONLY valid JSON:
       const sources = (parsed.sources || []).map((s: any) => ({
         ...s,
         moduleId: moduleInfo.moduleId,
-        agiCompliant: s.agiCompliant !== false,
+        // The model's own claim used to stand unless it said false.
+        agiCompliant: sourceCompliant(s, new Date().getFullYear()),
       }));
 
       return sources;

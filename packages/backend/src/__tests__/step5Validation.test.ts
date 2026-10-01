@@ -2,6 +2,7 @@ import {
   step5ValidationReport,
   step5Compliant,
   outcomesBelowSourceFloor,
+  sourceCompliant,
 } from '../services/step5Validation';
 
 const YEAR = 2026;
@@ -79,5 +80,30 @@ describe('outcomesBelowSourceFloor', () => {
       { mloId: 'm1-2', count: 0 },
       { mloId: 'm2-1', count: 1 },
     ]);
+  });
+});
+
+describe('sourceCompliant', () => {
+  it('passes a recent source from an approved category with a full citation', () => {
+    expect(sourceCompliant(source('m1', []), YEAR)).toBe(true);
+  });
+
+  it('fails an old source unless it is a justified seminal work paired with a recent one', () => {
+    expect(sourceCompliant(source('m1', [], { year: 2010 }), YEAR)).toBe(false);
+    const seminal = { year: 2010, isSeminal: true, seminalJustification: 'Founding text' };
+    expect(sourceCompliant(source('m1', [], seminal), YEAR)).toBe(false);
+    expect(
+      sourceCompliant(source('m1', [], { ...seminal, pairedRecentSourceId: 's2' }), YEAR)
+    ).toBe(true);
+  });
+
+  it('fails an unapproved category, a missing author, and a rejected source', () => {
+    expect(sourceCompliant(source('m1', [], { category: 'blog' }), YEAR)).toBe(false);
+    expect(sourceCompliant(source('m1', [], { authors: [] }), YEAR)).toBe(false);
+    expect(sourceCompliant(source('m1', [], { accessStatus: 'rejected' }), YEAR)).toBe(false);
+  });
+
+  it('does not pass a source an author added by hand until it is reviewed', () => {
+    expect(sourceCompliant(source('m1', [], { userAdded: true }), YEAR)).toBe(false);
   });
 });

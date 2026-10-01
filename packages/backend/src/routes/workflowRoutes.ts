@@ -98,6 +98,7 @@ import { deleteConfirmationProblem } from '../utils/softDelete';
 import { hasActiveGeneration } from '../services/generationActivity';
 import { step4ApprovalProblems } from '../services/step4Approval';
 import { step4ValidationReport } from '../services/step4Validation';
+import { step6ReportOf } from '../services/step6Validation';
 import { step7ValidationOf } from '../services/step7Validation';
 
 const router = Router();
@@ -1041,13 +1042,15 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
       });
     }
 
-    // Step 7 likewise (services/step7Validation): its stored report passed empty lists. Response
-    // only; writes nothing.
+    // Steps 6 and 7 likewise (services/step6Validation, step7Validation): their stored reports
+    // passed empty lists and read fields that do not exist. Response only; writes nothing.
     try {
+      const step6View = step6ReportOf(workflow as any, new Date().getFullYear());
+      if (step6View) Object.assign((workflow as any).step6, step6View);
       const step7View = step7ValidationOf(workflow as any);
       if (step7View) (workflow as any).step7.validation = step7View;
     } catch (error) {
-      loggingService.warn('Could not recompute Step 7 checks for view', {
+      loggingService.warn('Could not recompute Step 6/7 checks for view', {
         workflowId: req.params.id,
         error: error instanceof Error ? error.message : String(error),
       });
