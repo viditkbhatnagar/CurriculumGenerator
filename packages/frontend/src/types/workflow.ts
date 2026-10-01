@@ -1305,15 +1305,6 @@ export interface Step9Glossary {
   isValid: boolean;
   validationIssues: string[];
 
-  // Export formats available per workflow v2.2
-  exportFormats: {
-    alphabeticalPDF: boolean;
-    moduleLinkedPDF: boolean;
-    lmsImport: boolean;
-    spreadsheet: boolean;
-    mobileWeb: boolean;
-  };
-
   // Metadata
   generatedAt: string;
   validatedAt?: string;

@@ -1140,40 +1140,6 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
             </div>
           )}
 
-          {/* Export Formats */}
-          {workflow.step9?.exportFormats && (
-            <div className="bg-white rounded-lg p-4 border border-teal-200">
-              <h4 className="text-teal-800 font-medium mb-3">Available Export Formats</h4>
-              <div className="flex flex-wrap gap-2">
-                {workflow.step9.exportFormats.alphabeticalPDF && (
-                  <span className="text-xs px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded">
-                    📄 Alphabetical PDF
-                  </span>
-                )}
-                {workflow.step9.exportFormats.moduleLinkedPDF && (
-                  <span className="text-xs px-3 py-1 bg-blue-500/20 text-blue-400 rounded">
-                    📚 Module-Linked PDF
-                  </span>
-                )}
-                {workflow.step9.exportFormats.lmsImport && (
-                  <span className="text-xs px-3 py-1 bg-purple-500/20 text-purple-400 rounded">
-                    🔗 LMS Import
-                  </span>
-                )}
-                {workflow.step9.exportFormats.spreadsheet && (
-                  <span className="text-xs px-3 py-1 bg-cyan-500/20 text-cyan-400 rounded">
-                    📊 Spreadsheet
-                  </span>
-                )}
-                {workflow.step9.exportFormats.mobileWeb && (
-                  <span className="text-xs px-3 py-1 bg-amber-500/20 text-amber-400 rounded">
-                    📱 Mobile Web
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* View Mode Toggle */}
           <div className="flex gap-2">
             <button

@@ -4219,13 +4219,6 @@ CRITICAL VALIDATION:
       validationReport,
       isValid,
       validationIssues,
-      exportFormats: {
-        alphabeticalPDF: true,
-        moduleLinkedPDF: true,
-        lmsImport: true,
-        spreadsheet: true,
-        mobileWeb: true,
-      },
       generatedAt: new Date(),
       programType,
       typicalSize,
