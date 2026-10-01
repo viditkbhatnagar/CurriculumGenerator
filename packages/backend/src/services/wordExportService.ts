@@ -17,7 +17,7 @@ import { bloomIndex, statedBloom } from './assessmentGeneratorService';
 import { modulesInDocument, outlinesStep10, validationFromPlans } from './step10Completion';
 import { PER_MODULE_ARRAYS } from '../utils/perModuleExport';
 import { entryRequirementsLabel } from '../utils/entryRequirements';
-import { step12ValidationFromPacks } from './deliverableValidation';
+import { step12SummaryFromPacks, step12ValidationFromPacks } from './deliverableValidation';
 import { normaliseTopic } from '../utils/topicShape';
 import { cleanModelOutput, xmlSafeDeep } from '../utils/xmlSafe';
 import { buildWithReflows, inReflowSlot, reflowFromScope, Reflowed } from './reflowScope';
@@ -3280,7 +3280,10 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     }
 
     // Summary stats
-    if (step12.summary) {
+    // Counted live from the packs in this document: stored summaries written before 2026-10-01
+    // say three packs per module and 0 criteria per rubric whatever was generated.
+    const step12Summary = step12SummaryFromPacks(step12.moduleAssignmentPacks || []);
+    if (step12.summary || (step12.moduleAssignmentPacks || []).length) {
       contentChildren.push(this.createH2('12.2 Summary'));
       const summaryRows = [
         new TableRow({
@@ -3292,19 +3295,19 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         new TableRow({
           children: [
             this.createTableCell('Total Modules'),
-            this.createTableCell(String(step12.summary.totalModules || 0)),
+            this.createTableCell(String(step12Summary.totalModules)),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('Total Assignment Packs'),
-            this.createTableCell(String(step12.summary.totalAssignmentPacks || 0)),
+            this.createTableCell(String(step12Summary.totalAssignmentPacks)),
           ],
         }),
         new TableRow({
           children: [
             this.createTableCell('Avg. Criteria per Rubric'),
-            this.createTableCell(String(step12.summary.averageCriteriaPerRubric || 0)),
+            this.createTableCell(String(step12Summary.averageCriteriaPerRubric)),
           ],
         }),
       ];

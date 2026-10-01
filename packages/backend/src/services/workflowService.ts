@@ -35,7 +35,11 @@ import {
   MIN_SOURCES_PER_OUTCOME,
   outcomesBelowSourceFloor,
 } from './step5Validation';
-import { step11ValidationFromDecks, step12ValidationFromPacks } from './deliverableValidation';
+import {
+  step11ValidationFromDecks,
+  step12SummaryFromPacks,
+  step12ValidationFromPacks,
+} from './deliverableValidation';
 import { circularDefinitions, usSpellings } from './glossaryValidation';
 import { casesWithAssessmentQuestions } from './caseStudyValidation';
 import {
@@ -5108,22 +5112,10 @@ CRITICAL VALIDATION:
       moduleAssignmentPacks.push(packs);
     }
 
-    const totalCriteria = moduleAssignmentPacks.reduce((sum, m) => {
-      const variants = [m.variants.in_person, m.variants.self_study, m.variants.hybrid];
-      return sum + variants.reduce((vSum: number, v: any) => vSum + (v.rubric?.length || 0), 0);
-    }, 0);
-
     workflow.step12 = {
       moduleAssignmentPacks,
       validation: step12ValidationFromPacks(moduleAssignmentPacks as any, modules as any),
-      summary: {
-        totalModules: moduleAssignmentPacks.length,
-        totalAssignmentPacks: moduleAssignmentPacks.length * 3,
-        averageCriteriaPerRubric:
-          moduleAssignmentPacks.length > 0
-            ? Math.round(totalCriteria / (moduleAssignmentPacks.length * 3))
-            : 0,
-      },
+      summary: step12SummaryFromPacks(moduleAssignmentPacks as any),
       generatedAt: new Date(),
     };
 
@@ -5353,11 +5345,10 @@ CRITICAL VALIDATION:
     const newModulesCount = new Set(
       freshWorkflow.step12.moduleAssignmentPacks.map((m: any) => m.moduleId)
     ).size;
-    freshWorkflow.step12.summary = {
-      totalModules: newModulesCount,
-      totalAssignmentPacks: newModulesCount * 3,
-      averageCriteriaPerRubric: 0, // Simplified
-    };
+    // Counted from the packs; this used to be three per module and 0 criteria per rubric.
+    freshWorkflow.step12.summary = step12SummaryFromPacks(
+      freshWorkflow.step12.moduleAssignmentPacks as any
+    );
 
     // Update validation
     // Outcome coverage and rubric completeness used to be constant `true` here.

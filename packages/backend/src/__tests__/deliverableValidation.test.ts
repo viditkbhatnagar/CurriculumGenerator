@@ -1,6 +1,7 @@
 import {
   step11ValidationFromDecks,
   step12ValidationFromPacks,
+  step12SummaryFromPacks,
   resolveOutcomeLabel,
 } from '../services/deliverableValidation';
 
@@ -143,5 +144,48 @@ describe('positional outcome labels in assignment packs', () => {
 
   it('counts positionally labelled outcomes as covered', () => {
     expect(step12ValidationFromPacks([pack], modules).allMLOsCovered).toBe(true);
+  });
+});
+
+describe('step12SummaryFromPacks', () => {
+  const variant = (id: string, criteria: number) => ({
+    assignmentId: id,
+    rubric: Array.from({ length: criteria }, () => ({ linkedMLOs: ['a'] })),
+  });
+
+  it('counts generated packs and averages their rubric criteria', () => {
+    // The summary used to say three packs per module and "0" criteria per rubric, always.
+    const packs = [
+      {
+        moduleId: 'm1',
+        variants: {
+          in_person: variant('a1', 4),
+          self_study: variant('a2', 6),
+          hybrid: variant('a3', 5),
+        },
+      },
+      {
+        moduleId: 'm2',
+        variants: { in_person: variant('b1', 5), self_study: variant('b2-placeholder', 0) },
+      },
+    ];
+    expect(step12SummaryFromPacks(packs)).toEqual({
+      totalModules: 2,
+      totalAssignmentPacks: 4,
+      averageCriteriaPerRubric: 5,
+    });
+  });
+
+  it('counts a module stored twice once, and reports zero for no packs', () => {
+    const packs = [
+      { moduleId: 'm1', variants: { in_person: variant('a1', 3) } },
+      { moduleId: 'm1', variants: { in_person: variant('a1', 3) } },
+    ];
+    expect(step12SummaryFromPacks(packs).totalModules).toBe(1);
+    expect(step12SummaryFromPacks([])).toEqual({
+      totalModules: 0,
+      totalAssignmentPacks: 0,
+      averageCriteriaPerRubric: 0,
+    });
   });
 });

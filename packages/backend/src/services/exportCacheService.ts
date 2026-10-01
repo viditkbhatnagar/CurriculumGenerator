@@ -56,7 +56,9 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 // v23: text of 500 characters or less is printed as written rather than reflowed by a model,
 //      model answers are cleaned of control characters, and seven sections that dropped text
 //      the model returned as a list now keep it.
-const EXPORT_FORMAT_VERSION = 'v23';
+// v24: the Step 12 summary (packs, criteria per rubric) is counted from the packs, not stored
+//      constants.
+const EXPORT_FORMAT_VERSION = 'v24';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the

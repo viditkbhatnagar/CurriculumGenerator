@@ -170,3 +170,26 @@ export function step12ValidationFromPacks(
     allRubricsComplete: every((p) => variantsOf(p).every((v) => (v?.rubric || []).length > 0)),
   };
 }
+
+export interface Step12Summary {
+  totalModules: number;
+  totalAssignmentPacks: number;
+  averageCriteriaPerRubric: number;
+}
+
+/**
+ * Step 12's summary figures, counted from the packs. The module-by-module generator, which
+ * production uses, wrote three packs per module and "0 // Simplified" criteria per rubric
+ * whatever was generated, and the Word export printed both. Placeholder variants (failed
+ * generations) are not packs.
+ */
+export function step12SummaryFromPacks(packs: PackLike[]): Step12Summary {
+  const list = packs || [];
+  const real = list.flatMap((p) => variantsOf(p).filter(generated));
+  const criteria = real.reduce((n, v) => n + (v.rubric || []).length, 0);
+  return {
+    totalModules: new Set(list.map((p) => p.moduleId).filter(Boolean)).size,
+    totalAssignmentPacks: real.length,
+    averageCriteriaPerRubric: real.length ? Math.round((criteria / real.length) * 10) / 10 : 0,
+  };
+}
