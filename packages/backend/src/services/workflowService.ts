@@ -83,6 +83,7 @@ import {
   BloomLevel,
 } from '../types/newWorkflow';
 import { normaliseTopic } from '../utils/topicShape';
+import { step4ValidationReport, studentHoursOf } from './step4Validation';
 
 // ============================================================================
 // CREDIT CALCULATION UTILITIES
@@ -1867,33 +1868,28 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     const ploIds = new Set(
       ((workflow.step3 as any)?.outcomes || []).map((o: any) => o.code || o.id)
     );
-    const coveredPLOs = new Set(modules.flatMap((m) => m.linkedPLOs || []));
+    // Outcomes linked by a module or by any of its MLOs (most programmes link at MLO level).
+    const coveredPLOs = new Set(
+      modules.flatMap((m) => [
+        ...(m.linkedPLOs || []),
+        ...(m.mlos || []).flatMap((o: any) => o?.linkedPLOs || []),
+      ])
+    );
     const declaredHours = step1?.creditFramework?.totalHours || 0;
 
-    // Compare like with like. Step 1's hours describe what one student studies —
-    // every core module plus a single elective track — while `modules` holds
-    // every track on offer. Checking the all-tracks sum against Step 1 fails by
-    // the size of the tracks not taken: on a five-specialisation BBA that is
-    // 6256h against a declared 4086h, blocking approval on a correct programme.
-    const electiveHoursByGroup = new Map<string, number>();
-    let coreHours = 0;
-    for (const module of modules) {
-      const hours = (module.contactHours || 0) + (module.independentHours || 0);
-      if (module.isElective) {
-        electiveHoursByGroup.set(
-          module.group,
-          (electiveHoursByGroup.get(module.group) || 0) + hours
-        );
-      } else {
-        coreHours += hours;
-      }
-    }
-    const largestTrackHours = electiveHoursByGroup.size
-      ? Math.max(...electiveHoursByGroup.values())
-      : 0;
-    const studentHours = coreHours + largestTrackHours;
-    const hoursMatch =
-      declaredHours === 0 || Math.abs(studentHours - declaredHours) <= declaredHours * 0.05;
+    // Compare like with like: Step 1's hours describe what one student studies (every core
+    // module plus a single elective track), while `modules` holds every track on offer.
+    // Checking the all-tracks sum failed a correct five-specialisation BBA by 2,170 hours.
+    const studentHours = studentHoursOf(modules);
+    // Every check computed from the modules, or null when there is nothing to check against
+    // (services/step4Validation). Three of these used to be stored as a constant `true`.
+    const validationReport = step4ValidationReport({
+      modules,
+      ploIds: [...ploIds] as string[],
+      declaredHours,
+    });
+    // Approval is blocked only by a computed failure, not by a check that could not run.
+    const hoursMatch = validationReport.hoursMatch !== false;
 
     // A module the model skipped is persisted as a shell so the blueprint stays
     // whole; say which ones rather than letting them pass as finished work.
@@ -1913,21 +1909,15 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       contactHoursPercent: totalHours ? Math.round((totalContactHours / totalHours) * 100) : 0,
       deliveryMode: step1?.delivery?.mode || 'hybrid',
       hoursIntegrity: hoursMatch,
-      contactHoursIntegrity: true,
+      contactHoursIntegrity: validationReport.contactHoursMatch,
       ploCoveragePercent: ploIds.size
         ? Math.round(([...ploIds].filter((p) => coveredPLOs.has(p)).length / ploIds.size) * 100)
         : 0,
       // Key names must match what Step4View renders, or the indicators read as
       // failures no matter what the numbers say.
-      validationReport: {
-        hoursMatch,
-        contactHoursMatch: true,
-        allPLOsCovered: [...ploIds].every((p) => coveredPLOs.has(p)),
-        progressionValid: true,
-        noCircularDeps: true,
-        minMLOsPerModule: modules.every((m) => (m.mlos || []).length >= 2),
-      },
-      followedBlueprint: true,
+      validationReport,
+      // Every blueprint module is written, a skipped one as a shell (see above).
+      followedBlueprint: blueprint.length ? modules.length === blueprint.length : null,
       blueprintModuleCount: blueprint.length,
       incompleteModules: emptyModules,
       // A fresh generation is not the version anyone approved.

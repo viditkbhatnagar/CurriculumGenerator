@@ -1939,36 +1939,42 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
             <div className="bg-teal-50/50 rounded-lg p-4 border border-teal-200">
               <h4 className="text-sm font-medium text-teal-600 mb-3">Validation Report</h4>
               <div className="grid grid-cols-3 md:grid-cols-6 gap-3 text-xs">
-                <div
-                  className={`flex items-center gap-1 ${validation.hoursMatch ? 'text-emerald-400' : 'text-red-400'}`}
-                >
-                  {validation.hoursMatch ? '✓' : '✗'} Hours Match
-                </div>
-                <div
-                  className={`flex items-center gap-1 ${validation.contactHoursMatch ? 'text-emerald-400' : 'text-red-400'}`}
-                >
-                  {validation.contactHoursMatch ? '✓' : '✗'} Contact Hours
-                </div>
-                <div
-                  className={`flex items-center gap-1 ${validation.allPLOsCovered ? 'text-emerald-400' : 'text-amber-400'}`}
-                >
-                  {validation.allPLOsCovered ? '✓' : '⚠'} PLO Coverage
-                </div>
-                <div
-                  className={`flex items-center gap-1 ${validation.progressionValid ? 'text-emerald-400' : 'text-amber-400'}`}
-                >
-                  {validation.progressionValid ? '✓' : '⚠'} Progression
-                </div>
-                <div
-                  className={`flex items-center gap-1 ${validation.noCircularDeps ? 'text-emerald-400' : 'text-red-400'}`}
-                >
-                  {validation.noCircularDeps ? '✓' : '✗'} No Circular Deps
-                </div>
-                <div
-                  className={`flex items-center gap-1 ${validation.minMLOsPerModule ? 'text-emerald-400' : 'text-amber-400'}`}
-                >
-                  {validation.minMLOsPerModule ? '✓' : '⚠'} Min MLOs
-                </div>
+                {(
+                  [
+                    ['hoursMatch', 'Hours Match', 'fail'],
+                    ['contactHoursMatch', 'Contact Hours', 'fail'],
+                    ['allPLOsCovered', 'PLO Coverage', 'warn'],
+                    ['progressionValid', 'Progression', 'warn'],
+                    ['noCircularDeps', 'No Circular Deps', 'fail'],
+                    ['minMLOsPerModule', 'Min MLOs', 'warn'],
+                  ] as const
+                ).map(([key, label, failure]) => {
+                  // true passed, false failed, null not checked (nothing to check against).
+                  const value = validation[key] as boolean | null | undefined;
+                  const unchecked = value === null || value === undefined;
+                  const style = unchecked
+                    ? 'text-slate-400'
+                    : value
+                      ? 'text-emerald-400'
+                      : failure === 'fail'
+                        ? 'text-red-400'
+                        : 'text-amber-400';
+                  const mark = unchecked ? '—' : value ? '✓' : failure === 'fail' ? '✗' : '⚠';
+                  return (
+                    <div
+                      key={key}
+                      className={`flex items-center gap-1 ${style}`}
+                      title={
+                        unchecked
+                          ? 'Not checked: there is nothing to check this against'
+                          : undefined
+                      }
+                    >
+                      {mark} {label}
+                      {unchecked ? ' (not checked)' : ''}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

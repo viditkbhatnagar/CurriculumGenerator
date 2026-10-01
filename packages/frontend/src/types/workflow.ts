@@ -367,7 +367,7 @@ export interface Step4CourseFramework {
   totalContactHours: number;
   totalIndependentHours: number;
   hoursIntegrity: boolean; // Σ module hours = program hours (exact)
-  contactHoursIntegrity: boolean; // Contact hours sum correctly
+  contactHoursIntegrity: boolean | null; // Contact hours sum correctly; null: no target to check
 
   // PLO coverage
   ploMapping: Record<string, string[]>; // PLO ID -> MLO IDs
@@ -380,14 +380,14 @@ export interface Step4CourseFramework {
     lateModulesValid: boolean; // ≥30% at Analyze/Evaluate/Create
   };
 
-  // Validation summary
+  // Validation summary, computed on view. null: not checked (nothing to check against).
   validationReport?: {
-    hoursMatch: boolean;
-    contactHoursMatch: boolean;
-    allPLOsCovered: boolean;
-    progressionValid: boolean;
-    noCircularDeps: boolean;
-    minMLOsPerModule: boolean;
+    hoursMatch: boolean | null;
+    contactHoursMatch: boolean | null;
+    allPLOsCovered: boolean | null;
+    progressionValid: boolean | null;
+    noCircularDeps: boolean | null;
+    minMLOsPerModule: boolean | null;
   };
 
   validatedAt?: string;

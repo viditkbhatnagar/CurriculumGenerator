@@ -97,6 +97,7 @@ import { isValidObjectId } from 'mongoose';
 import { deleteConfirmationProblem } from '../utils/softDelete';
 import { hasActiveGeneration } from '../services/generationActivity';
 import { step4ApprovalProblems } from '../services/step4Approval';
+import { step4ValidationReport } from '../services/step4Validation';
 
 const router = Router();
 
@@ -1025,6 +1026,17 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
       return res.status(403).json({
         success: false,
         error: 'You do not have access to this workflow',
+      });
+    }
+
+    // Step 4's checks computed on view (services/step4Validation). Reports stored before
+    // 2026-10-01 carry constant passes; this is for the response only and writes nothing.
+    const step4Data = (workflow as any).step4;
+    if (Array.isArray(step4Data?.modules) && step4Data.modules.length) {
+      step4Data.validationReport = step4ValidationReport({
+        modules: step4Data.modules,
+        ploIds: ((workflow as any).step3?.outcomes || []).map((o: any) => o.code || o.id),
+        declaredHours: (workflow as any).step1?.creditFramework?.totalHours || 0,
       });
     }
 
