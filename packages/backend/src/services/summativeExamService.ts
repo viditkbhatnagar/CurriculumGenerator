@@ -12,6 +12,7 @@
  */
 
 import { openaiService } from './openaiService';
+import { step13Validation } from './step13Validation';
 import { loggingService } from './loggingService';
 import { buildBookGroundingBlock } from './bookGroundingService';
 import {
@@ -31,7 +32,7 @@ interface ExamContext {
   academicLevel: string;
   deliveryMode: string;
   creditFramework: any;
-  plos: Array<{ id: string; statement: string; bloomLevel: string }>;
+  plos: Array<{ id: string; code?: string; statement: string; bloomLevel: string }>;
   modules: Array<{
     id: string;
     moduleCode: string;
@@ -315,15 +316,6 @@ export class SummativeExamService {
       });
     }
 
-    // Validate PLO coverage
-    const coveredPLOs = new Set<string>();
-    sectionA.forEach((q) => q.linkedPLOs.forEach((p) => coveredPLOs.add(p)));
-    sectionB?.forEach((s) =>
-      s.questions.forEach((q) => q.linkedPLOs.forEach((p) => coveredPLOs.add(p)))
-    );
-    sectionC?.forEach((t) => t.linkedPLOs.forEach((p) => coveredPLOs.add(p)));
-    const allPLOsCovered = context.plos.every((plo) => coveredPLOs.has(plo.id));
-
     const result: Step13SummativeExam = {
       overview: {
         ...overview,
@@ -338,13 +330,8 @@ export class SummativeExamService {
       markingScheme,
       integrityAndSecurity,
       accessibilityProvisions,
-      validation: {
-        totalMarksCorrect: totalMarks > 0,
-        allSectionsPresent:
-          sectionA.length > 0 && (!includeSectionB || (sectionB && sectionB.length > 0)),
-        allPLOsCovered,
-        markingSchemeComplete: markingScheme.sectionA.length > 0,
-      },
+      // Filled in below from the finished exam: see step13Validation.
+      validation: undefined as any,
       summary: {
         totalQuestions:
           sectionA.length +
@@ -358,6 +345,9 @@ export class SummativeExamService {
       },
       generatedAt: new Date(),
     };
+
+    result.validation = step13Validation(result, context.plos);
+    const allPLOsCovered = result.validation.allPLOsCovered;
 
     loggingService.info('Summative exam generation complete', {
       totalQuestions: result.summary.totalQuestions,
@@ -386,6 +376,7 @@ export class SummativeExamService {
       creditFramework: workflow.step1?.creditFramework || {},
       plos: (workflow.step3?.outcomes || []).map((o: any) => ({
         id: o.id,
+        code: o.code,
         statement: o.statement,
         bloomLevel: o.bloomLevel,
       })),

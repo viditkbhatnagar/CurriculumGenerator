@@ -15,6 +15,7 @@ import { loggingService } from './loggingService';
 import { moduleLabelOf } from '../utils/moduleIdentity';
 import { bloomIndex, statedBloom } from './assessmentGeneratorService';
 import { modulesInDocument, outlinesStep10, validationFromPlans } from './step10Completion';
+import { step13Validation } from './step13Validation';
 import { PER_MODULE_ARRAYS } from '../utils/perModuleExport';
 import { entryRequirementsLabel } from '../utils/entryRequirements';
 import { step12SummaryFromPacks, step12ValidationFromPacks } from './deliverableValidation';
@@ -3555,7 +3556,11 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   /**
    * Generate Step 13 (Summative Exam) section
    */
-  private async generateStep13Section(step13: any, contentChildren: any[]): Promise<void> {
+  private async generateStep13Section(
+    step13: any,
+    contentChildren: any[],
+    outcomes: { id?: string; code?: string }[] = []
+  ): Promise<void> {
     if (!step13) return;
 
     contentChildren.push(
@@ -4047,48 +4052,39 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       }
     }
 
-    // Validation summary
-    if (step13.validation) {
-      const sectionNum = step13.sectionBIncluded ? '13.8' : '13.7';
-      contentChildren.push(this.createH2(`${sectionNum} Validation`));
-
-      const validationRows = [
-        new TableRow({
-          children: [
-            this.createTableCell('Check', { bold: true, shading: 'E8EAF6' }),
-            this.createTableCell('Result', { bold: true, shading: 'E8EAF6' }),
-          ],
-        }),
-        new TableRow({
-          children: [
-            this.createTableCell('Total Marks Correct'),
-            this.createTableCell(step13.validation.totalMarksCorrect ? '✓ Pass' : '✗ Fail'),
-          ],
-        }),
-        new TableRow({
-          children: [
-            this.createTableCell('All Sections Present'),
-            this.createTableCell(step13.validation.allSectionsPresent ? '✓ Pass' : '✗ Fail'),
-          ],
-        }),
-        new TableRow({
-          children: [
-            this.createTableCell('All PLOs Covered'),
-            this.createTableCell(step13.validation.allPLOsCovered ? '✓ Pass' : '✗ Fail'),
-          ],
-        }),
-        new TableRow({
-          children: [
-            this.createTableCell('Marking Scheme Complete'),
-            this.createTableCell(step13.validation.markingSchemeComplete ? '✓ Pass' : '✗ Fail'),
-          ],
-        }),
-      ];
-
-      contentChildren.push(
-        new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: validationRows })
-      );
-    }
+    // Validation summary, computed from the exam (services/step13Validation). The stored flags
+    // were thin and named differently from the screen's; exams stored before 2026-10-01 printed
+    // a pass for "total marks correct" whenever the total was above zero.
+    const sectionNum = step13.sectionBIncluded ? '13.8' : '13.7';
+    contentChildren.push(this.createH2(`${sectionNum} Validation`));
+    const validation = step13Validation(step13, outcomes);
+    const checks: [string, boolean | null][] = [
+      ['Marks and section totals agree with the questions', validation.marksAddUp],
+      ['All sections present', validation.allSectionsPresent],
+      ['All PLOs covered', validation.allPLOsCovered],
+      ['Marking scheme covers every question', validation.markingSchemeComplete],
+      ['Every question has a model answer', validation.modelAnswersComplete],
+    ];
+    const validationRows = [
+      new TableRow({
+        children: [
+          this.createTableCell('Check', { bold: true, shading: 'E8EAF6' }),
+          this.createTableCell('Result', { bold: true, shading: 'E8EAF6' }),
+        ],
+      }),
+      ...checks.map(
+        ([label, value]) =>
+          new TableRow({
+            children: [
+              this.createTableCell(label),
+              this.createTableCell(value === null ? '— Not checked' : value ? '✓ Pass' : '✗ Fail'),
+            ],
+          })
+      ),
+    ];
+    contentChildren.push(
+      new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: validationRows })
+    );
   }
 
   /**
@@ -4305,7 +4301,9 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       addSection(12, (out) => this.generateStep12Section(workflow.step12, out, workflow.step4));
     }
     if (workflow.step13) {
-      addSection(13, (out) => this.generateStep13Section(workflow.step13, out));
+      addSection(13, (out) =>
+        this.generateStep13Section(workflow.step13, out, workflow.step3?.outcomes || [])
+      );
     }
 
     const sectionResults = await Promise.all(
@@ -4565,7 +4563,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           });
           break;
         case 13:
-          await this.generateStep13Section(stepData, children);
+          await this.generateStep13Section(stepData, children, workflow.step3?.outcomes || []);
           break;
       }
     };

@@ -58,7 +58,8 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 //      the model returned as a list now keep it.
 // v24: the Step 12 summary (packs, criteria per rubric) is counted from the packs, not stored
 //      constants.
-const EXPORT_FORMAT_VERSION = 'v24';
+// v25: the Step 13 validation table is computed from the exam, with "Not checked" rows.
+const EXPORT_FORMAT_VERSION = 'v25';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the
@@ -269,6 +270,8 @@ export function stepExportContentHash(
             decks: step11DeckIds(workflow.step11),
           }
         : undefined,
+    // Step 13's validation table checks the exam's PLO coverage against Step 3.
+    step13Aux: stepNumber === 13 ? { outcomes: workflow.step3?.outcomes } : undefined,
   });
 }
 

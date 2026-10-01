@@ -545,10 +545,13 @@ export interface Step13SummativeExam {
   accessibilityProvisions: string;
 
   validation: {
-    totalMarksCorrect: boolean;
+    // services/step13Validation. Exams stored before 2026-10-01 carry totalMarksCorrect instead
+    // of marksAddUp, and no modelAnswersComplete.
+    marksAddUp: boolean;
     allSectionsPresent: boolean;
-    allPLOsCovered: boolean;
+    allPLOsCovered: boolean | null;
     markingSchemeComplete: boolean;
+    modelAnswersComplete: boolean;
   };
 
   summary: {

@@ -100,6 +100,7 @@ import { step4ApprovalProblems } from '../services/step4Approval';
 import { step4ValidationReport } from '../services/step4Validation';
 import { step6ReportOf } from '../services/step6Validation';
 import { step7ValidationOf } from '../services/step7Validation';
+import { step13Validation } from '../services/step13Validation';
 
 const router = Router();
 
@@ -1042,15 +1043,20 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
       });
     }
 
-    // Steps 6 and 7 likewise (services/step6Validation, step7Validation): their stored reports
-    // passed empty lists and read fields that do not exist. Response only; writes nothing.
+    // Steps 6, 7 and 13 likewise (services/step6Validation, step7Validation, step13Validation):
+    // their stored reports passed empty lists, read fields that do not exist, or (Step 13) were
+    // named differently from what the screen reads. Response only; writes nothing.
     try {
       const step6View = step6ReportOf(workflow as any, new Date().getFullYear());
       if (step6View) Object.assign((workflow as any).step6, step6View);
       const step7View = step7ValidationOf(workflow as any);
       if (step7View) (workflow as any).step7.validation = step7View;
+      const step13 = (workflow as any).step13;
+      if (step13?.sectionA) {
+        step13.validation = step13Validation(step13, (workflow as any).step3?.outcomes || []);
+      }
     } catch (error) {
-      loggingService.warn('Could not recompute Step 6/7 checks for view', {
+      loggingService.warn('Could not recompute Step 6/7/13 checks for view', {
         workflowId: req.params.id,
         error: error instanceof Error ? error.message : String(error),
       });

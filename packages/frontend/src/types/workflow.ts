@@ -1762,10 +1762,12 @@ export interface Step13SummativeExam {
   markingScheme: ExamMarkingScheme;
   integrityAndSecurity: string;
   accessibilityProvisions: string;
+  // Computed by the backend (services/step13Validation) whenever a programme is viewed.
   validation: {
-    allPLOsCovered: boolean;
     marksAddUp: boolean;
-    sectionBalanceValid: boolean;
+    allSectionsPresent: boolean;
+    allPLOsCovered: boolean | null;
+    markingSchemeComplete: boolean;
     modelAnswersComplete: boolean;
   };
   summary: {

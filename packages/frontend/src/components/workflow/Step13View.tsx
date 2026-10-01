@@ -13,6 +13,7 @@ import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationConte
 import StepDownloadButton from './StepDownloadButton';
 import { isStepDone } from '@/lib/stepGating';
 import { validationFrame } from '@/lib/validationFrame';
+import { ValidationChecks } from './ValidationChecks';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -184,16 +185,16 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
   const isApproved = !!workflow.step13?.approvedAt;
   const exam = workflow.step13;
   // The panel's colour follows its worst check.
-  const validationPanel = validationFrame(
-    exam?.validation
-      ? [
-          exam.validation.allPLOsCovered,
-          exam.validation.marksAddUp,
-          exam.validation.sectionBalanceValid,
-          exam.validation.modelAnswersComplete,
-        ]
-      : []
-  );
+  const step13Checks: [string, boolean | null | undefined][] = exam?.validation
+    ? [
+        ['Marks Add Up', exam.validation.marksAddUp],
+        ['All Sections Present', exam.validation.allSectionsPresent],
+        ['All PLOs Covered', exam.validation.allPLOsCovered],
+        ['Marking Scheme Complete', exam.validation.markingSchemeComplete],
+        ['Model Answers Complete', exam.validation.modelAnswersComplete],
+      ]
+    : [];
+  const validationPanel = validationFrame(step13Checks.map(([, value]) => value));
 
   // Step 12 done — drift-tolerant gate. See packages/frontend/src/lib/stepGating.ts.
   const isStep12Approved = isStepDone(workflow, 12);
@@ -536,30 +537,7 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
               <h4 className={`font-medium mb-3 ${validationPanel.heading}`}>
                 {validationPanel.title}
               </h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                <span
-                  className={exam.validation.allPLOsCovered ? 'text-emerald-400' : 'text-red-400'}
-                >
-                  {exam.validation.allPLOsCovered ? '✓' : '✗'} All PLOs Covered
-                </span>
-                <span className={exam.validation.marksAddUp ? 'text-emerald-400' : 'text-red-400'}>
-                  {exam.validation.marksAddUp ? '✓' : '✗'} Marks Add Up
-                </span>
-                <span
-                  className={
-                    exam.validation.sectionBalanceValid ? 'text-emerald-400' : 'text-red-400'
-                  }
-                >
-                  {exam.validation.sectionBalanceValid ? '✓' : '✗'} Section Balance
-                </span>
-                <span
-                  className={
-                    exam.validation.modelAnswersComplete ? 'text-emerald-400' : 'text-red-400'
-                  }
-                >
-                  {exam.validation.modelAnswersComplete ? '✓' : '✗'} Model Answers Complete
-                </span>
-              </div>
+              <ValidationChecks checks={step13Checks} columns="grid-cols-2 md:grid-cols-5" />
             </div>
           )}
 
