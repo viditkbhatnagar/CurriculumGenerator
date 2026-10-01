@@ -92,6 +92,21 @@ const CLAUSE_JOINERS = new Set(['and', 'or', 'then', 'plus']);
 
 const bareWord = (w: string | undefined) => (w || '').toLowerCase().replace(/[^a-z-]/g, '');
 
+/** Verbs that end in "ly" like an adverb. "Apply" was skipped as one, so its outcome was misread. */
+const VERBS_ENDING_LY = new Set([
+  'apply',
+  'supply',
+  'reply',
+  'rely',
+  'comply',
+  'multiply',
+  'imply',
+]);
+
+/** A leading word to skip: an adverb ("critically"), never a verb that happens to end in "ly". */
+const isAdverb = (word: string) =>
+  word.endsWith('ly') && !MEASURABLE_VERBS.has(word) && !VERBS_ENDING_LY.has(word);
+
 /**
  * The actions an outcome asks for: a measurable verb that opens the statement or a clause
  * ("Interpret and evaluate ... and assess"). Counting every word on the verb list treated
@@ -108,7 +123,7 @@ export function outcomeActions(statement: string): string[] {
       i === 0 || CLAUSE_JOINERS.has(bareWord(previous)) || /[,;:]$/.test(previous || '');
     if (!opensClause) continue;
     let word = bareWord(words[i]);
-    if (word.endsWith('ly') && words[i + 1]) word = bareWord(words[i + 1]);
+    if (isAdverb(word) && words[i + 1]) word = bareWord(words[i + 1]);
     if (MEASURABLE_VERBS.has(word) && !actions.includes(word)) actions.push(word);
   }
   return actions;
@@ -117,7 +132,7 @@ export function outcomeActions(statement: string): string[] {
 /** The verb an outcome starts with, past a leading adverb ("Critically evaluate" -> evaluate). */
 function leadingVerb(statement: string): string {
   const [first, second] = statement.split(/\s+/).map(bareWord);
-  return first?.endsWith('ly') && second ? second : first || '';
+  return first && isAdverb(first) && second ? second : first || '';
 }
 const VAGUE_VERBS = new Set([
   'understand',

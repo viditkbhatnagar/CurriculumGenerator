@@ -218,4 +218,26 @@ describe('outcomeActions', () => {
   it('skips a leading adverb', () => {
     expect(outcomeActions('Critically evaluate competing forecasts.')).toEqual(['evaluate']);
   });
+
+  it('does not mistake a verb ending in "ly" for an adverb', () => {
+    // "Apply" ends in "ly", so it was skipped: CR08's CLO5 read as "starts with data".
+    expect(outcomeActions('Apply the DMAIC method to reduce defects.')).toEqual(['apply']);
+    expect(outcomeActions('Critically apply privacy rules to analytics.')).toEqual(['apply']);
+    expect(outcomeActions('Analyse demand and apply safety stock rules.')).toEqual([
+      'analyse',
+      'apply',
+    ]);
+  });
+
+  it('raises no verb warning for an outcome that starts with "Apply"', () => {
+    const draft = validDraft();
+    draft.outcomes[0] = {
+      ...draft.outcomes[0],
+      statement: 'Apply the DMAIC method to reduce defects in a process.',
+    };
+    const verbFindings = validateDraft(draft, AGU_CATALOGUE_V1_4).filter(
+      (f) => f.code === 'OUTCOME_VERB' && f.message.includes(draft.outcomes[0].id)
+    );
+    expect(verbFindings).toEqual([]);
+  });
 });
