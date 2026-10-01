@@ -32,6 +32,7 @@ import {
 import { checkDraftShape } from '../agu/validation/draftShape';
 import { reviewStatus, validateDraft } from '../agu/validation/validateDraft';
 import { validateArtefacts } from '../agu/validation/validateArtefacts';
+import { currentOutline } from '../agu/validation/currentFindings';
 import { CourseDraft, Finding } from '../agu/draft/types';
 import { coursePackageBuffer } from '../agu/export/coursePackageDocx';
 import { generateArtefacts } from '../agu/generation/generateArtefacts';
@@ -263,10 +264,15 @@ router.get('/drafts/:id', async (req: Request, res: Response) => {
     await failIfInterrupted(doc);
     await failArtefactsIfInterrupted(doc);
     const artefactFindings = currentArtefactFindings(doc);
+    // Outline findings re-checked against today's validator, as artefact findings are.
+    const outline = currentOutline(doc, AGU_CATALOGUE_V1_4);
     res.json({
       success: true,
       data: {
         ...doc.toObject(),
+        findings: outline.findings,
+        status: outline.status,
+        ...(outline.recheck ? { findingsRecheck: outline.recheck } : {}),
         artefactFindings,
         artefactStatus: currentArtefactStatus(doc, artefactFindings),
       },
@@ -590,12 +596,13 @@ router.get('/drafts/:id/export', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'No drafted content to export yet' });
     }
     const artefactFindings = currentArtefactFindings(doc);
+    const outline = currentOutline(doc, AGU_CATALOGUE_V1_4);
     const buffer = await coursePackageBuffer({
       draft: doc.draft,
       course,
       catalogue: AGU_CATALOGUE_V1_4,
-      findings: doc.findings || [],
-      status: doc.status,
+      findings: outline.findings,
+      status: outline.status,
       version: doc.version,
       tools: doc.facultyInputs?.tools,
       sourcesOffered: (doc.sourcesOffered || []).length,
