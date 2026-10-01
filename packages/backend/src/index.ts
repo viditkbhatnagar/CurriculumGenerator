@@ -44,6 +44,7 @@ import aguRoutes from './routes/aguRoutes';
 import step7StreamRoutes from './routes/step7StreamRoutes';
 import pptRoutes from './routes/pptRoutes';
 import standaloneRoutes from './routes/standaloneRoutes';
+import { EXPORT_PATHS, exportRequestSlot } from './middleware/exportLimit';
 
 dotenv.config();
 
@@ -191,6 +192,9 @@ app.use((req, res, next) => {
     });
   });
 });
+
+// At most two downloads are prepared at once (middleware/exportLimit): each can need 500MB+.
+app.use(EXPORT_PATHS, exportRequestSlot);
 
 // Health check and monitoring routes
 app.use('/', healthRoutes);

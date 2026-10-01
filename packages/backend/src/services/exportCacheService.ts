@@ -23,6 +23,7 @@ import { Response } from 'express';
 import config from '../config';
 import { getS3Client } from './s3Service';
 import { loggingService } from './loggingService';
+import { createSlots, singleFlight } from '../utils/exportSlots';
 
 // Bump this when the export renderer (wordExportService / SCORM builder)
 // changes output in a way that should invalidate every cached export.
@@ -56,6 +57,30 @@ import { loggingService } from './loggingService';
 //      model answers are cleaned of control characters, and seven sections that dropped text
 //      the model returned as a list now keep it.
 const EXPORT_FORMAT_VERSION = 'v23';
+
+/**
+ * Builds in progress, by file and content hash: a second request for the same file shares the
+ * first build instead of starting another (each click used to build again).
+ */
+const building = new Map<string, Promise<Buffer>>();
+
+/**
+ * At most two builds run at once. The request-level limit (middleware/exportLimit) already
+ * bounds this; this one also holds when a client abandons a download, since its build carries
+ * on after the response has closed.
+ */
+const buildSlots = createSlots(2, 1000);
+
+async function inBuildSlot(build: () => Promise<Buffer>): Promise<Buffer> {
+  const slot = buildSlots.tryAcquire();
+  if (slot === 'busy') throw new Error('Too many export builds are queued');
+  const release = typeof slot === 'function' ? slot : await slot;
+  try {
+    return await build();
+  } finally {
+    release();
+  }
+}
 
 /** Stable SHA-256 of whatever workflow data an export is rendered from. */
 export function hashExportInput(data: unknown): string {
@@ -103,7 +128,12 @@ export async function serveCachedExport(res: Response, opts: ExportCacheOptions)
 
   // No S3 configured → behave exactly as before: generate every time.
   if (!config.s3.enabled) {
-    send(await generate(), 'bypass');
+    send(
+      await singleFlight(building, `bypass:${workflowId}:${artifact}:${contentHash}`, () =>
+        inBuildSlot(generate)
+      ),
+      'bypass'
+    );
     return;
   }
 
@@ -137,8 +167,8 @@ export async function serveCachedExport(res: Response, opts: ExportCacheOptions)
     }
   }
 
-  // Miss, stale, or lookup failed → render, then cache (best-effort).
-  const buffer = await generate();
+  // Miss, stale, or lookup failed → render (once, however many ask), then cache (best-effort).
+  const buffer = await singleFlight(building, `${key}:${contentHash}`, () => inBuildSlot(generate));
   try {
     await getS3Client().send(
       new PutObjectCommand({
