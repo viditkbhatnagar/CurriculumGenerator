@@ -98,6 +98,7 @@ import { deleteConfirmationProblem } from '../utils/softDelete';
 import { hasActiveGeneration } from '../services/generationActivity';
 import { step4ApprovalProblems } from '../services/step4Approval';
 import { step4ValidationReport } from '../services/step4Validation';
+import { step7ValidationOf } from '../services/step7Validation';
 
 const router = Router();
 
@@ -1037,6 +1038,18 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
         modules: step4Data.modules,
         ploIds: ((workflow as any).step3?.outcomes || []).map((o: any) => o.code || o.id),
         declaredHours: (workflow as any).step1?.creditFramework?.totalHours || 0,
+      });
+    }
+
+    // Step 7 likewise (services/step7Validation): its stored report passed empty lists. Response
+    // only; writes nothing.
+    try {
+      const step7View = step7ValidationOf(workflow as any);
+      if (step7View) (workflow as any).step7.validation = step7View;
+    } catch (error) {
+      loggingService.warn('Could not recompute Step 7 checks for view', {
+        workflowId: req.params.id,
+        error: error instanceof Error ? error.message : String(error),
       });
     }
 

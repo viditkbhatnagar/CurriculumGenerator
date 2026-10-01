@@ -18,6 +18,7 @@ import { RAGEngine } from './ragEngine';
 import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
 import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
+import { step7Passed, step7Validation } from './step7Validation';
 import { approvedSummativeFor, step7SpecifiesExam } from './step7Authority';
 import config from '../config';
 import {
@@ -3163,15 +3164,21 @@ CRITICAL VALIDATION:
       Number(step7.userPreferences?.formativePerModule) || 0
     );
 
-    const weightsSum100 = weightingsAreComplete(totals);
-    step7.validation = {
-      ...(step7.validation || {}),
-      allFormativesMapped:
-        all.length > 0 && all.every((f: any) => (f.alignedMLOs || []).length > 0),
-      weightsSum100,
+    const sampleQuestions = step7.sampleQuestions || {};
+    step7.validation = step7Validation({
+      formatives: all,
+      summatives,
+      sampleQuestionCount: ['mcq', 'sjt', 'caseQuestions', 'essayPrompts', 'practicalTasks'].reduce(
+        (n, kind) => n + (sampleQuestions[kind]?.length || 0),
+        0
+      ),
+      ploIds: ((workflow.step3?.outcomes || []) as any[]).map((plo) => plo.id || plo.code),
+      moduleIds: ((workflow.step4 as any)?.modules || []).map((m: any) => m.id),
+      weightingsComplete: weightingsAreComplete(totals),
       bloomFloorMet: bloomReport.floorMet,
-      formativeCountMet: formativeGaps.length === 0,
-    };
+      formativeGapCount: formativeGaps.length,
+    });
+    const { weightsSum100 } = step7.validation;
     step7.formativeGaps = formativeGaps;
 
     workflow.markModified('step7.formativeAssessments');
@@ -3346,28 +3353,6 @@ CRITICAL VALIDATION:
       assessmentResponse.sampleQuestions.essayPrompts.length +
       assessmentResponse.sampleQuestions.practicalTasks.length;
 
-    const plos = workflow.step3?.outcomes || [];
-    const ploIds = plos.map((plo: any) => plo.id || plo.code);
-    const coveredPloIds = new Set<string>();
-
-    // Collect PLO coverage from formative assessments
-    assessmentResponse.formativeAssessments.forEach((fa) => {
-      fa.alignedPLOs.forEach((ploId) => coveredPloIds.add(ploId));
-    });
-
-    // Collect PLO coverage from summative assessments
-    assessmentResponse.summativeAssessments.forEach((sa) => {
-      sa.alignmentTable.forEach((alignment) => coveredPloIds.add(alignment.ploId));
-    });
-
-    const allFormativesMapped = assessmentResponse.formativeAssessments.every(
-      (fa) => fa.alignedMLOs.length > 0
-    );
-
-    const allSummativesMapped = assessmentResponse.summativeAssessments.every(
-      (sa) => sa.alignmentTable.length > 0
-    );
-
     // Assign each assessment its percentage weighting from the author's own
     // formative/summative split, then report whether every module sums to 100%.
     //
@@ -3381,18 +3366,6 @@ CRITICAL VALIDATION:
       assessmentResponse.formativeAssessments as any[],
       assessmentResponse.summativeAssessments as any[]
     );
-    let weightsSum100 = weightingsAreComplete(weightingTotals);
-
-    // A summative whose own components do not add up is still a defect.
-    assessmentResponse.summativeAssessments.forEach((sa) => {
-      const totalWeight = (sa.components || []).reduce(
-        (sum: number, comp: any) => sum + (comp.weight || 0),
-        0
-      );
-      if (sa.components?.length && Math.abs(totalWeight - 100) > 0.1) {
-        weightsSum100 = false;
-      }
-    });
 
     const { assessmentGeneratorService: generator } = await import('./assessmentGeneratorService');
     const failedModules = [...generator.failedModules];
@@ -3403,11 +3376,6 @@ CRITICAL VALIDATION:
         modules: failedModules.map((f) => f.moduleId),
       });
     }
-
-    const modulesExpected = ((workflow.step4 as any)?.modules || []).length;
-    const modulesCovered = new Set(
-      assessmentResponse.formativeAssessments.map((fa: any) => fa.moduleId)
-    ).size;
 
     // Whether the assessments actually work at the level their outcomes are written at.
     // Until this existed the Bloom floor was an instruction in a prompt and nothing more:
@@ -3439,23 +3407,17 @@ CRITICAL VALIDATION:
       });
     }
 
-    const validation = {
-      allFormativesMapped,
-      allSummativesMapped,
-      weightsSum100,
-      sufficientSampleQuestions: totalSampleQuestions >= 20,
-      plosCovered: ploIds.every((ploId: string) => coveredPloIds.has(ploId)),
-      // Whether every module actually got assessments. Nothing checked this, so a run that
-      // dropped eleven of forty-six modules still reported itself valid, and the author
-      // discovered it by reading the export and listing what was not in it.
-      allModulesCovered: modulesExpected > 0 && modulesCovered === modulesExpected,
-      // Whether every assessment reaches the Bloom level its own outcomes demand.
+    // A summative whose own components do not add up is a defect too: see step7Validation.
+    const validation = step7Validation({
+      formatives: assessmentResponse.formativeAssessments as any[],
+      summatives: assessmentResponse.summativeAssessments as any[],
+      sampleQuestionCount: totalSampleQuestions,
+      ploIds: ((workflow.step3?.outcomes || []) as any[]).map((plo) => plo.id || plo.code),
+      moduleIds: ((workflow.step4 as any)?.modules || []).map((m: any) => m.id),
+      weightingsComplete: weightingsAreComplete(weightingTotals),
       bloomFloorMet: bloomReport.floorMet,
-      // Whether every module got the number of formative activities the author configured.
-      // A failed formative slot is kept as a partial success, so without this a module
-      // silently returns one activity where two were asked for.
-      formativeCountMet: formativeGaps.length === 0,
-    };
+      formativeGapCount: formativeGaps.length,
+    });
 
     // Store in workflow
     workflow.step7 = {
@@ -3486,7 +3448,7 @@ CRITICAL VALIDATION:
       formativeCount: assessmentResponse.formativeAssessments.length,
       summativeCount: assessmentResponse.summativeAssessments.length,
       totalSampleQuestions,
-      validationPassed: Object.values(validation).every((v) => v === true),
+      validationPassed: step7Passed(validation),
     });
 
     return workflow;
@@ -3725,32 +3687,14 @@ CRITICAL VALIDATION:
       (workflow.step7!.sampleQuestions.essayPrompts?.length || 0) +
       (workflow.step7!.sampleQuestions.practicalTasks?.length || 0);
 
-    const plos = workflow.step3?.outcomes || [];
-    const ploIds = plos.map((plo: any) => plo.id || plo.code);
-    const coveredPloIds = new Set<string>();
-
-    workflow.step7!.formativeAssessments.forEach((fa: any) => {
-      fa.alignedPLOs.forEach((ploId: string) => coveredPloIds.add(ploId));
-    });
-
-    workflow.step7!.summativeAssessments.forEach((sa: any) => {
-      sa.alignmentTable.forEach((alignment: any) => coveredPloIds.add(alignment.ploId));
-    });
-
-    const allFormativesMapped = workflow.step7!.formativeAssessments.every(
-      (fa: any) => fa.alignedMLOs.length > 0
+    // This path never assigned weightings: it started weightsSum100 as true and only looked at
+    // summative components, so with no summatives it passed with every weighting unset.
+    const weightingTotals = applyAssessmentWeightings(
+      workflow.step7!.formativeAssessments as any[],
+      workflow.step7!.summativeAssessments as any[]
     );
-    const allSummativesMapped = workflow.step7!.summativeAssessments.every(
-      (sa: any) => sa.alignmentTable.length > 0
-    );
-
-    let weightsSum100 = true;
-    workflow.step7!.summativeAssessments.forEach((sa: any) => {
-      const totalWeight = sa.components.reduce((sum: number, comp: any) => sum + comp.weight, 0);
-      if (Math.abs(totalWeight - 100) > 0.1) {
-        weightsSum100 = false;
-      }
-    });
+    workflow.markModified('step7.formativeAssessments');
+    workflow.markModified('step7.summativeAssessments');
 
     const { assessmentGeneratorService: generator } = await import('./assessmentGeneratorService');
     const failedModules = [...generator.failedModules];
@@ -3761,11 +3705,6 @@ CRITICAL VALIDATION:
         modules: failedModules.map((f) => f.moduleId),
       });
     }
-
-    const modulesExpected = ((workflow.step4 as any)?.modules || []).length;
-    const modulesCovered = new Set(
-      assessmentResponse.formativeAssessments.map((fa: any) => fa.moduleId)
-    ).size;
 
     // Whether the assessments actually work at the level their outcomes are written at.
     // Until this existed the Bloom floor was an instruction in a prompt and nothing more:
@@ -3797,23 +3736,16 @@ CRITICAL VALIDATION:
       });
     }
 
-    const validation = {
-      allFormativesMapped,
-      allSummativesMapped,
-      weightsSum100,
-      sufficientSampleQuestions: totalSampleQuestions >= 20,
-      plosCovered: ploIds.every((ploId: string) => coveredPloIds.has(ploId)),
-      // Whether every module actually got assessments. Nothing checked this, so a run that
-      // dropped eleven of forty-six modules still reported itself valid, and the author
-      // discovered it by reading the export and listing what was not in it.
-      allModulesCovered: modulesExpected > 0 && modulesCovered === modulesExpected,
-      // Whether every assessment reaches the Bloom level its own outcomes demand.
+    const validation = step7Validation({
+      formatives: workflow.step7!.formativeAssessments as any[],
+      summatives: workflow.step7!.summativeAssessments as any[],
+      sampleQuestionCount: totalSampleQuestions,
+      ploIds: ((workflow.step3?.outcomes || []) as any[]).map((plo) => plo.id || plo.code),
+      moduleIds: ((workflow.step4 as any)?.modules || []).map((m: any) => m.id),
+      weightingsComplete: weightingsAreComplete(weightingTotals),
       bloomFloorMet: bloomReport.floorMet,
-      // Whether every module got the number of formative activities the author configured.
-      // A failed formative slot is kept as a partial success, so without this a module
-      // silently returns one activity where two were asked for.
-      formativeCountMet: formativeGaps.length === 0,
-    };
+      formativeGapCount: formativeGaps.length,
+    });
 
     // Update validation
     workflow.step7!.validation = validation;

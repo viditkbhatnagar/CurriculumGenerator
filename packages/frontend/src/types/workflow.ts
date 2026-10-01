@@ -987,15 +987,20 @@ export interface Step7Assessments {
 
   // Validation
   validation: {
-    allFormativesMapped: boolean;
-    allSummativesMapped: boolean;
+    // true passed, false failed, null not checked (nothing to check against).
+    allFormativesMapped: boolean | null;
+    /** null when Step 7 holds no summatives. */
+    allSummativesMapped: boolean | null;
     weightsSum100: boolean;
     sufficientSampleQuestions: boolean;
-    plosCovered: boolean;
+    /** null when Step 3 holds no outcomes. */
+    plosCovered: boolean | null;
     /** Did every module in step4 actually receive assessments? */
-    allModulesCovered?: boolean;
+    allModulesCovered?: boolean | null;
     /** Does every assessment reach the Bloom level its own outcomes are written at? */
-    bloomFloorMet?: boolean;
+    bloomFloorMet?: boolean | null;
+    /** Did every module get the number of formative activities the author configured? */
+    formativeCountMet?: boolean | null;
   };
 
   /** How the generated assessments sit against the taxonomy. */

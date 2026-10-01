@@ -16,6 +16,8 @@ import {
 } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import StepDownloadButton from './StepDownloadButton';
+import { validationFrame } from '@/lib/validationFrame';
+import { ValidationChecks } from './ValidationChecks';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -859,6 +861,21 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
   const isApproved = !!workflow.step7?.approvedAt;
   const validation = workflow.step7?.validation;
   const bloomReport = (workflow.step7 as any)?.bloomReport;
+  const step7Checks: [string, boolean | null | undefined][] = validation
+    ? [
+        ['Formatives Mapped', validation.allFormativesMapped],
+        ['Summatives Mapped', validation.allSummativesMapped],
+        ['Weights = 100%', validation.weightsSum100],
+        ['Sufficient Samples', validation.sufficientSampleQuestions],
+        ['All PLOs Covered', validation.plosCovered],
+        ['All Modules Covered', validation.allModulesCovered],
+        ['Bloom Level Met', validation.bloomFloorMet],
+        ['Formative Count Met', validation.formativeCountMet],
+      ]
+    : [];
+  const step7Frame = validationFrame(step7Checks.map(([, value]) => value));
+  // Valid when no check fails. It used to mean only "every PLO is covered".
+  const step7Valid = step7Checks.length > 0 && step7Checks.every(([, value]) => value !== false);
 
   // Toggle array item
   const toggleArrayItem = (array: string[], item: string) => {
@@ -1533,9 +1550,9 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
             </div>
             <div className="bg-white rounded-xl p-4 border border-teal-200 text-center">
               <p
-                className={`text-3xl font-bold ${validation?.plosCovered ? 'text-emerald-400' : hasStreamingData ? 'text-amber-400' : 'text-red-400'}`}
+                className={`text-3xl font-bold ${step7Valid ? 'text-emerald-400' : hasStreamingData ? 'text-amber-400' : 'text-red-400'}`}
               >
-                {validation?.plosCovered ? '✓' : hasStreamingData ? '⟳' : '✗'}
+                {step7Valid ? '✓' : hasStreamingData ? '⟳' : '✗'}
               </p>
               <p className="text-xs text-teal-500 mt-1">
                 {hasStreamingData && !validation ? 'Loading...' : 'Valid'}
@@ -1558,51 +1575,9 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
 
           {/* Validation Report */}
           {validation && (
-            <div
-              className={`rounded-lg p-4 border ${validation.plosCovered ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}
-            >
-              <h4
-                className={`font-medium mb-3 ${validation.plosCovered ? 'text-emerald-400' : 'text-amber-400'}`}
-              >
-                Validation Report
-              </h4>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                <span
-                  className={validation.allFormativesMapped ? 'text-emerald-400' : 'text-red-400'}
-                >
-                  {validation.allFormativesMapped ? '✓' : '✗'} Formatives Mapped
-                </span>
-                <span
-                  className={validation.allSummativesMapped ? 'text-emerald-400' : 'text-red-400'}
-                >
-                  {validation.allSummativesMapped ? '✓' : '✗'} Summatives Mapped
-                </span>
-                <span className={validation.weightsSum100 ? 'text-emerald-400' : 'text-red-400'}>
-                  {validation.weightsSum100 ? '✓' : '✗'} Weights = 100%
-                </span>
-                <span
-                  className={
-                    validation.sufficientSampleQuestions ? 'text-emerald-400' : 'text-red-400'
-                  }
-                >
-                  {validation.sufficientSampleQuestions ? '✓' : '✗'} Sufficient Samples
-                </span>
-                <span className={validation.plosCovered ? 'text-emerald-400' : 'text-red-400'}>
-                  {validation.plosCovered ? '✓' : '✗'} All PLOs Covered
-                </span>
-                {validation.allModulesCovered !== undefined && (
-                  <span
-                    className={validation.allModulesCovered ? 'text-emerald-400' : 'text-red-400'}
-                  >
-                    {validation.allModulesCovered ? '✓' : '✗'} All Modules Covered
-                  </span>
-                )}
-                {validation.bloomFloorMet !== undefined && (
-                  <span className={validation.bloomFloorMet ? 'text-emerald-400' : 'text-red-400'}>
-                    {validation.bloomFloorMet ? '✓' : '✗'} Bloom Level Met
-                  </span>
-                )}
-              </div>
+            <div className={`rounded-lg p-4 border ${step7Frame.frame}`}>
+              <h4 className={`font-medium mb-3 ${step7Frame.heading}`}>{step7Frame.title}</h4>
+              <ValidationChecks checks={step7Checks} columns="grid-cols-2 md:grid-cols-3" />
 
               {/*
                 Naming the modules that fall short. A flag alone tells the author something is
