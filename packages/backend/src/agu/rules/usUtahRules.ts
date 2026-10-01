@@ -94,12 +94,76 @@ export const PROHIBITED_CLAIMS: ProhibitedClaim[] = [
   },
   {
     id: 'vendor_certification',
-    pattern: /\b(earn|obtain|awarded|receive)\b[^.]{0,40}?\b(certification|certified)\b/i,
+    // "Prepare for the ... certification exam" implies it as much as "earn a certification".
+    pattern:
+      /\b(earn|obtain|awarded|receive|prepare[sd]?\s+(?:you\s+|students\s+)?for|preparation\s+for)\b[^.]{0,40}?\b(certification|certified)\b/i,
     denial: 'before',
     severity: 'warning',
     message:
       'May imply a vendor or professional certification. Name any external exam only with the vendor-certification disclaimer.',
     source: 'Catalog v1.4 §12',
+  },
+  // Found missing by the 2026-10-01 audit: the course-drafts review lists each family as one to
+  // strip, and the catalogue's own policies (materials_included, no_library) forbid the last
+  // three. Warnings: a faculty member judges each one.
+  {
+    id: 'career_outcome',
+    pattern:
+      /\b(graduates?|students?|learners?|you)\b[^.]{0,30}?\b(will|are|become)\b[^.]{0,25}?\b(well[-\s]placed|positioned|ready|eligible|qualified)\b[^.]{0,40}?\b(roles?|jobs?|positions?|careers?|promotions?|employment)\b/i,
+    denial: 'before',
+    severity: 'warning',
+    message:
+      'Implies a career or job outcome for graduates. The catalogue makes no placement, promotion or role claims.',
+    source: 'Product owner compliance register; Catalog v1.4 §12',
+  },
+  {
+    id: 'recognition',
+    pattern:
+      /\b(globally|internationally|universally|widely)\s+(recogni[sz]ed|respected|accepted|valued)\b|\b(employers?|industry)\b[^.]{0,30}?\b(value|values|recogni[sz]es?|accepts?|respects?)\b[^.]{0,40}?\b(credential|certificate|qualification|degree|mba|diploma|programme|program)\b/i,
+    denial: 'before',
+    severity: 'warning',
+    message:
+      'Claims employer or international recognition of the credential, which AGU cannot evidence.',
+    source: 'Product owner compliance register; course-drafts review',
+  },
+  {
+    id: 'credential_name',
+    pattern: /\b(micro-?credentials?|nano-?degrees?)\b/i,
+    severity: 'warning',
+    message:
+      "Uses a credential name AGU does not award. AGU's credentials are the Course Certificate, the Specialized Diploma and the MBA.",
+    source: 'Catalog v1.4 credentials',
+  },
+  {
+    id: 'purchase_required',
+    pattern:
+      /\b(must|need to|needs to|will need to|have to|required to|should)\s+(buy|purchase|rent)\b|^\s*(buy|purchase)\b[^.]{0,30}?\b(text\s?books?|books?|licen[cs]es?|subscriptions?|software)\b/i,
+    denial: 'before',
+    severity: 'warning',
+    message: 'Asks students to buy material. Course materials are included in tuition.',
+    source: 'Catalog v1.4 §4.4 (materials_included)',
+  },
+  {
+    id: 'software_install',
+    // An instruction only: "Install ..." or "must install ...", so "installing sensors" in a
+    // supply-chain course and the catalogue's own "not required to ... install software" pass.
+    pattern:
+      /(?:^\s*|\b(?:must|need to|needs to|will need to|have to|required to|should|please)\s+)(?:download\s+and\s+)?install\b[^.]{0,40}?\b(python|r|rstudio|anaconda|jupyter|tableau|power ?bi|spss|stata|matlab|sas|excel|software|application|app|tools?)\b/i,
+    denial: 'before',
+    severity: 'warning',
+    message:
+      'Asks students to install software. Students are not required to install software; use browser-based tools.',
+    source: 'Catalog v1.4 §4.4 (materials_included)',
+  },
+  {
+    id: 'library_access',
+    pattern:
+      /\b(library|institutional)\s+(databases?|access|subscriptions?|portal|login|e-?resources?)\b/i,
+    denial: 'before',
+    severity: 'warning',
+    message:
+      'Relies on library or database access. AGU has no library; every required item must be openly accessible or supplied through the platform.',
+    source: 'Catalog v1.4 (no_library); template T05',
   },
   {
     id: 'uk_framing',

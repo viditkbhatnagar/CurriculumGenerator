@@ -1,5 +1,15 @@
 import { AguFinding } from '@/lib/aguApi';
 
+/** Where a finding is in the draft and the rule it comes from, so faculty can find and judge it. */
+function FindingOrigin({ finding }: { finding: AguFinding }) {
+  const parts = [
+    finding.path && `at ${finding.path}`,
+    finding.source && `rule: ${finding.source}`,
+  ].filter(Boolean);
+  if (!parts.length) return null;
+  return <span className="block text-xs text-slate-500">{parts.join(' · ')}</span>;
+}
+
 /** Blocking findings first, then warnings for faculty to judge; "no findings" only when empty. */
 export default function Findings({ findings }: { findings: AguFinding[] }) {
   const blocking = findings.filter((f) => f.severity === 'blocking');
@@ -21,6 +31,7 @@ export default function Findings({ findings }: { findings: AguFinding[] }) {
               <li key={`b${i}`} className="text-sm text-red-800">
                 <span className="font-mono text-xs mr-2">{f.code}</span>
                 {f.message}
+                <FindingOrigin finding={f} />
               </li>
             ))}
           </ul>
@@ -36,6 +47,7 @@ export default function Findings({ findings }: { findings: AguFinding[] }) {
               <li key={`w${i}`} className="text-sm text-amber-900">
                 <span className="font-mono text-xs mr-2">{f.code}</span>
                 {f.message}
+                <FindingOrigin finding={f} />
               </li>
             ))}
           </ul>

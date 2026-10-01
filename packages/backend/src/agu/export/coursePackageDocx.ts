@@ -10,7 +10,7 @@
  */
 import { Document, HeadingLevel, Packer, Paragraph, Table } from 'docx';
 import { CatalogueCourse, CatalogueEdition } from '../catalogue/types';
-import { DISCLOSURES } from '../rules/usUtahRules';
+import { DISCLOSURES, RULE_PACK_VERSION } from '../rules/usUtahRules';
 import { CourseDraft, Finding } from '../draft/types';
 import { CourseArtefacts } from '../draft/artefactTypes';
 import { BODY, FONT, bullet, h, linkParagraph, p, sum, table } from './docxParts';
@@ -466,9 +466,16 @@ export function coursePackageDocument(input: PackageInput): Document {
       `Outcomes, weeks, assessments and cases are proposals for faculty review; locked facts come from the catalogue.`
     )
   );
+  // Distinct sources: one source can be assigned to two weeks, and "12 chosen" overstated it.
+  const distinctReadings = new Set(draft.readings.map((r) => r.sourceId || r.citation)).size;
   children.push(
     bullet(
-      `Readings: ${draft.readings.length} chosen from ${input.sourcesOffered} verified open-access sources; anything else the model cited was dropped.`
+      `Readings: ${draft.readings.length} assigned from ${distinctReadings} distinct sources, chosen from ${input.sourcesOffered} verified open-access sources; anything else the model cited was dropped.`
+    )
+  );
+  children.push(
+    bullet(
+      `Checked against the ${RULE_PACK_VERSION} rule pack and catalogue v${input.catalogue.edition.version}.`
     )
   );
   children.push(

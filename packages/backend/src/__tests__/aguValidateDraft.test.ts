@@ -200,6 +200,31 @@ describe('findProhibitedClaims', () => {
     expect(m.map((x) => x.ruleId)).toEqual(['uk_framing']);
     expect(m[0].severity).toBe('warning');
   });
+  // Claims the audit found the scan missed (2026-10-01): the course-drafts review lists each
+  // family as one to strip, and the catalogue's own policies forbid the last three.
+  it.each([
+    ['Graduates will be well placed for senior analytics roles.', 'career_outcome'],
+    ['The certificate is globally recognised by employers worldwide.', 'recognition'],
+    ['Employers value this credential across sectors.', 'recognition'],
+    ['This microcredential stacks into the MBA.', 'credential_name'],
+    ['Prepare for the Microsoft Power BI certification exam.', 'vendor_certification'],
+    ['Students must purchase the textbook before week 1.', 'purchase_required'],
+    ['Install Python and RStudio on your laptop.', 'software_install'],
+    ['Access the library database to find three peer-reviewed articles.', 'library_access'],
+  ])('flags "%s"', (text, ruleId) => {
+    expect(findProhibitedClaims(text).map((m) => m.ruleId)).toContain(ruleId);
+  });
+
+  it.each([
+    'Analyse demand data and apply safety stock rules.',
+    'Plan the installation of IoT sensors across three warehouses.',
+    'Students use Excel for the web; no software needs to be installed.',
+    'Readings are open access; no library database is needed.',
+    'Students are not required to buy textbooks or install software.',
+    'Discuss how employers value data literacy in hiring decisions.',
+  ])('leaves ordinary course text alone: "%s"', (text) => {
+    expect(findProhibitedClaims(text)).toEqual([]);
+  });
 });
 
 describe('outcomeActions', () => {
