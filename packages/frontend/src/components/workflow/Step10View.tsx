@@ -858,6 +858,15 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
 
   const hasStep10Data = workflow.step10 && (workflow.step10.moduleLessonPlans?.length ?? 0) > 0;
   const validation = workflow.step10?.validation;
+  // Decks Step 11 actually generated, by deck id and lesson id. Every lesson carries a
+  // pptDeckRef from the moment it is planned, so the reference alone does not mean a deck exists.
+  const generatedDeckIds = new Set<string>(
+    (workflow.step11?.modulePPTDecks || []).flatMap((module) =>
+      (module?.pptDecks || []).flatMap(
+        (deck) => [deck?.deckId, deck?.lessonId].filter(Boolean) as string[]
+      )
+    )
+  );
   // The panel's colour follows its worst check; case studies count only when they are required.
   const validationPanel = validationFrame(
     validation
@@ -1988,14 +1997,16 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                 <div className="bg-teal-50/50 rounded-lg p-5 border border-teal-200">
                   <h4 className="text-teal-800 font-medium mb-3">Required Materials</h4>
                   <div className="space-y-3">
-                    {currentLesson.materials.pptDeckRef && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-orange-400">📊</span>
-                        <span className="text-teal-700">
-                          PowerPoint: {currentLesson.materials.pptDeckRef}
-                        </span>
-                      </div>
-                    )}
+                    {currentLesson.materials.pptDeckRef &&
+                      (generatedDeckIds.has(currentLesson.materials.pptDeckRef) ||
+                        generatedDeckIds.has(currentLesson.lessonId)) && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-orange-400">📊</span>
+                          <span className="text-teal-700">
+                            PowerPoint: {currentLesson.materials.pptDeckRef}
+                          </span>
+                        </div>
+                      )}
                     {currentLesson.materials.caseFiles &&
                       currentLesson.materials.caseFiles.length > 0 && (
                         <div>
