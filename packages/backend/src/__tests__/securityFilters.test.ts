@@ -1,4 +1,11 @@
-import { XSS_PATTERNS, containsXSS, preventSQLInjection, preventXSS } from '../middleware/security';
+import {
+  XSS_PATTERNS,
+  containsXSS,
+  preventXSS,
+  rejectOperatorKeys,
+  sanitizeObject,
+  securityValidation,
+} from '../middleware/security';
 
 jest.mock('../services/loggingService', () => ({
   loggingService: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
@@ -87,20 +94,58 @@ describe('XSS check', () => {
   });
 });
 
-describe('SQL check', () => {
-  it('lets curriculum content with SQL examples through on the AGU routes', () => {
-    const lesson = { text: 'Students write INSERT INTO sales and a UNION ALL query; see sp_help.' };
-    expect(passes(preventSQLInjection, '/api/agu/drafts/1', lesson)).toBe(true);
-    expect(passes(preventSQLInjection, '/api/v3/workflow/1/apply-edit', lesson)).toBe(true);
+describe('operator-key check', () => {
+  // MongoDB reads a key starting with "$" as an operator: on production ?status[$ne]=zzz listed
+  // all 46 programmes where ?status=zzz listed none.
+  const run = (where: 'body' | 'query' | 'params', value: unknown): boolean => {
+    let passed = false;
+    const req: any = {
+      path: '/api/v3/workflow',
+      method: 'GET',
+      body: {},
+      query: {},
+      params: {},
+      headers: {},
+    };
+    req[where] = value;
+    const res: any = { status: () => res, json: () => res };
+    rejectOperatorKeys(req, res, () => {
+      passed = true;
+    });
+    return passed;
+  };
+
+  it('refuses a "$" key anywhere in the body, query or params', () => {
+    expect(run('query', { status: { $ne: 'zzz' } })).toBe(false);
+    expect(run('query', { status: { $regex: '^step10' } })).toBe(false);
+    expect(run('body', { filter: [{ name: 'x' }, { $where: 'sleep(1000)' }] })).toBe(false);
+    expect(run('body', { a: { b: { c: { $gt: '' } } } })).toBe(false);
+    expect(run('params', { $id: 'x' })).toBe(false);
   });
 
-  it('exempts whole path segments only', () => {
-    const lesson = { text: 'UNION ALL' };
-    expect(passes(preventSQLInjection, '/api/agu', lesson)).toBe(true);
-    expect(passes(preventSQLInjection, '/api/aguXYZ/anything', lesson)).toBe(false);
+  it('lets ordinary input through, including "$" inside values', () => {
+    expect(run('query', { status: 'step10_complete', step: '10' })).toBe(true);
+    expect(run('body', { text: 'Price is $20; EV = 0.35×$20 − $5', tags: ['$'] })).toBe(true);
   });
 
-  it('still refuses SQL keywords on other routes', () => {
-    expect(passes(preventSQLInjection, '/api/users', { q: "x'; DROP TABLE users;--" })).toBe(false);
+  it('copes with deeply nested input without recursion', () => {
+    let deep: any = { leaf: 'x' };
+    for (let i = 0; i < 20000; i++) deep = { next: deep };
+    expect(run('body', deep)).toBe(true);
+  });
+
+  it('runs in the app-wide chain in place of the SQL keyword filter', () => {
+    expect(securityValidation[1]).toBe(rejectOperatorKeys);
+  });
+});
+
+describe('sanitizeObject', () => {
+  it('drops __proto__, constructor and prototype keys', () => {
+    const body = JSON.parse(
+      '{"__proto__":{"role":"administrator"},"constructor":1,"prototype":2,"name":"x"}'
+    );
+    const clean = sanitizeObject(body);
+    expect(clean.role).toBeUndefined();
+    expect(Object.keys(clean)).toEqual(['name']);
   });
 });

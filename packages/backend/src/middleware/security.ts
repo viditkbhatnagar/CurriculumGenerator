@@ -40,6 +40,8 @@ export function sanitizeString(input: string): string {
   // (React escapes by default; exports render text, not HTML).
 }
 
+const PROTOTYPE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 /**
  * Sanitize object recursively
  */
@@ -59,6 +61,9 @@ export function sanitizeObject(obj: any): any {
   if (typeof obj === 'object') {
     const sanitized: any = {};
     for (const key in obj) {
+      // A JSON "__proto__" key copied onto a plain object becomes its prototype: a body of
+      // {"__proto__":{"role":"administrator"}} made req.body.role read "administrator".
+      if (PROTOTYPE_KEYS.has(key)) continue;
       if (Object.prototype.hasOwnProperty.call(obj, key)) {
         sanitized[key] = sanitizeObject(obj[key]);
       }
@@ -370,90 +375,47 @@ export const requireSignature = (req: Request, res: Response, next: NextFunction
 };
 
 /**
- * Prevent SQL injection by validating input doesn't contain SQL keywords
- * Note: Relaxed for content-heavy routes like curriculum workflow since we use MongoDB
+ * Refuses any field name that starts with "$", anywhere in the body, query or params.
+ *
+ * MongoDB reads such a key as an operator, so a query string like ?status[$ne]=zzz turned a
+ * route's equality filter into "anything but zzz": on production it listed all 46 programmes
+ * where ?status=zzz listed none (2026-10-01). No client sends "$" keys; values may contain "$".
+ *
+ * This replaces a SQL keyword filter: the app has no SQL database, and the filter only ever
+ * refused curriculum text such as "INSERT INTO" in a data-analytics lesson.
  */
-export const preventSQLInjection = (req: Request, res: Response, next: NextFunction): void => {
-  // Skip SQL injection check for content-heavy routes (we use MongoDB, not SQL)
-  // These routes legitimately contain educational content that may include words like "script", "update", etc.
-  const exemptPaths = [
-    '/api/v3/workflow', // 9-step workflow (curriculum content)
-    '/api/v2/projects', // Old workflow (curriculum content)
-    '/api/curriculum', // Curriculum generation
-    '/api/knowledge-base', // Knowledge base content
-    // AGU course drafts: a save sends the whole draft, so one "sp_", "/*" or SQL example in
-    // a data course's lesson would refuse every edit to that course.
-    '/api/agu',
-  ];
-
-  // Whole path segments: '/api/agu' exempts '/api/agu/...' but not '/api/aguXYZ'.
-  const isExempt = exemptPaths.some((path) => req.path === path || req.path.startsWith(`${path}/`));
-  if (isExempt) {
-    return next();
-  }
-
-  // Only check for actual dangerous SQL patterns, not common words
-  const sqlKeywords = [
-    'DROP TABLE',
-    'DROP DATABASE',
-    'DELETE FROM',
-    'TRUNCATE TABLE',
-    'ALTER TABLE',
-    'EXEC(',
-    'EXECUTE(',
-    'UNION SELECT',
-    'UNION ALL',
-    'INSERT INTO',
-    'UPDATE SET',
-    ';--',
-    '/*',
-    '*/',
-    'xp_',
-    'sp_',
-  ];
-
-  const checkForSQLInjection = (obj: any): boolean => {
-    if (typeof obj === 'string') {
-      const upperStr = obj.toUpperCase();
-      return sqlKeywords.some((keyword) => upperStr.includes(keyword));
-    }
-
-    if (Array.isArray(obj)) {
-      return obj.some((item) => checkForSQLInjection(item));
-    }
-
-    if (typeof obj === 'object' && obj !== null) {
-      return Object.values(obj).some((value) => checkForSQLInjection(value));
-    }
-
-    return false;
-  };
-
-  if (
-    checkForSQLInjection(req.body) ||
-    checkForSQLInjection(req.query) ||
-    checkForSQLInjection(req.params)
-  ) {
-    loggingService.warn('Potential SQL injection attempt detected', {
-      path: req.path,
-      method: req.method,
-      ip: req.ip,
-      userId: req.user?.id,
-    });
-
+export const rejectOperatorKeys = (req: Request, res: Response, next: NextFunction): void => {
+  if ([req.body, req.query, req.params].some(hasOperatorKey)) {
     res.status(400).json({
       error: {
         code: 'INVALID_INPUT',
-        message: 'Invalid input detected',
+        message: 'Field names may not start with "$"',
         timestamp: new Date().toISOString(),
         requestId: req.headers['x-request-id'] || 'unknown',
       },
     });
     return;
   }
-
   next();
 };
+
+/** Whether any key in a value starts with "$", at any depth (walked without recursion). */
+function hasOperatorKey(root: unknown): boolean {
+  const stack: unknown[] = [root];
+  while (stack.length) {
+    const value = stack.pop();
+    if (!value || typeof value !== 'object') continue;
+    if (Array.isArray(value)) {
+      for (const item of value) stack.push(item);
+      continue;
+    }
+    for (const key of Object.keys(value)) {
+      if (key.startsWith('$')) return true;
+      stack.push((value as Record<string, unknown>)[key]);
+    }
+  }
+  return false;
+}
 
 /**
  * What the XSS check refuses: markup that could run script if a stored string were ever rendered
@@ -526,4 +488,4 @@ export const preventXSS = (req: Request, res: Response, next: NextFunction): voi
 /**
  * Combined security validation middleware
  */
-export const securityValidation = [sanitizeInput, preventSQLInjection, preventXSS];
+export const securityValidation = [sanitizeInput, rejectOperatorKeys, preventXSS];

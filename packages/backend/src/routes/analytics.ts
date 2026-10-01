@@ -14,6 +14,7 @@ import { AuditLog } from '../models/AuditLog';
 import { monitoringService } from '../services/monitoringService';
 import { loggingService } from '../services/loggingService';
 import { analyticsStorageService } from '../services/analyticsStorageService';
+import { stringParam } from '../utils/requestValues';
 
 const router = express.Router();
 
@@ -194,8 +195,8 @@ router.get('/projects', async (req: Request, res: Response, next: NextFunction) 
     if (endDate) {
       filter.createdAt = { ...filter.createdAt, $lte: new Date(endDate as string) };
     }
-    if (status) {
-      filter.status = status;
+    if (stringParam(status)) {
+      filter.status = stringParam(status);
     }
 
     // Get project statistics

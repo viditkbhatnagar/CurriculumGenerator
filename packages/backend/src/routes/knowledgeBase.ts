@@ -6,6 +6,7 @@ import { KnowledgeBaseService } from '../services/knowledgeBaseService';
 import { DocumentSource, SourceMetadata } from '../types/knowledgeBase';
 import { validateJWT, loadUser } from '../middleware/auth';
 import { KnowledgeBase } from '../models/KnowledgeBase';
+import { intParam, stringParam } from '../utils/requestValues';
 
 // Domain mapping for bulk ingestion
 const DOMAIN_MAPPING: Record<string, string> = {
@@ -160,14 +161,14 @@ export function createKnowledgeBaseRouter(): Router {
 
       // Build MongoDB query
       const query: Record<string, any> = {};
-      if (domain) {
-        query.domain = domain;
+      if (stringParam(domain)) {
+        query.domain = stringParam(domain);
       }
 
       const sources = await KnowledgeBase.find(query)
         .sort({ createdAt: -1 })
-        .skip(Number(offset))
-        .limit(Number(limit))
+        .skip(intParam(offset, 0, 0, 1_000_000))
+        .limit(intParam(limit, 50, 1, 200))
         .select('-embedding'); // Exclude embedding from response
 
       const total = await KnowledgeBase.countDocuments(query);

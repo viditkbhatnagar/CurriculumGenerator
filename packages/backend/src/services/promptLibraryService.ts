@@ -7,6 +7,7 @@
 import { CoursePrompt, ICoursePrompt } from '../models/CoursePrompt';
 import { CurriculumProject } from '../models/CurriculumProject';
 import { loggingService } from './loggingService';
+import { escapeRegex, stringParam } from '../utils/requestValues';
 
 // AGI SME Submission Template (from your email)
 const AGI_SME_SUBMISSION_TEMPLATE = `You are the Subject Matter Expert (SME) for {DOMAIN}. Your task is to produce a complete AGI SME Submission for a 120-hour (15 ECTS) self-study {QUALIFICATION_TYPE} for {COURSE_TITLE}.
@@ -153,17 +154,23 @@ class PromptLibraryService {
     try {
       const query: any = {};
 
-      if (filters.domain) query.domain = filters.domain;
-      if (filters.level) query.level = filters.level;
-      if (filters.status) query.status = filters.status;
-      else query.status = 'active'; // Default to active prompts
+      // Strings only: these come from a public query string.
+      const domain = stringParam(filters.domain);
+      const level = stringParam(filters.level);
+      const status = stringParam(filters.status);
+      if (domain) query.domain = domain;
+      if (level) query.level = level;
+      query.status = status || 'active'; // Default to active prompts
 
-      // Search in title or domain
-      if (filters.search) {
+      // Search in title or domain. Escaped and capped: the search is text to find, and an
+      // unescaped pattern from the query string could be slow enough to stall the server.
+      const search = stringParam(filters.search, 100);
+      if (search) {
+        const pattern = escapeRegex(search);
         query.$or = [
-          { promptTitle: { $regex: filters.search, $options: 'i' } },
-          { domain: { $regex: filters.search, $options: 'i' } },
-          { courseCode: { $regex: filters.search, $options: 'i' } },
+          { promptTitle: { $regex: pattern, $options: 'i' } },
+          { domain: { $regex: pattern, $options: 'i' } },
+          { courseCode: { $regex: pattern, $options: 'i' } },
         ];
       }
 

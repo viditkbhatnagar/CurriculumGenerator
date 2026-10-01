@@ -13,6 +13,7 @@ import { publicationService } from '../services/publicationService';
 import { CurriculumProject } from '../models/CurriculumProject';
 import { PreliminaryCurriculumPackage } from '../models/PreliminaryCurriculumPackage';
 import { loggingService } from '../services/loggingService';
+import { stringParam } from '../utils/requestValues';
 
 const router = Router();
 
@@ -209,8 +210,8 @@ router.get('/projects', validateJWT, loadUser, async (req: Request, res: Respons
     const { status } = req.query;
 
     const query: any = { smeId: userId };
-    if (status) {
-      query.status = status;
+    if (stringParam(status)) {
+      query.status = stringParam(status);
     }
 
     const projects = await CurriculumProject.find(query)
