@@ -59,7 +59,9 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 // v24: the Step 12 summary (packs, criteria per rubric) is counted from the packs, not stored
 //      constants.
 // v25: the Step 13 validation table is computed from the exam, with "Not checked" rows.
-const EXPORT_FORMAT_VERSION = 'v25';
+// v26: the single-step Step 13 export is given Step 3, so PLO coverage is checked. v25 copies
+//      read "Not checked" for it, under the same content hash.
+const EXPORT_FORMAT_VERSION = 'v26';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the

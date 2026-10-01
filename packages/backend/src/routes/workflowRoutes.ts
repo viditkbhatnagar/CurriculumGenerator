@@ -7210,6 +7210,9 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
       // Step 11 holds the decks actually generated; without it no lesson can list its deck.
       workflowData.step11 = workflow.step11;
     }
+    // Step 13's validation table checks the exam's PLO coverage against Step 3; without it the
+    // row read "Not checked" on every single-step exam export.
+    if (stepNumber === 13) workflowData.step3 = workflow.step3;
 
     const STEP_SLUGS: Record<number, string> = {
       1: 'Program-Foundation',
