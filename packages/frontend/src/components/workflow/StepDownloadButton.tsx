@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { neutraliseLinks } from '@/lib/safeHref';
 import { downloadFile } from '@/lib/download';
 import { api } from '@/lib/api';
 
@@ -128,6 +129,7 @@ export default function StepDownloadButton({
         const { renderAsync } = await import('docx-preview');
         if (cancelled || !previewRef.current) return;
         await renderAsync(blob, previewRef.current);
+        if (previewRef.current) neutraliseLinks(previewRef.current);
       } catch (err) {
         console.error('Step preview failed:', err);
         if (!cancelled) {

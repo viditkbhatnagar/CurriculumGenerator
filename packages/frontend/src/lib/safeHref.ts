@@ -22,3 +22,25 @@ export function safeHref(url: unknown): string | undefined {
     return undefined;
   }
 }
+
+/**
+ * Makes the links in rendered document HTML safe to click. The in-app Word preview
+ * (docx-preview) copies every hyperlink's target into an href as it is, so a "javascript:" link
+ * inside an uploaded .docx ran script in this origin when clicked. Links within the document
+ * ("#...", such as a table of contents) are kept; web links open in a new tab without access to
+ * this window; anything else loses its link and stays as text.
+ */
+export function neutraliseLinks(container: ParentNode): void {
+  container.querySelectorAll('a[href], area[href]').forEach((link) => {
+    const href = link.getAttribute('href') || '';
+    if (href.startsWith('#')) return;
+    const target = safeHref(href);
+    if (!target) {
+      link.removeAttribute('href');
+      return;
+    }
+    link.setAttribute('href', target);
+    link.setAttribute('target', '_blank');
+    link.setAttribute('rel', 'noopener noreferrer');
+  });
+}

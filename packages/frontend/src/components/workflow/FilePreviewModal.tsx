@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { neutraliseLinks } from '@/lib/safeHref';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -65,6 +66,7 @@ export default function FilePreviewModal({
           if (cancelled || !docxRef.current) return;
           docxRef.current.innerHTML = '';
           await renderAsync(blob, docxRef.current);
+          if (docxRef.current) neutraliseLinks(docxRef.current);
         }
       } catch (err) {
         console.error('File preview failed:', err);
