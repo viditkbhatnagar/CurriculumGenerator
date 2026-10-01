@@ -96,6 +96,7 @@ import { moduleEntryAt, parseModuleIndex, PER_MODULE_ARRAYS } from '../utils/per
 import { isValidObjectId } from 'mongoose';
 import { deleteConfirmationProblem } from '../utils/softDelete';
 import { hasActiveGeneration } from '../services/generationActivity';
+import { step4ApprovalProblems } from '../services/step4Approval';
 
 const router = Router();
 
@@ -2782,6 +2783,17 @@ router.post('/:id/step4/approve', validateJWT, loadUser, async (req: Request, re
       return res.status(400).json({
         success: false,
         error: 'At least 6 modules are required',
+      });
+    }
+
+    // Every topic named and every module's hours set (services/step4Approval).
+    const problems = step4ApprovalProblems(workflow.step4.modules as any[]);
+    if (problems.length) {
+      const more = problems.length > 1 ? ` (and ${problems.length - 1} more)` : '';
+      return res.status(400).json({
+        success: false,
+        error: `Step 4 cannot be approved yet: ${problems[0]}${more}`,
+        problems,
       });
     }
 
