@@ -8,6 +8,7 @@ import { orderByStep4 } from '@/lib/moduleOrder';
 import { useGeneration } from '@/contexts/GenerationContext';
 import { api } from '@/lib/api';
 import StepDownloadButton from './StepDownloadButton';
+import { validationFrame } from '@/lib/validationFrame';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -270,6 +271,17 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
 
   const hasStep11Data = workflow.step11 && workflow.step11.modulePPTDecks?.length > 0;
   const validation = workflow.step11?.validation;
+  // The panel's colour follows its worst check; unchecked citations show as "not run".
+  const validationPanel = validationFrame(
+    validation
+      ? [
+          validation.allLessonsHavePPTs,
+          validation.allSlideCountsValid,
+          validation.allMLOsCovered,
+          validation.allCitationsValid,
+        ]
+      : []
+  );
   const isApproved = !!workflow.step11?.approvedAt;
 
   // Step 10 done — drift-tolerant gate. See packages/frontend/src/lib/stepGating.ts.
@@ -988,8 +1000,10 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Validation Report */}
           {validation && (
-            <div className="rounded-lg p-4 border bg-emerald-500/10 border-emerald-500/30">
-              <h4 className="font-medium mb-3 text-emerald-400">Validation Report</h4>
+            <div className={`rounded-lg p-4 border ${validationPanel.frame}`}>
+              <h4 className={`font-medium mb-3 ${validationPanel.heading}`}>
+                {validationPanel.title}
+              </h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                 <span
                   className={validation.allLessonsHavePPTs ? 'text-emerald-400' : 'text-red-400'}

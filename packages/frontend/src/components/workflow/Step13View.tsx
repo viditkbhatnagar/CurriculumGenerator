@@ -12,6 +12,7 @@ import {
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
 import StepDownloadButton from './StepDownloadButton';
 import { isStepDone } from '@/lib/stepGating';
+import { validationFrame } from '@/lib/validationFrame';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -182,6 +183,17 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
   const hasStep13Data = !!workflow.step13;
   const isApproved = !!workflow.step13?.approvedAt;
   const exam = workflow.step13;
+  // The panel's colour follows its worst check.
+  const validationPanel = validationFrame(
+    exam?.validation
+      ? [
+          exam.validation.allPLOsCovered,
+          exam.validation.marksAddUp,
+          exam.validation.sectionBalanceValid,
+          exam.validation.modelAnswersComplete,
+        ]
+      : []
+  );
 
   // Step 12 done — drift-tolerant gate. See packages/frontend/src/lib/stepGating.ts.
   const isStep12Approved = isStepDone(workflow, 12);
@@ -520,8 +532,10 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Validation */}
           {exam?.validation && (
-            <div className="rounded-lg p-4 border bg-emerald-500/10 border-emerald-500/30">
-              <h4 className="font-medium mb-3 text-emerald-400">Validation Report</h4>
+            <div className={`rounded-lg p-4 border ${validationPanel.frame}`}>
+              <h4 className={`font-medium mb-3 ${validationPanel.heading}`}>
+                {validationPanel.title}
+              </h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                 <span
                   className={exam.validation.allPLOsCovered ? 'text-emerald-400' : 'text-red-400'}

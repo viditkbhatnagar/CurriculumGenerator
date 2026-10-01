@@ -15,6 +15,7 @@ import StepDownloadButton from './StepDownloadButton';
 import FacultyGuideDownloadButton from './FacultyGuideDownloadButton';
 import { toast } from '@/stores/toastStore';
 import { formatAuthorList } from '@/lib/citation';
+import { validationFrame } from '@/lib/validationFrame';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -857,6 +858,21 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
 
   const hasStep10Data = workflow.step10 && (workflow.step10.moduleLessonPlans?.length ?? 0) > 0;
   const validation = workflow.step10?.validation;
+  // The panel's colour follows its worst check; case studies count only when they are required.
+  const validationPanel = validationFrame(
+    validation
+      ? [
+          validation.allModulesHaveLessonPlans,
+          validation.allLessonDurationsValid,
+          validation.totalHoursMatch,
+          validation.allMLOsCovered,
+          ...((workflow.step8 as { notRequired?: unknown } | undefined)?.notRequired
+            ? []
+            : [validation.caseStudiesIntegrated]),
+          validation.assessmentsIntegrated,
+        ]
+      : []
+  );
   const isApproved = !!workflow.step10?.approvedAt;
 
   // Step 9 done — drift-tolerant gate (status alone breaks once workflow
@@ -1555,8 +1571,10 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Validation Report */}
           {validation && (
-            <div className="rounded-lg p-4 border bg-emerald-500/10 border-emerald-500/30">
-              <h4 className="font-medium mb-3 text-emerald-400">Validation Report</h4>
+            <div className={`rounded-lg p-4 border ${validationPanel.frame}`}>
+              <h4 className={`font-medium mb-3 ${validationPanel.heading}`}>
+                {validationPanel.title}
+              </h4>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
                 <span
                   className={
