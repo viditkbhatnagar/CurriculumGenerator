@@ -103,9 +103,11 @@ export function useDeleteWorkflow() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    // The API refuses a delete that does not name the programme (confirmName).
+    mutationFn: async ({ id, projectName }: { id: string; projectName: string }) => {
       const response = await fetchAPI(`${WORKFLOW_BASE}/${id}`, {
         method: 'DELETE',
+        body: JSON.stringify({ confirmName: projectName || id }),
       });
       return response;
     },

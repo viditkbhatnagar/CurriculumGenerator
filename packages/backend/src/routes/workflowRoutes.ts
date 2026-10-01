@@ -67,7 +67,6 @@ import {
   deleteModulePlan,
   restoreStep10Snapshot,
   renameStoredModule,
-  deleteWorkflowLessonPlans,
   loadLessonIndex,
   lessonPlansSignature,
 } from '../services/step10Store';
@@ -94,6 +93,9 @@ import { sanitizeSourcePayload } from '../services/sourceValidator';
 import crypto from 'crypto';
 import { moduleDownloadSlugOf, moduleLabelOf, ModuleLike } from '../utils/moduleIdentity';
 import { moduleEntryAt, parseModuleIndex, PER_MODULE_ARRAYS } from '../utils/perModuleExport';
+import { isValidObjectId } from 'mongoose';
+import { deleteConfirmationProblem } from '../utils/softDelete';
+import { hasActiveGeneration } from '../services/generationActivity';
 
 const router = Router();
 
@@ -984,6 +986,26 @@ router.post(
  * can fetch any. The mock-admin fallback (when Auth0 is unconfigured)
  * is treated as administrator, preserving existing dev behaviour.
  */
+/**
+ * GET /api/v3/workflow/deleted
+ * Deleted programmes, for an administrator to restore (POST /:id/restore).
+ */
+router.get('/deleted', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    if ((req as any).user?.role !== 'administrator') {
+      return res.status(403).json({ success: false, error: 'Administrators only' });
+    }
+    const deleted = await CurriculumWorkflow.find({ deletedAt: { $ne: null } })
+      .select('projectName deletedAt deletedBy createdBy')
+      .sort({ deletedAt: -1 })
+      .lean();
+    res.json({ success: true, data: deleted });
+  } catch (error) {
+    loggingService.error('Error listing deleted workflows', { error });
+    res.status(500).json({ success: false, error: 'Failed to list deleted programmes' });
+  }
+});
+
 router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || (req as any).user?.userId;
@@ -8047,37 +8069,65 @@ router.post('/:id/approve', validateJWT, loadUser, async (req: Request, res: Res
 
 /**
  * DELETE /api/v3/workflow/:id
- * Delete a workflow and all its associated data
+ * Deletes a programme by hiding it: the workflow and its lesson plans are kept, with
+ * `deletedAt` set, and every read leaves it out (utils/softDelete). The request must name the
+ * programme (`confirmName`, the project name), and only its owner or an administrator may
+ * delete it. This used to erase the programme for good, with no sign-in or confirmation.
  */
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
     const workflowId = req.params.id;
-
-    // Find the workflow first
+    if (!isValidObjectId(workflowId)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
     const workflow = await CurriculumWorkflow.findById(workflowId);
-
     if (!workflow) {
-      return res.status(404).json({
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+
+    const user = (req as any).user;
+    const userId = String(user?.id || user?.userId || '');
+    const isOwner = !!userId && String(workflow.createdBy) === userId;
+    if (user?.role !== 'administrator' && !isOwner) {
+      return res.status(403).json({
         success: false,
-        error: 'Workflow not found',
+        error: 'Only the programme’s owner or an administrator can delete it',
       });
     }
 
-    // Delete the workflow
-    await CurriculumWorkflow.findByIdAndDelete(workflowId);
+    const problem = deleteConfirmationProblem(
+      { projectName: workflow.projectName, id: workflowId },
+      req.body?.confirmName ?? req.query.confirm
+    );
+    if (problem) {
+      return res
+        .status(400)
+        .json({ success: false, error: problem, code: 'CONFIRM_NAME_REQUIRED' });
+    }
 
-    // Lesson plans live in their own collection, so deleting the workflow no longer takes
-    // them with it. Left behind they are unreachable rows that nothing will ever clean up.
-    await deleteWorkflowLessonPlans(workflowId);
+    // A generation still running would lose its output and leave the step stuck on restore.
+    if (await hasActiveGeneration(workflowId)) {
+      return res.status(409).json({
+        success: false,
+        error: 'A step of this programme is still generating. Delete it once that has finished.',
+        code: 'GENERATION_IN_PROGRESS',
+      });
+    }
 
-    loggingService.info('Workflow deleted', {
+    await CurriculumWorkflow.updateOne(
+      { _id: workflow._id },
+      { $set: { deletedAt: new Date(), deletedBy: userId || 'unknown' } }
+    );
+
+    loggingService.info('Workflow deleted (kept for recovery)', {
       workflowId,
       projectName: workflow.projectName,
+      deletedBy: userId,
     });
 
     res.json({
       success: true,
-      message: 'Workflow deleted successfully',
+      message: 'Programme deleted. It is kept, and an administrator can restore it.',
     });
   } catch (error) {
     loggingService.error('Error deleting workflow', { error });
@@ -8085,6 +8135,39 @@ router.delete('/:id', async (req: Request, res: Response) => {
       success: false,
       error: 'Failed to delete workflow',
     });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/restore
+ * An administrator brings back a deleted programme.
+ */
+router.post('/:id/restore', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    if ((req as any).user?.role !== 'administrator') {
+      return res
+        .status(403)
+        .json({ success: false, error: 'Only an administrator can restore a programme' });
+    }
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'No deleted programme with that id' });
+    }
+    const restored = await CurriculumWorkflow.findOneAndUpdate(
+      { _id: req.params.id, deletedAt: { $ne: null } },
+      { $unset: { deletedAt: 1, deletedBy: 1 } },
+      { new: true }
+    ).select('projectName');
+    if (!restored) {
+      return res.status(404).json({ success: false, error: 'No deleted programme with that id' });
+    }
+    loggingService.info('Workflow restored', { workflowId: req.params.id });
+    res.json({
+      success: true,
+      data: { id: String(restored._id), projectName: restored.projectName },
+    });
+  } catch (error) {
+    loggingService.error('Error restoring workflow', { error });
+    res.status(500).json({ success: false, error: 'Failed to restore workflow' });
   }
 });
 

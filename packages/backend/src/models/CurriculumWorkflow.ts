@@ -21,6 +21,7 @@
  */
 
 import mongoose, { Schema, Document } from 'mongoose';
+import { applySoftDeleteFilter, applySoftDeleteToPipeline } from '../utils/softDelete';
 
 // ============================================================================
 // STEP 10 INTERFACES - Lesson Plans (Separated from PPT for timeout prevention)
@@ -1313,6 +1314,10 @@ export interface ICurriculumWorkflow extends Document {
   updatedAt: Date;
   completedAt?: Date;
 
+  // Soft delete: a deleted programme is kept and hidden from every find (utils/softDelete).
+  deletedAt?: Date | null;
+  deletedBy?: string;
+
   // Metrics
   totalTimeSpentMinutes?: number;
   estimatedCompletionDate?: Date;
@@ -1534,12 +1539,26 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
     completedAt: Date,
     totalTimeSpentMinutes: Number,
     estimatedCompletionDate: Date,
+
+    deletedAt: { type: Date },
+    deletedBy: { type: String },
   },
   {
     timestamps: true,
     collection: 'curriculumworkflows',
   }
 );
+
+// A deleted programme is hidden from every read unless the query is about deletedAt itself
+// (the administrators' list of deleted programmes, and restore). See utils/softDelete.
+for (const op of ['find', 'findOne', 'findOneAndUpdate', 'countDocuments'] as const) {
+  CurriculumWorkflowSchema.pre(op, function () {
+    applySoftDeleteFilter(this);
+  });
+}
+CurriculumWorkflowSchema.pre('aggregate', function () {
+  applySoftDeleteToPipeline(this.pipeline() as unknown as Record<string, unknown>[]);
+});
 
 // ============================================================================
 // INDEXES

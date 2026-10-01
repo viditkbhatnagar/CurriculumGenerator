@@ -84,6 +84,7 @@ export default function WorkflowListPage() {
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
     show: boolean;
     workflow?: CurriculumWorkflow;
+    error?: string;
   }>({ show: false });
 
   // Assign-to-faculty modal state (admin only)
@@ -237,10 +238,15 @@ export default function WorkflowListPage() {
   const handleDeleteWorkflow = async () => {
     if (!deleteConfirmModal.workflow) return;
     try {
-      await deleteWorkflow.mutateAsync(deleteConfirmModal.workflow._id);
+      await deleteWorkflow.mutateAsync({
+        id: deleteConfirmModal.workflow._id,
+        projectName: deleteConfirmModal.workflow.projectName,
+      });
       setDeleteConfirmModal({ show: false });
     } catch (err) {
-      console.error('Failed to delete workflow:', err);
+      // The server explains a refusal (a step still generating, not the owner): show it.
+      const message = err instanceof Error && err.message ? err.message : 'Could not delete it.';
+      setDeleteConfirmModal((current) => ({ ...current, error: message }));
     }
   };
 
@@ -850,8 +856,14 @@ export default function WorkflowListPage() {
                 ?
               </p>
               <p className="text-xs text-foreground-muted mb-5">
-                This action cannot be undone. All workflow data will be permanently deleted.
+                It will disappear from your list. Its content is kept, and an administrator can
+                restore it.
               </p>
+              {deleteConfirmModal.error && (
+                <p role="alert" className="text-xs text-error mb-4">
+                  {deleteConfirmModal.error}
+                </p>
+              )}
 
               <div className="flex gap-2">
                 <button
@@ -872,7 +884,7 @@ export default function WorkflowListPage() {
                       Deleting...
                     </>
                   ) : (
-                    'Delete Permanently'
+                    'Delete'
                   )}
                 </button>
               </div>
