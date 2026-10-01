@@ -1,7 +1,12 @@
 import mammoth from 'mammoth';
+import { fetchableUrlProblem, publicHttpAgent, publicHttpsAgent } from '../utils/publicUrl';
+
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { DocumentSource, ProcessedDocument } from '../types/knowledgeBase';
+
+/** The most a fetched page may weigh: a web page's text, not a download. */
+const MAX_PAGE_BYTES = 5 * 1024 * 1024;
 
 // pdf-parse is a CommonJS module that doesn't support ES imports
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -79,9 +84,26 @@ export class DocumentIngestionService {
     // Implement rate limiting
     await this.enforceRateLimit();
 
+    // Only public web pages: this URL comes from the request body (see utils/publicUrl).
+    const problem = fetchableUrlProblem(url);
+    if (problem) throw new Error(`Cannot fetch ${url}: ${problem}`);
+
     try {
       const response = await axios.get(url, {
         timeout: 10000, // 10 second timeout
+        maxRedirects: 3,
+        maxContentLength: MAX_PAGE_BYTES,
+        responseType: 'text',
+        // The address actually connected to must be public, on every hop.
+        httpAgent: publicHttpAgent,
+        httpsAgent: publicHttpsAgent,
+        beforeRedirect: (options: Record<string, any>) => {
+          const next =
+            options.href ||
+            `${options.protocol}//${options.hostname}${options.port ? `:${options.port}` : ''}${options.path || ''}`;
+          const refused = fetchableUrlProblem(String(next));
+          if (refused) throw new Error(`Redirect to ${next} refused: ${refused}`);
+        },
         headers: {
           'User-Agent': 'AGCQ-Curriculum-Generator/1.0',
         },

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { isInsideRoot } from '../utils/publicUrl';
 import * as fs from 'fs';
 import * as path from 'path';
 import { KnowledgeBaseService } from '../services/knowledgeBaseService';
@@ -278,6 +279,20 @@ export function createKnowledgeBaseRouter(): Router {
         });
       }
 
+      // targetFolder names a folder INSIDE the knowledge-base folder. Joined unchecked, "../.."
+      // let a request ingest documents from anywhere on the server (found 2026-10-01).
+      if (targetFolder !== undefined) {
+        const resolved = typeof targetFolder === 'string' ? path.resolve(kbPath, targetFolder) : '';
+        if (!resolved || !isInsideRoot(kbPath, resolved)) {
+          return res.status(400).json({
+            error: {
+              code: 'INVALID_INPUT',
+              message: 'targetFolder must be a folder inside the knowledge base',
+            },
+          });
+        }
+      }
+
       // Helper function to scan for documents
       const getAllDocuments = (rootDir: string, folder?: string): string[] => {
         const documents: string[] = [];
@@ -300,7 +315,7 @@ export function createKnowledgeBaseRouter(): Router {
         };
 
         if (folder) {
-          const targetPath = path.join(rootDir, folder);
+          const targetPath = path.resolve(rootDir, folder);
           if (fs.existsSync(targetPath)) {
             scanDirectory(targetPath);
           }
