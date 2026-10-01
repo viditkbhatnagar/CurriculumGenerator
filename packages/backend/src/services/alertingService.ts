@@ -38,9 +38,10 @@ class AlertingService {
 
   // Start periodic monitoring for alert conditions
   private startAlertMonitoring(): void {
+    // unref: a timer alone must not keep the process alive (see monitoringService).
     setInterval(() => {
       this.checkAlertConditions();
-    }, this.checkIntervalMs);
+    }, this.checkIntervalMs).unref?.();
 
     loggingService.info('Alert monitoring started', {
       thresholds: this.alertThresholds,

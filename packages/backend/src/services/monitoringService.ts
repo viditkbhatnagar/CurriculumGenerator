@@ -205,9 +205,11 @@ class MonitoringService {
 
   // Periodically flush metrics to logs
   private startMetricsFlusher(): void {
+    // unref: a timer alone must not keep the process alive, or every test that imports this
+    // service through openaiService never exits.
     setInterval(() => {
       this.flushMetrics();
-    }, this.flushIntervalMs);
+    }, this.flushIntervalMs).unref?.();
   }
 
   private flushMetrics(): void {
