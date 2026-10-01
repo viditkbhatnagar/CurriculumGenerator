@@ -1657,6 +1657,11 @@ CurriculumWorkflowSchema.pre('save', async function () {
 CurriculumWorkflowSchema.methods.advanceStep = async function (
   approvedStep?: number
 ): Promise<void> {
+  // Every stepN is free-form (Mixed), so the caller's `stepN.approvedAt = ...` is invisible to
+  // Mongoose until the path is marked: approvals of Steps 1-7 and 9 were never saved, and
+  // approved steps reloaded as unapproved (found 2026-10-01).
+  if (typeof approvedStep === 'number') this.markModified(`step${approvedStep}`);
+
   // Re-approving a step the workflow has already moved past — leave
   // currentStep where it is (and don't surface it as an error). Still
   // save so the caller's changes (e.g. the re-approval timestamp) stick.
