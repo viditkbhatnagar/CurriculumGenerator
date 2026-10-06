@@ -288,14 +288,13 @@ export function GenerationProgressBar({
   /** Real-time queue status from useStepStatus hook (e.g. 'queued', 'processing', 'completed') */
   queueStatus?: string | null;
 }) {
-  const { isGenerating, getElapsedTime, getProgress, getGenerationState } = useGeneration();
+  const { isGenerating, getElapsedTime, getGenerationState } = useGeneration();
 
   if (!isGenerating(workflowId, step)) {
     return null;
   }
 
   const elapsed = getElapsedTime(workflowId, step);
-  const progress = getProgress(workflowId, step);
   const state = getGenerationState(workflowId, step);
   const estimated = state?.estimatedDuration || 60;
   const statusInfo = getQueueStatusLabel(queueStatus);
@@ -323,14 +322,18 @@ export function GenerationProgressBar({
         </div>
       )}
 
-      {/* Progress bar */}
-      <div className="relative h-3 bg-slate-700 rounded-full overflow-hidden">
-        <div
-          className="absolute inset-y-0 left-0 bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-500 ease-out"
-          style={{ width: `${progress}%` }}
-        />
-        {/* Animated shimmer effect */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
+      {/* A running indicator, not a percentage. The bar used to fill towards 95% on a guess
+          from elapsed time, whatever the job was doing: the 21 September review found it
+          suggesting completion for a step that had failed. The backend's own state is the
+          badge above; a failure is shown on the step itself. */}
+      <div
+        className="relative h-3 bg-slate-700 rounded-full overflow-hidden"
+        role="progressbar"
+        aria-label="Generating"
+        aria-valuetext={`Running for ${formatTime(elapsed)}`}
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/40 to-blue-500/40" />
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
       </div>
 
       {/* Time info. Past the estimate, say so rather than showing "~0s
@@ -338,9 +341,9 @@ export function GenerationProgressBar({
           about to finish is what makes it look stuck. */}
       {showTimeEstimate && (
         <div className="flex justify-between text-xs text-slate-400">
-          <span>Elapsed: {formatTime(elapsed)}</span>
+          <span>Running for {formatTime(elapsed)}</span>
           {elapsed < estimated ? (
-            <span>~{formatTime(estimated - elapsed)} remaining</span>
+            <span>This step usually takes about {formatTime(estimated)}</span>
           ) : (
             <span className="text-amber-400">
               Longer than the usual {formatTime(estimated)} — still running
