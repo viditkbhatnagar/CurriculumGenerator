@@ -289,7 +289,12 @@ function KSCCard({
         </span>
       </div>
       {item.description && <p className="text-sm text-teal-600 ml-10 mb-2">{item.description}</p>}
-      {item.source && <p className="text-xs text-teal-500 ml-10">Source: {item.source}</p>}
+      {item.source && (
+        <p className="text-xs text-teal-500 ml-10">
+          Framework named by the AI (not verified): {item.source}
+        </p>
+      )}
+      <EvidenceLine evidence={item.evidence} />
       <button
         onClick={() => onEdit(item)}
         className="mt-2 ml-10 text-xs text-cyan-400 hover:text-cyan-300"
@@ -297,6 +302,33 @@ function KSCCard({
         Edit
       </button>
     </div>
+  );
+}
+
+/**
+ * The knowledge-base passages behind a statement, or that there are none (the 21 September
+ * review, 5.2: the framework's origin was not auditable).
+ */
+function EvidenceLine({ evidence }: { evidence: KSCItem['evidence'] }) {
+  if (!evidence?.checkedAt) {
+    return <p className="text-xs text-teal-500 ml-10 mt-1">Evidence: not checked yet</p>;
+  }
+  const supporting = evidence.supporting || [];
+  if (!supporting.length) {
+    return (
+      <p className="text-xs text-amber-700 ml-10 mt-1">
+        No supporting passage found in the knowledge base: needs expert review
+      </p>
+    );
+  }
+  return (
+    <ul className="text-xs text-teal-700 ml-10 mt-1 space-y-0.5">
+      {supporting.slice(0, 2).map((p) => (
+        <li key={`${p.sourceTitle}-${p.score}`} title={p.excerpt}>
+          Evidence: {p.sourceTitle} (match {p.score.toFixed(2)})
+        </li>
+      ))}
+    </ul>
   );
 }
 

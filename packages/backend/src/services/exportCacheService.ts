@@ -71,7 +71,9 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 // v31: the whole-programme document has a contents page linking to each section.
 // v32: Step 7 prints the institution's assessment rules, and Unresolved Issues lists those not
 //      stated.
-const EXPORT_FORMAT_VERSION = 'v32';
+// v33: Step 2 prints the evidence behind each competency statement, and Unresolved Issues lists
+//      statements without evidence and likely duplicates.
+const EXPORT_FORMAT_VERSION = 'v33';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the

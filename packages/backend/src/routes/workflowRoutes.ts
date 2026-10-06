@@ -104,6 +104,12 @@ import { step13Validation } from '../services/step13Validation';
 import { applyStep12Edit } from '../utils/step12Edit';
 import { BLOCKING_KINDS, publicationProblem } from '../services/publication';
 import { cleanAssessmentRules, missingAssessmentRules } from '../services/assessmentRules';
+import { checkCompetencyEvidence } from '../services/competencyEvidenceRunner';
+import {
+  competencyItemsOf,
+  currentEvidence,
+  supportingPassages,
+} from '../services/competencyEvidence';
 import { openaiService } from '../services/openaiService';
 import {
   CAPABILITY_STATEMENT,
@@ -1135,6 +1141,13 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
       const step13 = (workflow as any).step13;
       if (step13?.sectionA) {
         step13.validation = step13Validation(step13, (workflow as any).step3?.outcomes || []);
+      }
+      // Step 2: which stored passages count as evidence under the current floor.
+      for (const item of competencyItemsOf((workflow as any).step2)) {
+        if (!item.evidence) continue;
+        // Evidence found for earlier wording reads as not checked (currentEvidence).
+        if (!currentEvidence(item)) (item as any).evidence = undefined;
+        else (item.evidence as any).supporting = supportingPassages(item);
       }
     } catch (error) {
       loggingService.warn('Could not recompute Step 5/6/7/13 checks for view', {
@@ -3114,6 +3127,37 @@ router.post('/:id/step5/topics', validateJWT, loadUser, async (req: Request, res
     });
     const message = error instanceof Error ? error.message : 'Failed to link sources to topics';
     res.status(/not found/i.test(message) ? 404 : 500).json({ success: false, error: message });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/step2/evidence
+ * Search the knowledge base for the evidence behind each competency statement, and find
+ * statements that may be the same competency (services/competencyEvidence). A dry run, which
+ * reports the score distributions, unless `?dryRun=false` is given by an administrator.
+ */
+router.post('/:id/step2/evidence', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const dryRun = req.query.dryRun !== 'false';
+    if (!dryRun && (req as any).user?.role !== 'administrator') {
+      return res
+        .status(403)
+        .json({ success: false, error: 'Only an administrator can save competency evidence' });
+    }
+    const result = await checkCompetencyEvidence(req.params.id, { dryRun });
+    res.json({ success: true, data: result });
+  } catch (error) {
+    loggingService.error('Error checking competency evidence', {
+      workflowId: req.params.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    const message = error instanceof Error ? error.message : 'Failed to check evidence';
+    res
+      .status(/not found|no competency/i.test(message) ? 404 : 500)
+      .json({ success: false, error: message });
   }
 });
 

@@ -21,6 +21,7 @@ import { modulesInDocument, outlinesStep10, validationFromPlans } from './step10
 import { step13Validation } from './step13Validation';
 import { unresolvedIssues } from './unresolvedIssues';
 import { ASSESSMENT_RULES, AssessmentRules } from './assessmentRules';
+import { evidenceLabel } from './competencyEvidence';
 import { PER_MODULE_ARRAYS } from '../utils/perModuleExport';
 import { entryRequirementsLabel } from '../utils/entryRequirements';
 import { step12SummaryFromPacks, step12ValidationFromPacks } from './deliverableValidation';
@@ -740,8 +741,10 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       const rows = [
         new TableRow({
           children: [
-            this.createTableCell('ID', { bold: true, shading: 'e2e8f0', width: 15 }),
-            this.createTableCell('Statement', { bold: true, shading: 'e2e8f0', width: 85 }),
+            this.createTableCell('ID', { bold: true, shading: 'e2e8f0', width: 10 }),
+            this.createTableCell('Statement', { bold: true, shading: 'e2e8f0', width: 55 }),
+            // The knowledge-base passages that support it (the 21 September review, 5.2).
+            this.createTableCell('Evidence', { bold: true, shading: 'e2e8f0', width: 35 }),
           ],
         }),
       ];
@@ -752,6 +755,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             children: [
               this.createTableCell(item.id || '-'),
               this.createTableCell(item.statement || item.description || item.title || '-'),
+              this.createTableCell(evidenceLabel(item)),
             ],
           })
         );

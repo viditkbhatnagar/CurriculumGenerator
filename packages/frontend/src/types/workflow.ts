@@ -155,8 +155,14 @@ export interface KSCItem {
   statement: string; // ≤50 words
   description: string;
   importance: KSCImportance;
-  source?: string; // Which benchmark this came from
+  source?: string; // The framework the model named; not verified
   jobTaskMapping?: string[]; // Links to job tasks from Step 1
+  /** Knowledge-base passages that support the statement (backend services/competencyEvidence). */
+  evidence?: {
+    checkedAt: string;
+    /** The passages that count as evidence under the current floor, computed by the API. */
+    supporting?: { sourceTitle: string; excerpt: string; score: number }[];
+  };
 }
 
 // Benchmark program for Step 2 (moved from Step 1 per workflow v2.2)

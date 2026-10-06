@@ -17,6 +17,7 @@
 import { repeatedTopics, step4ValidationReport } from './step4Validation';
 import { scopeIssue } from './capabilityScope';
 import { missingAssessmentRules } from './assessmentRules';
+import { currentDuplicates, evidenceSummary } from './competencyEvidence';
 import { step5ValidationReport } from './step5Validation';
 import { step6ReportOf } from './step6Validation';
 import { step7ValidationOf } from './step7Validation';
@@ -185,6 +186,29 @@ export function unresolvedIssues(workflow: Workflowish, currentYear: number): Un
       'proposal',
       'Entry, language and RPL requirements were proposed by the AI and need institutional approval'
     );
+  }
+  // The evidence behind each competency statement, and statements that may be the same one
+  // (the 21 September review, 5.2).
+  if (w.step2) {
+    const evidence = evidenceSummary(w.step2);
+    if (!evidence.checked) {
+      add(2, 'not_checked', 'The evidence behind the competency statements has not been checked');
+    } else if (evidence.unsupported.length) {
+      add(
+        2,
+        'review',
+        `${evidence.unsupported.length} of ${evidence.checked} competency statements have no supporting passage in the knowledge base: ${evidence.unsupported
+          .slice(0, 10)
+          .join(', ')}${evidence.unsupported.length > 10 ? '…' : ''}`
+      );
+    }
+    for (const pair of currentDuplicates(w.step2)) {
+      add(
+        2,
+        'review',
+        `${pair.first} and ${pair.second} may state the same competency: merge them, or make the difference explicit`
+      );
+    }
   }
   // Essential Step 2 competencies that no programme outcome covers (the 21 September review,
   // 5.3: the coverage figure did not say which competency was missing).
