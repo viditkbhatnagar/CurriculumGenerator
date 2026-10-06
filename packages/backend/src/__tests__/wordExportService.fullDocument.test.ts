@@ -19,7 +19,7 @@ jest.mock('openai', () => ({
   })),
 }));
 
-import { wordExportService } from '../services/wordExportService';
+import { headingBookmark, wordExportService } from '../services/wordExportService';
 import { FULL_DOCUMENT_LESSON_LIMIT } from '../services/step10Completion';
 
 const lesson = (n: number) => ({
@@ -90,5 +90,38 @@ describe('whole-programme Word document, unresolved issues', () => {
     // Steps 2, 3, 5-9 and 11-13 are absent from this test programme.
     expect(text).toContain('This step has not been generated');
     expect(text.indexOf('Unresolved Issues')).toBeLessThan(text.indexOf('Program Foundation'));
+  });
+});
+
+describe('whole-programme Word document, contents page', () => {
+  it('links every contents entry to a section heading that exists', async () => {
+    const zip = await JSZip.loadAsync(await wordExportService.generateDocument(programme(1)));
+    const xml = await zip.file('word/document.xml')!.async('string');
+    const anchors = [...xml.matchAll(/<w:hyperlink [^>]*w:anchor="([^"]+)"/g)].map((m) => m[1]);
+    const bookmarks = new Set(
+      [...xml.matchAll(/<w:bookmarkStart [^>]*w:name="([^"]+)"/g)].map((m) => m[1])
+    );
+    // Unresolved Issues, Step 1, Step 4 and Step 10 are in this test programme.
+    expect(anchors).toHaveLength(4);
+    for (const anchor of anchors) expect(bookmarks.has(anchor)).toBe(true);
+  });
+
+  it('comes before the unresolved issues, and lists only the sections the document has', async () => {
+    const text = await documentText(await wordExportService.generateDocument(programme(1)));
+    const start = text.indexOf('Contents');
+    const end = text.indexOf('This list is produced automatically');
+    expect(start).toBeGreaterThan(-1);
+    expect(start).toBeLessThan(end);
+    const contents = text.slice(start, end);
+    expect(contents).toContain('10. Lesson Plans &amp; PPT Generation');
+    expect(contents).not.toContain('8. Case Studies');
+  });
+});
+
+describe('headingBookmark', () => {
+  it('makes a valid Word bookmark name', () => {
+    const name = headingBookmark('4. Course Structure & Module Learning Outcomes');
+    expect(name).toMatch(/^[A-Za-z][A-Za-z0-9_]{0,39}$/);
+    expect(headingBookmark('Unresolved Issues')).toBe('h_unresolved_issues');
   });
 });

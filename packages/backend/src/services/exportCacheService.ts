@@ -68,7 +68,8 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 //      source floor is two per weekly topic.
 // v30: Unresolved Issues adds the declared subject scope and essential competencies no outcome
 //      covers.
-const EXPORT_FORMAT_VERSION = 'v30';
+// v31: the whole-programme document has a contents page linking to each section.
+const EXPORT_FORMAT_VERSION = 'v31';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the

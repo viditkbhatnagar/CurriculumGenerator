@@ -10,6 +10,8 @@ import {
   AlignmentType,
   PageBreak,
   HeadingLevel,
+  Bookmark,
+  InternalHyperlink,
 } from 'docx';
 import OpenAI from 'openai';
 import { loggingService } from './loggingService';
@@ -67,6 +69,34 @@ const FONT_SIZES = {
 
 // Line spacing: 1.15
 const LINE_SPACING = 276; // 240 * 1.15
+
+/**
+ * The top-level heading of each step's section, shared by the section and the contents page
+ * so a contents entry always names, and links to, a heading that exists.
+ */
+const SECTION_HEADINGS: Record<number, string> = {
+  1: '1. Program Foundation',
+  2: '2. Competency Framework (KSC)',
+  3: '3. Program Learning Outcomes (PLOs)',
+  4: '4. Course Structure & Module Learning Outcomes',
+  5: '5. Academic Sources',
+  6: '6. Reading Lists',
+  7: '7. Comprehensive Assessment Package',
+  8: '8. Case Studies',
+  9: '9. Glossary',
+  10: '10. Lesson Plans & PPT Generation',
+  11: '11. PowerPoint Decks',
+  12: '12. Assignment Packs',
+  13: '13. Summative Exam',
+};
+const UNRESOLVED_HEADING = 'Unresolved Issues';
+
+/** A Word bookmark name for a heading: a letter first, no spaces, at most 40 characters. */
+export const headingBookmark = (text: string): string =>
+  `h_${text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '')}`.slice(0, 40);
 
 // Paragraph spacing: 6pt before and after
 const PARA_SPACING = {
@@ -292,7 +322,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       proposal: 'Needs approval',
       review: 'Needs review',
     };
-    out.push(this.createH1('Unresolved Issues'));
+    out.push(this.createH1(UNRESOLVED_HEADING));
     out.push(
       ...this.createFormattedParagraphs([
         'This list is produced automatically when the document is generated. It shows every check that failed or could not be run, every step with no content, every AI proposal that still needs institutional approval, and topics that look repeated across modules.',
@@ -388,13 +418,19 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       // move by section; it was bold text only. The run keeps the look, and black overrides
       // the heading style's default blue.
       heading: HeadingLevel.HEADING_1,
+      // Bookmarked, so the contents page can link to it.
       children: [
-        new TextRun({
-          text,
-          bold: true,
-          size: FONT_SIZES.H1,
-          font: FONT_FAMILY,
-          color: '000000',
+        new Bookmark({
+          id: headingBookmark(text),
+          children: [
+            new TextRun({
+              text,
+              bold: true,
+              size: FONT_SIZES.H1,
+              font: FONT_FAMILY,
+              color: '000000',
+            }),
+          ],
         }),
       ],
       spacing: {
@@ -403,6 +439,42 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         line: LINE_SPACING,
       },
     });
+  }
+
+  /**
+   * A contents page linking to each section's heading. Written out rather than as a Word
+   * contents field: a field is empty until Word updates it, and Word for the web and Google
+   * Docs do not, so the page would arrive blank there.
+   */
+  private createContentsPage(headings: string[]): Paragraph[] {
+    return [
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Contents', bold: true, size: FONT_SIZES.H1, font: FONT_FAMILY }),
+        ],
+        spacing: { after: 200, line: LINE_SPACING },
+      }),
+      ...headings.map(
+        (text) =>
+          new Paragraph({
+            children: [
+              new InternalHyperlink({
+                anchor: headingBookmark(text),
+                children: [
+                  new TextRun({
+                    text,
+                    font: FONT_FAMILY,
+                    size: FONT_SIZES.BODY,
+                    color: '1a365d',
+                    underline: {},
+                  }),
+                ],
+              }),
+            ],
+            spacing: { after: 120, line: LINE_SPACING },
+          })
+      ),
+    ];
   }
 
   /**
@@ -463,7 +535,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
   private async generateStep1Section(step1: any, contentChildren: any[]): Promise<void> {
     if (!step1) return;
 
-    contentChildren.push(this.createH1('1. Program Foundation'));
+    contentChildren.push(this.createH1(SECTION_HEADINGS[1]));
 
     // Program Description with intelligent formatting
     if (step1.programDescription) {
@@ -616,7 +688,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
-      this.createH1('2. Competency Framework (KSC)')
+      this.createH1(SECTION_HEADINGS[2])
     );
 
     // Helper to generate KSC item section (knowledge, skills, competencies)
@@ -710,7 +782,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
-      this.createH1('3. Program Learning Outcomes (PLOs)')
+      this.createH1(SECTION_HEADINGS[3])
     );
 
     step3.outcomes.forEach((plo: any, index: number) => {
@@ -801,7 +873,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
-      this.createH1('4. Course Structure & Module Learning Outcomes')
+      this.createH1(SECTION_HEADINGS[4])
     );
 
     // Summary
@@ -1138,7 +1210,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
-      this.createH1('5. Academic Sources')
+      this.createH1(SECTION_HEADINGS[5])
     );
 
     // Group by module if moduleId exists, otherwise list all
@@ -1208,7 +1280,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
-      this.createH1('6. Reading Lists')
+      this.createH1(SECTION_HEADINGS[6])
     );
 
     // Helper function to get reading text
@@ -1675,7 +1747,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
-      this.createH1('7. Comprehensive Assessment Package')
+      this.createH1(SECTION_HEADINGS[7])
     );
 
     // Assessment Strategy Summary
@@ -1920,7 +1992,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
-      this.createH1('8. Case Studies')
+      this.createH1(SECTION_HEADINGS[8])
     );
 
     // Grouped under a module heading, the way Step 7 already does it.
@@ -2034,7 +2106,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
-      this.createH1('9. Glossary')
+      this.createH1(SECTION_HEADINGS[9])
     );
 
     // Sort alphabetically
@@ -2087,7 +2159,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     );
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
-      this.createH1('11. PowerPoint Decks'),
+      this.createH1(SECTION_HEADINGS[11]),
       new Paragraph({
         children: [
           new TextRun({
@@ -2246,7 +2318,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
-      this.createH1('10. Lesson Plans & PPT Generation')
+      this.createH1(SECTION_HEADINGS[10])
     );
 
     // Counts computed LIVE from the lesson plans actually present (the array
@@ -3297,7 +3369,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
-      this.createH1('12. Assignment Packs')
+      this.createH1(SECTION_HEADINGS[12])
     );
 
     // Validation summary, computed from the packs in this document. Workflows generated
@@ -3645,7 +3717,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
-      this.createH1('13. Summative Exam')
+      this.createH1(SECTION_HEADINGS[13])
     );
 
     // Exam overview
@@ -4386,6 +4458,15 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         this.generateStep13Section(workflow.step13, out, workflow.step3?.outcomes || [])
       );
     }
+
+    // The contents page, on its own page after the title (the 21 September review, 6.7).
+    sections.push({
+      properties: {},
+      children: this.createContentsPage([
+        UNRESOLVED_HEADING,
+        ...sectionBuilders.map(({ step }) => SECTION_HEADINGS[step]),
+      ]),
+    });
 
     const sectionResults = await Promise.all(
       sectionBuilders.map(async ({ step, build }) => {
