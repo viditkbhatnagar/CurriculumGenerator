@@ -103,6 +103,12 @@ import { step7ValidationOf } from '../services/step7Validation';
 import { step13Validation } from '../services/step13Validation';
 import { applyStep12Edit } from '../utils/step12Edit';
 import { BLOCKING_KINDS, publicationProblem } from '../services/publication';
+import {
+  CAPABILITY_STATEMENT,
+  OTHER_SUBJECT,
+  scopeProblem,
+  SUBJECT_AREAS,
+} from '../services/capabilityScope';
 import { unresolvedIssues } from '../services/unresolvedIssues';
 import {
   condensedCoverage,
@@ -1000,6 +1006,17 @@ router.post(
  * is treated as administrator, preserving existing dev behaviour.
  */
 /**
+ * GET /api/v3/workflow/capability
+ * What the generator supports, shown before Step 1 (services/capabilityScope).
+ */
+router.get('/capability', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    data: { ...CAPABILITY_STATEMENT, subjectAreas: SUBJECT_AREAS, other: OTHER_SUBJECT },
+  });
+});
+
+/**
  * GET /api/v3/workflow/deleted
  * Deleted programmes, for an administrator to restore (POST /:id/restore).
  */
@@ -1244,6 +1261,8 @@ router.post('/:id/step1', validateJWT, loadUser, async (req: Request, res: Respo
       deliveryDescription,
       programPurpose,
       jobRoles,
+      subjectArea,
+      scopeAcknowledged,
     } = req.body;
 
     // Minimal validation stays synchronous
@@ -1252,6 +1271,11 @@ router.post('/:id/step1', validateJWT, loadUser, async (req: Request, res: Respo
         success: false,
         error: 'Program title must be at least 3 characters',
       });
+    }
+    // Outside the reviewed scope, the author must acknowledge that an expert will review it.
+    const outOfScope = scopeProblem(subjectArea, scopeAcknowledged);
+    if (outOfScope) {
+      return res.status(400).json({ success: false, error: outOfScope });
     }
 
     const filteredJobRoles = (jobRoles || []).filter((role: any) => {
@@ -1279,6 +1303,8 @@ router.post('/:id/step1', validateJWT, loadUser, async (req: Request, res: Respo
       deliveryDescription: deliveryDescription || '',
       programPurpose: programPurpose || '',
       jobRoles: filteredJobRoles,
+      subjectArea: typeof subjectArea === 'string' ? subjectArea : undefined,
+      scopeAcknowledged: scopeAcknowledged === true,
     };
 
     if (stepQueue) {

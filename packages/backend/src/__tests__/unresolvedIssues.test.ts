@@ -18,7 +18,8 @@ describe('unresolvedIssues', () => {
       ])
     );
     expect(say(5)).toEqual(expect.arrayContaining(['Every module outcome has a source']));
-    expect(issues.find((i) => i.step === 1)?.kind).toBe('proposal');
+    const step1 = issues.filter((i) => i.step === 1).map((i) => i.kind);
+    expect(step1).toEqual(expect.arrayContaining(['proposal', 'not_checked']));
     // Steps the fixture does not hold are reported missing, not skipped.
     expect(issues.filter((i) => i.kind === 'missing').map((i) => i.step)).toEqual(
       expect.arrayContaining([2, 3, 6, 7, 9, 11, 12, 13])

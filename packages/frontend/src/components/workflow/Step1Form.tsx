@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep1, useApproveStep1 } from '@/hooks/useWorkflow';
+import CapabilityScopePanel from './CapabilityScopePanel';
 import { useStepStatus } from '@/hooks/useStepStatus';
 import {
   useGeneration,
@@ -77,6 +78,8 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
     programTitle: '',
     programDescription: '',
     academicLevel: 'certificate',
+    subjectArea: '',
+    scopeAcknowledged: false,
 
     // Credit Framework
     isCreditAwarding: true,
@@ -136,6 +139,8 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
         programTitle: step1.programTitle || '',
         programDescription: step1.programDescription || '',
         academicLevel: step1.academicLevel || 'certificate',
+        subjectArea: (step1 as any).subjectArea || '',
+        scopeAcknowledged: !!(step1 as any).scopeAcknowledged,
 
         isCreditAwarding: creditFramework?.isCreditAwarding ?? true,
         creditSystem: creditFramework?.creditSystem || creditFramework?.system || 'uk',
@@ -409,6 +414,12 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-8">
+        <CapabilityScopePanel
+          subjectArea={formData.subjectArea || ''}
+          acknowledged={!!formData.scopeAcknowledged}
+          onChange={(next) => setFormData((prev) => ({ ...prev, ...next }))}
+        />
+
         {/* ============================================================ */}
         {/* SECTION 1: PROGRAM IDENTITY & DESCRIPTION */}
         {/* ============================================================ */}

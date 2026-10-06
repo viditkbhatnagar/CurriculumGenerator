@@ -1991,6 +1991,10 @@ export interface Step1FormData {
   programDescription: string;
   academicLevel: AcademicLevel;
 
+  // Declared scope (backend services/capabilityScope)
+  subjectArea?: string;
+  scopeAcknowledged?: boolean;
+
   // Credit Framework
   isCreditAwarding: boolean;
   creditSystem: CreditSystem;

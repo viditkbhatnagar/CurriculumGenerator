@@ -15,6 +15,7 @@
  * the list cannot disagree with them. Pure, so it can be tested.
  */
 import { repeatedTopics, step4ValidationReport } from './step4Validation';
+import { scopeIssue } from './capabilityScope';
 import { step5ValidationReport } from './step5Validation';
 import { step6ReportOf } from './step6Validation';
 import { step7ValidationOf } from './step7Validation';
@@ -175,6 +176,8 @@ export function unresolvedIssues(workflow: Workflowish, currentYear: number): Un
     if (!w[`step${step}`]) add(step, 'missing', 'This step has not been generated');
   }
 
+  const scope = w.step1 ? scopeIssue(w.step1) : null;
+  if (scope) add(1, scope.kind, scope.issue);
   if (w.step1?.entryRequirements && w.step1?.entryRequirementsOrigin !== 'institution') {
     add(
       1,

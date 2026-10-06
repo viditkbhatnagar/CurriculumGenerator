@@ -425,6 +425,10 @@ class WorkflowService {
       // Labour Market
       programPurpose: string;
       jobRoles: any[]; // Array of { title, description, tasks } or strings
+
+      // Declared scope (services/capabilityScope)
+      subjectArea?: string;
+      scopeAcknowledged?: boolean;
     }
   ): Promise<ICurriculumWorkflow> {
     const workflow = await CurriculumWorkflow.findById(workflowId);
@@ -476,6 +480,8 @@ class WorkflowService {
     workflow.step1 = {
       programTitle: input.programTitle || '',
       programDescription: input.programDescription || '',
+      subjectArea: input.subjectArea,
+      scopeAcknowledged: input.scopeAcknowledged,
       academicLevel: input.academicLevel || 'certificate',
       creditFramework: {
         system: normalizedCreditSystem as CreditSystem,
