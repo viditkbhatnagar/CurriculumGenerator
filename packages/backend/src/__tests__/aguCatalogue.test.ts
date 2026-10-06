@@ -86,8 +86,8 @@ describe('AGU catalogue v1.4', () => {
     expect(courseShape.assessment.value.reduce((n, a) => n + a.weight, 0)).toBe(100);
   });
 
-  it('stays pending until AGU confirms the edition', () => {
-    expect(AGU_CATALOGUE_V1_4.edition.approvalStatus).toBe('pending_confirmation');
+  it('is the edition AGU confirmed as approved (3 October 2026)', () => {
+    expect(AGU_CATALOGUE_V1_4.edition.approvalStatus).toBe('approved');
   });
 
   it('finds a course by code regardless of case', () => {

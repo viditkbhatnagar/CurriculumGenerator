@@ -9,7 +9,8 @@
  * 40/20/40 assessment scheme) is not in the catalogue; it comes from AGU's Wave 1 faculty
  * templates and is sourced as such.
  *
- * approvalStatus stays 'pending_confirmation' until AGU confirms v1.4 is its approved edition.
+ * AGU confirmed v1.4 as its approved edition on 3 October 2026 (Logan Pacey, AGU's answers to
+ * the curriculum questionnaire), adding that the newest edition should always be the one used.
  */
 import { CatalogueCourse, CatalogueEdition } from './types';
 
@@ -95,9 +96,9 @@ export const AGU_CATALOGUE_V1_4: CatalogueEdition = {
     version: '1.4',
     published: '2026-09-29',
     effective: '2026-08-28',
-    approvalStatus: 'pending_confirmation',
+    approvalStatus: 'approved',
     approvalNote:
-      'Confirm with AGU that v1.4 is the approved controlling edition before any draft is issued as final.',
+      'Confirmed by AGU as the approved edition on 3 October 2026 (Logan Pacey). AGU may issue a later edition; the newest approved edition is the one to use.',
   },
   credentials: [
     {
