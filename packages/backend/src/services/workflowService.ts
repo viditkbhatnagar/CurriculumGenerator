@@ -30,7 +30,7 @@ import {
   validationFromStubs,
 } from './step10Completion';
 import { saveModulePlan, loadModulePlan, withLessons, loadLessonIndex } from './step10Store';
-import { reachStep, recordStepGenerated } from './stepGating';
+import { reachStep, recordStepGenerated, refuseEmpty } from './stepGating';
 import { step12Index } from '../utils/step12Edit';
 import {
   step5ValidationReport,
@@ -3056,6 +3056,9 @@ CRITICAL VALIDATION:
 
     // Process readings
     const readings = readingContent.readings || [];
+    // An empty result is a failure, not a finished step: saved, it showed as complete with an
+    // empty reading list (the 21 September review, 5.6 and criterion 11).
+    refuseEmpty(readings.length, 6, 'reading list');
     // modules already declared above
 
     // Organize readings by module
@@ -3323,6 +3326,8 @@ CRITICAL VALIDATION:
         });
       }
     );
+
+    refuseEmpty(assessmentResponse.formativeAssessments.length, 7, 'assessments');
 
     // Validation
     const totalSampleQuestions =
@@ -3798,6 +3803,9 @@ CRITICAL VALIDATION:
         workflowId,
       });
     }
+    // Saved, an empty result showed as complete and was later reported as integrated (the 21
+    // September review, 5.8). A programme that needs no case studies says so at approval.
+    refuseEmpty(caseStudies.length, 8, 'case studies');
     const modules = workflow.step4?.modules || [];
 
     // Calculate word counts
@@ -3984,6 +3992,7 @@ CRITICAL VALIDATION:
 
     // Process terms
     const terms = glossaryContent.terms || [];
+    refuseEmpty(terms.length, 9, 'glossary terms');
     const modules = workflow.step4?.modules || [];
 
     // Calculate word counts for definitions
@@ -5253,6 +5262,7 @@ CRITICAL VALIDATION:
 
     const { summativeExamService } = await import('./summativeExamService');
     const examResult = await summativeExamService.generateSummativeExam(workflow, onProgress);
+    refuseEmpty((examResult as any)?.sectionA?.length || 0, 13, 'exam questions');
 
     workflow.step13 = examResult;
     // The exam is complete — drop the generation checkpoint so it can't shadow a

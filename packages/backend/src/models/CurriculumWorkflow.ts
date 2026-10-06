@@ -1296,9 +1296,11 @@ export interface ICurriculumWorkflow extends Document {
   // Step Progress Tracking
   stepProgress: Array<{
     step: number;
-    status: 'pending' | 'in_progress' | 'completed' | 'approved';
+    status: 'pending' | 'in_progress' | 'completed' | 'approved' | 'failed';
     startedAt?: Date;
     completedAt?: Date;
+    error?: string;
+    failedAt?: Date;
     approvedAt?: Date;
     approvedBy?: mongoose.Types.ObjectId;
     reviewTimeMinutes?: number;
@@ -1531,11 +1533,14 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
         step: { type: Number, required: true },
         status: {
           type: String,
-          enum: ['pending', 'in_progress', 'completed', 'approved'],
+          enum: ['pending', 'in_progress', 'completed', 'approved', 'failed'],
           default: 'pending',
         },
         startedAt: Date,
         completedAt: Date,
+        // Set when the step's generation failed for good (stepGating.recordStepFailed).
+        error: String,
+        failedAt: Date,
         approvedAt: Date,
         approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
         reviewTimeMinutes: Number,

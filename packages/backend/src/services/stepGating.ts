@@ -68,7 +68,18 @@ export function recordStepGenerated(workflow: Workflowish, step: number) {
     progress.status = 'completed';
     progress.startedAt = progress.startedAt || new Date();
     progress.completedAt = new Date();
+    progress.error = undefined;
+    progress.failedAt = undefined;
   }
+}
+
+/** A step's generation failed for good: shown as failed, with the reason, never as done. */
+export function recordStepFailed(workflow: Workflowish, step: number, message: string) {
+  const progress = progressOf(workflow, step);
+  if (!progress) return;
+  progress.status = 'failed';
+  progress.error = message.slice(0, 1000);
+  progress.failedAt = new Date();
 }
 
 /**
@@ -101,4 +112,16 @@ export function recordStepApproved(
     nextProgress.status = 'in_progress';
     nextProgress.startedAt = nextProgress.startedAt || now;
   }
+}
+
+/**
+ * A generation that produced nothing is a failure. Thrown before anything is saved, so the
+ * job fails, the step is marked failed with this message, and earlier content is left as it
+ * was; it is never stored as a completed step with nothing in it.
+ */
+export function refuseEmpty(count: number, step: number, what: string): void {
+  if (count > 0) return;
+  throw new Error(
+    `Step ${step} produced no ${what}. Nothing was saved; generate the step again, and if it keeps failing, report it.`
+  );
 }

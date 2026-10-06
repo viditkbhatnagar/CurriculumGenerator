@@ -10,6 +10,7 @@
  * - Graceful fallback when Redis is unavailable
  */
 
+import { recordStepFailed } from '../services/stepGating';
 import Bull, { Queue, Job } from 'bull';
 import { loggingService } from '../services/loggingService';
 import { workflowService } from '../services/workflowService';
@@ -198,10 +199,13 @@ if (stepQueue) {
     try {
       const { stepNumber, workflowId } = job.data;
       const workflow = await CurriculumWorkflow.findById(workflowId);
-      const sp = workflow?.stepProgress?.find((p: any) => p.step === stepNumber);
-      if (sp && sp.status === 'in_progress') {
-        sp.status = 'pending';
-        workflow!.markModified('stepProgress');
+      // Marked failed, with the reason, so it shows as failed and is never taken for done.
+      // It was reset to "pending", which looked as though nothing had happened; and when the
+      // step had never produced content there was nowhere else the error was recorded
+      // (Step 8 on the 21 September Logistics test).
+      if (workflow) {
+        recordStepFailed(workflow, stepNumber, error.message);
+        workflow.markModified('stepProgress');
       }
 
       // Record the failure on the step itself. Without this a failed

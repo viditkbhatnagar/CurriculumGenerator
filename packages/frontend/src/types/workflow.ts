@@ -7,7 +7,13 @@
 export type WorkflowStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
 
 // Step statuses
-export type StepStatus = 'pending' | 'in_progress' | 'completed' | 'approved' | 'revision_needed';
+export type StepStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'approved'
+  | 'revision_needed'
+  | 'failed';
 
 // Workflow overall status
 export type WorkflowStatus =
@@ -1794,6 +1800,9 @@ export interface StepProgress {
   approvedAt?: string;
   approvedBy?: string;
   timeSpentMinutes?: number;
+  /** Why the step's last generation failed, when its status is 'failed'. */
+  error?: string;
+  failedAt?: string;
 }
 
 // =============================================================================

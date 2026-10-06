@@ -1,4 +1,11 @@
-import { reachStep, recordStepApproved, recordStepGenerated } from '../services/stepGating';
+import {
+  isStepDone,
+  reachStep,
+  recordStepApproved,
+  recordStepFailed,
+  recordStepGenerated,
+  refuseEmpty,
+} from '../services/stepGating';
 
 function workflow(currentStep: number, statuses: Record<number, string> = {}) {
   return {
@@ -75,5 +82,28 @@ describe('step progression', () => {
     reachStep(w, 3);
     expect(w.currentStep).toBe(3);
     expect(w.stepProgress[2].status).toBe('pending');
+  });
+});
+
+describe('failed generations', () => {
+  it('marks the step failed with its reason, and not done', () => {
+    const w = workflow(8, { 8: 'in_progress' });
+    recordStepFailed(w, 8, 'The model returned nothing');
+    expect(w.stepProgress[7].status).toBe('failed');
+    expect(w.stepProgress[7].error).toBe('The model returned nothing');
+    expect(isStepDone(w, 8)).toBe(false);
+  });
+
+  it('clears the failure when the step is generated again', () => {
+    const w = workflow(8);
+    recordStepFailed(w, 8, 'boom');
+    recordStepGenerated(w, 8);
+    expect(w.stepProgress[7].status).toBe('completed');
+    expect(w.stepProgress[7].error).toBeUndefined();
+  });
+
+  it('refuses an empty result before anything is saved', () => {
+    expect(() => refuseEmpty(0, 8, 'case studies')).toThrow(/Step 8 produced no case studies/);
+    expect(() => refuseEmpty(3, 8, 'case studies')).not.toThrow();
   });
 });

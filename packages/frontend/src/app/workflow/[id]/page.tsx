@@ -183,6 +183,9 @@ function getStepStatusColor(status?: StepStatus, isCurrent: boolean = false): st
   if (status === 'approved' || status === 'completed') {
     return 'bg-teal-500 text-white border-teal-500';
   }
+  if (status === 'failed') {
+    return 'bg-red-500 text-white border-red-500';
+  }
   if (isCurrent) {
     return 'bg-teal-600 text-white border-teal-600';
   }
@@ -623,6 +626,26 @@ export default function WorkflowDetailPage() {
               />
             </div>
           </div>
+
+          {/* A failed generation is shown as failed, with its reason, never as done. */}
+          {(() => {
+            const failed = workflow.stepProgress.find(
+              (p) => p.step === currentStep && p.status === 'failed'
+            );
+            return failed ? (
+              <div
+                role="alert"
+                className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-800"
+              >
+                <p className="font-semibold">The last generation of this step failed.</p>
+                <p className="mt-1">{failed.error || 'No reason was recorded.'}</p>
+                <p className="mt-1 text-red-700">
+                  Nothing from that attempt was saved. Generate the step again; if it keeps failing,
+                  report it.
+                </p>
+              </div>
+            ) : null;
+          })()}
 
           {/* Step Content */}
           <div className="bg-white rounded-xl border border-teal-200/50 shadow-sm">
