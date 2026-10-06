@@ -102,6 +102,8 @@ import { step6ReportOf } from '../services/step6Validation';
 import { step7ValidationOf } from '../services/step7Validation';
 import { step13Validation } from '../services/step13Validation';
 import { applyStep12Edit } from '../utils/step12Edit';
+import { BLOCKING_KINDS, publicationProblem } from '../services/publication';
+import { unresolvedIssues } from '../services/unresolvedIssues';
 import {
   condensedCoverage,
   condenseRun,
@@ -6713,28 +6715,29 @@ router.post('/:id/assign', validateJWT, loadUser, async (req: Request, res: Resp
 router.post('/:id/complete', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || (req as any).user?.userId;
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
     const workflow = await CurriculumWorkflow.findById(req.params.id);
 
     if (!workflow) {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
 
-    if (
-      !isStepDone(workflow, 12) ||
-      !workflow.step12 ||
-      !workflow.step12.moduleAssignmentPacks ||
-      workflow.step12.moduleAssignmentPacks.length === 0 ||
-      !workflow.step13
-    ) {
-      return res.status(400).json({
-        success: false,
-        error:
-          'All 13 steps must be completed first, including assignment packs and summative exam',
-      });
+    // Completing a curriculum submits it to the super admin for approval (services/publication).
+    const problem = publicationProblem(workflow, 'submit', (req as any).user?.role);
+    if (problem) {
+      return res.status(400).json({ success: false, error: problem });
     }
 
     workflow.status = 'review_pending';
     workflow.completedAt = new Date();
+    workflow.publication = {
+      ...((workflow.publication as any) || {}),
+      submittedAt: new Date(),
+      submittedBy: userId,
+    };
+    workflow.markModified('publication');
 
     // Calculate total time
     const startTime = workflow.stepProgress.find((p) => p.step === 1)?.startedAt;
@@ -6753,7 +6756,7 @@ router.post('/:id/complete', validateJWT, loadUser, async (req: Request, res: Re
         completedAt: workflow.completedAt,
         totalTimeSpentMinutes: workflow.totalTimeSpentMinutes,
       },
-      message: 'Workflow complete! Ready for final review and publication.',
+      message: 'Submitted for approval. The super admin reviews it before it is published.',
     });
   } catch (error) {
     loggingService.error('Error completing workflow', { error });
@@ -6761,6 +6764,117 @@ router.post('/:id/complete', validateJWT, loadUser, async (req: Request, res: Re
       success: false,
       error: error instanceof Error ? error.message : 'Failed to complete workflow',
     });
+  }
+});
+
+/**
+ * GET /api/v3/workflow/:id/unresolved-issues
+ * What the automated checks could not pass (services/unresolvedIssues), for the approver.
+ */
+router.get('/:id/unresolved-issues', async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const workflow = await CurriculumWorkflow.findById(req.params.id).lean();
+    if (!workflow) return res.status(404).json({ success: false, error: 'Workflow not found' });
+    res.json({ success: true, data: unresolvedIssues(workflow, new Date().getFullYear()) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to list unresolved issues' });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/publish  { acknowledgeIssues?: boolean }
+ * The super admin approves a submitted curriculum and publishes it. Refused while checks fail
+ * or steps are missing, unless the approver acknowledges them.
+ */
+router.post('/:id/publish', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    if (!workflow) return res.status(404).json({ success: false, error: 'Workflow not found' });
+    const user = (req as any).user;
+    const problem = publicationProblem(workflow, 'publish', user?.role);
+    if (problem) {
+      return res
+        .status(user?.role === 'administrator' ? 409 : 403)
+        .json({ success: false, error: problem });
+    }
+    const blocking = unresolvedIssues(workflow, new Date().getFullYear()).filter((i) =>
+      BLOCKING_KINDS.has(i.kind)
+    );
+    if (blocking.length && req.body?.acknowledgeIssues !== true) {
+      return res.status(409).json({
+        success: false,
+        error: `${blocking.length} automated check(s) fail or steps are missing. Review them, then publish with acknowledgeIssues.`,
+        issues: blocking,
+      });
+    }
+    workflow.status = 'published';
+    workflow.publication = {
+      ...((workflow.publication as any) || {}),
+      publishedAt: new Date(),
+      publishedBy: user?.id,
+      acknowledgedIssues: blocking.length,
+    };
+    workflow.markModified('publication');
+    await workflow.save();
+    loggingService.info('Curriculum published', {
+      workflowId: req.params.id,
+      publishedBy: user?.email,
+      acknowledgedIssues: blocking.length,
+    });
+    res.json({
+      success: true,
+      data: { status: workflow.status, publication: workflow.publication },
+    });
+  } catch (error) {
+    loggingService.error('Error publishing workflow', { error });
+    res.status(500).json({ success: false, error: 'Failed to publish' });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/return  { note: string }
+ * The super admin sends a submitted curriculum back to its author with a note.
+ */
+router.post('/:id/return', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 2000) : '';
+    if (!note) {
+      return res.status(400).json({ success: false, error: 'Say what needs changing (note)' });
+    }
+    const workflow = await CurriculumWorkflow.findById(req.params.id);
+    if (!workflow) return res.status(404).json({ success: false, error: 'Workflow not found' });
+    const user = (req as any).user;
+    const problem = publicationProblem(workflow, 'return', user?.role);
+    if (problem) {
+      return res
+        .status(user?.role === 'administrator' ? 409 : 403)
+        .json({ success: false, error: problem });
+    }
+    workflow.status = 'step13_complete';
+    workflow.publication = {
+      ...((workflow.publication as any) || {}),
+      returnedAt: new Date(),
+      returnedBy: user?.id,
+      returnNote: note,
+    };
+    workflow.markModified('publication');
+    await workflow.save();
+    res.json({
+      success: true,
+      data: { status: workflow.status, publication: workflow.publication },
+    });
+  } catch (error) {
+    loggingService.error('Error returning workflow', { error });
+    res.status(500).json({ success: false, error: 'Failed to return' });
   }
 });
 

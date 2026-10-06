@@ -1926,6 +1926,17 @@ export interface CurriculumWorkflow {
   // Metadata
   createdAt: string;
   updatedAt: string;
+  /** Approval before publication (backend services/publication). */
+  publication?: {
+    submittedAt?: string;
+    submittedBy?: string;
+    publishedAt?: string;
+    publishedBy?: string;
+    returnedAt?: string;
+    returnedBy?: string;
+    returnNote?: string;
+    acknowledgedIssues?: number;
+  };
   completedAt?: string;
   publishedAt?: string;
   totalTimeSpentMinutes?: number;

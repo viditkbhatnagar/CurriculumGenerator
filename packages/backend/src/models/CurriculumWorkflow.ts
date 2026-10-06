@@ -1322,6 +1322,18 @@ export interface ICurriculumWorkflow extends Document {
   deletedAt?: Date | null;
   deletedBy?: string;
 
+  // Approval before publication (services/publication).
+  publication?: {
+    submittedAt?: Date;
+    submittedBy?: string;
+    publishedAt?: Date;
+    publishedBy?: string;
+    returnedAt?: Date;
+    returnedBy?: string;
+    returnNote?: string;
+    acknowledgedIssues?: number;
+  };
+
   // Metrics
   totalTimeSpentMinutes?: number;
   estimatedCompletionDate?: Date;
@@ -1546,6 +1558,8 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
 
     deletedAt: { type: Date },
     deletedBy: { type: String },
+
+    publication: { type: Schema.Types.Mixed },
   },
   {
     timestamps: true,

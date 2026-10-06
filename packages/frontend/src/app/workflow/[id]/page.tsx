@@ -320,7 +320,7 @@ export default function WorkflowDetailPage() {
         </header>
 
         {/* Final Review Content */}
-        <FinalReviewView workflow={workflow} />
+        <FinalReviewView workflow={workflow} onChanged={() => refetch()} />
       </div>
     );
   }
@@ -450,14 +450,26 @@ export default function WorkflowDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {workflow.currentStep === 13 && workflow.step13 && (
+              {/* A submitted or published curriculum opens its approval page; a finished one is
+                  submitted for the super admin's approval (backend services/publication). */}
+              {workflow.status === 'review_pending' || workflow.status === 'published' ? (
                 <button
-                  onClick={handleCompleteWorkflow}
-                  disabled={completeWorkflow.isPending}
+                  onClick={() => setShowFinalReview(true)}
                   className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-white font-medium rounded-lg transition-all shadow-lg shadow-teal-500/20"
                 >
-                  {completeWorkflow.isPending ? 'Completing...' : 'Complete & Review'}
+                  {workflow.status === 'published' ? 'Published' : 'Approval'}
                 </button>
+              ) : (
+                workflow.step13 &&
+                isStepDone(workflow, 12) && (
+                  <button
+                    onClick={handleCompleteWorkflow}
+                    disabled={completeWorkflow.isPending}
+                    className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-white font-medium rounded-lg transition-all shadow-lg shadow-teal-500/20"
+                  >
+                    {completeWorkflow.isPending ? 'Submitting...' : 'Submit for approval'}
+                  </button>
+                )
               )}
               {workflow.currentStep >= 9 && workflow.step9 && (
                 <button
