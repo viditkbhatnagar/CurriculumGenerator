@@ -2724,17 +2724,16 @@ CRITICAL VALIDATION:
    */
   rebuildStep5InPlace(workflow: ICurriculumWorkflow): void {
     const previous = workflow.step5 as any;
-    workflow.step5 = this.buildStep5Summary(
-      previous.sources || [],
-      (workflow.step4 as any)?.modules || [],
-      {
+    // Everything the rebuild does not produce is kept: the approval, an admin override, and
+    // anything added later. Keeping only the approval dropped the rest.
+    workflow.step5 = {
+      ...previous,
+      ...this.buildStep5Summary(previous.sources || [], (workflow.step4 as any)?.modules || [], {
         sourceShortfalls: previous.sourceShortfalls || [],
         subjectFields: previous.subjectFields || [],
         retractionsRemoved: previous.retractionsRemoved || [],
-      }
-    );
-    (workflow.step5 as any).approvedAt = previous.approvedAt;
-    (workflow.step5 as any).approvedBy = previous.approvedBy;
+      }),
+    };
     workflow.markModified('step5');
   }
 
@@ -2831,12 +2830,8 @@ CRITICAL VALIDATION:
     });
 
     if (!dryRun) {
-      workflow.step5 = this.buildStep5Summary(sources, modules, {
-        sourceShortfalls: step5.sourceShortfalls,
-        subjectFields: step5.subjectFields,
-        retractionsRemoved: step5.retractionsRemoved,
-      });
-      workflow.markModified('step5');
+      // `sources` is the stored array, scored in place; the rebuild keeps the approval.
+      this.rebuildStep5InPlace(workflow);
       await workflow.save();
     }
     // One module's matches in full, so a reviewer can judge whether the floor is sensible.
