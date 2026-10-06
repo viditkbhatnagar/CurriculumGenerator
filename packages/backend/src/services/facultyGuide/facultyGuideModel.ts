@@ -19,6 +19,7 @@
  *
  * Pure functions only, so the mapping can be tested.
  */
+import { CondensedSession, storedCondensed } from './condensedGuide';
 
 /**
  * Lookups the guide needs, taken from the workflow's own steps.
@@ -189,6 +190,8 @@ export interface GuideSession {
     aiUse?: string;
   };
   takeaways: string[];
+  /** The AI-condensed version of this session, when one is stored and current. */
+  condensed?: CondensedSession;
 }
 
 export interface GuideModule {
@@ -520,6 +523,7 @@ export function guideSession(
   const checks = guideChecks(lesson?.formativeChecks);
 
   return {
+    condensed: storedCondensed(lesson?.facultyGuide),
     number: lesson?.lessonNumber ?? index + 1,
     topic,
     durationMinutes: typeof lesson?.duration === 'number' ? lesson.duration : undefined,

@@ -94,12 +94,22 @@ const orNone = (paragraphs: Paragraph[]): Paragraph[] =>
 
 const section = (title: string) => heading(title, HeadingLevel.HEADING_3);
 
+/** An AI-condensed item; ⚑ when most of its words are not in the lesson (condensedGuide). */
+const FLAG = ' ⚑';
+const flagged = (item: { value: string; check?: boolean }) =>
+  `${item.value}${item.check ? FLAG : ''}`;
+
 function focusSection(s: GuideSession): Paragraph[] {
   const { keyConcepts, whyItMatters, connectionToPrevious } = s.focus;
+  const c = s.condensed;
   return [
     section('1. Session Focus'),
     labelled('Main topic', s.topic),
-    ...(keyConcepts.length ? [labelled('Key concepts', keyConcepts.join('; '))] : []),
+    ...(c
+      ? [caption('Must teach'), ...c.mustTeach.map((m) => bullet(flagged(m), 1))]
+      : keyConcepts.length
+        ? [labelled('Key concepts', keyConcepts.join('; '))]
+        : []),
     ...(whyItMatters.length
       ? [caption('Why it matters: it builds towards'), ...whyItMatters.map((w) => bullet(w, 1))]
       : []),
@@ -122,6 +132,12 @@ function alignmentSection(s: GuideSession): Paragraph[] {
 }
 
 function guidanceSection(s: GuideSession): Paragraph[] {
+  if (s.condensed?.guidance.length) {
+    return [
+      section('3. Faculty Teaching Guidance'),
+      ...s.condensed.guidance.map((g) => bullet(flagged(g))),
+    ];
+  }
   return [
     section('3. Faculty Teaching Guidance'),
     ...orNone([...s.teachingGuidance.map((g) => bullet(g)), ...labelledList('Pacing', s.pacing)]),
@@ -129,6 +145,15 @@ function guidanceSection(s: GuideSession): Paragraph[] {
 }
 
 function conceptsSection(s: GuideSession): Paragraph[] {
+  if (s.condensed?.keyConcepts.length) {
+    return [
+      section('4. Key Concepts to Cover'),
+      ...s.condensed.keyConcepts.flatMap((k) => [
+        labelled(k.name, `${k.definition}${k.check ? FLAG : ''}`),
+        ...optional('Business example', k.example, 1),
+      ]),
+    ];
+  }
   return [
     section('4. Key Concepts to Cover'),
     ...orNone(
@@ -185,7 +210,29 @@ function caseActivityBlock(c: GuideCaseActivity): Paragraph[] {
   ];
 }
 
+/** A condensed case activity: what it is, how long, and what students produce. */
+function caseActivityBrief(c: GuideCaseActivity): Paragraph[] {
+  const time = c.minutes ? `${c.minutes} min` : c.time;
+  return [
+    labelled('Case activity', `${c.title}${time ? ` (${time})` : ''}`),
+    ...optional('Purpose', c.purpose, 1),
+    ...labelledList('Students produce', c.expectedOutputs, 1),
+  ];
+}
+
 function activitiesSection(s: GuideSession): Paragraph[] {
+  const condensed = s.condensed?.activities || [];
+  if (condensed.length) {
+    return [
+      section('5. Teaching & Learning Activities'),
+      ...condensed.flatMap((a) => [
+        caption(`${a.title}${a.minutes ? ` (${a.minutes} min)` : ''}`),
+        ...optional('Lecturer', a.lecturer, 1),
+        ...optional('Students', a.students, 1),
+      ]),
+      ...(s.caseActivity ? caseActivityBrief(s.caseActivity) : []),
+    ];
+  }
   return [
     section('5. Teaching & Learning Activities'),
     ...orNone([
@@ -197,10 +244,11 @@ function activitiesSection(s: GuideSession): Paragraph[] {
 }
 
 function promptsSection(s: GuideSession): Paragraph[] {
+  const ask = s.condensed?.prompts.length ? s.condensed.prompts.map(flagged) : s.prompts.ask;
   return [
     section('6. Faculty Facilitation Prompts'),
     ...orNone([
-      ...s.prompts.ask.map((q) => labelled('Ask', q)),
+      ...ask.map((q) => labelled('Ask', q)),
       ...s.prompts.watchFor.map((m) => labelled('Watch for the misconception', m)),
     ]),
   ];
@@ -219,6 +267,23 @@ function checkBlock(c: GuideCheck): Paragraph[] {
 }
 
 function checksSection(s: GuideSession): Paragraph[] {
+  const c = s.condensed;
+  if (c?.quickCheck.length) {
+    return [
+      section('7. Check for Learning'),
+      caption('Quick check (end of session)'),
+      ...c.quickCheck.flatMap((q) => [
+        bullet(`${q.question}${q.check ? FLAG : ''}`, 1),
+        labelled('Answer', q.answer, 2),
+      ]),
+      // The module's formative tasks, one line each; set out in full in the appendix.
+      ...s.checks.map((check) =>
+        bullet(
+          `${check.ref ? `${check.ref}: ` : ''}${check.question || check.label}${check.ref ? ' (appendix)' : ''}`
+        )
+      ),
+    ];
+  }
   return [
     section('7. Check for Learning'),
     ...orNone([
@@ -230,6 +295,13 @@ function checksSection(s: GuideSession): Paragraph[] {
 
 function resourcesSection(s: GuideSession): Paragraph[] {
   const r = s.resources;
+  if (s.condensed?.prepare.length) {
+    return [
+      section('8. Resources / Preparation'),
+      ...s.condensed.prepare.map((p) => bullet(flagged(p))),
+      ...countedList('Essential reading', 'item(s)', r.readings),
+    ];
+  }
   const effort = r.independentStudyMinutes ? `${r.independentStudyMinutes} minutes` : undefined;
   return [
     section('8. Resources / Preparation'),
@@ -249,6 +321,13 @@ function resourcesSection(s: GuideSession): Paragraph[] {
 }
 
 function takeawaysSection(s: GuideSession): Paragraph[] {
+  if (s.condensed?.takeaways.length) {
+    return [
+      section('9. Session Takeaways'),
+      para('By the end of the session, students should be able to:'),
+      ...s.condensed.takeaways.map((t) => bullet(flagged(t))),
+    ];
+  }
   return [
     section('9. Session Takeaways'),
     ...(s.takeaways.length
@@ -289,7 +368,14 @@ function glanceTable(s: GuideSession): Table {
     .join('; ');
   const none = ['none recorded'];
   const rows: [string, string[]][] = [
-    ['Must teach', s.focus.keyConcepts.length ? s.focus.keyConcepts : [s.topic]],
+    [
+      'Must teach',
+      s.condensed?.mustTeach.length
+        ? s.condensed.mustTeach.map(flagged)
+        : s.focus.keyConcepts.length
+          ? s.focus.keyConcepts
+          : [s.topic],
+    ],
     ['Outcomes', outcomes ? [outcomes] : none],
     ['Activities', activities.length ? activities : none],
     ['Check learning', checks.length ? checks : none],
@@ -481,6 +567,17 @@ export function facultyGuideDocument(guide: GuideModule, programmeTitle?: string
         'delivery style are the lecturer’s own choice, provided these requirements and the ' +
         'intended learning outcomes are met.'
     ),
+    ...(guide.sessions.some((x) => x.condensed)
+      ? [
+          para(
+            'Sessions are shortened by AI from each lesson plan, which stays unchanged in the ' +
+              'Step 10 lesson-plan documents. Key-concept definitions, business examples and quick ' +
+              'checks are drafted by AI from the lesson’s own content. Anything marked ⚑ uses ' +
+              'words the lesson does not contain: check it before teaching.',
+            { italics: true }
+          ),
+        ]
+      : []),
     heading('Minimum Teaching Requirements', HeadingLevel.HEADING_1),
     bullet(sessionCountRequirement(guide)),
     ...(guide.minimumRequirements.length

@@ -102,6 +102,11 @@ import { step6ReportOf } from '../services/step6Validation';
 import { step7ValidationOf } from '../services/step7Validation';
 import { step13Validation } from '../services/step13Validation';
 import { applyStep12Edit } from '../utils/step12Edit';
+import {
+  condensedCoverage,
+  condenseRun,
+  startCondensing,
+} from '../services/facultyGuide/condenseRunner';
 
 const router = Router();
 
@@ -6981,6 +6986,69 @@ router.get(
     }
   }
 );
+
+/**
+ * POST /api/v3/workflow/:id/faculty-guide/condense?modules=0,23 (or =all)
+ * Condense the faculty guide's sessions with AI (Dr. Sherin Thomas's 2 October format). Runs
+ * in the background and returns at once; lessons already condensed are skipped.
+ * GET the same path for the run's progress and each module's coverage.
+ */
+router.post(
+  '/:id/faculty-guide/condense',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      if (!isValidObjectId(req.params.id)) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+      if ((req as any).user?.role !== 'administrator') {
+        return res
+          .status(403)
+          .json({ success: false, error: 'Only an administrator can run this' });
+      }
+      const raw = String(req.query.modules || '');
+      const modules =
+        raw === 'all'
+          ? 'all'
+          : raw
+              .split(',')
+              .map((v) => (/^\d{1,4}$/.test(v.trim()) ? Number(v.trim()) : NaN))
+              .filter((n) => Number.isInteger(n));
+      if (modules !== 'all' && !modules.length) {
+        return res
+          .status(400)
+          .json({ success: false, error: 'Give modules=all or module indexes, e.g. modules=0,23' });
+      }
+      const run = await startCondensing(req.params.id, modules);
+      res.status(202).json({ success: true, data: run });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start';
+      res
+        .status(/not found|no such/i.test(message) ? 404 : 500)
+        .json({ success: false, error: message });
+    }
+  }
+);
+
+router.get('/:id/faculty-guide/condense', async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    res.json({
+      success: true,
+      data: {
+        run: condenseRun(req.params.id) || null,
+        coverage: await condensedCoverage(req.params.id),
+      },
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ success: false, error: error instanceof Error ? error.message : 'Failed' });
+  }
+});
 
 /**
  * GET /api/v3/workflow/:id/export/faculty-guide
