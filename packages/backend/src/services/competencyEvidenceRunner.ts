@@ -26,8 +26,11 @@ import {
 
 /** Candidates below this are not kept at all; above it they are kept for calibration. */
 const SEARCH_FLOOR = 0.6;
-/** Pairs recorded from this similarity up, so the duplicate floor can be lowered later. */
-const PAIR_RECORD_FLOOR = 0.75;
+/**
+ * Pairs recorded from this similarity up, so the duplicate floor can be lowered later. Same-kind
+ * statements of one programme measured 0.23 to 0.55 on the BBA and Logistics (2026-10-06).
+ */
+const PAIR_RECORD_FLOOR = 0.5;
 const SEARCHES_IN_FLIGHT = 4;
 
 async function inBatches<T>(items: T[], limit: number, fn: (item: T) => Promise<void>) {
@@ -159,12 +162,13 @@ export async function checkCompetencyEvidence(
       ).length,
     })),
     floor: EVIDENCE_FLOOR,
-    examples: items.slice(0, 6).map((i) => ({
+    // Every statement's best passage, so a reviewer can judge where the floor should sit.
+    examples: items.map((i) => ({
       id: i.id,
       statement: i.statement,
       top: (candidates.get(String(i.id)) || [])
         .sort((a, b) => b.score - a.score)
-        .slice(0, 2)
+        .slice(0, 1)
         .map((p) => ({
           score: Number(p.score.toFixed(3)),
           title: p.sourceTitle,
@@ -178,7 +182,7 @@ export async function checkCompetencyEvidence(
             recorded: pairs.length,
             // Every same-kind pair, not only those recorded, so the floor can be set from it.
             scores: quantiles((allPairs || []).map((p) => p.score)),
-            top: pairs.slice(0, 10).map((p) => ({
+            top: (allPairs || []).slice(0, 10).map((p) => ({
               score: Number(p.score.toFixed(3)),
               first: `${p.first}: ${statementOf.get(p.first)}`,
               second: `${p.second}: ${statementOf.get(p.second)}`,
