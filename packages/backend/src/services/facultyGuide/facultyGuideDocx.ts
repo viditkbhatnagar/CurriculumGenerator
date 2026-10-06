@@ -14,6 +14,7 @@ import {
   ShadingType,
   Table,
   TableCell,
+  TableLayoutType,
   TableRow,
   TextRun,
   WidthType,
@@ -33,6 +34,10 @@ import {
 import { xmlSafeDeep } from '../../utils/xmlSafe';
 
 const FONT = 'Arial';
+// The docx default page: A4 (11906 twips) less 1440-twip margins either side. Widths are set in
+// twips because percentage widths are ignored by some readers, which split columns evenly.
+const USABLE = 11906 - 2 * 1440;
+const twips = (percent: number) => Math.round((percent / 100) * USABLE);
 const BODY = 21; // half-points: 10.5pt
 const NONE = 'Not recorded for this session.';
 
@@ -96,10 +101,7 @@ function focusSection(s: GuideSession): Paragraph[] {
     labelled('Main topic', s.topic),
     ...(keyConcepts.length ? [labelled('Key concepts', keyConcepts.join('; '))] : []),
     ...(whyItMatters.length
-      ? [
-          labelled('Why this topic matters', 'it builds towards'),
-          ...whyItMatters.map((w) => bullet(w, 1)),
-        ]
+      ? [caption('Why it matters: it builds towards'), ...whyItMatters.map((w) => bullet(w, 1))]
       : []),
     ...optional(
       'Connection to previous learning',
@@ -258,10 +260,67 @@ function takeawaysSection(s: GuideSession): Paragraph[] {
   ];
 }
 
-function sessionBlock(s: GuideSession): Paragraph[] {
+/**
+ * What a lecturer needs before anything else, in one table: what must be taught, the outcomes
+ * it serves, the activities with their timing, how learning is checked and what to prepare.
+ * Dr. Sherin Thomas (2 October 2026): "Faculty should immediately see what must be taught, how
+ * it connects to outcomes, suggested activities and how learning is checked." The nine
+ * sections below it keep the detail.
+ */
+function glanceTable(s: GuideSession): Table {
+  const minutes = (m?: number) => (m ? ` (${m} min)` : '');
+  // A title often repeats its label ("Mini-lecture: Management functions"); say it once.
+  const named = (label: string, title: string) =>
+    !label || title.toLowerCase().startsWith(label.toLowerCase()) ? title : `${label}: ${title}`;
+  const activities = [
+    ...s.activities.map((a) => `${named(a.label, a.title)}${minutes(a.minutes)}`),
+    ...(s.caseActivity ? [`Case: ${s.caseActivity.title}${minutes(s.caseActivity.minutes)}`] : []),
+  ];
+  // "Check (F1)" told a lecturer nothing; name the task.
+  const checks = s.checks.map((c) => {
+    const what = c.question || c.label;
+    return c.ref ? `${c.ref}: ${what}` : what;
+  });
+  const outcomes = [
+    s.alignment.mlos.join(', '),
+    s.alignment.plos.length ? `programme: ${s.alignment.plos.join(', ')}` : '',
+  ]
+    .filter(Boolean)
+    .join('; ');
+  const none = ['none recorded'];
+  const rows: [string, string[]][] = [
+    ['Must teach', s.focus.keyConcepts.length ? s.focus.keyConcepts : [s.topic]],
+    ['Outcomes', outcomes ? [outcomes] : none],
+    ['Activities', activities.length ? activities : none],
+    ['Check learning', checks.length ? checks : none],
+    ['Prepare', [s.resources.readings[0] || s.resources.materials[0] || none[0]]],
+  ];
+  const cell = (lines: string[], label: boolean, width: number) =>
+    new TableCell({
+      children: lines.map((t) => cellText(t, { bold: label })),
+      width: { size: twips(width), type: WidthType.DXA },
+      shading: label ? { type: ShadingType.CLEAR, color: 'auto', fill: 'ECFDF5' } : undefined,
+      margins: { top: 40, bottom: 40, left: 80, right: 80 },
+    });
+  return new Table({
+    width: { size: USABLE, type: WidthType.DXA },
+    columnWidths: [twips(20), twips(80)],
+    layout: TableLayoutType.FIXED,
+    rows: rows.map(
+      ([label, value]) =>
+        new TableRow({
+          cantSplit: true,
+          children: [cell([label], true, 20), cell(value, false, 80)],
+        })
+    ),
+  });
+}
+
+function sessionBlock(s: GuideSession): (Paragraph | Table)[] {
   const duration = s.durationMinutes ? ` (${s.durationMinutes} min)` : '';
   return [
     heading(`Session ${s.number}: ${s.topic}${duration}`, HeadingLevel.HEADING_2),
+    glanceTable(s),
     ...focusSection(s),
     ...alignmentSection(s),
     ...guidanceSection(s),
@@ -311,19 +370,26 @@ function formativeBlock(f: GuideFormative): (Paragraph | Table)[] {
 const cellText = (t: string, opts: { bold?: boolean } = {}) =>
   new Paragraph({ children: [text(t, opts)], spacing: { after: 40 } });
 
-/** A plain table: a shaded header row and one row per item. */
-function gridTable(header: string[], rows: string[][]): Table {
-  const cell = (t: string, head: boolean) =>
+/** A plain table; `percents` sets the column widths, or the first takes 25% and the rest share. */
+function gridTable(header: string[], rows: string[][], percents?: number[]): Table {
+  const rest = 75 / Math.max(1, header.length - 1);
+  const widths = header.map((_, i) => twips(percents?.[i] ?? (i === 0 ? 25 : rest)));
+  const cell = (t: string, head: boolean, i: number) =>
     new TableCell({
       children: [cellText(t, { bold: head })],
+      width: { size: widths[i], type: WidthType.DXA },
       shading: head ? { type: ShadingType.CLEAR, color: 'auto', fill: 'E5E7EB' } : undefined,
       margins: { top: 40, bottom: 40, left: 80, right: 80 },
     });
   return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: USABLE, type: WidthType.DXA },
+    columnWidths: widths,
+    layout: TableLayoutType.FIXED,
     rows: [
-      new TableRow({ tableHeader: true, children: header.map((h) => cell(h, true)) }),
-      ...rows.map((r) => new TableRow({ cantSplit: true, children: r.map((t) => cell(t, false)) })),
+      new TableRow({ tableHeader: true, children: header.map((h, i) => cell(h, true, i)) }),
+      ...rows.map(
+        (r) => new TableRow({ cantSplit: true, children: r.map((t, i) => cell(t, false, i)) })
+      ),
     ],
   });
 }
@@ -372,7 +438,8 @@ function gradedBlock(g: GuideGradedTask): (Paragraph | Table)[] {
               a.component,
               a.marks === undefined ? '' : String(a.marks),
               a.indicativeContent || '',
-            ])
+            ]),
+            [32, 10, 58]
           ),
         ]
       : []),

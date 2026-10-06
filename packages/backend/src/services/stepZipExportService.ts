@@ -35,8 +35,9 @@ import { expectedLessonCount, isPlanComplete, plannedLessonTarget } from './step
  * 4: a case activity whose time is stored as text prints it ("Time: ..."); it was dropped.
  * 5: the appendix adds each task's discussion prompts and, for graded tasks, the marks, brief,
  *    rubric and marking guide (Dr. Sherin Thomas, 2 October 2026).
+ * 6: each session opens with a "Session at a glance" table; checks are named by their task.
  */
-export const FACULTY_GUIDE_FORMAT_VERSION = 5;
+export const FACULTY_GUIDE_FORMAT_VERSION = 6;
 
 /** How a module is named in its file inside the archive. */
 function moduleFileName(stepNumber: number, index: number, stub: any, step4Module: any): string {

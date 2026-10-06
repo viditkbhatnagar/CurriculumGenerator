@@ -802,3 +802,18 @@ describe('a case activity whose time is stored as text', () => {
     expect(text).toContain('Time: Preparation 20–30 minutes; class/discussion 60–75 minutes.');
   });
 });
+
+describe('session at a glance', () => {
+  it('opens each session with what to teach, outcomes, activities, checks and preparation', async () => {
+    const text = await guideText(
+      guideModule({ code: 'M01', title: 'Management' }, [fullLesson as any], context)
+    );
+    const glance = text.indexOf('Must teach');
+    expect(glance).toBeGreaterThan(-1);
+    for (const row of ['Outcomes', 'Activities', 'Check learning', 'Prepare']) {
+      expect(text.indexOf(row, glance)).toBeGreaterThan(glance);
+    }
+    // The table comes before the nine detailed sections.
+    expect(glance).toBeLessThan(text.indexOf('1. Session Focus'));
+  });
+});
