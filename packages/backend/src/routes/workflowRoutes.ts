@@ -103,6 +103,7 @@ import { step7ValidationOf } from '../services/step7Validation';
 import { step13Validation } from '../services/step13Validation';
 import { applyStep12Edit } from '../utils/step12Edit';
 import { BLOCKING_KINDS, publicationProblem } from '../services/publication';
+import { cleanAssessmentRules, missingAssessmentRules } from '../services/assessmentRules';
 import { openaiService } from '../services/openaiService';
 import {
   CAPABILITY_STATEMENT,
@@ -6882,6 +6883,46 @@ router.get('/:id/unresolved-issues', async (req: Request, res: Response) => {
 });
 
 /**
+ * PUT /api/v3/workflow/:id/assessment-rules
+ * { passRequirements?, moderation?, resits?, authenticity?, accessibility? }
+ * Record the institution's assessment rules as it states them (services/assessmentRules). Only
+ * the rules sent are changed; an empty string clears one. Validated before anything is written.
+ */
+router.put('/:id/assessment-rules', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const cleaned = cleanAssessmentRules(req.body);
+    if ('error' in cleaned) return res.status(400).json({ success: false, error: cleaned.error });
+    const user = (req as any).user;
+    const set: Record<string, string> = {
+      'assessmentRules.updatedAt': new Date().toISOString(),
+      'assessmentRules.updatedBy': String(user?.email || user?.id || 'unknown'),
+    };
+    for (const [key, value] of Object.entries(cleaned.rules)) set[`assessmentRules.${key}`] = value;
+    // A field-level update, so a save of another part of the workflow cannot be overwritten.
+    const workflow = await CurriculumWorkflow.findByIdAndUpdate(
+      req.params.id,
+      { $set: set },
+      { new: true, projection: { assessmentRules: 1 } }
+    ).lean();
+    if (!workflow) return res.status(404).json({ success: false, error: 'Workflow not found' });
+    const rules = (workflow as any).assessmentRules;
+    res.json({
+      success: true,
+      data: { assessmentRules: rules, missing: missingAssessmentRules(rules) },
+    });
+  } catch (error) {
+    loggingService.error('Error saving assessment rules', {
+      workflowId: req.params.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({ success: false, error: 'Failed to save assessment rules' });
+  }
+});
+
+/**
  * POST /api/v3/workflow/:id/publish  { acknowledgeIssues?: boolean }
  * The super admin approves a submitted curriculum and publishes it. Refused while checks fail
  * or steps are missing, unless the approver acknowledges them.
@@ -7108,6 +7149,7 @@ router.get('/:id/export/word', async (req: Request, res: Response) => {
       step11: workflow.step11,
       step12: workflow.step12,
       step13: workflow.step13,
+      assessmentRules: workflow.assessmentRules,
       createdAt: workflow.createdAt?.toISOString(),
       updatedAt: workflow.updatedAt?.toISOString(),
     };
@@ -7135,6 +7177,7 @@ router.get('/:id/export/word', async (req: Request, res: Response) => {
         step11: workflow.step11,
         step12: workflow.step12,
         step13: workflow.step13,
+        assessmentRules: workflow.assessmentRules,
       }),
       contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       filename,
@@ -7463,6 +7506,8 @@ router.get('/:id/export/word/step/:stepNumber', async (req: Request, res: Respon
     // Step 13's validation table checks the exam's PLO coverage against Step 3; without it the
     // row read "Not checked" on every single-step exam export.
     if (stepNumber === 13) workflowData.step3 = workflow.step3;
+    // Step 7 prints the institution's assessment rules, which live on the workflow itself.
+    if (stepNumber === 7) workflowData.assessmentRules = workflow.assessmentRules;
 
     const STEP_SLUGS: Record<number, string> = {
       1: 'Program-Foundation',
@@ -7555,6 +7600,7 @@ router.get('/:id/export/pdf', async (req: Request, res: Response) => {
       step11: workflow.step11,
       step12: workflow.step12,
       step13: workflow.step13,
+      assessmentRules: workflow.assessmentRules,
       createdAt: workflow.createdAt?.toISOString(),
       updatedAt: workflow.updatedAt?.toISOString(),
     };
@@ -7579,6 +7625,8 @@ router.get('/:id/export/pdf', async (req: Request, res: Response) => {
       step11: workflow.step11,
       step12: workflow.step12,
       step13: workflow.step13,
+      // Must match the Word export's hash exactly: the PDF reuses its cached render.
+      assessmentRules: workflow.assessmentRules,
     });
 
     // Cached in S3 — a re-download skips both the Word render (per-section

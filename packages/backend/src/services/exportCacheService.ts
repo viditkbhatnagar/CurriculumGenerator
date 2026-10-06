@@ -69,7 +69,9 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 // v30: Unresolved Issues adds the declared subject scope and essential competencies no outcome
 //      covers.
 // v31: the whole-programme document has a contents page linking to each section.
-const EXPORT_FORMAT_VERSION = 'v31';
+// v32: Step 7 prints the institution's assessment rules, and Unresolved Issues lists those not
+//      stated.
+const EXPORT_FORMAT_VERSION = 'v32';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the
@@ -282,6 +284,8 @@ export function stepExportContentHash(
         : undefined,
     // Step 13's validation table checks the exam's PLO coverage against Step 3.
     step13Aux: stepNumber === 13 ? { outcomes: workflow.step3?.outcomes } : undefined,
+    // Step 7 prints the institution's assessment rules.
+    step7Aux: stepNumber === 7 ? { assessmentRules: workflow.assessmentRules } : undefined,
   });
 }
 

@@ -10,6 +10,7 @@
  */
 
 import { BloomLevel } from './newWorkflow';
+import type { AssessmentRules } from '../services/assessmentRules';
 
 // ============================================================================
 // USER PREFERENCES (INPUT)
@@ -325,6 +326,8 @@ export interface AssessmentGenerationRequest {
   topicSources: any[]; // From Step 5
   readingLists: any[]; // From Step 6
   userPreferences: AssessmentUserPreferences;
+  /** The institution's stated assessment rules (services/assessmentRules). */
+  assessmentRules?: AssessmentRules;
 }
 
 // ============================================================================

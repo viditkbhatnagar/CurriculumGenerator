@@ -18,6 +18,7 @@ import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationConte
 import StepDownloadButton from './StepDownloadButton';
 import { validationFrame } from '@/lib/validationFrame';
 import { ValidationChecks } from './ValidationChecks';
+import AssessmentRulesPanel from './AssessmentRulesPanel';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -892,6 +893,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
+      <AssessmentRulesPanel workflowId={workflow._id} rules={workflow.assessmentRules} />
       {/* Show generating state */}
       {isCurrentlyGenerating && !hasStep7Data && (
         <div className="mb-6 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 rounded-xl p-6">

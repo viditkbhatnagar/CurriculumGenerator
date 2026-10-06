@@ -50,6 +50,7 @@ import {
   TASK_SHAPES_BY_BLOOM,
   type FormatPlan,
 } from './bloomTaxonomy';
+import { assessmentRulesForPrompt } from './assessmentRules';
 
 /**
  * Reconcile an MCQ's correct-answer fields so the ticked answer always matches
@@ -202,6 +203,7 @@ export class AssessmentGeneratorService {
       topicSources: workflow.step5?.topicSources || [],
       readingLists: workflow.step6?.moduleReadingLists || [],
       userPreferences,
+      assessmentRules: (workflow as any).assessmentRules,
     } as AssessmentGenerationRequest;
   }
 
@@ -657,6 +659,8 @@ ${(module.topics || []).map((t: any) => `- ${t.title || t}`).join('\n')}
 
 === ASSESSMENT REQUIREMENTS ===
 
+${assessmentRulesForPrompt(request.assessmentRules)}
+
 **User Preferences:**
 - Assessment Balance: ${request.userPreferences.assessmentBalance}
 - Formative Types Permitted: ${(request.userPreferences.formativeTypesPerUnit || [])
@@ -1096,6 +1100,8 @@ Topics: ${(mod.topics || [])
   .join('\n')}
 
 === ASSESSMENT REQUIREMENTS ===
+
+${assessmentRulesForPrompt(request.assessmentRules)}
 
 **User Preferences:**
 - Format: ${request.userPreferences.summativeFormat}

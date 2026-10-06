@@ -20,6 +20,7 @@ import { bloomIndex, statedBloom } from './assessmentGeneratorService';
 import { modulesInDocument, outlinesStep10, validationFromPlans } from './step10Completion';
 import { step13Validation } from './step13Validation';
 import { unresolvedIssues } from './unresolvedIssues';
+import { ASSESSMENT_RULES, AssessmentRules } from './assessmentRules';
 import { PER_MODULE_ARRAYS } from '../utils/perModuleExport';
 import { entryRequirementsLabel } from '../utils/entryRequirements';
 import { step12SummaryFromPacks, step12ValidationFromPacks } from './deliverableValidation';
@@ -42,6 +43,7 @@ interface WorkflowData {
   step11?: any;
   step12?: any;
   step13?: any;
+  assessmentRules?: AssessmentRules;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -368,6 +370,44 @@ If the content is better as bullets, put it in bullets array and leave paragraph
         ],
       })
     );
+  }
+
+  /**
+   * The institution's assessment rules as it stated them, each rule not stated marked so (the
+   * 21 September review, 5.7). The generator never writes these itself.
+   */
+  private createAssessmentRulesBlock(rules: AssessmentRules | undefined): any[] {
+    return [
+      this.createH2('Assessment Rules'),
+      ...this.createFormattedParagraphs([
+        'Stated by the institution, not written by the generator. A rule not stated is listed under Unresolved Issues.',
+      ]),
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new TableRow({
+            tableHeader: true,
+            children: [
+              this.createTableCell('Rule', { bold: true, shading: 'e2e8f0', width: 25 }),
+              this.createTableCell("Institution's rule", {
+                bold: true,
+                shading: 'e2e8f0',
+                width: 75,
+              }),
+            ],
+          }),
+          ...ASSESSMENT_RULES.map(
+            ({ key, label }) =>
+              new TableRow({
+                children: [
+                  this.createTableCell(label, { bold: true }),
+                  this.createTableCell(rules?.[key]?.trim() || 'Not stated by the institution'),
+                ],
+              })
+          ),
+        ],
+      }),
+    ];
   }
 
   /**
@@ -1489,7 +1529,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     step7: any,
     contentChildren: any[],
     step4?: any,
-    step1Credits?: any
+    step1Credits?: any,
+    assessmentRules?: AssessmentRules
   ): Promise<void> {
     const moduleLabels = this.buildModuleLabels(step4);
     // The Bloom level of every outcome in the programme, so an assessment can be printed
@@ -1749,6 +1790,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       new Paragraph({ children: [new PageBreak()] }),
       this.createH1(SECTION_HEADINGS[7])
     );
+
+    contentChildren.push(...this.createAssessmentRulesBlock(assessmentRules));
 
     // Assessment Strategy Summary
     const userPrefs = step7.userPreferences || {};
@@ -4420,7 +4463,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           workflow.step7,
           out,
           workflow.step4,
-          workflow.step1?.creditFramework
+          workflow.step1?.creditFramework,
+          workflow.assessmentRules
         )
       );
     }
@@ -4695,7 +4739,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             stepData,
             children,
             workflow.step4,
-            (workflow as any).step1?.creditFramework
+            (workflow as any).step1?.creditFramework,
+            (workflow as any).assessmentRules
           );
           break;
         case 8:

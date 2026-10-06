@@ -125,3 +125,32 @@ describe('headingBookmark', () => {
     expect(headingBookmark('Unresolved Issues')).toBe('h_unresolved_issues');
   });
 });
+
+describe('Step 7, assessment rules', () => {
+  const withStep7 = (assessmentRules?: Record<string, string>) => ({
+    ...programme(1),
+    step7: {
+      formativeAssessments: [
+        { title: 'Check of understanding', purpose: 'formative', moduleId: 'mod-a' },
+      ],
+    },
+    assessmentRules,
+  });
+
+  it("prints the institution's rules, and marks a rule it has not stated", async () => {
+    const text = await documentText(
+      await wordExportService.generateDocument(withStep7({ resits: 'One resit, capped at 40%' }))
+    );
+    expect(text).toContain('Assessment Rules');
+    expect(text).toContain('One resit, capped at 40%');
+    expect(text).toContain('Not stated by the institution');
+    expect(text).toContain('Assessment rules not stated by the institution: Pass requirements');
+  });
+
+  it('prints them in the single-step Step 7 export as well', async () => {
+    const text = await documentText(
+      await wordExportService.generateStepDocument(withStep7({ moderation: 'Second marking' }), 7)
+    );
+    expect(text).toContain('Second marking');
+  });
+});

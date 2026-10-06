@@ -16,6 +16,7 @@
  */
 import { repeatedTopics, step4ValidationReport } from './step4Validation';
 import { scopeIssue } from './capabilityScope';
+import { missingAssessmentRules } from './assessmentRules';
 import { step5ValidationReport } from './step5Validation';
 import { step6ReportOf } from './step6Validation';
 import { step7ValidationOf } from './step7Validation';
@@ -243,6 +244,11 @@ export function unresolvedIssues(workflow: Workflowish, currentYear: number): Un
     )
   );
   issues.push(...fromReport(7, step7ValidationOf(w) as unknown as Record<string, unknown> | null));
+  // Institutional policy the generator must not write itself (the 21 September review, 5.7).
+  const rulesMissing = missingAssessmentRules(w.assessmentRules);
+  if (rulesMissing.length) {
+    add(7, 'missing', `Assessment rules not stated by the institution: ${rulesMissing.join(', ')}`);
+  }
   // A programme recorded as needing no case studies is not short of them.
   if (w.step8 && !w.step8.notRequired) issues.push(...fromReport(8, w.step8.validationReport));
   if (w.step9) issues.push(...fromReport(9, w.step9.validationReport));

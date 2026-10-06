@@ -1935,6 +1935,8 @@ export interface CurriculumWorkflow {
   // Metadata
   createdAt: string;
   updatedAt: string;
+  /** The institution's assessment rules, as it states them (backend services/assessmentRules). */
+  assessmentRules?: AssessmentRules;
   /** Approval before publication (backend services/publication). */
   publication?: {
     submittedAt?: string;
@@ -1949,6 +1951,16 @@ export interface CurriculumWorkflow {
   completedAt?: string;
   publishedAt?: string;
   totalTimeSpentMinutes?: number;
+}
+
+export interface AssessmentRules {
+  passRequirements?: string;
+  moderation?: string;
+  resits?: string;
+  authenticity?: string;
+  accessibility?: string;
+  updatedAt?: string;
+  updatedBy?: string;
 }
 
 // =============================================================================

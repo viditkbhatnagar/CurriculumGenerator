@@ -44,7 +44,10 @@ describe('unresolvedIssues', () => {
   });
 
   it('reports every step missing for an empty programme', () => {
-    expect(unresolvedIssues({}, 2026).filter((i) => i.kind === 'missing')).toHaveLength(13);
+    const missing = unresolvedIssues({}, 2026).filter((i) => i.kind === 'missing');
+    expect(missing.filter((i) => i.issue === 'This step has not been generated')).toHaveLength(13);
+    // and the institution's assessment rules, which no step generates.
+    expect(missing).toHaveLength(14);
   });
 });
 

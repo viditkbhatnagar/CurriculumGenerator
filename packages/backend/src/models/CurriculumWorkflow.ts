@@ -20,6 +20,7 @@
  * Total: 3-4 hours of SME time
  */
 
+import type { AssessmentRules } from '../services/assessmentRules';
 import mongoose, { Schema, Document } from 'mongoose';
 import { applySoftDeleteFilter, applySoftDeleteToPipeline } from '../utils/softDelete';
 import { recordStepApproved } from '../services/stepGating';
@@ -1324,6 +1325,9 @@ export interface ICurriculumWorkflow extends Document {
   deletedAt?: Date | null;
   deletedBy?: string;
 
+  // The institution's assessment rules, as it states them (services/assessmentRules).
+  assessmentRules?: AssessmentRules;
+
   // Approval before publication (services/publication).
   publication?: {
     submittedAt?: Date;
@@ -1565,6 +1569,8 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
     deletedBy: { type: String },
 
     publication: { type: Schema.Types.Mixed },
+    // The institution's assessment rules, as it states them (services/assessmentRules).
+    assessmentRules: { type: Schema.Types.Mixed },
   },
   {
     timestamps: true,
