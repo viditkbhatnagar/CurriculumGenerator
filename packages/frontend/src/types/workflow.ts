@@ -533,7 +533,7 @@ export interface Step5Sources {
   validationReport: {
     allSourcesApproved: boolean; // No prohibited sources
     recencyCompliance: boolean; // All ≤5 years OR justified seminal
-    minimumSourcesPerTopic: boolean; // every outcome has ≥2 of its module's sources
+    minimumSourcesPerTopic: boolean | null; // every weekly topic has ≥2 of its module's sources; null until topics are matched
     academicAppliedBalance: boolean; // Each topic has both
     peerReviewRatio: boolean; // ≥30% peer-reviewed
     completeCitations: boolean; // All have required fields

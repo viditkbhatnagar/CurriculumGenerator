@@ -36,8 +36,9 @@ import {
   step5ValidationReport,
   step5Compliant,
   isFreeAccess,
-  MIN_SOURCES_PER_OUTCOME,
-  outcomesBelowSourceFloor,
+  MIN_SOURCES_PER_TOPIC,
+  topicsBelowSourceFloor,
+  sourcesPerTopic,
   sourceCompliant,
 } from './step5Validation';
 import {
@@ -66,6 +67,8 @@ import {
   scoreAgainstMLOs,
   scoreAgainstModules,
   assignOutcomes,
+  assignTopics,
+  linkSourcesToTopics,
   MLO_SUPPORT_FLOOR,
   type ModuleSemantics,
 } from './sourceRelevanceService';
@@ -2648,16 +2651,14 @@ CRITICAL VALIDATION:
       complianceIssues.push('Not all MLOs have supporting sources');
     if (!validationReport.freeAccessRatio)
       complianceIssues.push('Less than 70% of sources are freely accessible');
-    if (!validationReport.minimumSourcesPerTopic) {
-      const below = outcomesBelowSourceFloor(sources, modules);
-      const totalOutcomes = modules.reduce((n: number, m: any) => n + (m?.mlos || []).length, 0);
+    if (validationReport.minimumSourcesPerTopic === false) {
+      const below = topicsBelowSourceFloor(sources, modules);
+      const totalTopics = modules.reduce((n: number, m: any) => n + (m?.topics || []).length, 0);
       complianceIssues.push(
-        below.length > 0
-          ? `${below.length} of ${totalOutcomes} outcomes have fewer than ${MIN_SOURCES_PER_OUTCOME} sources linked to them: ${below
-              .slice(0, 6)
-              .map((o) => `${o.mloId} (${o.count})`)
-              .join(', ')}${below.length > 6 ? '…' : ''}`
-          : `Outcomes could not be checked for ${MIN_SOURCES_PER_OUTCOME} sources each: no sources, or a module with no outcomes`
+        `${below.length} of ${totalTopics} weekly topics have fewer than ${MIN_SOURCES_PER_TOPIC} sources: ${below
+          .slice(0, 6)
+          .map((t) => `${t.topic} (${t.count})`)
+          .join(', ')}${below.length > 6 ? '…' : ''}`
       );
     }
     if (!validationReport.traceabilityComplete)
@@ -2790,6 +2791,67 @@ CRITICAL VALIDATION:
    * Per workflow v2.2: Transform AGI-validated sources into structured reading lists
    * with Core (3-6) and Supplementary (4-8) per module
    */
+  /**
+   * Match a programme's Step 5 sources to its weekly topics, for the rule of two sources per
+   * topic (Dr. Sherin Thomas, 2 October 2026). Programmes generated before then have no topic
+   * links, so the rule reads "not checked" until this runs.
+   *
+   * A dry run (the default) scores a copy and saves nothing. It reports the score
+   * distribution and the coverage at several floors, so the floor can be set from real data.
+   * Otherwise the scores and links are saved and the Step 5 summary rebuilt.
+   */
+  async linkStep5Topics(workflowId: string, { dryRun = true }: { dryRun?: boolean } = {}) {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    const step5 = workflow?.step5 as any;
+    if (!workflow || !Array.isArray(step5?.sources)) {
+      throw new Error('Workflow or Step 5 sources not found');
+    }
+    const modules = ((workflow.step4 as any)?.modules || []) as any[];
+    const sources: any[] = dryRun ? JSON.parse(JSON.stringify(step5.sources)) : step5.sources;
+    const scored = await linkSourcesToTopics(sources, modules);
+
+    const all = sources
+      .flatMap((s) => Object.values((s.topicScores || {}) as Record<string, number>))
+      .sort((a, b) => a - b);
+    const at = (q: number) => (all.length ? all[Math.floor(q * (all.length - 1))] : null);
+    const coverage = [0.3, 0.35, 0.4, 0.45, 0.5].map((floor) => {
+      const copy = sources.map((s) => ({ ...s }));
+      assignTopics(copy, floor);
+      const perTopic = sourcesPerTopic(copy, modules);
+      return {
+        floor,
+        topics: perTopic.length,
+        topicsWithTwoOrMore: perTopic.filter((t) => t.count >= MIN_SOURCES_PER_TOPIC).length,
+        topicsWithNone: perTopic.filter((t) => t.count === 0).length,
+        sourcesLinked: copy.filter((s) => (s.linkedTopics || []).length > 0).length,
+      };
+    });
+
+    if (!dryRun) {
+      workflow.step5 = this.buildStep5Summary(sources, modules, {
+        sourceShortfalls: step5.sourceShortfalls,
+        subjectFields: step5.subjectFields,
+        retractionsRemoved: step5.retractionsRemoved,
+      });
+      workflow.markModified('step5');
+      await workflow.save();
+    }
+    return {
+      dryRun,
+      ...scored,
+      sources: sources.length,
+      scores: {
+        count: all.length,
+        min: at(0),
+        p10: at(0.1),
+        median: at(0.5),
+        p90: at(0.9),
+        max: at(1),
+      },
+      coverage,
+    };
+  }
+
   /**
    * Recompute every Step 6 aggregate from a list of readings.
    *
@@ -5532,6 +5594,14 @@ CRITICAL VALIDATION:
 
     // Anything the model attached to no module at all.
     output.push(...generated.filter((s: any) => !s.moduleId));
+
+    // Which weekly topics each source covers, for the rule of two sources per topic. If
+    // scoring fails the topics stay unlinked and the rule reads "not checked".
+    await linkSourcesToTopics(output, modules).catch((error) =>
+      loggingService.warn('Could not link sources to topics', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    );
 
     const misplaced = await this.flagMisplacedAppliedSources(output, modules, semantics).catch(
       (error) => {

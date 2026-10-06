@@ -23,6 +23,7 @@ import FilePreviewModal from './FilePreviewModal';
 import { downloadFile } from '@/lib/download';
 import { formatAuthorList, toAuthorArray } from '@/lib/citation';
 import { safeHref } from '@/lib/safeHref';
+import { ValidationChecks } from './ValidationChecks';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1737,50 +1738,20 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
               >
                 AGI Standards Validation
               </h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                <span
-                  className={validation.allSourcesApproved ? 'text-emerald-400' : 'text-red-400'}
-                >
-                  {validation.allSourcesApproved ? '✓' : '✗'} Approved Sources
-                </span>
-                <span
-                  className={validation.recencyCompliance ? 'text-emerald-400' : 'text-red-400'}
-                >
-                  {validation.recencyCompliance ? '✓' : '✗'} Recency
-                </span>
-                <span
-                  className={
-                    validation.minimumSourcesPerTopic ? 'text-emerald-400' : 'text-red-400'
-                  }
-                >
-                  {validation.minimumSourcesPerTopic ? '✓' : '✗'} ≥2 Sources per Outcome
-                </span>
-                <span
-                  className={
-                    validation.academicAppliedBalance ? 'text-emerald-400' : 'text-red-400'
-                  }
-                >
-                  {validation.academicAppliedBalance ? '✓' : '✗'} Balance
-                </span>
-                <span className={validation.peerReviewRatio ? 'text-emerald-400' : 'text-red-400'}>
-                  {validation.peerReviewRatio ? '✓' : '✗'} Peer-Review ≥30%
-                </span>
-                <span
-                  className={validation.completeCitations ? 'text-emerald-400' : 'text-red-400'}
-                >
-                  {validation.completeCitations ? '✓' : '✗'} Complete Citations
-                </span>
-                {/* No check compares citations with APA rules. Workflows generated before
-                    2026-09-30 store a constant `true` here, so the stored value is not shown. */}
-                <span className="text-teal-500" title="APA formatting is not checked yet">
-                  – APA not checked
-                </span>
-                <span
-                  className={validation.everyMLOSupported ? 'text-emerald-400' : 'text-red-400'}
-                >
-                  {validation.everyMLOSupported ? '✓' : '✗'} All MLOs Supported
-                </span>
-              </div>
+              <ValidationChecks
+                checks={[
+                  ['Approved Sources', validation.allSourcesApproved],
+                  ['Recency', validation.recencyCompliance],
+                  // Dr. Sherin Thomas, 2 October 2026: at least 2 sources for each week's topic.
+                  // Not checked until the programme's sources are matched to its topics.
+                  ['≥2 Sources per Weekly Topic', validation.minimumSourcesPerTopic],
+                  ['Balance', validation.academicAppliedBalance],
+                  ['Peer-Review ≥30%', validation.peerReviewRatio],
+                  ['Complete Citations', validation.completeCitations],
+                  ['APA Format', validation.apaAccuracy],
+                  ['All MLOs Supported', validation.everyMLOSupported],
+                ]}
+              />
 
               {/* Compliance Issues */}
               {workflow.step5?.complianceIssues && workflow.step5.complianceIssues.length > 0 && (

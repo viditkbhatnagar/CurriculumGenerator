@@ -27,12 +27,17 @@ export interface Step5SourceLike {
   title?: string;
   accessStatus?: string;
   userAdded?: boolean;
+  /** The module's weekly topics this source covers, by meaning (sourceRelevanceService). */
+  linkedTopics?: string[];
+  topicScores?: Record<string, number>;
   complianceBadges?: { peerReviewed?: boolean; freeAccess?: boolean; fullTextAvailable?: boolean };
 }
 
 export interface Step5ModuleLike {
   id?: string;
   mlos?: { id?: string }[];
+  /** Weekly topics, stored as strings or as { title }. */
+  topics?: unknown[];
 }
 
 /** `true` passed, `false` failed, `null` not checked. */
@@ -63,8 +68,12 @@ export const APPROVED_SOURCE_CATEGORIES = [
   'government_research',
 ];
 
-/** Each module outcome needs at least this many sources linked to it. */
-export const MIN_SOURCES_PER_OUTCOME = 2;
+/**
+ * Each weekly topic needs at least this many of its module's sources. Dr. Sherin Thomas,
+ * 2 October 2026: "at least 2 sources for each week's topic". The rule had been read as two
+ * per learning outcome, which she did not mean.
+ */
+export const MIN_SOURCES_PER_TOPIC = 2;
 const RECENT_YEARS = 5;
 const MIN_PEER_REVIEWED_SHARE = 0.3;
 const MIN_FREE_ACCESS_SHARE = 0.7;
@@ -128,18 +137,44 @@ function sourcesPerOutcome(
   });
 }
 
-/**
- * The outcomes below the per-outcome floor, with how many sources each has. For the issue
- * message: "some outcomes" told an author nothing about how far short a programme was, or
- * which outcomes to find sources for.
- */
-export function outcomesBelowSourceFloor(
+const topicTitleOf = (t: unknown): string =>
+  typeof t === 'string'
+    ? t.trim()
+    : t && typeof t === 'object' && typeof (t as { title?: unknown }).title === 'string'
+      ? ((t as { title: string }).title || '').trim()
+      : '';
+
+/** How many of a module's own sources cover each of its weekly topics. */
+export function sourcesPerTopic(
   sources: Step5SourceLike[],
   modules: Step5ModuleLike[]
-): { mloId: string; count: number }[] {
-  return sourcesPerOutcome(sources || [], modules || []).filter(
-    (o) => o.count < MIN_SOURCES_PER_OUTCOME
-  );
+): { moduleId: string; topic: string; count: number }[] {
+  return (modules || []).flatMap((mod) => {
+    const own = (sources || []).filter((s) => s.moduleId === mod.id);
+    return (mod.topics || [])
+      .map(topicTitleOf)
+      .filter(Boolean)
+      .map((topic) => ({
+        moduleId: String(mod.id),
+        topic,
+        count: own.filter((s) => (s.linkedTopics || []).includes(topic)).length,
+      }));
+  });
+}
+
+/** Whether any source carries topic scores: until then the topic rule cannot be checked. */
+export const topicsScored = (sources: Step5SourceLike[]) =>
+  (sources || []).some((s) => s.topicScores && Object.keys(s.topicScores).length > 0);
+
+/**
+ * The weekly topics below the floor, with how many sources each has. For the issue message,
+ * so an author is told which topics to find sources for.
+ */
+export function topicsBelowSourceFloor(
+  sources: Step5SourceLike[],
+  modules: Step5ModuleLike[]
+): { moduleId: string; topic: string; count: number }[] {
+  return sourcesPerTopic(sources, modules).filter((t) => t.count < MIN_SOURCES_PER_TOPIC);
 }
 
 export function step5ValidationReport(
@@ -161,8 +196,13 @@ export function step5ValidationReport(
   return {
     allSourcesApproved: all((s) => APPROVED_SOURCE_CATEGORIES.includes(s.category || '')),
     recencyCompliance: all((s) => isRecentOrJustified(s, currentYear)),
-    minimumSourcesPerTopic:
-      any && everyModuleHasOutcomes && outcomes.every((o) => o.count >= MIN_SOURCES_PER_OUTCOME),
+    // Two sources per weekly topic, once topics are scored; until then not checked.
+    minimumSourcesPerTopic: !topicsScored(list)
+      ? null
+      : (() => {
+          const topics = sourcesPerTopic(list, mods);
+          return topics.length > 0 && topics.every((t) => t.count >= MIN_SOURCES_PER_TOPIC);
+        })(),
     academicAppliedBalance:
       list.some((s) => s.type === 'academic') &&
       list.some((s) => s.type === 'applied' || s.type === 'industry'),

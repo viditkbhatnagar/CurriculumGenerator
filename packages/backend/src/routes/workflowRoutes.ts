@@ -1049,6 +1049,23 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
     // their stored reports passed empty lists, read fields that do not exist, or (Step 13) were
     // named differently from what the screen reads. Response only; writes nothing.
     try {
+      // Step 5's report too: its source floor became two per weekly topic on 2 October 2026.
+      const step5 = (workflow as any).step5;
+      if (Array.isArray(step5?.sources)) {
+        const fresh = workflowService.buildStep5Summary(
+          step5.sources,
+          (workflow as any).step4?.modules || [],
+          {
+            sourceShortfalls: step5.sourceShortfalls,
+            subjectFields: step5.subjectFields,
+            retractionsRemoved: step5.retractionsRemoved,
+          }
+        );
+        step5.validationReport = fresh.validationReport;
+        step5.complianceIssues = fresh.complianceIssues;
+        step5.agiCompliant = fresh.agiCompliant;
+        step5.adminOverrideRequired = fresh.adminOverrideRequired;
+      }
       const step6View = step6ReportOf(workflow as any, new Date().getFullYear());
       if (step6View) Object.assign((workflow as any).step6, step6View);
       const step7View = step7ValidationOf(workflow as any);
@@ -1058,7 +1075,7 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
         step13.validation = step13Validation(step13, (workflow as any).step3?.outcomes || []);
       }
     } catch (error) {
-      loggingService.warn('Could not recompute Step 6/7/13 checks for view', {
+      loggingService.warn('Could not recompute Step 5/6/7/13 checks for view', {
         workflowId: req.params.id,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -2999,6 +3016,34 @@ router.put(
     }
   }
 );
+
+/**
+ * POST /api/v3/workflow/:id/step5/topics
+ * Match Step 5 sources to the weekly topics they cover (the two-sources-per-topic rule). A dry
+ * run unless `?dryRun=false` is given by an administrator: then the links are saved.
+ */
+router.post('/:id/step5/topics', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const dryRun = req.query.dryRun !== 'false';
+    if (!dryRun && (req as any).user?.role !== 'administrator') {
+      return res
+        .status(403)
+        .json({ success: false, error: 'Only an administrator can save topic links' });
+    }
+    const result = await workflowService.linkStep5Topics(req.params.id, { dryRun });
+    res.json({ success: true, data: result });
+  } catch (error) {
+    loggingService.error('Error linking Step 5 sources to topics', {
+      workflowId: req.params.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    const message = error instanceof Error ? error.message : 'Failed to link sources to topics';
+    res.status(/not found/i.test(message) ? 404 : 500).json({ success: false, error: message });
+  }
+});
 
 /**
  * POST /api/v3/workflow/:id/step5/source

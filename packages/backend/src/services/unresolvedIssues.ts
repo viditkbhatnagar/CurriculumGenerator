@@ -60,7 +60,7 @@ const CHECK_LABELS: Record<number, Record<string, string>> = {
   5: {
     allSourcesApproved: 'Every source is from an approved category',
     recencyCompliance: 'Sources are from the last five years, or are justified seminal works',
-    minimumSourcesPerTopic: 'Every module outcome has at least two sources',
+    minimumSourcesPerTopic: 'Every weekly topic has at least two sources',
     academicAppliedBalance: 'Sources mix academic and applied material',
     peerReviewRatio: 'At least 30% of sources are peer-reviewed',
     completeCitations: 'Every citation names its authors, year and title',

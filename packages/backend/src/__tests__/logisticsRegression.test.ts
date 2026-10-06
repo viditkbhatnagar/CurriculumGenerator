@@ -32,7 +32,9 @@ describe('Logistics regression (21 Sep 2026)', () => {
   it('fails minimum sources and traceability for its 71 sources', () => {
     expect(fixture.step5.sources).toHaveLength(71);
     const report = step5ValidationReport(fixture.step5.sources as any, modules, 2026);
-    expect(report.minimumSourcesPerTopic).toBe(false);
+    // Two sources per weekly topic: not checked, since these sources were never matched to
+    // topics (the rule is Dr. Sherin Thomas's of 2 October 2026).
+    expect(report.minimumSourcesPerTopic).toBeNull();
     expect(report.traceabilityComplete).toBe(false);
     expect(report.everyMLOSupported).toBe(false);
     expect(report.apaAccuracy).toBeNull();

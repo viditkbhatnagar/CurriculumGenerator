@@ -1,15 +1,21 @@
 import {
   step5ValidationReport,
   step5Compliant,
-  outcomesBelowSourceFloor,
+  topicsBelowSourceFloor,
   sourceCompliant,
 } from '../services/step5Validation';
 
 const YEAR = 2026;
 const modules = [
-  { id: 'm1', mlos: [{ id: 'm1-1' }, { id: 'm1-2' }] },
-  { id: 'm2', mlos: [{ id: 'm2-1' }] },
+  { id: 'm1', mlos: [{ id: 'm1-1' }, { id: 'm1-2' }], topics: ['Planning', { title: 'Control' }] },
+  { id: 'm2', mlos: [{ id: 'm2-1' }], topics: ['Markets'] },
 ];
+/** Sources matched to weekly topics, as linkSourcesToTopics leaves them. */
+const onTopics = (s: any, topics: string[]) => ({
+  ...s,
+  linkedTopics: topics,
+  topicScores: Object.fromEntries(topics.map((t) => [t, 0.6])),
+});
 const source = (moduleId: string, linkedMLOs: string[], extra: any = {}) => ({
   moduleId,
   linkedMLOs,
@@ -36,13 +42,20 @@ describe('step5ValidationReport', () => {
     expect(passed).toEqual([]);
   });
 
-  it('fails minimum sources when an outcome has fewer than two', () => {
-    const thin = [...wellSourced.slice(0, 3)];
-    expect(step5ValidationReport(thin, modules, YEAR).minimumSourcesPerTopic).toBe(false);
+  it('does not check two sources per weekly topic until sources are matched to topics', () => {
+    expect(step5ValidationReport(wellSourced, modules, YEAR).minimumSourcesPerTopic).toBeNull();
   });
 
-  it('passes minimum sources when every outcome has two', () => {
-    expect(step5ValidationReport(wellSourced, modules, YEAR).minimumSourcesPerTopic).toBe(true);
+  it('passes two sources per weekly topic, and fails a topic with fewer', () => {
+    const covered = [
+      onTopics(wellSourced[0], ['Planning', 'Control']),
+      onTopics(wellSourced[1], ['Planning', 'Control']),
+      onTopics(wellSourced[2], ['Markets']),
+      onTopics(wellSourced[3], ['Markets']),
+    ];
+    expect(step5ValidationReport(covered, modules, YEAR).minimumSourcesPerTopic).toBe(true);
+    const thin = [covered[0], covered[1], covered[2], onTopics(wellSourced[3], [])];
+    expect(step5ValidationReport(thin, modules, YEAR).minimumSourcesPerTopic).toBe(false);
   });
 
   it('fails traceability when a source is linked to no outcome', () => {
@@ -73,12 +86,16 @@ describe('step5Compliant', () => {
   });
 });
 
-describe('outcomesBelowSourceFloor', () => {
-  it('names each outcome short of two sources, with its count', () => {
-    const sources = [source('m1', ['m1-1']), source('m1', ['m1-1']), source('m2', ['m2-1'])];
-    expect(outcomesBelowSourceFloor(sources, modules)).toEqual([
-      { mloId: 'm1-2', count: 0 },
-      { mloId: 'm2-1', count: 1 },
+describe('topicsBelowSourceFloor', () => {
+  it('names each weekly topic short of two sources, with its count', () => {
+    const sources = [
+      onTopics(source('m1', []), ['Planning']),
+      onTopics(source('m1', []), ['Planning']),
+      onTopics(source('m2', []), ['Markets']),
+    ];
+    expect(topicsBelowSourceFloor(sources, modules)).toEqual([
+      { moduleId: 'm1', topic: 'Control', count: 0 },
+      { moduleId: 'm2', topic: 'Markets', count: 1 },
     ]);
   });
 });

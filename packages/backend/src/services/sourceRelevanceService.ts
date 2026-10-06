@@ -328,3 +328,129 @@ export function assignOutcomes(
 
   return { uncovered: mloIds.filter((id) => !covered.has(id)) };
 }
+
+/**
+ * Sources per weekly topic.
+ *
+ * Dr. Sherin Thomas decided on 2 October 2026 that the source rule is "at least 2 sources for
+ * each week's topic". Nothing linked a source to a topic: `relevantTopics` was the module's
+ * first three topics copied onto every looked-up source (246 of the BBA's 407), so it said
+ * nothing about what a source covers. Topics are scored like outcomes, by meaning.
+ */
+
+/** A topic as the text a source is compared with; the module title disambiguates short topics. */
+export function topicText(topic: string, moduleTitle?: string): string {
+  return moduleTitle ? `${topic} (${moduleTitle})` : topic;
+}
+
+/** How closely each source matches each of a module's topics, -1..1, in one batched request. */
+export async function scoreAgainstTopics<T extends { title?: string; abstract?: string }>(
+  sources: T[],
+  topics: string[],
+  moduleTitle?: string
+): Promise<Map<T, Record<string, number>>> {
+  const scores = new Map<T, Record<string, number>>();
+  if (sources.length === 0 || topics.length === 0) return scores;
+  const vectors = await openaiService.generateEmbeddingsBatch([
+    ...topics.map((t) => topicText(t, moduleTitle)),
+    ...sources.map(sourceText),
+  ]);
+  if (vectors.length !== topics.length + sources.length) {
+    loggingService.warn('Embedding count mismatch while scoring topics; skipping', {
+      topics: topics.length,
+      sources: sources.length,
+      vectors: vectors.length,
+    });
+    return scores;
+  }
+  sources.forEach((source, index) => {
+    const vector = vectors[topics.length + index];
+    const perTopic: Record<string, number> = {};
+    topics.forEach((topic, t) => {
+      perTopic[topic] = Number(cosine(vector, vectors[t]).toFixed(4));
+    });
+    scores.set(source, perTopic);
+  });
+  return scores;
+}
+
+/**
+ * The lowest topic score that counts as a source covering the topic. Provisional until it is
+ * calibrated against the BBA's stored scores, as MLO_SUPPORT_FLOOR was; the scores are kept on
+ * each source so a new floor re-derives the links for free.
+ */
+export const TOPIC_SUPPORT_FLOOR = 0.4;
+
+/** How many of a module's weekly topics one source may be said to cover. */
+export const MAX_TOPICS_PER_SOURCE = 3;
+
+/**
+ * Turn stored topic scores into topic links. Pure; mutates `linkedTopics` on each source and
+ * leaves a source with no scores unlinked rather than guessing.
+ */
+export function assignTopics(
+  sources: { topicScores?: Record<string, number>; linkedTopics?: string[] }[],
+  floor = TOPIC_SUPPORT_FLOOR
+): void {
+  for (const source of sources) {
+    const scores = source.topicScores || {};
+    source.linkedTopics = Object.entries(scores)
+      .filter(([, score]) => score >= floor)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, MAX_TOPICS_PER_SOURCE)
+      .map(([topic]) => topic);
+  }
+}
+
+const titleOfTopic = (t: unknown): string =>
+  typeof t === 'string'
+    ? t.trim()
+    : t && typeof t === 'object' && typeof (t as { title?: unknown }).title === 'string'
+      ? String((t as { title: string }).title).trim()
+      : '';
+
+/**
+ * Score every module's sources against that module's weekly topics, store the scores and link
+ * each source to the topics it covers. Mutates the sources: `topicScores`, `linkedTopics`, and
+ * `relevantTopics` (which consumers already read) set to the same links. A module whose
+ * scoring fails is left unscored, so the topic rule reads "not checked" rather than failing.
+ */
+export async function linkSourcesToTopics(
+  sources: {
+    moduleId?: string;
+    title?: string;
+    abstract?: string;
+    topicScores?: Record<string, number>;
+    linkedTopics?: string[];
+    relevantTopics?: string[];
+  }[],
+  modules: { id?: string; title?: string; topics?: unknown[] }[],
+  floor = TOPIC_SUPPORT_FLOOR
+): Promise<{ modulesScored: number; sourcesScored: number }> {
+  let modulesScored = 0;
+  let sourcesScored = 0;
+  for (const mod of modules || []) {
+    const topics = (mod.topics || []).map(titleOfTopic).filter(Boolean);
+    const own = (sources || []).filter((s) => s.moduleId === mod.id);
+    if (!topics.length || !own.length) continue;
+    try {
+      const scores = await scoreAgainstTopics(own, topics, mod.title);
+      if (scores.size === 0) continue;
+      own.forEach((s) => {
+        s.topicScores = scores.get(s) || {};
+      });
+      assignTopics(own, floor);
+      own.forEach((s) => {
+        s.relevantTopics = s.linkedTopics;
+      });
+      modulesScored++;
+      sourcesScored += own.length;
+    } catch (error) {
+      loggingService.warn('Could not score sources against topics', {
+        moduleId: mod.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return { modulesScored, sourcesScored };
+}
