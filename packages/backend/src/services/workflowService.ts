@@ -30,6 +30,7 @@ import {
   validationFromStubs,
 } from './step10Completion';
 import { saveModulePlan, loadModulePlan, withLessons, loadLessonIndex } from './step10Store';
+import { reachStep, recordStepGenerated } from './stepGating';
 import {
   step5ValidationReport,
   step5Compliant,
@@ -937,8 +938,7 @@ IMPORTANT:
       step2Progress.completedAt = new Date();
     }
 
-    workflow.currentStep = 2;
-    workflow.status = 'step2_complete';
+    reachStep(workflow, 2);
 
     await workflow.save();
 
@@ -1323,8 +1323,7 @@ IMPORTANT:
       step3Progress.completedAt = new Date();
     }
 
-    workflow.currentStep = 3;
-    workflow.status = 'step3_complete';
+    reachStep(workflow, 3);
 
     await workflow.save();
 
@@ -1938,13 +1937,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       });
     }
 
-    workflow.currentStep = Math.max(workflow.currentStep, 4);
-    workflow.status = 'step4_complete' as any;
-    const progress = workflow.stepProgress.find((p) => p.step === 4);
-    if (progress) {
-      progress.status = 'completed';
-      progress.completedAt = new Date();
-    }
+    recordStepGenerated(workflow, 4);
     workflow.markModified('step4');
     await workflow.save();
 
@@ -2148,8 +2141,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       step4Progress.completedAt = new Date();
     }
 
-    workflow.currentStep = 4;
-    workflow.status = 'step4_complete';
+    reachStep(workflow, 4);
 
     loggingService.info('Saving Step 4 data to database', {
       workflowId,
@@ -2812,14 +2804,7 @@ CRITICAL VALIDATION:
       subjectFields: (workflow as any).__subjectFields || [],
     });
 
-    workflow.currentStep = 5;
-    workflow.status = 'step5_complete';
-
-    const step5Progress = workflow.stepProgress.find((p) => p.step === 5);
-    if (step5Progress) {
-      step5Progress.status = 'completed';
-      step5Progress.completedAt = new Date();
-    }
+    recordStepGenerated(workflow, 5);
 
     await workflow.save();
 
@@ -3037,14 +3022,7 @@ CRITICAL VALIDATION:
       sources,
     });
 
-    workflow.currentStep = 6;
-    workflow.status = 'step6_complete';
-
-    const step6Progress = workflow.stepProgress.find((p) => p.step === 6);
-    if (step6Progress) {
-      step6Progress.status = 'completed';
-      step6Progress.completedAt = new Date();
-    }
+    recordStepGenerated(workflow, 6);
 
     await workflow.save();
 
@@ -3391,14 +3369,7 @@ CRITICAL VALIDATION:
       generatedAt: new Date(),
     };
 
-    workflow.currentStep = 7;
-    workflow.status = 'step7_complete';
-
-    const step7Progress = workflow.stepProgress.find((p) => p.step === 7);
-    if (step7Progress) {
-      step7Progress.status = 'completed';
-      step7Progress.completedAt = new Date();
-    }
+    recordStepGenerated(workflow, 7);
 
     await workflow.save();
 
@@ -3709,14 +3680,7 @@ CRITICAL VALIDATION:
     // Update validation
     workflow.step7!.validation = validation;
     (workflow.step7 as any).bloomReport = bloomReport;
-    workflow.currentStep = 7;
-    workflow.status = 'step7_complete';
-
-    const step7Progress = workflow.stepProgress.find((p) => p.step === 7);
-    if (step7Progress) {
-      step7Progress.status = 'completed';
-      step7Progress.completedAt = new Date();
-    }
+    recordStepGenerated(workflow, 7);
 
     // Use queued save for final save to prevent parallel save errors
     loggingService.info('[Step 7 Stream] BEFORE FINAL SAVE - data in memory', {
@@ -3945,14 +3909,7 @@ CRITICAL VALIDATION:
       ...(caseStudies.length === 0 && debugError ? { _debugError: debugError } : {}),
     };
 
-    workflow.currentStep = 8;
-    workflow.status = 'step8_complete';
-
-    const step8Progress = workflow.stepProgress.find((p) => p.step === 8);
-    if (step8Progress) {
-      step8Progress.status = 'completed';
-      step8Progress.completedAt = new Date();
-    }
+    recordStepGenerated(workflow, 8);
 
     await workflow.save();
 
@@ -4105,15 +4062,8 @@ CRITICAL VALIDATION:
       typicalSize,
     };
 
-    workflow.currentStep = 9;
-    workflow.status = 'step9_complete';
     workflow.completedAt = new Date();
-
-    const step9Progress = workflow.stepProgress.find((p) => p.step === 9);
-    if (step9Progress) {
-      step9Progress.status = 'completed';
-      step9Progress.completedAt = new Date();
-    }
+    recordStepGenerated(workflow, 9);
 
     await workflow.save();
 
@@ -4156,16 +4106,7 @@ CRITICAL VALIDATION:
     workflow.step10 = step10Content;
 
     // Update workflow status
-    workflow.currentStep = 10;
-    workflow.status = 'step10_complete';
-
-    // Update step progress
-    const step10Progress = workflow.stepProgress.find((p) => p.step === 10);
-    if (step10Progress) {
-      step10Progress.status = 'completed';
-      step10Progress.startedAt = step10Progress.startedAt || new Date();
-      step10Progress.completedAt = new Date();
-    }
+    recordStepGenerated(workflow, 10);
 
     await workflow.save();
 
@@ -4471,18 +4412,10 @@ CRITICAL VALIDATION:
       'step10.generationProgress': null,
     };
     if (newModulesCount >= totalModules) {
-      set.currentStep = 10;
-      set.status = 'step10_complete';
-      freshWorkflow.currentStep = 10;
-      freshWorkflow.status = 'step10_complete';
-
-      const step10Progress = freshWorkflow.stepProgress.find((p) => p.step === 10);
-      if (step10Progress) {
-        step10Progress.status = 'completed';
-        step10Progress.startedAt = step10Progress.startedAt || new Date();
-        step10Progress.completedAt = new Date();
-        set.stepProgress = freshWorkflow.stepProgress;
-      }
+      recordStepGenerated(freshWorkflow, 10);
+      set.currentStep = freshWorkflow.currentStep;
+      set.status = freshWorkflow.status;
+      set.stepProgress = freshWorkflow.stepProgress;
     }
     await CurriculumWorkflow.updateOne({ _id: workflowId }, { $set: set });
 
@@ -4522,16 +4455,7 @@ CRITICAL VALIDATION:
     workflow.step11 = step11Content;
 
     // Update workflow status
-    workflow.currentStep = 11;
-    workflow.status = 'step11_complete';
-
-    // Update step progress
-    const step11Progress = workflow.stepProgress.find((p) => p.step === 11);
-    if (step11Progress) {
-      step11Progress.status = 'completed';
-      step11Progress.startedAt = step11Progress.startedAt || new Date();
-      step11Progress.completedAt = new Date();
-    }
+    recordStepGenerated(workflow, 11);
 
     await workflow.save();
 
@@ -4810,15 +4734,7 @@ CRITICAL VALIDATION:
 
     // Update workflow status if all modules are complete
     if (newModulesCount >= totalModules) {
-      freshWorkflow.currentStep = 11;
-      freshWorkflow.status = 'step11_complete';
-
-      const step11Progress = freshWorkflow.stepProgress.find((p) => p.step === 11);
-      if (step11Progress) {
-        step11Progress.status = 'completed';
-        step11Progress.startedAt = step11Progress.startedAt || new Date();
-        step11Progress.completedAt = new Date();
-      }
+      recordStepGenerated(freshWorkflow, 11);
     }
 
     // Clear any previous error since generation succeeded
@@ -4993,15 +4909,7 @@ CRITICAL VALIDATION:
       generatedAt: new Date(),
     };
 
-    workflow.currentStep = 12;
-    workflow.status = 'step12_complete';
-
-    const step12Progress = workflow.stepProgress.find((p) => p.step === 12);
-    if (step12Progress) {
-      step12Progress.status = 'completed';
-      step12Progress.startedAt = step12Progress.startedAt || new Date();
-      step12Progress.completedAt = new Date();
-    }
+    recordStepGenerated(workflow, 12);
 
     await workflow.save();
 
@@ -5233,15 +5141,7 @@ CRITICAL VALIDATION:
 
     // Mark complete if all modules done
     if (newModulesCount >= totalModules) {
-      freshWorkflow.currentStep = 12;
-      freshWorkflow.status = 'step12_complete';
-
-      const step12Progress = freshWorkflow.stepProgress.find((p) => p.step === 12);
-      if (step12Progress) {
-        step12Progress.status = 'completed';
-        step12Progress.startedAt = step12Progress.startedAt || new Date();
-        step12Progress.completedAt = new Date();
-      }
+      recordStepGenerated(freshWorkflow, 12);
     }
 
     freshWorkflow.markModified('step12');
@@ -5313,19 +5213,11 @@ CRITICAL VALIDATION:
     const examResult = await summativeExamService.generateSummativeExam(workflow, onProgress);
 
     workflow.step13 = examResult;
-    workflow.currentStep = 13;
-    workflow.status = 'step13_complete';
     // The exam is complete — drop the generation checkpoint so it can't shadow a
     // future regeneration.
     (workflow as any).step13Draft = undefined;
     workflow.markModified('step13Draft');
-
-    const step13Progress = workflow.stepProgress.find((p) => p.step === 13);
-    if (step13Progress) {
-      step13Progress.status = 'completed';
-      step13Progress.startedAt = step13Progress.startedAt || new Date();
-      step13Progress.completedAt = new Date();
-    }
+    recordStepGenerated(workflow, 13);
 
     await workflow.save();
     // Belt-and-braces: ensure the checkpoint is gone even if the Mixed-field

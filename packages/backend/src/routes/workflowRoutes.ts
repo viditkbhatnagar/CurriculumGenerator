@@ -87,7 +87,7 @@ import {
 } from '../queues/stepQueue';
 import { createAuditLog } from '../services/auditService';
 import { sanitizeActivityArray } from '../services/activitySanitizer';
-import { isStepDone } from '../services/stepGating';
+import { isStepDone, recordStepApproved } from '../services/stepGating';
 import { sanitizeReadingPayload } from '../services/readingValidator';
 import { sanitizeSourcePayload } from '../services/sourceValidator';
 import crypto from 'crypto';
@@ -4743,7 +4743,7 @@ router.post('/:id/step10', validateJWT, loadUser, async (req: Request, res: Resp
       });
     }
 
-    if (!existingWorkflow.step9 || existingWorkflow.currentStep < 9) {
+    if (!existingWorkflow.step9) {
       return res.status(400).json({
         success: false,
         error: 'Step 9 must be completed before generating lesson plans',
@@ -4907,7 +4907,7 @@ router.post(
         });
       }
 
-      if (!workflow.step9 || workflow.currentStep < 9) {
+      if (!workflow.step9 || !isStepDone(workflow, 9)) {
         return res.status(400).json({
           success: false,
           error: 'Step 9 must be completed before generating lesson plans',
@@ -5264,36 +5264,8 @@ router.post('/:id/step10/approve', validateJWT, loadUser, async (req: Request, r
       workflow.step10 as any
     );
 
-    // Update workflow status - advance to Step 11
-    workflow.currentStep = 11;
-    workflow.status = 'step11_pending';
-
-    // Update step progress for Step 10
-    const step10Progress = workflow.stepProgress.find((p) => p.step === 10);
-    if (step10Progress) {
-      step10Progress.completedAt = new Date();
-      step10Progress.status = 'approved';
-    } else {
-      workflow.stepProgress.push({
-        step: 10,
-        status: 'approved',
-        startedAt: workflow.step10.generatedAt || new Date(),
-        completedAt: new Date(),
-      });
-    }
-
-    // Initialize Step 11 progress
-    const step11Progress = workflow.stepProgress.find((p) => p.step === 11);
-    if (step11Progress) {
-      step11Progress.status = 'in_progress';
-      step11Progress.startedAt = new Date();
-    } else {
-      workflow.stepProgress.push({
-        step: 11,
-        status: 'in_progress',
-        startedAt: new Date(),
-      });
-    }
+    // Step 10 is done and Step 11 opens, without moving a programme that is further on back.
+    recordStepApproved(workflow, 10);
 
     workflow.markModified('step10');
     workflow.markModified('stepProgress');
@@ -5352,7 +5324,7 @@ router.post('/:id/step11', validateJWT, loadUser, async (req: Request, res: Resp
       });
     }
 
-    if (!existingWorkflow.step10 || existingWorkflow.currentStep < 10) {
+    if (!existingWorkflow.step10) {
       return res.status(400).json({
         success: false,
         error: 'Step 10 must be completed before generating PPTs',
@@ -5616,7 +5588,7 @@ router.post(
         });
       }
 
-      if (!workflow.step10 || workflow.currentStep < 10) {
+      if (!workflow.step10 || !isStepDone(workflow, 10)) {
         return res.status(400).json({
           success: false,
           error: 'Step 10 must be completed before generating PPTs',
@@ -5826,36 +5798,9 @@ router.post('/:id/step11/approve', validateJWT, loadUser, async (req: Request, r
       summariseFromStubs((workflow.step10 as any)?.moduleLessonPlans || []).totalLessons
     );
 
-    // Update workflow status — advance to Step 12
-    workflow.currentStep = 12;
-    workflow.status = 'step12_pending';
-
-    // Update step progress
-    const step11Progress = workflow.stepProgress.find((p) => p.step === 11);
-    if (step11Progress) {
-      step11Progress.completedAt = new Date();
-      step11Progress.status = 'approved';
-    } else {
-      workflow.stepProgress.push({
-        step: 11,
-        status: 'approved',
-        startedAt: workflow.step11.generatedAt || new Date(),
-        completedAt: new Date(),
-      });
-    }
-
-    // Initialize Step 12 progress
-    const step12Progress = workflow.stepProgress.find((p) => p.step === 12);
-    if (step12Progress) {
-      step12Progress.status = 'in_progress';
-      step12Progress.startedAt = new Date();
-    } else {
-      workflow.stepProgress.push({
-        step: 12,
-        status: 'in_progress',
-        startedAt: new Date(),
-      });
-    }
+    // Step 11 is done and Step 12 opens, unless Step 12 is already generated or approved:
+    // re-approving Step 11 used to reopen an approved Step 12.
+    recordStepApproved(workflow, 11);
 
     workflow.markModified('step11');
     workflow.markModified('stepProgress');
@@ -5909,7 +5854,7 @@ router.post('/:id/step12', validateJWT, loadUser, async (req: Request, res: Resp
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
 
-    if (!existingWorkflow.step11 || existingWorkflow.currentStep < 11) {
+    if (!existingWorkflow.step11 || !isStepDone(existingWorkflow, 11)) {
       return res.status(400).json({
         success: false,
         error: 'Step 11 must be completed before generating assignment packs',
@@ -6102,22 +6047,8 @@ router.post('/:id/step12/approve', validateJWT, loadUser, async (req: Request, r
 
     workflow.step12.approvedAt = new Date();
 
-    // Advance to Step 13
-    workflow.currentStep = 13;
-    workflow.status = 'step13_pending';
-
-    const step12Progress = workflow.stepProgress.find((p) => p.step === 12);
-    if (step12Progress) {
-      step12Progress.completedAt = new Date();
-      step12Progress.status = 'approved';
-    }
-
-    // Initialize Step 13 progress
-    const step13Progress = workflow.stepProgress.find((p) => p.step === 13);
-    if (step13Progress) {
-      step13Progress.status = 'in_progress';
-      step13Progress.startedAt = new Date();
-    }
+    // Step 12 is done and Step 13 opens.
+    recordStepApproved(workflow, 12);
 
     workflow.markModified('step12');
     workflow.markModified('stepProgress');
@@ -6170,7 +6101,7 @@ router.post('/:id/step13', validateJWT, loadUser, async (req: Request, res: Resp
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
 
-    if (!existingWorkflow.step12 || existingWorkflow.currentStep < 12) {
+    if (!existingWorkflow.step12 || !isStepDone(existingWorkflow, 12)) {
       return res.status(400).json({
         success: false,
         error: 'Step 12 must be completed before generating summative exam',
@@ -6264,14 +6195,8 @@ router.post('/:id/step13/approve', validateJWT, loadUser, async (req: Request, r
 
     workflow.step13.approvedAt = new Date();
 
-    workflow.currentStep = 13;
-    workflow.status = 'step13_complete';
-
-    const step13Progress = workflow.stepProgress.find((p) => p.step === 13);
-    if (step13Progress) {
-      step13Progress.completedAt = new Date();
-      step13Progress.status = 'approved';
-    }
+    // Approving the exam does not open Step 14 (the syllabus is optional).
+    recordStepApproved(workflow, 13, { opensNext: false });
 
     workflow.markModified('step13');
     workflow.markModified('stepProgress');
@@ -6402,15 +6327,11 @@ router.post('/:id/step14/approve', validateJWT, loadUser, async (req: Request, r
 
     workflow.step14.approvedAt = new Date();
     workflow.step14.approvedBy = userId;
-    workflow.currentStep = 14;
-    workflow.status = 'step14_complete';
-
+    recordStepApproved(workflow, 14);
     const progress = workflow.stepProgress.find((p) => p.step === 14);
     if (progress) {
-      progress.status = 'approved';
       progress.approvedAt = new Date();
       progress.approvedBy = userId;
-      progress.completedAt = new Date();
     }
 
     workflow.markModified('step14');
@@ -6746,7 +6667,7 @@ router.post('/:id/complete', validateJWT, loadUser, async (req: Request, res: Re
     }
 
     if (
-      workflow.currentStep < 13 ||
+      !isStepDone(workflow, 12) ||
       !workflow.step12 ||
       !workflow.step12.moduleAssignmentPacks ||
       workflow.step12.moduleAssignmentPacks.length === 0 ||
@@ -6846,8 +6767,10 @@ router.get('/:id/export', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
 
+    // Step 9 done, by any of its signals: the status string alone only read 'step9_complete'
+    // while Step 9 was the latest step touched.
     if (
-      workflow.status !== 'step9_complete' &&
+      !isStepDone(workflow, 9) &&
       workflow.status !== 'review_pending' &&
       workflow.status !== 'published'
     ) {

@@ -22,6 +22,7 @@
 
 import mongoose, { Schema, Document } from 'mongoose';
 import { applySoftDeleteFilter, applySoftDeleteToPipeline } from '../utils/softDelete';
+import { recordStepApproved } from '../services/stepGating';
 
 // ============================================================================
 // STEP 10 INTERFACES - Lesson Plans (Separated from PPT for timeout prevention)
@@ -1665,38 +1666,9 @@ CurriculumWorkflowSchema.methods.advanceStep = async function (
   // approved steps reloaded as unapproved (found 2026-10-01).
   if (typeof approvedStep === 'number') this.markModified(`step${approvedStep}`);
 
-  // Re-approving a step the workflow has already moved past — leave
-  // currentStep where it is (and don't surface it as an error). Still
-  // save so the caller's changes (e.g. the re-approval timestamp) stick.
-  if (typeof approvedStep === 'number' && approvedStep < this.currentStep) {
-    await this.save();
-    return;
-  }
-  // Already at the final step — nothing to advance to. No-op rather than
-  // throw, so re-approving the last step isn't shown as an error.
-  if (this.currentStep >= 14) {
-    await this.save();
-    return;
-  }
-
-  // Mark current step as completed
-  const currentProgress = this.stepProgress.find((p: any) => p.step === this.currentStep);
-  if (currentProgress) {
-    currentProgress.status = 'completed';
-    currentProgress.completedAt = new Date();
-  }
-
-  // Move to next step
-  this.currentStep += 1;
-  this.status = `step${this.currentStep}_pending`;
-
-  // Mark next step as in progress
-  const nextProgress = this.stepProgress.find((p: any) => p.step === this.currentStep);
-  if (nextProgress) {
-    nextProgress.status = 'in_progress';
-    nextProgress.startedAt = new Date();
-  }
-
+  // The approved step is done and the next one opens. A programme already further on keeps its
+  // position, and a later step that is already done is not reopened (services/stepGating).
+  recordStepApproved(this, typeof approvedStep === 'number' ? approvedStep : this.currentStep);
   await this.save();
 };
 

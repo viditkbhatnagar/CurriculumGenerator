@@ -508,6 +508,14 @@ export default function WorkflowDetailPage() {
               <nav className="p-2 max-h-[calc(100vh-200px)] overflow-y-auto scrollbar-thin scrollbar-track-teal-50 scrollbar-thumb-teal-200 hover:scrollbar-thumb-teal-300">
                 {([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] as WorkflowStep[]).map((step) => {
                   const stepProgress = workflow.stepProgress.find((p) => p.step === step);
+                  // Ticked when the step is done by any of its signals. Progress records alone
+                  // drifted: an approved Step 12 showed "in progress" after Step 11 was
+                  // re-approved, so the approval looked lost.
+                  const stepStatus = isStepDone(workflow, step)
+                    ? stepProgress?.status === 'approved'
+                      ? 'approved'
+                      : 'completed'
+                    : stepProgress?.status;
                   const isAccessible = isStepAccessible(step);
                   const isCurrent = workflow.currentStep === step;
                   const isActive = currentStep === step;
@@ -527,12 +535,11 @@ export default function WorkflowDetailPage() {
                     >
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${getStepStatusColor(
-                          stepProgress?.status,
+                          stepStatus,
                           isCurrent
                         )}`}
                       >
-                        {stepProgress?.status === 'approved' ||
-                        stepProgress?.status === 'completed' ? (
+                        {stepStatus === 'approved' || stepStatus === 'completed' ? (
                           <svg
                             className="w-4 h-4"
                             fill="none"
@@ -564,7 +571,9 @@ export default function WorkflowDetailPage() {
                         </p>
                         <p className="text-xs text-teal-500">{ESTIMATED_TIMES[step]}</p>
                       </div>
-                      {stepProgress?.status === 'approved' && (
+                      {(stepProgress?.status === 'approved' ||
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        !!(workflow as any)[`step${step}`]?.approvedAt) && (
                         <span className="text-teal-500 text-xs font-medium">Approved</span>
                       )}
                     </button>

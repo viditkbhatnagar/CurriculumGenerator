@@ -42,3 +42,13 @@ describe('advanceStep', () => {
     expect(doc.currentStep).toBe(3);
   });
 });
+
+describe('advanceStep position', () => {
+  it('marks the approved step approved and opens the next', async () => {
+    const doc = loaded(2);
+    await doc.advanceStep(2);
+    expect(doc.currentStep).toBe(3);
+    expect(doc.stepProgress.find((p: any) => p.step === 2).status).toBe('approved');
+    expect(doc.stepProgress.find((p: any) => p.step === 3).status).toBe('in_progress');
+  });
+});
