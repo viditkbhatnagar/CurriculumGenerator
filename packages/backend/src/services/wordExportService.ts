@@ -17,6 +17,7 @@ import { moduleLabelOf } from '../utils/moduleIdentity';
 import { bloomIndex, statedBloom } from './assessmentGeneratorService';
 import { modulesInDocument, outlinesStep10, validationFromPlans } from './step10Completion';
 import { step13Validation } from './step13Validation';
+import { unresolvedIssues } from './unresolvedIssues';
 import { PER_MODULE_ARRAYS } from '../utils/perModuleExport';
 import { entryRequirementsLabel } from '../utils/entryRequirements';
 import { step12SummaryFromPacks, step12ValidationFromPacks } from './deliverableValidation';
@@ -274,6 +275,68 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       shading: options.shading ? { fill: options.shading } : undefined,
       width: options.width ? { size: options.width, type: WidthType.PERCENTAGE } : undefined,
     });
+  }
+
+  /**
+   * What the automated checks could not pass, at the front of the document (services/
+   * unresolvedIssues). The 21 September review found the export "concealed unresolved
+   * defects behind a polished structure": failures were scattered across step tables or
+   * absent, and a missing step left only a gap in the numbering.
+   */
+  private generateUnresolvedIssuesSection(workflow: WorkflowData, out: any[]): void {
+    const issues = unresolvedIssues(workflow, new Date().getFullYear());
+    const KIND_LABELS: Record<string, string> = {
+      fail: 'Fails',
+      not_checked: 'Not checked',
+      missing: 'Missing',
+      proposal: 'Needs approval',
+    };
+    out.push(this.createH1('Unresolved Issues'));
+    out.push(
+      ...this.createFormattedParagraphs([
+        'This list is produced automatically when the document is generated. It shows every check that failed or could not be run, every step with no content, and every AI proposal that still needs institutional approval.',
+        'A passing check is not academic approval. Every section of this document still needs review by a subject expert.',
+      ])
+    );
+    if (!issues.length) {
+      out.push(
+        ...this.createFormattedParagraphs([
+          'No automated check failed, and no step is missing, as of this document.',
+        ])
+      );
+      return;
+    }
+    const counts = Object.entries(KIND_LABELS)
+      .map(([kind, label]) => [label, issues.filter((i) => i.kind === kind).length] as const)
+      .filter(([, n]) => n > 0)
+      .map(([label, n]) => `${label}: ${n}`)
+      .join(' · ');
+    out.push(...this.createFormattedParagraphs([counts]));
+    out.push(
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new TableRow({
+            tableHeader: true,
+            children: [
+              this.createTableCell('Step', { bold: true, shading: 'E8EAF6', width: 22 }),
+              this.createTableCell('Issue', { bold: true, shading: 'E8EAF6', width: 58 }),
+              this.createTableCell('Status', { bold: true, shading: 'E8EAF6', width: 20 }),
+            ],
+          }),
+          ...issues.map(
+            (issue) =>
+              new TableRow({
+                children: [
+                  this.createTableCell(`${issue.step}. ${issue.stepName}`),
+                  this.createTableCell(issue.issue),
+                  this.createTableCell(KIND_LABELS[issue.kind]),
+                ],
+              })
+          ),
+        ],
+      })
+    );
   }
 
   /**
@@ -4227,6 +4290,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
 
     // Content sections
     const contentChildren: any[] = [];
+    this.generateUnresolvedIssuesSection(workflow, contentChildren);
 
     // Step names for progress reporting
     const stepNames: Record<number, string> = {

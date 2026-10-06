@@ -63,7 +63,8 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 //      read "Not checked" for it, under the same content hash.
 // v27: section headings in the curriculum Word export are real Word headings (navigable
 //      outline), not bold text.
-const EXPORT_FORMAT_VERSION = 'v27';
+// v28: the whole-programme document opens with an Unresolved Issues list.
+const EXPORT_FORMAT_VERSION = 'v28';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the

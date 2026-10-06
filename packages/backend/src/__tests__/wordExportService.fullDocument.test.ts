@@ -82,3 +82,13 @@ describe('whole-programme Word document, headings', () => {
     expect(xml).toMatch(/<w:pStyle w:val="Heading2"\/>/);
   });
 });
+
+describe('whole-programme Word document, unresolved issues', () => {
+  it('opens with the list of unresolved issues', async () => {
+    const text = await documentText(await wordExportService.generateDocument(programme(1)));
+    expect(text).toContain('Unresolved Issues');
+    // Steps 2, 3, 5-9 and 11-13 are absent from this test programme.
+    expect(text).toContain('This step has not been generated');
+    expect(text.indexOf('Unresolved Issues')).toBeLessThan(text.indexOf('Program Foundation'));
+  });
+});
