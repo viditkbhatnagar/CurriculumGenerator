@@ -103,6 +103,7 @@ import { step7ValidationOf } from '../services/step7Validation';
 import { step13Validation } from '../services/step13Validation';
 import { applyStep12Edit } from '../utils/step12Edit';
 import { BLOCKING_KINDS, publicationProblem } from '../services/publication';
+import { openaiService } from '../services/openaiService';
 import {
   CAPABILITY_STATEMENT,
   OTHER_SUBJECT,
@@ -1005,6 +1006,42 @@ router.post(
  * can fetch any. The mock-admin fallback (when Auth0 is unconfigured)
  * is treated as administrator, preserving existing dev behaviour.
  */
+/**
+ * POST /api/v3/workflow/draft-description  { programTitle, academicLevel?, subjectArea?, industrySector? }
+ * An AI draft of a programme description for Step 1, for the author to edit. AGU (Logan Pacey,
+ * 3 October 2026): "The generator should be able to create description through step 1": six
+ * catalogue courses have none. A draft only: nothing is saved.
+ */
+router.post('/draft-description', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const title = typeof req.body?.programTitle === 'string' ? req.body.programTitle.trim() : '';
+    if (title.length < 5) {
+      return res.status(400).json({ success: false, error: 'Give the programme title first' });
+    }
+    const clip = (v: unknown) => (typeof v === 'string' ? v.trim().slice(0, 200) : '');
+    const subject = SUBJECT_AREAS.find((a) => a.id === req.body?.subjectArea)?.label || '';
+    const prompt = [
+      `Programme title: ${title.slice(0, 200)}`,
+      clip(req.body?.academicLevel) && `Level: ${clip(req.body.academicLevel)}`,
+      subject && `Subject area: ${subject}`,
+      clip(req.body?.industrySector) && `Learners' sector: ${clip(req.body.industrySector)}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    const description = await openaiService.generateContent(
+      prompt,
+      'Write a programme description of 120 to 180 words for a curriculum document: what the programme covers, who it is for, and what learners will be able to do. Plain British English, no headings, no bullet points. Do not invent accreditation, entry requirements, institutions, statistics or career guarantees.',
+      { model: 'gpt-4o', maxTokens: 600, timeout: 60000 }
+    );
+    res.json({ success: true, data: { description: description.trim() } });
+  } catch (error) {
+    loggingService.error('Error drafting a programme description', { error });
+    res
+      .status(500)
+      .json({ success: false, error: 'Could not draft a description. Please try again.' });
+  }
+});
+
 /**
  * GET /api/v3/workflow/capability
  * What the generator supports, shown before Step 1 (services/capabilityScope).

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep1, useApproveStep1 } from '@/hooks/useWorkflow';
+import { api } from '@/lib/api';
 import CapabilityScopePanel from './CapabilityScopePanel';
 import { useStepStatus } from '@/hooks/useStepStatus';
 import {
@@ -104,6 +105,32 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
   });
 
   const [error, setError] = useState<string | null>(null);
+  const [draftingDescription, setDraftingDescription] = useState(false);
+  const [descriptionDrafted, setDescriptionDrafted] = useState(false);
+
+  const draftDescription = async () => {
+    if (formData.programDescription.trim()) {
+      setError('Clear the description first: a draft never replaces what you wrote.');
+      return;
+    }
+    setDraftingDescription(true);
+    setError(null);
+    try {
+      const response = await api.post('/api/v3/workflow/draft-description', {
+        programTitle: formData.programTitle,
+        academicLevel: formData.academicLevel,
+        subjectArea: formData.subjectArea,
+        industrySector: formData.targetLearnerIndustrySector,
+      });
+      const description = response.data?.data?.description || '';
+      setFormData((prev) => ({ ...prev, programDescription: description }));
+      setDescriptionDrafted(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.error || 'Could not draft a description. Please try again.');
+    } finally {
+      setDraftingDescription(false);
+    }
+  };
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [showCustomContactHours, setShowCustomContactHours] = useState(false);
 
@@ -462,9 +489,31 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
               className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 resize-none"
               required
             />
-            <p className="text-xs text-teal-500 mt-1">
-              {formData.programDescription.split(/\s+/).filter(Boolean).length} words (minimum 50)
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-1">
+              <p className="text-xs text-teal-500">
+                {formData.programDescription.split(/\s+/).filter(Boolean).length} words (minimum 50)
+              </p>
+              {/* An AI draft for the author to edit, for courses with no description of their
+                  own (AGU, 3 October 2026). It never replaces text already written. */}
+              <button
+                type="button"
+                disabled={draftingDescription || formData.programTitle.trim().length < 5}
+                onClick={draftDescription}
+                className="text-xs px-3 py-1.5 rounded-lg border border-teal-300 text-teal-700 hover:bg-teal-50 disabled:opacity-50"
+                title={
+                  formData.programDescription.trim()
+                    ? 'Clear the description first: a draft never replaces what you wrote'
+                    : 'Draft a description from the title, level and subject'
+                }
+              >
+                {draftingDescription ? 'Drafting…' : 'Draft with AI'}
+              </button>
+            </div>
+            {descriptionDrafted && (
+              <p className="text-xs text-amber-700 mt-1">
+                AI draft: check and edit it before generating. It is your description once saved.
+              </p>
+            )}
           </div>
 
           {/* Academic Level */}
