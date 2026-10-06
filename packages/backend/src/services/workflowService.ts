@@ -1890,6 +1890,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       modules,
       ploIds: [...ploIds] as string[],
       declaredHours,
+      declaredContactHours: step1?.creditFramework?.contactHours,
     });
     // Approval is blocked only by a computed failure, not by a check that could not run.
     const hoursMatch = validationReport.hoursMatch !== false;
@@ -2097,8 +2098,9 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     const validationReport = step4ValidationReport({
       modules,
       ploIds,
-      declaredHours: totalProgramHours,
-      declaredContactHours: contactHours,
+      // Only targets Step 1 declares: the totals above fall back to an assumed 120 hours and 30%.
+      declaredHours: (creditFramework as { totalHours?: number }).totalHours || 0,
+      declaredContactHours: (creditFramework as { contactHours?: number }).contactHours,
     });
     const allPLOsCovered = validationReport.allPLOsCovered !== false;
     const hoursIntegrity = validationReport.hoursMatch !== false;

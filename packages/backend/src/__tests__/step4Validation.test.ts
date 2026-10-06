@@ -88,3 +88,17 @@ describe('step4ValidationReport', () => {
     ).toBe(true);
   });
 });
+
+describe('step4ValidationReport contact hours', () => {
+  it("counts one student's contact hours: core modules plus the largest elective track", () => {
+    const modules = [
+      mod('core', 1, { contactHours: 30 }),
+      mod('fin-a', 2, { contactHours: 20, isElective: true, group: 'Finance' }),
+      mod('mkt-a', 3, { contactHours: 25, isElective: true, group: 'Marketing' }),
+    ];
+    const report = (declaredContactHours: number) =>
+      step4ValidationReport({ modules, ploIds: ['PLO1'], declaredHours: 0, declaredContactHours });
+    expect(report(55).contactHoursMatch).toBe(true); // 30 + the larger track's 25
+    expect(report(75).contactHoursMatch).toBe(false); // the all-tracks total does not count
+  });
+});

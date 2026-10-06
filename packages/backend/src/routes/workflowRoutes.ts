@@ -1041,6 +1041,7 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
         modules: step4Data.modules,
         ploIds: ((workflow as any).step3?.outcomes || []).map((o: any) => o.code || o.id),
         declaredHours: (workflow as any).step1?.creditFramework?.totalHours || 0,
+        declaredContactHours: (workflow as any).step1?.creditFramework?.contactHours,
       });
     }
 

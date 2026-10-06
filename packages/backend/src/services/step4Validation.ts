@@ -40,15 +40,22 @@ const hoursOf = (m: ModuleLike) =>
  * What one student studies: every core module plus the largest elective track. Step 1's hours
  * describe one student, while the modules hold every track on offer.
  */
-export function studentHoursOf(modules: ModuleLike[]): number {
+export function studentHoursOf(
+  modules: ModuleLike[],
+  hoursIn: (m: ModuleLike) => number = hoursOf
+): number {
   let core = 0;
   const tracks = new Map<string, number>();
   for (const m of modules) {
-    if (m.isElective) tracks.set(m.group || '', (tracks.get(m.group || '') || 0) + hoursOf(m));
-    else core += hoursOf(m);
+    if (m.isElective) tracks.set(m.group || '', (tracks.get(m.group || '') || 0) + hoursIn(m));
+    else core += hoursIn(m);
   }
   return core + (tracks.size ? Math.max(...tracks.values()) : 0);
 }
+
+/** One student's contact hours, counted the same way. */
+export const studentContactHoursOf = (modules: ModuleLike[]) =>
+  studentHoursOf(modules, (m) => m.contactHours || 0);
 
 const within = (actual: number, declared: number) =>
   Math.abs(actual - declared) <= declared * HOURS_TOLERANCE;
@@ -73,14 +80,13 @@ export function step4ValidationReport(input: {
       ...(m.mlos || []).flatMap((o) => (o?.linkedPLOs || []).filter((p) => typeof p === 'string')),
     ])
   );
-  const totalContact = modules.reduce((n, m) => n + (m.contactHours || 0), 0);
 
   return {
     hoursMatch:
       input.declaredHours > 0 ? within(studentHoursOf(modules), input.declaredHours) : null,
     contactHoursMatch:
       input.declaredContactHours && input.declaredContactHours > 0
-        ? within(totalContact, input.declaredContactHours)
+        ? within(studentContactHoursOf(modules), input.declaredContactHours)
         : null,
     allPLOsCovered: input.ploIds.length ? input.ploIds.every((p) => covered.has(p)) : null,
     // Every prerequisite names a module, and one that comes earlier.
