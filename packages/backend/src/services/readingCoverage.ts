@@ -109,3 +109,44 @@ export function coverageReport(
     problems: rows.filter((r) => !r.ok),
   };
 }
+
+export interface LinkableReading extends CoverageReading {
+  sourceId?: string;
+  moduleId?: string;
+  linkOrigin?: string;
+}
+
+/**
+ * Gives each reading that claims no outcome the outcomes of the Step 5 source it cites, within
+ * the reading's own module.
+ *
+ * Step 6 asks the model for outcome links, and it writes them for core readings and almost
+ * never for supplementary ones: 240 of the BBA's 245 supplementary readings had none, and every
+ * other programme showed the same. The source a reading cites was already matched to outcomes
+ * in Step 5 (by meaning, see sourceRelevanceService), so a reading of it serves those outcomes.
+ * Only outcomes of the reading's module are taken, so a source shared with another module
+ * cannot link a reading to that module's outcomes. A source that supports none of them leaves
+ * the reading unlinked, and it stays reported as such.
+ *
+ * Links the model wrote are never changed. Inherited ones are marked, so they can be told
+ * apart and removed. Returns new reading objects; the input is not modified.
+ */
+export function inheritOutcomeLinks<R extends LinkableReading>(
+  readings: R[],
+  sources: { id?: string; _id?: unknown; linkedMLOs?: string[] }[],
+  modules: { id?: string; mlos?: { id?: string }[] }[]
+): R[] {
+  const sourceById = new Map((sources || []).map((s) => [String(s.id ?? s._id), s]));
+  const outcomesByModule = new Map(
+    (modules || []).map((m) => [m.id, new Set((m.mlos || []).map((o) => o?.id).filter(Boolean))])
+  );
+  return (readings || []).map((reading) => {
+    if (outcomesOf(reading).length) return reading;
+    const source = sourceById.get(String(reading.sourceId));
+    const own = outcomesByModule.get(reading.moduleId);
+    const inherited = (source?.linkedMLOs || []).filter((id) => own?.has(id));
+    return inherited.length
+      ? { ...reading, linkedMLOs: inherited, linkOrigin: 'cited-source' }
+      : reading;
+  });
+}

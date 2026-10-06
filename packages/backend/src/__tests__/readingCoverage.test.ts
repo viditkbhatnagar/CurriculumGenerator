@@ -7,11 +7,13 @@
  */
 
 import {
+  inheritOutcomeLinks,
   outcomesOf,
   unlinkedReadings,
   outcomesWithoutCoreReading,
   moduleCoverage,
   coverageReport,
+  LinkableReading,
 } from '../services/readingCoverage';
 
 const outcomes = [
@@ -99,5 +101,49 @@ describe('module and programme reporting', () => {
     ]);
     expect(report.problems).toEqual([]);
     expect(report.outcomesWithNoReading).toEqual([]);
+  });
+});
+
+describe('inheritOutcomeLinks', () => {
+  const modules = [
+    { id: 'mod-a', mlos: [{ id: 'A-LO1' }, { id: 'A-LO2' }] },
+    { id: 'mod-b', mlos: [{ id: 'B-LO1' }] },
+  ];
+  const sources = [
+    { id: 's1', linkedMLOs: ['A-LO2'] },
+    { id: 's2', linkedMLOs: ['A-LO1', 'B-LO1'] },
+    { id: 's3', linkedMLOs: [] },
+  ];
+  const link = (readings: LinkableReading[]) => inheritOutcomeLinks(readings, sources, modules);
+
+  it('links an unlinked reading to the outcomes of the source it cites', () => {
+    const [r] = link([{ sourceId: 's1', moduleId: 'mod-a' }]);
+    expect(r.linkedMLOs).toEqual(['A-LO2']);
+    expect(r.linkOrigin).toBe('cited-source');
+    expect(unlinkedReadings([r])).toHaveLength(0);
+  });
+
+  it("takes only the outcomes of the reading's own module", () => {
+    const [r] = link([{ sourceId: 's2', moduleId: 'mod-b' }]);
+    expect(r.linkedMLOs).toEqual(['B-LO1']);
+  });
+
+  it('leaves a reading unlinked when its source supports none of its module outcomes', () => {
+    const readings: LinkableReading[] = [
+      { sourceId: 's3', moduleId: 'mod-a' },
+      { sourceId: 's1', moduleId: 'mod-b' },
+      { sourceId: 'missing', moduleId: 'mod-a' },
+    ];
+    const out = link(readings);
+    expect(unlinkedReadings(out)).toHaveLength(3);
+    expect(out.every((r) => !('linkOrigin' in r))).toBe(true);
+  });
+
+  it('never changes links the reading already has, and does not modify its input', () => {
+    const linked: LinkableReading = { sourceId: 's1', moduleId: 'mod-a', linkedMLOs: ['A-LO1'] };
+    const unlinked: LinkableReading = { sourceId: 's1', moduleId: 'mod-a' };
+    const out = link([linked, unlinked]);
+    expect(out[0]).toBe(linked);
+    expect(unlinked).not.toHaveProperty('linkedMLOs');
   });
 });

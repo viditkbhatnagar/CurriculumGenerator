@@ -3117,6 +3117,40 @@ router.post('/:id/step5/topics', validateJWT, loadUser, async (req: Request, res
 });
 
 /**
+ * POST /api/v3/workflow/:id/step6/link-readings
+ * Link readings that claim no outcome to the outcomes of the Step 5 source they cite; without
+ * one a reading reaches no lesson. A dry run unless `?dryRun=false` is given by an
+ * administrator: then the links are saved.
+ */
+router.post(
+  '/:id/step6/link-readings',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      if (!isValidObjectId(req.params.id)) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+      const dryRun = req.query.dryRun !== 'false';
+      if (!dryRun && (req as any).user?.role !== 'administrator') {
+        return res
+          .status(403)
+          .json({ success: false, error: 'Only an administrator can save reading links' });
+      }
+      const result = await workflowService.linkStep6Readings(req.params.id, { dryRun });
+      res.json({ success: true, data: result });
+    } catch (error) {
+      loggingService.error('Error linking Step 6 readings to outcomes', {
+        workflowId: req.params.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      const message = error instanceof Error ? error.message : 'Failed to link readings';
+      res.status(/not found/i.test(message) ? 404 : 500).json({ success: false, error: message });
+    }
+  }
+);
+
+/**
  * POST /api/v3/workflow/:id/step5/source
  * Add a manually-authored source to Step 5. SMEs use this to drop in
  * resources the AI pipeline didn't surface — documents, YouTube links,

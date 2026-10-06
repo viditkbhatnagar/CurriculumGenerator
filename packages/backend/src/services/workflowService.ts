@@ -20,6 +20,7 @@ import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundi
 import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
 import { step7Passed, step7Validation } from './step7Validation';
 import { step6Checks, step6Issues, step6Passed } from './step6Validation';
+import { inheritOutcomeLinks, unlinkedReadings } from './readingCoverage';
 import { approvedSummativeFor, step7SpecifiesExam } from './step7Authority';
 import config from '../config';
 import {
@@ -2881,10 +2882,13 @@ CRITICAL VALIDATION:
    * and compliance report describing the reading list as it was before.
    */
   buildStep6Summary(
-    readings: any[],
+    generated: any[],
     modules: any[],
     extras: { failedModules?: any[]; sources?: any[] } = {}
   ): any {
+    // A reading the model left unlinked takes the outcomes of the source it cites; without a
+    // linked outcome it reaches no lesson (see readingCoverage.inheritOutcomeLinks).
+    const readings = inheritOutcomeLinks(generated, extras.sources || [], modules);
     const moduleReadings: Record<string, any[]> = {};
     for (const reading of readings) {
       const modId = reading.moduleId || 'unassigned';
@@ -3016,11 +3020,7 @@ CRITICAL VALIDATION:
       ...stillMissing.filter((f: any) => !previous.some((p: any) => p.moduleId === f.moduleId)),
     ];
 
-    workflow.step6 = this.buildStep6Summary([...existing, ...added], modules, {
-      failedModules: remaining,
-      sources: (workflow.step5 as any)?.sources || [],
-    });
-    workflow.markModified('step6');
+    this.rebuildStep6InPlace(workflow, [...existing, ...added], remaining);
     await workflow.save();
 
     loggingService.info('Step 6: gap fill complete', {
@@ -3029,6 +3029,62 @@ CRITICAL VALIDATION:
       stillMissing: stillMissing.map((f) => f.moduleId),
     });
     return { repaired, stillMissing: stillMissing.map((f) => f.moduleId) };
+  }
+
+  /**
+   * Rebuild the Step 6 summary from the given readings. Everything the rebuild does not produce
+   * is kept: the approval and anything added later (as rebuildStep5InPlace does).
+   */
+  rebuildStep6InPlace(workflow: ICurriculumWorkflow, readings: any[], failedModules: any[]): void {
+    const previous = (workflow.step6 || {}) as any;
+    workflow.step6 = {
+      ...previous,
+      ...this.buildStep6Summary(readings, (workflow.step4 as any)?.modules || [], {
+        failedModules,
+        sources: (workflow.step5 as any)?.sources || [],
+      }),
+    };
+    workflow.markModified('step6');
+  }
+
+  /**
+   * Link the stored readings that claim no outcome to the outcomes of the sources they cite
+   * (readingCoverage.inheritOutcomeLinks). A dry run unless `dryRun` is false; links already
+   * present are never changed, so running it twice changes nothing the second time.
+   */
+  async linkStep6Readings(workflowId: string, { dryRun = true }: { dryRun?: boolean } = {}) {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    const step6 = workflow?.step6 as any;
+    if (!workflow || !Array.isArray(step6?.readings)) {
+      throw new Error('Workflow or Step 6 readings not found');
+    }
+    const before = step6.readings as any[];
+    const modules = ((workflow.step4 as any)?.modules || []) as any[];
+    const after = inheritOutcomeLinks(before, (workflow.step5 as any)?.sources || [], modules);
+    const count = (rs: any[], category: string) =>
+      unlinkedReadings(rs.filter((r) => r.category === category)).length;
+    const codeOf = new Map(modules.map((m) => [m.id, m.code || m.id]));
+    const stillUnlinked = unlinkedReadings(after) as any[];
+
+    if (!dryRun) {
+      this.rebuildStep6InPlace(workflow, before, step6.failedModules || []);
+      await workflow.save();
+    }
+    return {
+      dryRun,
+      readings: before.length,
+      linked: after.filter((r: any, i: number) => r !== before[i]).length,
+      unlinkedBefore: {
+        core: count(before, 'core'),
+        supplementary: count(before, 'supplementary'),
+      },
+      unlinkedAfter: { core: count(after, 'core'), supplementary: count(after, 'supplementary') },
+      stillUnlinked: stillUnlinked.map((r) => ({
+        module: codeOf.get(r.moduleId) || r.moduleId,
+        category: r.category,
+        title: r.title,
+      })),
+    };
   }
 
   async processStep6(workflowId: string): Promise<ICurriculumWorkflow> {
