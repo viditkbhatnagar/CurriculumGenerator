@@ -31,6 +31,7 @@ import {
 } from './step10Completion';
 import { saveModulePlan, loadModulePlan, withLessons, loadLessonIndex } from './step10Store';
 import { reachStep, recordStepGenerated } from './stepGating';
+import { step12Index } from '../utils/step12Edit';
 import {
   step5ValidationReport,
   step5Compliant,
@@ -8890,6 +8891,27 @@ Return ONLY valid JSON:
       };
     }
 
+    // Steps 11 and 12 were left out, so the assistant told an author asking about Step 12 that
+    // no such step existed. Step 11 is a summary only: slides can be archived to S3 with stubs
+    // on the workflow, so they are edited in the PowerPoint step, not here. Step 12 is a short
+    // index; edits go through utils/step12Edit.
+    if ((workflow as any).step11) {
+      fullWorkflowData.step11 = {
+        modules: ((workflow as any).step11.modulePPTDecks || []).map((m: any) => ({
+          moduleCode: m.moduleCode,
+          moduleTitle: m.moduleTitle,
+          decks: (m.pptDecks || []).length,
+        })),
+        approved: !!(workflow as any).step11.approvedAt,
+      };
+    }
+    if ((workflow as any).step12) {
+      fullWorkflowData.step12 = {
+        moduleAssignmentPacks: step12Index((workflow as any).step12.moduleAssignmentPacks || []),
+        approved: !!(workflow as any).step12.approvedAt,
+      };
+    }
+
     // Step 13 - Summative Exam. A LIGHTWEIGHT question index so the chat editor
     // can LOCATE a question to edit — deliberately without the heavy per-question
     // rationale / model answers (that ~40k-char payload rode along on EVERY
@@ -9112,6 +9134,19 @@ Example (update by lessonId — most reliable):
 Example (regenerate all lesson plans for one module — use the regenerate action):
 { "step": 10, "path": "moduleLessonPlans", "action": "regenerate", "match": { "moduleId": "mod3" } }
 The "regenerate" action triggers fresh AI generation that incorporates the latest module title/description. Use this when the user wants context-wide updates (e.g. "remove UK from all modules" or "regenerate for Indian context") rather than editing individual lesson fields.
+
+STEP 11 - PowerPoint decks (READ-ONLY here):
+step11.modules lists each module's decks. Slides cannot be changed from this chat. If asked to change slides, say so plainly and tell the author to edit or regenerate that module's decks on the PowerPoint step (Step 11). Do not return updates for step 11.
+
+STEP 12 - Assignment packs (editable):
+step12.moduleAssignmentPacks is an index: for each module, its delivery variants ("in_person", "self_study", "hybrid") with the assignment title, type, the start of the workplace context and the rubric criterion names.
+Edit ONE field of a module's pack with the "set" action, naming the module, the variant ("all" for every variant) and the field:
+{ "step": 12, "path": "moduleAssignmentPacks", "action": "set", "match": { "moduleCode": "M01", "variant": "in_person" }, "field": "brief.workplaceContext", "value": "…full new text…" }
+Editable fields and their values:
+- text: "overview.title", "overview.assignmentType", "overview.submissionFormat", "overview.groupOrIndividual", "brief.studentFacingIntro", "brief.workplaceContext", "academicIntegrity", "accessibilityOptions"
+- list: "brief.stepByStepInstructions" (strings), "brief.deliverables", "evidenceRequirements" (objects: artefactType, wordCountOrDuration, fileType, additionalNotes), "rubric" (objects: criterionName, linkedMLOs, fail, pass, merit, distinction, weight; give the WHOLE rubric, weights adding to 100)
+You only see the start of long texts. When rewriting one, write the complete new text. If you need wording you cannot see, ask the author to paste it.
+For a request covering several modules, return one update per module.
 
 STEP 13 - Summative Exam (editable free-text metadata):
 - "integrityAndSecurity" = the full Integrity & Security section text (academic integrity, identity verification, invigilation, randomisation) — a single long string.

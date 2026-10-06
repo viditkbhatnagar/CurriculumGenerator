@@ -4,7 +4,27 @@ import { useState, useRef, useEffect } from 'react';
 import { useStep10LessonIndex } from '@/hooks/useStep10Module';
 import { CurriculumWorkflow } from '@/types/workflow';
 import { api } from '@/lib/api';
+import axios from 'axios';
 import { formatAuthorList } from '@/lib/citation';
+
+/**
+ * The assistant reads the whole programme in one AI call, which can take minutes on a large
+ * programme. The app-wide 60-second limit cut such requests off, and every failure was shown
+ * as "Sorry, I encountered an error" with no reason.
+ */
+const ASSISTANT_TIMEOUT_MS = 5 * 60 * 1000;
+
+function assistantError(error: unknown, doing: string): string {
+  if (axios.isAxiosError(error)) {
+    if (error.code === 'ECONNABORTED') {
+      return `Sorry, ${doing} took longer than five minutes and was stopped. Try a narrower request, for example one module or one step at a time.`;
+    }
+    const reason = (error.response?.data as { error?: string } | undefined)?.error;
+    if (reason) return `Sorry, ${doing} failed: ${reason}`;
+    if (!error.response) return `Sorry, ${doing} failed: the server could not be reached.`;
+  }
+  return `Sorry, ${doing} failed. Please try again.`;
+}
 
 // Canvas mode types
 type EditTarget = {
@@ -866,17 +886,21 @@ export default function CanvasChatbot({
           };
 
       // Call Canvas AI API - it has full workflow context on backend
-      const response = await api.post('/api/v3/workflow/canvas-edit', {
-        workflowId: workflow._id,
-        stepNumber: selectedItem?.stepNumber || currentStep, // Use selected item's step
-        userMessage: messageWithContext, // Send message with context to AI
-        editTarget: effectiveEditTarget,
-        context: {
-          programTitle: workflow.step1?.programTitle,
-          academicLevel: workflow.step1?.academicLevel,
-          selectedItem: selectedItem, // Pass selected item for additional context
+      const response = await api.post(
+        '/api/v3/workflow/canvas-edit',
+        {
+          workflowId: workflow._id,
+          stepNumber: selectedItem?.stepNumber || currentStep, // Use selected item's step
+          userMessage: messageWithContext, // Send message with context to AI
+          editTarget: effectiveEditTarget,
+          context: {
+            programTitle: workflow.step1?.programTitle,
+            academicLevel: workflow.step1?.academicLevel,
+            selectedItem: selectedItem, // Pass selected item for additional context
+          },
         },
-      });
+        { timeout: ASSISTANT_TIMEOUT_MS }
+      );
 
       const data = response.data;
       const proposedChanges = data.proposedChanges || data.data?.proposedChanges;
@@ -900,7 +924,7 @@ export default function CanvasChatbot({
       const errorMessage: CanvasMessage = {
         id: `msg-${Date.now()}-error`,
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: assistantError(error, 'working on that request'),
         timestamp: new Date(),
       };
 
@@ -952,7 +976,7 @@ export default function CanvasChatbot({
         const errorMsg: CanvasMessage = {
           id: `msg-${Date.now()}-error`,
           role: 'assistant',
-          content: '❌ Failed to apply changes. Please try again or check the console for errors.',
+          content: `❌ ${assistantError(error, 'applying the changes')}`,
           timestamp: new Date(),
         };
         setChatHistory((prev) => [...prev, errorMsg]);

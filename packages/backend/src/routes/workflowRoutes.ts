@@ -101,6 +101,7 @@ import { step4ValidationReport } from '../services/step4Validation';
 import { step6ReportOf } from '../services/step6Validation';
 import { step7ValidationOf } from '../services/step7Validation';
 import { step13Validation } from '../services/step13Validation';
+import { applyStep12Edit } from '../utils/step12Edit';
 
 const router = Router();
 
@@ -8581,6 +8582,24 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
           path: update.path,
           action: update.action,
         });
+
+        // Step 12 packs are found by module and keyed by delivery variant, which the generic
+        // handling below cannot reach: see utils/step12Edit.
+        if (targetStep === 12 && update.path === 'moduleAssignmentPacks') {
+          const result = applyStep12Edit(targetStepData.moduleAssignmentPacks || [], update);
+          if ('problem' in result) {
+            noteRejected(update, result.problem);
+          } else {
+            targetStepData.moduleAssignmentPacks = result.packs;
+            workflow.markModified(targetStepKey);
+            noteApplied();
+          }
+          continue;
+        }
+        if (targetStep === 11) {
+          noteRejected(update, 'slides are edited on the PowerPoint step, not from the chat');
+          continue;
+        }
 
         // =====================================================
         // STEP 10 SPECIAL HANDLING - Lesson plans use moduleId/lessonId
