@@ -16,7 +16,9 @@
 import type { GuideSession } from './facultyGuideModel';
 
 /** Bump when the prompt or the shape changes: lessons condensed under an older version redo. */
-export const CONDENSED_GUIDE_VERSION = 1;
+// 2: concepts are not attributed to professional bodies or publishers (the pilot printed
+//    "CIPD-related factors"); a missing quick check is retried.
+export const CONDENSED_GUIDE_VERSION = 2;
 
 export interface Flagged<T> {
   value: T;
@@ -65,10 +67,11 @@ export const SYSTEM_PROMPT = `You condense one session of a university lesson pl
 
 Rules:
 - Use only the content of the session you are given. Do not add facts, figures, names, organisations, sources or claims that are not in it.
+- Name concepts and ideas by what they are. Do not attribute them to a professional body, publisher or source (write "organisational culture", not "CIPD culture factors"). The only organisations to name are those in the session's own case.
 - Write short bullet points: no more than 20 words each, plain British English, no full stops at the end of bullets.
 - Keep the lecturer's perspective: what to teach, how to run it, how to check learning.
 - Key concepts: for each, a definition of at most two sentences and one short business example. Take the example from the session's own case, activities or examples wherever it has one.
-- Quick check: two or three short questions a lecturer can ask at the end of the session, each with a one-sentence model answer, answerable from this session's content.
+- Quick check: always two or three short questions a lecturer can ask at the end of the session, each with a one-sentence model answer, answerable from this session's content.
 - Activities: exactly one entry per activity you are given, in the same order, with what the lecturer does and what students do.
 
 Return JSON only, in exactly this shape:

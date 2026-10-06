@@ -126,7 +126,15 @@ function alignmentSection(s: GuideSession): Paragraph[] {
     section('2. Alignment'),
     labelled('MLO', a.mlos.join(', ') || 'none recorded'),
     labelled('PLO', a.plos.join(', ') || 'none recorded'),
-    labelled('Assessment link', a.assessment.join(', ') || 'none recorded'),
+    // The tasks themselves, by name; the stored check type alone ("Check") said nothing.
+    labelled(
+      'Assessment link',
+      s.checks
+        .map((c) => (c.ref ? `${c.ref}: ${c.question || c.label}` : c.question || c.label))
+        .join('; ') ||
+        a.assessment.join(', ') ||
+        'none recorded'
+    ),
     ...optional('Reference', a.reference),
   ];
 }

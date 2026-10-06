@@ -37,8 +37,9 @@ import { expectedLessonCount, isPlanComplete, plannedLessonTarget } from './step
  *    rubric and marking guide (Dr. Sherin Thomas, 2 October 2026).
  * 6: each session opens with a "Session at a glance" table; checks are named by their task.
  * 7: a session with an AI-condensed version (condensedGuide) prints that short form.
+ * 8: "Assessment link" names the session's tasks instead of their type ("Check").
  */
-export const FACULTY_GUIDE_FORMAT_VERSION = 7;
+export const FACULTY_GUIDE_FORMAT_VERSION = 8;
 
 /** How a module is named in its file inside the archive. */
 function moduleFileName(stepNumber: number, index: number, stub: any, step4Module: any): string {

@@ -47,9 +47,13 @@ export const condenseRun = (workflowId: string) => runs.get(workflowId);
 
 const lessonKey = (l: any, i: number) => String(l?.lessonId || l?.lessonNumber || i);
 
+/** Complete enough to print: something to teach, a quick check and at least one concept. */
+const complete = (c: CondensedSession) => c.quickCheck.length >= 2 && c.keyConcepts.length > 0;
+
 async function condenseOne(
   session: ReturnType<typeof guideSession>
 ): Promise<CondensedSession | null> {
+  let best: CondensedSession | null = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
     const raw = await openaiService.generateContent(userPrompt(session), SYSTEM_PROMPT, {
       model: MODEL,
@@ -58,9 +62,11 @@ async function condenseOne(
       timeout: 120000,
     });
     const parsed = parseCondensed(raw, session);
-    if (parsed) return parsed;
+    if (parsed && complete(parsed)) return parsed;
+    // Keep a usable but incomplete answer in case the retry does no better.
+    best = best || parsed;
   }
-  return null;
+  return best;
 }
 
 /** Map with at most `limit` promises running at once, in input order. */
