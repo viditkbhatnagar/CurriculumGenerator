@@ -9085,10 +9085,16 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
         workflowId: id,
         rejected,
       });
+      // A refusal with a specific reason (a slide edit, a field that cannot be set) says so;
+      // the generic advice only fits an edit that matched nothing.
+      const reasons = Array.from(
+        new Set(rejected.map((r) => r.reason).filter((r) => !/matched/.test(r)))
+      );
       return res.status(400).json({
         success: false,
-        error:
-          "The AI's proposed edit didn't match any item in the workflow. Try rephrasing — include the exact code (e.g. PLO1, MOD202) or the verbatim text you want to change.",
+        error: reasons.length
+          ? `The change could not be applied: ${reasons.join('; ')}.`
+          : "The AI's proposed edit didn't match any item in the workflow. Try rephrasing — include the exact code (e.g. PLO1, MOD202) or the verbatim text you want to change.",
         rejected,
         appliedCount: 0,
         totalUpdates,
