@@ -3033,7 +3033,8 @@ router.post('/:id/step5/topics', validateJWT, loadUser, async (req: Request, res
         .status(403)
         .json({ success: false, error: 'Only an administrator can save topic links' });
     }
-    const result = await workflowService.linkStep5Topics(req.params.id, { dryRun });
+    const detailModule = typeof req.query.module === 'string' ? req.query.module : undefined;
+    const result = await workflowService.linkStep5Topics(req.params.id, { dryRun, detailModule });
     res.json({ success: true, data: result });
   } catch (error) {
     loggingService.error('Error linking Step 5 sources to topics', {

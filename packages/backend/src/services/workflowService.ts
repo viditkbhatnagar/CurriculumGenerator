@@ -2800,7 +2800,10 @@ CRITICAL VALIDATION:
    * distribution and the coverage at several floors, so the floor can be set from real data.
    * Otherwise the scores and links are saved and the Step 5 summary rebuilt.
    */
-  async linkStep5Topics(workflowId: string, { dryRun = true }: { dryRun?: boolean } = {}) {
+  async linkStep5Topics(
+    workflowId: string,
+    { dryRun = true, detailModule }: { dryRun?: boolean; detailModule?: string } = {}
+  ) {
     const workflow = await CurriculumWorkflow.findById(workflowId);
     const step5 = workflow?.step5 as any;
     if (!workflow || !Array.isArray(step5?.sources)) {
@@ -2836,9 +2839,25 @@ CRITICAL VALIDATION:
       workflow.markModified('step5');
       await workflow.save();
     }
+    // One module's matches in full, so a reviewer can judge whether the floor is sensible.
+    const detailOf = modules.find((m) => m.code === detailModule || m.id === detailModule);
+    const detail = detailOf
+      ? {
+          module: `${detailOf.code} ${detailOf.title}`,
+          sources: sources
+            .filter((s) => s.moduleId === detailOf.id)
+            .map((s) => ({
+              title: s.title,
+              topics: Object.entries((s.topicScores || {}) as Record<string, number>)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 4),
+            })),
+        }
+      : undefined;
     return {
       dryRun,
       ...scored,
+      detail,
       sources: sources.length,
       scores: {
         count: all.length,
