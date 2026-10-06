@@ -14,7 +14,7 @@
  * Each check is recomputed from the stored content, the same way the screens compute it, so
  * the list cannot disagree with them. Pure, so it can be tested.
  */
-import { step4ValidationReport } from './step4Validation';
+import { repeatedTopics, step4ValidationReport } from './step4Validation';
 import { step5ValidationReport } from './step5Validation';
 import { step6ReportOf } from './step6Validation';
 import { step7ValidationOf } from './step7Validation';
@@ -22,7 +22,7 @@ import { step13Validation } from './step13Validation';
 import { programmeLessonsHeld, validationFromStubs } from './step10Completion';
 import { step11ValidationFromDecks, step12ValidationFromPacks } from './deliverableValidation';
 
-export type IssueKind = 'fail' | 'not_checked' | 'missing' | 'proposal';
+export type IssueKind = 'fail' | 'not_checked' | 'missing' | 'proposal' | 'review';
 
 export interface UnresolvedIssue {
   step: number;
@@ -193,6 +193,13 @@ export function unresolvedIssues(workflow: Workflowish, currentYear: number): Un
           declaredContactHours: w.step1?.creditFramework?.contactHours,
         }) as unknown as Record<string, unknown>
       )
+    );
+  }
+  for (const { first, second } of repeatedTopics(modules)) {
+    add(
+      4,
+      'review',
+      `"${first.topic}" (${first.module}) and "${second.topic}" (${second.module}) look alike: confirm the second builds on the first rather than repeating it`
     );
   }
   if (w.step5) {

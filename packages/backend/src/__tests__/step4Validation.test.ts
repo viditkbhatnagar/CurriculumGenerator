@@ -1,4 +1,4 @@
-import { step4ValidationReport, studentHoursOf } from '../services/step4Validation';
+import { repeatedTopics, step4ValidationReport, studentHoursOf } from '../services/step4Validation';
 
 const mod = (id: string, sequence: number, over: Record<string, unknown> = {}) => ({
   id,
@@ -100,5 +100,30 @@ describe('step4ValidationReport contact hours', () => {
       step4ValidationReport({ modules, ploIds: ['PLO1'], declaredHours: 0, declaredContactHours });
     expect(report(55).contactHoursMatch).toBe(true); // 30 + the larger track's 25
     expect(report(75).contactHoursMatch).toBe(false); // the all-tracks total does not count
+  });
+});
+
+describe('repeatedTopics', () => {
+  it('flags a topic taught in nearly the same words in two modules', () => {
+    // The Logistics test programme, 21 September 2026: M02 and M06.
+    const pairs = repeatedTopics([
+      { code: 'M02', topics: ['Cycle counting and variance analysis', 'Warehouse layout'] },
+      { code: 'M06', topics: ['Cycle counting, variance analysis and adjustments'] },
+    ]);
+    expect(pairs).toEqual([
+      {
+        first: { module: 'M02', topic: 'Cycle counting and variance analysis' },
+        second: { module: 'M06', topic: 'Cycle counting, variance analysis and adjustments' },
+      },
+    ]);
+  });
+
+  it('ignores repetition inside one module and unrelated topics', () => {
+    expect(
+      repeatedTopics([
+        { code: 'M01', topics: ['Budgeting basics', 'Budgeting basics'] },
+        { code: 'M02', topics: [{ title: 'Marketing research' }] },
+      ])
+    ).toEqual([]);
   });
 });

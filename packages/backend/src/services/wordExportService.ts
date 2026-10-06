@@ -290,11 +290,12 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       not_checked: 'Not checked',
       missing: 'Missing',
       proposal: 'Needs approval',
+      review: 'Needs review',
     };
     out.push(this.createH1('Unresolved Issues'));
     out.push(
       ...this.createFormattedParagraphs([
-        'This list is produced automatically when the document is generated. It shows every check that failed or could not be run, every step with no content, and every AI proposal that still needs institutional approval.',
+        'This list is produced automatically when the document is generated. It shows every check that failed or could not be run, every step with no content, every AI proposal that still needs institutional approval, and topics that look repeated across modules.',
         'A passing check is not academic approval. Every section of this document still needs review by a subject expert.',
       ])
     );

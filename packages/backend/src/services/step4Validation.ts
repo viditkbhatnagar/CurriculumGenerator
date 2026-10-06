@@ -116,3 +116,53 @@ function hasCycle(modules: ModuleLike[], prerequisitesOf: (m: ModuleLike) => str
   };
   return [...edges.keys()].some(visit);
 }
+
+const STOP_WORDS = new Set(
+  'and or of the a an in to for with on using through by from as at its their key basics introduction intro fundamentals principles'.split(
+    ' '
+  )
+);
+const topicWords = (t: string) =>
+  new Set(
+    (t.toLowerCase().match(/[a-z]+/g) ?? ([] as string[])).filter(
+      (w: string) => w.length > 2 && !STOP_WORDS.has(w)
+    )
+  );
+
+/** How alike two topic titles must be (shared words over all words) to be flagged. */
+export const REPEATED_TOPIC_SIMILARITY = 0.6;
+
+/**
+ * Weekly topics that appear, in nearly the same words, in two different modules. The 21
+ * September review (5.4) found duplication across the Logistics modules: M02 and M06 both
+ * teach EOQ and safety stock, and both cycle counting. Repetition can also be deliberate
+ * progression (an introductory and an advanced module), so these are flagged for a reviewer
+ * rather than failed.
+ */
+export function repeatedTopics(
+  modules: { code?: string; id?: string; topics?: unknown[] }[]
+): { first: { module: string; topic: string }; second: { module: string; topic: string } }[] {
+  const all = (modules || []).flatMap((m) =>
+    (m.topics || [])
+      .map((t) => (typeof t === 'string' ? t : (t as { title?: string } | null)?.title || ''))
+      .filter((t) => t.trim())
+      .map((topic) => ({ module: String(m.code || m.id || ''), topic, words: topicWords(topic) }))
+  );
+  const pairs: ReturnType<typeof repeatedTopics> = [];
+  for (let i = 0; i < all.length; i++) {
+    for (let j = i + 1; j < all.length; j++) {
+      const a = all[i];
+      const b = all[j];
+      if (a.module === b.module || !a.words.size || !b.words.size) continue;
+      const shared = [...a.words].filter((w) => b.words.has(w)).length;
+      const similarity = shared / (a.words.size + b.words.size - shared);
+      if (similarity >= REPEATED_TOPIC_SIMILARITY) {
+        pairs.push({
+          first: { module: a.module, topic: a.topic },
+          second: { module: b.module, topic: b.topic },
+        });
+      }
+    }
+  }
+  return pairs;
+}
