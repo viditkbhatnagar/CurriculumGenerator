@@ -375,9 +375,17 @@ export async function scoreAgainstTopics<T extends { title?: string; abstract?: 
 }
 
 /**
- * The lowest topic score that counts as a source covering the topic. Provisional until it is
- * calibrated against the BBA's stored scores, as MLO_SUPPORT_FLOOR was; the scores are kept on
- * each source so a new floor re-derives the links for free.
+ * The lowest topic score that counts as a source covering the topic.
+ *
+ * Calibrated on 2026-10-06 against the BBA's 407 sources and 360 weekly topics (3,188 pairs):
+ * min 0.084, p10 0.286, median 0.436, p90 0.555. At 0.40, 213 topics have two or more
+ * sources and 66 have none; at 0.35 the counts are 237 and 50, at 0.45 176 and 98. Read pair
+ * by pair (M01, M24), matches at or above 0.40 were sensible. Below it they were mostly
+ * tangential ("Organisational learning and sustainable tourism" to organisational structure,
+ * 0.36), with some true matches that a title alone cannot show (the Green Book to cost-benefit
+ * appraisal, 0.33). A missed match is a visible gap someone can fix; a false one claims
+ * coverage that is not there, so the floor sits at 0.40. The scores are kept on each source,
+ * so a new floor re-derives the links for free.
  */
 export const TOPIC_SUPPORT_FLOOR = 0.4;
 
