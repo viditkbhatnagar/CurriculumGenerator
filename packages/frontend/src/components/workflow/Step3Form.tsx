@@ -674,6 +674,16 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
   const kscCoveragePercent = totalKSCItems
     ? Math.round((linkedKSCIds.size / totalKSCItems) * 100)
     : coverageReport?.coveragePercent || 0;
+  // Which items no outcome covers, essential ones first. The 21 September review (5.3): the
+  // percentage was opaque and did not say which competency was missing.
+  const allKSCItems: KSCItem[] = [
+    ...((workflow.step2 as any)?.knowledgeItems || []),
+    ...((workflow.step2 as any)?.skillItems || []),
+    ...((workflow.step2 as any)?.competencyItems || (workflow.step2 as any)?.attitudeItems || []),
+  ];
+  const uncoveredKSCs = allKSCItems
+    .filter((item) => item?.id && !linkedKSCIds.has(item.id))
+    .sort((a, b) => Number(b.importance === 'essential') - Number(a.importance === 'essential'));
 
   const bloomValidation = {
     hasLowerLevel: LOWER_LEVELS.some((level) => (bloomDistribution[level] || 0) > 0),
@@ -1079,6 +1089,27 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                 <p className="text-xs text-teal-500">Bloom Levels</p>
               </div>
             </div>
+
+            <p className="text-xs text-teal-600 mb-4">
+              KSC coverage is the share of the {totalKSCItems} knowledge, skill and competency items
+              in Step 2 that at least one programme outcome links to: {linkedKSCIds.size} of{' '}
+              {totalKSCItems}.
+            </p>
+            {uncoveredKSCs.length > 0 && (
+              <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="text-sm font-medium text-amber-800">
+                  Not covered by any outcome ({uncoveredKSCs.length})
+                </p>
+                <ul className="mt-2 space-y-1 text-xs text-amber-900 max-h-48 overflow-y-auto">
+                  {uncoveredKSCs.map((item) => (
+                    <li key={item.id}>
+                      <span className="font-mono">{item.id}</span>
+                      {item.importance === 'essential' ? ' (essential)' : ''}: {item.statement}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Bloom Distribution */}
             <div>

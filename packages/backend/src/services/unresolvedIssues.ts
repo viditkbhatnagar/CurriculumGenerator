@@ -185,6 +185,26 @@ export function unresolvedIssues(workflow: Workflowish, currentYear: number): Un
       'Entry, language and RPL requirements were proposed by the AI and need institutional approval'
     );
   }
+  // Essential Step 2 competencies that no programme outcome covers (the 21 September review,
+  // 5.3: the coverage figure did not say which competency was missing).
+  if (w.step2 && w.step3) {
+    const linked = new Set(outcomes.flatMap((o: Workflowish) => o?.linkedKSCs || []));
+    const essential = [
+      ...(w.step2.knowledgeItems || []),
+      ...(w.step2.skillItems || []),
+      ...(w.step2.competencyItems || w.step2.attitudeItems || []),
+    ].filter((k: Workflowish) => k?.importance === 'essential' && k?.id && !linked.has(k.id));
+    if (essential.length) {
+      add(
+        3,
+        'review',
+        `${essential.length} essential competency item(s) are not covered by any programme outcome: ${essential
+          .slice(0, 8)
+          .map((k: Workflowish) => k.id)
+          .join(', ')}${essential.length > 8 ? '…' : ''}`
+      );
+    }
+  }
   if (w.step4) {
     issues.push(
       ...fromReport(

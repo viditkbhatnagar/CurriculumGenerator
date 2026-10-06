@@ -47,3 +47,24 @@ describe('unresolvedIssues', () => {
     expect(unresolvedIssues({}, 2026).filter((i) => i.kind === 'missing')).toHaveLength(13);
   });
 });
+
+describe('competency coverage', () => {
+  it('names essential competencies that no programme outcome covers', () => {
+    const issues = unresolvedIssues(
+      {
+        step2: {
+          knowledgeItems: [
+            { id: 'K1', importance: 'essential' },
+            { id: 'K2', importance: 'desirable' },
+          ],
+          competencyItems: [{ id: 'C1', importance: 'essential' }],
+        },
+        step3: { outcomes: [{ code: 'PLO1', linkedKSCs: ['C1'] }] },
+      },
+      2026
+    );
+    const coverage = issues.find((i) => i.step === 3);
+    expect(coverage?.kind).toBe('review');
+    expect(coverage?.issue).toMatch(/^1 essential competency item\(s\).*K1$/);
+  });
+});
