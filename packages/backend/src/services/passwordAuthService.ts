@@ -14,10 +14,10 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { User, IUser } from '../models/User';
+import { SystemSecret } from '../models/SystemSecret';
 import { UserRole, AuthUser } from '../types/auth';
 import { loggingService } from './loggingService';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me-in-production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const BCRYPT_ROUNDS = 10;
 
@@ -29,6 +29,53 @@ export interface LoginInput {
 export interface LoginResult {
   token: string;
   user: AuthUser;
+}
+
+/**
+ * The secret login tokens are signed with: JWT_SECRET when it is set, otherwise one the server
+ * generated and stored (models/SystemSecret). It used to fall back to a constant committed in
+ * this file, which let anyone who had read the repository sign a token for any user.
+ */
+let cachedSecret: string | null = null;
+const MIN_SECRET_LENGTH = 32;
+
+export async function jwtSecret(): Promise<string> {
+  const fromEnv = process.env.JWT_SECRET;
+  if (fromEnv && fromEnv.length >= MIN_SECRET_LENGTH) return fromEnv;
+  if (cachedSecret) return cachedSecret;
+  if (fromEnv) {
+    loggingService.warn('JWT_SECRET is shorter than 32 characters; using a generated secret');
+  }
+  const stored = await SystemSecret.findOne({ name: 'jwt' }).select('+value').lean();
+  if (stored?.value) {
+    cachedSecret = stored.value;
+    return cachedSecret;
+  }
+  // Two instances starting at once may both try; the unique name keeps whichever wins.
+  await SystemSecret.updateOne(
+    { name: 'jwt' },
+    { $setOnInsert: { name: 'jwt', value: crypto.randomBytes(48).toString('hex') } },
+    { upsert: true }
+  );
+  const created = await SystemSecret.findOne({ name: 'jwt' }).select('+value').lean();
+  if (!created?.value) throw new Error('Could not establish a token-signing secret');
+  loggingService.warn('JWT_SECRET is not set; generated a signing secret and stored it');
+  cachedSecret = created.value;
+  return cachedSecret;
+}
+
+/**
+ * Passwords that were committed to the repository and so are known to anyone who has read it.
+ * An account still using one is reported at boot; it must be changed.
+ */
+const COMPROMISED_PASSWORDS = ['loganPacey123!'];
+
+export async function usesCompromisedPassword(passwordHash: string | undefined): Promise<boolean> {
+  if (!passwordHash) return false;
+  for (const known of COMPROMISED_PASSWORDS) {
+    if (await bcrypt.compare(known, passwordHash)) return true;
+  }
+  return false;
 }
 
 export class InvalidCredentialsError extends Error {
@@ -59,7 +106,7 @@ export async function login(input: LoginInput): Promise<LoginResult> {
     /* ignore */
   });
 
-  const token = signToken(user);
+  const token = await signToken(user);
   loggingService.info('User logged in', { userId: user._id.toString(), email, role: user.role });
   return { token, user: toAuthUser(user) };
 }
@@ -67,7 +114,7 @@ export async function login(input: LoginInput): Promise<LoginResult> {
 /** Decode + verify a JWT and return the corresponding user. */
 export async function userFromToken(token: string): Promise<AuthUser | null> {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as { sub?: string };
+    const payload = jwt.verify(token, await jwtSecret()) as { sub?: string };
     if (!payload?.sub) return null;
     const user = await User.findById(payload.sub);
     if (!user) return null;
@@ -102,14 +149,19 @@ export async function setUserPassword(userId: string, plain: string): Promise<vo
 
 /**
  * Idempotent superadmin seed. Runs at boot.
- *   - If a user with SUPERADMIN_EMAIL exists, ensure role=administrator.
- *     Reset password ONLY if the user doesn't have one yet, so re-deploys
- *     don't reset a password the user has already changed.
+ *   - If a user with SUPERADMIN_EMAIL exists, ensure role=administrator. The password is set
+ *     only when the account has none, or when SUPERADMIN_RESET_PASSWORD=true, so a re-deploy
+ *     does not reset a password the user has changed.
  *   - If no such user exists, create them with role=administrator.
+ *
+ * The password comes from SUPERADMIN_PASSWORD only. It used to default to a password committed
+ * in this file; without the variable an account is created with no password and cannot sign in
+ * until one is set.
  */
 export async function seedSuperAdmin(): Promise<void> {
   const email = (process.env.SUPERADMIN_EMAIL || 'loganpacey@gmail.com').toLowerCase().trim();
-  const password = process.env.SUPERADMIN_PASSWORD || 'loganPacey123!';
+  const password = process.env.SUPERADMIN_PASSWORD || '';
+  const reset = (process.env.SUPERADMIN_RESET_PASSWORD || '').toLowerCase() === 'true';
   const firstName = process.env.SUPERADMIN_FIRST_NAME || 'Logan';
   const lastName = process.env.SUPERADMIN_LAST_NAME || 'Pacey';
 
@@ -120,34 +172,40 @@ export async function seedSuperAdmin(): Promise<void> {
       existing.role = 'administrator';
       dirty = true;
     }
-    if (!existing.passwordHash) {
+    if (password && (!existing.passwordHash || reset)) {
       existing.passwordHash = await hashPassword(password);
       existing.passwordSetAt = new Date();
       dirty = true;
     }
     if (dirty) await existing.save();
+    if (await usesCompromisedPassword(existing.passwordHash)) {
+      loggingService.error(
+        'The superadmin still uses a password that was committed to the repository. Set SUPERADMIN_PASSWORD and SUPERADMIN_RESET_PASSWORD=true, or change it.',
+        { email }
+      );
+    }
     return;
   }
 
-  const passwordHash = await hashPassword(password);
   await User.create({
     email,
     role: 'administrator',
     authProviderId: `local:${email}`,
-    passwordHash,
-    passwordSetAt: new Date(),
+    ...(password ? { passwordHash: await hashPassword(password), passwordSetAt: new Date() } : {}),
     invited: false,
     profile: { firstName, lastName },
   });
-  loggingService.info('Seeded superadmin', { email });
+  loggingService.info('Seeded superadmin', { email, hasPassword: !!password });
 }
 
 // ---------- helpers ----------
 
-function signToken(user: IUser): string {
-  return jwt.sign({ sub: user._id.toString(), email: user.email, role: user.role }, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
-  } as jwt.SignOptions);
+async function signToken(user: IUser): Promise<string> {
+  return jwt.sign(
+    { sub: user._id.toString(), email: user.email, role: user.role },
+    await jwtSecret(),
+    { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
+  );
 }
 
 function toAuthUser(user: IUser): AuthUser {
