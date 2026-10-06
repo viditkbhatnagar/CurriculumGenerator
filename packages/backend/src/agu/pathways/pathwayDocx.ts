@@ -5,7 +5,7 @@
  */
 import { Document, HeadingLevel, Packer, Paragraph } from 'docx';
 import { bullet, h, p, table } from '../export/docxParts';
-import type { PathwayStatus } from './mbaPathways';
+import type { PathwayStatus, SharedTopic } from './mbaPathways';
 import { xmlSafeDeep } from '../../utils/xmlSafe';
 
 const STATE_LABEL: Record<string, string> = {
@@ -21,7 +21,8 @@ type Programme = any;
 export async function pathwayDocxBuffer(
   pathway: PathwayStatus,
   programmes: Map<string, Programme>,
-  composition: string
+  composition: string,
+  overlaps: SharedTopic[] = []
 ): Promise<Buffer> {
   pathway = xmlSafeDeep(pathway);
   const outstanding = pathway.courses.filter((c) => c.state !== 'published');
@@ -53,6 +54,23 @@ export async function pathwayDocxBuffer(
       h('Outstanding', HeadingLevel.HEADING_1),
       ...outstanding.map((c) =>
         bullet(`${c.code} ${c.title}: ${STATE_LABEL[c.state].toLowerCase()}`)
+      )
+    );
+  }
+  if (overlaps.length) {
+    children.push(
+      h('Topics taught in more than one course', HeadingLevel.HEADING_1),
+      p(
+        'These look alike across courses. The super admin decides which course keeps each topic, or confirms that the second builds on the first.'
+      ),
+      table(
+        ['Topic', 'Course', 'Also in'],
+        overlaps.map((o) => [
+          o.first.topic,
+          `${o.first.course} ${o.first.module}`.trim(),
+          `${o.second.course} ${o.second.module}: ${o.second.topic}`,
+        ]),
+        [40, 20, 40]
       )
     );
   }

@@ -36,7 +36,8 @@ import { currentOutline } from '../agu/validation/currentFindings';
 import { CourseDraft, Finding } from '../agu/draft/types';
 import { coursePackageBuffer } from '../agu/export/coursePackageDocx';
 import { generateArtefacts } from '../agu/generation/generateArtefacts';
-import { pathwayStatuses } from '../agu/pathways/mbaPathways';
+import { pathwayStatuses, sharedTopics } from '../agu/pathways/mbaPathways';
+import { repeatedTopics } from '../services/step4Validation';
 import { pathwayDocxBuffer } from '../agu/pathways/pathwayDocx';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 
@@ -236,9 +237,9 @@ router.get('/pathways/:pathwayId/export', async (req: Request, res: Response) =>
     );
     const pathway = statuses.find((s) => s.id === req.params.pathwayId);
     if (!pathway) return res.status(404).json({ success: false, error: 'No such pathway' });
-    const ids = pathway.courses
-      .filter((c) => c.state === 'published' && c.programmeId)
-      .map((c) => c.programmeId as string);
+    // Every course with a programme, for the shared-topics check; published ones are also
+    // printed in full.
+    const ids = pathway.courses.filter((c) => c.programmeId).map((c) => c.programmeId as string);
     const full = await CurriculumWorkflow.find({ _id: { $in: ids } })
       .select('step1.programDescription step3.outcomes step4.modules')
       .lean();
@@ -247,8 +248,17 @@ router.get('/pathways/:pathwayId/export', async (req: Request, res: Response) =>
       const found = full.find((f: any) => String(f._id) === course.programmeId);
       if (found) byCode.set(course.code, found);
     }
+    const overlaps = sharedTopics(
+      [...byCode.entries()].map(([code, prog]) => ({ code, modules: prog?.step4?.modules || [] })),
+      repeatedTopics
+    );
+    const published = new Map(
+      [...byCode.entries()].filter(([code]) =>
+        pathway.courses.some((c) => c.code === code && c.state === 'published')
+      )
+    );
     const mba = AGU_CATALOGUE_V1_4.credentials.find((c) => c.id === 'mba');
-    const buffer = await pathwayDocxBuffer(pathway, byCode, mba?.composition || '');
+    const buffer = await pathwayDocxBuffer(pathway, published, mba?.composition || '', overlaps);
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'

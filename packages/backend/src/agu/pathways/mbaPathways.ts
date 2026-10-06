@@ -132,3 +132,35 @@ export function pathwayStatuses(
     };
   });
 }
+
+export interface SharedTopic {
+  first: { course: string; module: string; topic: string };
+  second: { course: string; module: string; topic: string };
+}
+
+/**
+ * Weekly topics that two different courses of a pathway both teach, in nearly the same words.
+ * AGU's default (3 October 2026): overlaps are flagged for the super admin, who decides which
+ * course keeps the topic. Uses the same comparison as a single programme's repeated topics.
+ */
+export function sharedTopics(
+  courses: { code: string; modules: { code?: string; topics?: unknown[] }[] }[],
+  compare: (
+    modules: { code?: string; topics?: unknown[] }[]
+  ) => { first: { module: string; topic: string }; second: { module: string; topic: string } }[]
+): SharedTopic[] {
+  const SEP = '::';
+  const modules = courses.flatMap((c) =>
+    (c.modules || []).map((m) => ({ code: `${c.code}${SEP}${m.code || ''}`, topics: m.topics }))
+  );
+  return compare(modules)
+    .map(({ first, second }) => {
+      const [fc, fm] = first.module.split(SEP);
+      const [sc, sm] = second.module.split(SEP);
+      return {
+        first: { course: fc, module: fm, topic: first.topic },
+        second: { course: sc, module: sm, topic: second.topic },
+      };
+    })
+    .filter((s) => s.first.course !== s.second.course);
+}

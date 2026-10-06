@@ -78,3 +78,33 @@ describe('pathway document', () => {
     expect(text).toContain('PLO1: Prepare statements.');
   });
 });
+
+describe('topics shared between courses', () => {
+  it('flags a topic two courses both teach, but not repetition inside one course', async () => {
+    const { sharedTopics } = await import('../agu/pathways/mbaPathways');
+    const { repeatedTopics } = await import('../services/step4Validation');
+    const overlaps = sharedTopics(
+      [
+        {
+          code: 'CR08',
+          modules: [{ code: 'W1', topics: ['Descriptive analytics and dashboards'] }],
+        },
+        {
+          code: 'FT04',
+          modules: [
+            { code: 'W2', topics: ['Descriptive analytics and dashboards for finance'] },
+            { code: 'W3', topics: ['Descriptive analytics and dashboards for finance'] },
+          ],
+        },
+      ],
+      repeatedTopics
+    );
+    expect(overlaps.every((o) => o.first.course !== o.second.course)).toBe(true);
+    expect(overlaps[0].first).toEqual({
+      course: 'CR08',
+      module: 'W1',
+      topic: 'Descriptive analytics and dashboards',
+    });
+    expect(overlaps.map((o) => o.second.course)).toEqual(['FT04', 'FT04']);
+  });
+});
