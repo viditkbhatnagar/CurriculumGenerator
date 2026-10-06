@@ -21,6 +21,7 @@ import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/asses
 import { step7Passed, step7Validation } from './step7Validation';
 import { step6Checks, step6Issues, step6Passed } from './step6Validation';
 import { inheritOutcomeLinks, unlinkedReadings } from './readingCoverage';
+import { checkCompetencyEvidence } from './competencyEvidenceRunner';
 import { approvedSummativeFor, step7SpecifiesExam } from './step7Authority';
 import config from '../config';
 import {
@@ -959,7 +960,18 @@ IMPORTANT:
       essentialCount: workflow.step2.essentialCount,
     });
 
-    return workflow;
+    // The evidence behind each statement (services/competencyEvidence). If the search fails the
+    // statements stay "not checked", which the screen and the export report; the step stands.
+    try {
+      await checkCompetencyEvidence(workflowId, { dryRun: false });
+      return (await CurriculumWorkflow.findById(workflowId)) || workflow;
+    } catch (error) {
+      loggingService.warn('Step 2 evidence check failed; statements stay unchecked', {
+        workflowId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return workflow;
+    }
   }
 
   private async generateStep2Content(step1: any, input: any): Promise<any> {

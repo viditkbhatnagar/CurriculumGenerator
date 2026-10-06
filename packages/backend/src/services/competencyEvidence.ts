@@ -52,7 +52,14 @@ export interface ItemEvidence {
 /**
  * The knowledge-base search score a passage needs to count as evidence. Atlas reports
  * `(1 + cosine) / 2`, so 0.5 is unrelated text.
- * Provisional until calibrated on a production dry run.
+ *
+ * Set from a production dry run (2026-10-06) with a control. Best scores per statement: BBA
+ * 0.816-0.844 and Logistics 0.780-0.868, whose top passages were on topic; Clinical Research,
+ * whose subject the knowledge base does not cover, 0.745-0.828, with passages mostly unrelated
+ * (pharmacovigilance matched to HSE procedures). At 0.80 Clinical Research has 3 of 20
+ * statements supported (generic ethics and learning, which the HR standards do cover), Logistics
+ * 18 of 21 and the BBA 20 of 20. Scores overlap around 0.78-0.80, so a statement just below the
+ * floor may have real support; it goes to expert review, which is the safe direction.
  */
 export const EVIDENCE_FLOOR = 0.8;
 export const MAX_PASSAGES = 3;
@@ -60,9 +67,12 @@ export const EXCERPT_LENGTH = 300;
 
 /**
  * Two statements of the same kind this alike in meaning (cosine of their embeddings) are
- * flagged as possibly the same competency. Provisional until calibrated.
+ * flagged as possibly the same competency. On 2026-10-06 the most alike distinct pair in four
+ * programmes measured 0.71 (Fashion: hand illustration and CAD, against pattern making) and the
+ * rest at most 0.55; reworded duplicates sit well above that. Pairs are stored from 0.5, so this
+ * can be lowered from stored scores.
  */
-export const DUPLICATE_SIMILARITY = 0.9;
+export const DUPLICATE_SIMILARITY = 0.8;
 
 /** Every statement of a Step 2 framework, under the list names stored data uses. */
 export function competencyItemsOf(
