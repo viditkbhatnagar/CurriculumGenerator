@@ -2,6 +2,10 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
+import { installAuthFetch } from '@/lib/authFetch';
+
+// Before any component fetches: every request to the API carries the signed-in user's token.
+installAuthFetch();
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(

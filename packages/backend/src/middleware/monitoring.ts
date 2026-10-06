@@ -3,19 +3,8 @@ import { loggingService } from '../services/loggingService';
 import { monitoringService } from '../services/monitoringService';
 import { errorTrackingService } from '../services/errorTrackingService';
 
-// Extend Express Request type to include user
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string;
-        email?: string;
-        username?: string;
-      };
-    }
-  }
-}
+// `req.user` is declared once, in middleware/auth (AuthUser). A second declaration here with
+// a different shape made every use of the user's role a type error there.
 
 // Request logging middleware
 export function requestLoggingMiddleware(req: Request, res: Response, next: NextFunction): void {
@@ -111,7 +100,7 @@ export function performanceMonitoringMiddleware(
 // User context middleware
 export function userContextMiddleware(req: Request, res: Response, next: NextFunction): void {
   if (req.user?.id) {
-    errorTrackingService.setUser(req.user.id, req.user.email, req.user.username);
+    errorTrackingService.setUser(req.user.id, req.user.email);
   }
 
   res.on('finish', () => {

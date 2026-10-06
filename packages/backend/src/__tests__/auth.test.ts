@@ -8,9 +8,10 @@ describe('Authentication System', () => {
       expect(UserRole.STUDENT).toBe('student');
     });
 
-    it('should have all three roles defined', () => {
+    it('should have all four roles defined', () => {
       const roles = Object.values(UserRole);
-      expect(roles).toHaveLength(3);
+      expect(roles).toHaveLength(4);
+      expect(roles).toContain('faculty');
       expect(roles).toContain('administrator');
       expect(roles).toContain('sme');
       expect(roles).toContain('student');
@@ -20,16 +21,16 @@ describe('Authentication System', () => {
   describe('Auth configuration', () => {
     it('should validate role strings', () => {
       const validRoles = ['administrator', 'sme', 'student'];
-      
-      validRoles.forEach(role => {
+
+      validRoles.forEach((role) => {
         expect(Object.values(UserRole)).toContain(role);
       });
     });
 
     it('should reject invalid roles', () => {
       const invalidRoles = ['admin', 'teacher', 'user', ''];
-      
-      invalidRoles.forEach(role => {
+
+      invalidRoles.forEach((role) => {
         expect(Object.values(UserRole)).not.toContain(role);
       });
     });

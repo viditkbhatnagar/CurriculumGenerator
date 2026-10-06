@@ -11,20 +11,15 @@ import { encryptionService } from '../services/encryptionService';
 
 describe('Security Middleware', () => {
   describe('sanitizeString', () => {
-    it('should remove HTML tags', () => {
-      const input = '<script>alert("xss")</script>Hello';
-      const result = sanitizeString(input);
-      expect(result).not.toContain('<script>');
-      expect(result).not.toContain('</script>');
+    // Input is stored as written, not HTML-escaped: escaping on the way in turned "A & B" into
+    // "A &amp; B" in the database and every export. Script tags are refused by preventXSS
+    // (securityFilters.test.ts), and output is escaped where it is rendered.
+    it('keeps text as written rather than HTML-escaping it', () => {
+      expect(sanitizeString('Test & <test> "quotes"')).toBe('Test & <test> "quotes"');
     });
 
-    it('should escape special characters', () => {
-      const input = 'Test & <test> "quotes"';
-      const result = sanitizeString(input);
-      expect(result).toContain('&amp;');
-      expect(result).toContain('&lt;');
-      expect(result).toContain('&gt;');
-      expect(result).toContain('&quot;');
+    it('removes control characters but keeps newlines and tabs', () => {
+      expect(sanitizeString('a\u0014b\nc\td')).toBe('ab\nc\td');
     });
 
     it('should remove null bytes', () => {
@@ -43,20 +38,20 @@ describe('Security Middleware', () => {
   describe('sanitizeObject', () => {
     it('should sanitize nested objects', () => {
       const input = {
-        name: '<script>alert(1)</script>',
+        name: '  Name\u0000  ',
         nested: {
           value: 'Test & Value',
         },
       };
       const result = sanitizeObject(input);
-      expect(result.name).not.toContain('<script>');
-      expect(result.nested.value).toContain('&amp;');
+      expect(result.name).toBe('Name');
+      expect(result.nested.value).toBe('Test & Value');
     });
 
     it('should sanitize arrays', () => {
-      const input = ['<script>test</script>', 'normal'];
+      const input = ['  padded\u0000', 'normal'];
       const result = sanitizeObject(input);
-      expect(result[0]).not.toContain('<script>');
+      expect(result[0]).toBe('padded');
       expect(result[1]).toBe('normal');
     });
 
@@ -132,7 +127,14 @@ describe('Security Middleware', () => {
     it('should reject tampered requests', () => {
       const signature = generateRequestSignature(method, path, body, timestamp, secret);
       const tamperedBody = { data: 'tampered' };
-      const isValid = verifyRequestSignature(method, path, tamperedBody, timestamp, signature, secret);
+      const isValid = verifyRequestSignature(
+        method,
+        path,
+        tamperedBody,
+        timestamp,
+        signature,
+        secret
+      );
       expect(isValid).toBe(false);
     });
   });

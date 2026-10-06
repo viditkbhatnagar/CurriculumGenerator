@@ -45,6 +45,7 @@ import step7StreamRoutes from './routes/step7StreamRoutes';
 import pptRoutes from './routes/pptRoutes';
 import standaloneRoutes from './routes/standaloneRoutes';
 import { EXPORT_PATHS, exportRequestSlot } from './middleware/exportLimit';
+import { requireLoginWhenEnabled } from './middleware/auth';
 
 dotenv.config();
 
@@ -192,6 +193,9 @@ app.use((req, res, next) => {
     });
   });
 });
+
+// Sign-in for every /api route once REQUIRE_AUTH is on (middleware/auth); a no-op until then.
+app.use('/api', requireLoginWhenEnabled);
 
 // At most two downloads are prepared at once (middleware/exportLimit): each can need 500MB+.
 app.use(EXPORT_PATHS, exportRequestSlot);

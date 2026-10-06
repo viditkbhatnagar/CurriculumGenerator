@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { expressjwt, GetVerificationKey } from 'express-jwt';
 import jwksRsa from 'jwks-rsa';
@@ -29,6 +30,30 @@ declare global {
 
 // Check if Auth0 is configured
 const isAuth0Configured = config.auth0.domain && config.auth0.audience;
+
+/**
+ * Whether a request must carry a valid login. Without Auth0, every request without a token was
+ * treated as an administrator, so every write endpoint was open to anyone.
+ * - REQUIRE_AUTH=true: every change (any method but GET/HEAD/OPTIONS) needs our login token.
+ * - REQUIRE_AUTH_READS=true as well: reads need a login token or the LMS service token below.
+ * Switches rather than defaults: the LMS reads without a token today, and some downloads are
+ * plain links that cannot carry one.
+ */
+const flag = (name: string) => (process.env[name] || '').toLowerCase() === 'true';
+const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+export const loginRequiredFor = (method: string) =>
+  flag('REQUIRE_AUTH') && (!READ_METHODS.has(method.toUpperCase()) || flag('REQUIRE_AUTH_READS'));
+
+/**
+ * The read-only token the LMS sends (Authorization: Bearer <LMS_SERVICE_TOKEN>) to import
+ * curricula through GET requests once REQUIRE_AUTH is on. Any other method is refused.
+ */
+export const LMS_SERVICE_SUB = 'service:lms';
+const isLmsToken = (bearer: string | null) => {
+  const token = process.env.LMS_SERVICE_TOKEN || '';
+  if (!bearer || token.length < 32 || bearer.length !== token.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(bearer), Buffer.from(token));
+};
 
 // Auth bypass middleware when Auth0 is not configured
 const authBypass = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -76,7 +101,22 @@ export const validateJWT = (req: Request, res: Response, next: NextFunction): vo
 
 function continueWithAuth0OrBypass(req: Request, res: Response, next: NextFunction): void {
   if (!isAuth0Configured) {
-    authBypass(req, res, next);
+    if (!loginRequiredFor(req.method)) {
+      authBypass(req, res, next);
+      return;
+    }
+    const authHeader = req.headers.authorization;
+    const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (isLmsToken(bearer)) {
+      if (req.method !== 'GET') {
+        res.status(403).json({ success: false, error: 'The LMS token is read-only' });
+        return;
+      }
+      req.auth = { sub: LMS_SERVICE_SUB, email: 'lms@service' };
+      next();
+      return;
+    }
+    res.status(401).json({ success: false, error: 'Sign in required' });
     return;
   }
 
@@ -121,7 +161,21 @@ export const loadUser = async (req: Request, res: Response, next: NextFunction):
     const authProviderId = req.auth.sub;
     const email = req.auth.email || req.auth['https://curriculum-app.com/email'];
 
-    // Create a mock admin user when Auth0 is not configured (any environment)
+    // The LMS's read-only service identity (GET only, enforced in validateJWT).
+    if (authProviderId === LMS_SERVICE_SUB) {
+      // Typed through a cast: another declaration of Request.user conflicts with AuthUser.
+      const service: AuthUser = {
+        id: '000000000000000000000001',
+        email: 'lms@service',
+        role: UserRole.ADMINISTRATOR,
+        authProviderId,
+      };
+      (req as any).user = service;
+      next();
+      return;
+    }
+
+    // Create a mock admin user when Auth0 is not configured and login is not required
     if (!isAuth0Configured) {
       req.user = {
         id: '507f1f77bcf86cd799439011', // Valid MongoDB ObjectId for anonymous mode
@@ -334,4 +388,20 @@ export const handleAuthError = (
   }
 
   next(err);
+};
+
+/** Paths under /api that never need a login: signing in itself. */
+const OPEN_PATHS = ['/auth/login'];
+
+/**
+ * Mounted on /api ahead of every router, so the login requirement covers routes that never
+ * call validateJWT themselves: about 60 write routes across the workflow, AGU, RAG, benchmark
+ * and standalone routers did not. Does nothing unless REQUIRE_AUTH is on.
+ */
+export const requireLoginWhenEnabled = (req: Request, res: Response, next: NextFunction): void => {
+  if (!loginRequiredFor(req.method) || OPEN_PATHS.includes(req.path)) {
+    next();
+    return;
+  }
+  validateJWT(req, res, next);
 };
