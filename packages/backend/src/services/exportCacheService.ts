@@ -61,7 +61,9 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 // v25: the Step 13 validation table is computed from the exam, with "Not checked" rows.
 // v26: the single-step Step 13 export is given Step 3, so PLO coverage is checked. v25 copies
 //      read "Not checked" for it, under the same content hash.
-const EXPORT_FORMAT_VERSION = 'v26';
+// v27: section headings in the curriculum Word export are real Word headings (navigable
+//      outline), not bold text.
+const EXPORT_FORMAT_VERSION = 'v27';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the

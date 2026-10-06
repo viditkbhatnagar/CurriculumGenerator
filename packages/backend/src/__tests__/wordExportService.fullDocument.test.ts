@@ -73,3 +73,12 @@ describe('whole-programme Word document, Step 10', () => {
     expect(text).toContain('10.1 Validation Summary');
   });
 });
+
+describe('whole-programme Word document, headings', () => {
+  it('marks section headings as Word headings, so the document has an outline', async () => {
+    const zip = await JSZip.loadAsync(await wordExportService.generateDocument(programme(1)));
+    const xml = await zip.file('word/document.xml')!.async('string');
+    expect(xml).toMatch(/<w:pStyle w:val="Heading1"\/>/);
+    expect(xml).toMatch(/<w:pStyle w:val="Heading2"\/>/);
+  });
+});

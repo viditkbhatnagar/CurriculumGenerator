@@ -9,6 +9,7 @@ import {
   WidthType,
   AlignmentType,
   PageBreak,
+  HeadingLevel,
 } from 'docx';
 import OpenAI from 'openai';
 import { loggingService } from './loggingService';
@@ -319,12 +320,17 @@ If the content is better as bullets, put it in bullets array and leave paragraph
    */
   private createH1(text: string): Paragraph {
     return new Paragraph({
+      // A real Word heading, so the document has a navigable outline and a screen reader can
+      // move by section; it was bold text only. The run keeps the look, and black overrides
+      // the heading style's default blue.
+      heading: HeadingLevel.HEADING_1,
       children: [
         new TextRun({
           text,
           bold: true,
           size: FONT_SIZES.H1,
           font: FONT_FAMILY,
+          color: '000000',
         }),
       ],
       spacing: {
@@ -340,12 +346,17 @@ If the content is better as bullets, put it in bullets array and leave paragraph
    */
   private createH2(text: string): Paragraph {
     return new Paragraph({
+      // A real Word heading, so the document has a navigable outline and a screen reader can
+      // move by section; it was bold text only. The run keeps the look, and black overrides
+      // the heading style's default blue.
+      heading: HeadingLevel.HEADING_2,
       children: [
         new TextRun({
           text,
           bold: true,
           size: FONT_SIZES.H2,
           font: FONT_FAMILY,
+          color: '000000',
         }),
       ],
       spacing: {
@@ -361,12 +372,17 @@ If the content is better as bullets, put it in bullets array and leave paragraph
    */
   private createH3(text: string): Paragraph {
     return new Paragraph({
+      // A real Word heading, so the document has a navigable outline and a screen reader can
+      // move by section; it was bold text only. The run keeps the look, and black overrides
+      // the heading style's default blue.
+      heading: HeadingLevel.HEADING_3,
       children: [
         new TextRun({
           text,
           bold: true,
           size: FONT_SIZES.H3,
           font: FONT_FAMILY,
+          color: '000000',
         }),
       ],
       spacing: {
