@@ -2074,14 +2074,6 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
 
     // Calculate hours totals
     const totalModuleHours = modules.reduce((sum: number, m: any) => sum + (m.totalHours || 0), 0);
-    const totalModuleContactHours = modules.reduce(
-      (sum: number, m: any) => sum + (m.contactHours || 0),
-      0
-    );
-
-    // Validate hours integrity (exact match required per workflow v2.2)
-    const hoursIntegrity = totalModuleHours === totalProgramHours;
-    const contactHoursIntegrity = Math.abs(totalModuleContactHours - contactHours) <= 1;
 
     // Validate progressive complexity
     const progressiveComplexity = this.validateProgressiveComplexity(modules);
@@ -2097,22 +2089,20 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       }
     }
 
-    // Check if all PLOs are covered
-    const ploIds = (workflow.step3.outcomes || []).map((o: any) => o.id);
-    const allPLOsCovered = ploIds.every((id: string) => ploMapping[id]?.length > 0);
-
-    // Validation report
-    const validationReport = {
-      hoursMatch: hoursIntegrity,
-      contactHoursMatch: contactHoursIntegrity,
-      allPLOsCovered,
-      progressionValid:
-        progressiveComplexity.earlyModulesValid &&
-        progressiveComplexity.middleModulesValid &&
-        progressiveComplexity.lateModulesValid,
-      noCircularDeps: this.validateNoCircularDeps(modules),
-      minMLOsPerModule: modules.every((m: any) => (m.mlos?.length || 0) >= 1),
-    };
+    // Every check computed from the modules (services/step4Validation), the same as the
+    // uploaded-structure path and the screen. This path still stored its own: exact hours
+    // equality against the all-tracks total, "at least one" outcome per module, and a
+    // progression test unrelated to prerequisites.
+    const ploIds = (workflow.step3.outcomes || []).map((o: any) => o.code || o.id);
+    const validationReport = step4ValidationReport({
+      modules,
+      ploIds,
+      declaredHours: totalProgramHours,
+      declaredContactHours: contactHours,
+    });
+    const allPLOsCovered = validationReport.allPLOsCovered !== false;
+    const hoursIntegrity = validationReport.hoursMatch !== false;
+    const contactHoursIntegrity = validationReport.contactHoursMatch !== false;
 
     // Store step data
     workflow.step4 = {
@@ -2196,33 +2186,6 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       middleModulesValid: true, // Middle is more flexible
       lateModulesValid: lateModules.length === 0 || countLevels(lateModules, higherLevels) >= 0.3,
     };
-  }
-
-  private validateNoCircularDeps(modules: any[]): boolean {
-    const modIds = modules.map((m) => m.id);
-    const visited = new Set<string>();
-    const recursionStack = new Set<string>();
-
-    const hasCycle = (modId: string): boolean => {
-      if (recursionStack.has(modId)) return true;
-      if (visited.has(modId)) return false;
-
-      visited.add(modId);
-      recursionStack.add(modId);
-
-      const mod = modules.find((m) => m.id === modId);
-      for (const prereq of mod?.prerequisites || []) {
-        if (hasCycle(prereq)) return true;
-      }
-
-      recursionStack.delete(modId);
-      return false;
-    };
-
-    for (const modId of modIds) {
-      if (hasCycle(modId)) return false;
-    }
-    return true;
   }
 
   private async generateStep4Content(
