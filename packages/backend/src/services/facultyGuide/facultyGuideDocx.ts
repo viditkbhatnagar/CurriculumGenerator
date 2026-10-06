@@ -6,13 +6,25 @@
  * characters inside plain paragraphs, which the 21 Sep 2026 review flagged as an accessibility
  * and navigation problem.
  */
-import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
+import {
+  Document,
+  HeadingLevel,
+  Packer,
+  Paragraph,
+  ShadingType,
+  Table,
+  TableCell,
+  TableRow,
+  TextRun,
+  WidthType,
+} from 'docx';
 import {
   GuideActivity,
   GuideCaseActivity,
   GuideCharacter,
   GuideCheck,
   GuideFormative,
+  GuideGradedTask,
   GuideModule,
   GuideRolePlay,
   GuideSession,
@@ -276,7 +288,7 @@ const splitLines = (t: string | undefined) =>
     .filter(Boolean);
 
 /** One Step 7 formative assessment, in full, for the appendix. */
-function formativeBlock(f: GuideFormative): Paragraph[] {
+function formativeBlock(f: GuideFormative): (Paragraph | Table)[] {
   return [
     heading(`${f.ref}. ${f.title}`, HeadingLevel.HEADING_2),
     ...optional('Type', f.type),
@@ -291,6 +303,80 @@ function formativeBlock(f: GuideFormative): Paragraph[] {
     ...labelledList('Success criteria', f.criteria),
     ...optional('Feedback guidance', f.feedbackGuidance),
     ...labelledList('Student self-check', f.selfCheck),
+    ...labelledList('Discussion prompts', f.discussionPrompts),
+    ...(f.graded ? gradedBlock(f.graded) : []),
+  ];
+}
+
+const cellText = (t: string, opts: { bold?: boolean } = {}) =>
+  new Paragraph({ children: [text(t, opts)], spacing: { after: 40 } });
+
+/** A plain table: a shaded header row and one row per item. */
+function gridTable(header: string[], rows: string[][]): Table {
+  const cell = (t: string, head: boolean) =>
+    new TableCell({
+      children: [cellText(t, { bold: head })],
+      shading: head ? { type: ShadingType.CLEAR, color: 'auto', fill: 'E5E7EB' } : undefined,
+      margins: { top: 40, bottom: 40, left: 80, right: 80 },
+    });
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({ tableHeader: true, children: header.map((h) => cell(h, true)) }),
+      ...rows.map((r) => new TableRow({ cantSplit: true, children: r.map((t) => cell(t, false)) })),
+    ],
+  });
+}
+
+const marksLabel = (marks?: number) =>
+  marks === undefined ? '' : ` (${marks} mark${marks === 1 ? '' : 's'})`;
+
+/** A graded task's marks, brief, rubric and marking guide. */
+function gradedBlock(g: GuideGradedTask): (Paragraph | Table)[] {
+  const bands: string[] = [];
+  for (const c of g.rubric)
+    for (const l of c.levels) if (!bands.includes(l.band)) bands.push(l.band);
+  const total = g.marking.totalMarks ?? g.maxMarks;
+  return [
+    heading('Graded task', HeadingLevel.HEADING_3),
+    ...optional('Marks', total === undefined ? undefined : String(total)),
+    ...optional('Context', g.brief.context),
+    ...optional('Task', g.brief.task),
+    ...labelledList('Deliverables', g.brief.deliverables),
+    ...optional('Conditions', g.brief.conditions),
+    ...optional('Submission', g.brief.submissionFormat),
+    ...(g.rubric.length
+      ? [
+          heading('Rubric', HeadingLevel.HEADING_3),
+          gridTable(
+            ['Criterion', ...bands],
+            g.rubric.map((c) => [
+              `${c.criterion}${marksLabel(c.maxMarks)}`,
+              ...bands.map((band) => {
+                const level = c.levels.find((l) => l.band === band);
+                if (!level) return '';
+                return level.markRange
+                  ? `${level.markRange}: ${level.descriptor}`
+                  : level.descriptor;
+              }),
+            ])
+          ),
+        ]
+      : []),
+    ...(g.marking.allocations.length
+      ? [
+          heading('Marking guide', HeadingLevel.HEADING_3),
+          gridTable(
+            ['Component', 'Marks', 'What to look for'],
+            g.marking.allocations.map((a) => [
+              a.component,
+              a.marks === undefined ? '' : String(a.marks),
+              a.indicativeContent || '',
+            ])
+          ),
+        ]
+      : []),
+    ...optional('Marker notes', g.marking.markerNotes),
   ];
 }
 
@@ -319,7 +405,7 @@ export function facultyGuideDocument(guide: GuideModule, programmeTitle?: string
   programmeTitle = programmeTitle && xmlSafeDeep(programmeTitle);
   const note = incompleteNote(guide);
   const title = `Faculty Delivery Guide: ${guide.code} ${guide.title}`.trim();
-  const children: Paragraph[] = [
+  const children: (Paragraph | Table)[] = [
     heading(note ? `${title} (incomplete)` : title, HeadingLevel.TITLE),
     ...(programmeTitle ? [para(programmeTitle, { italics: true })] : []),
     ...(note ? [para(`This guide is incomplete: ${note}`, { bold: true })] : []),
@@ -340,10 +426,11 @@ export function facultyGuideDocument(guide: GuideModule, programmeTitle?: string
     ...guide.sessions.flatMap(sessionBlock),
     ...(guide.formatives.length
       ? [
-          heading('Appendix: Formative Checks Used in This Module', HeadingLevel.HEADING_1),
+          heading('Appendix: Assessment Tasks Used in This Module', HeadingLevel.HEADING_1),
           para(
-            'Each check is set out once here, with its questions and model answers; sessions ' +
-              'refer to it by number. From the module’s Step 7 formative assessments.',
+            'Each task is set out once here, with its questions, model answers and discussion ' +
+              'prompts; sessions refer to it by number. A graded task also gives its marks, ' +
+              'brief, rubric and marking guide. From the module’s Step 7 assessments.',
             { italics: true }
           ),
           ...guide.formatives.flatMap(formativeBlock),

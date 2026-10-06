@@ -50,6 +50,34 @@ export interface GuideFormativeQuestion {
   rationale?: string;
 }
 
+export interface GuideRubricCriterion {
+  criterion: string;
+  maxMarks?: number;
+  levels: { band: string; markRange?: string; descriptor: string }[];
+}
+
+/**
+ * What a graded task adds: its marks, the brief students receive, the rubric and the marking
+ * guide. Dr. Sherin Thomas asked for these in the appendix (2 October 2026); the guide printed
+ * the questions and model answers only.
+ */
+export interface GuideGradedTask {
+  maxMarks?: number;
+  brief: {
+    context?: string;
+    task?: string;
+    deliverables: string[];
+    conditions?: string;
+    submissionFormat?: string;
+  };
+  rubric: GuideRubricCriterion[];
+  marking: {
+    totalMarks?: number;
+    allocations: { component: string; marks?: number; indicativeContent?: string }[];
+    markerNotes?: string;
+  };
+}
+
 /** A Step 7 formative assessment as the guide's appendix sets it out. */
 export interface GuideFormativeTask {
   id: string;
@@ -61,6 +89,10 @@ export interface GuideFormativeTask {
   criteria: string[];
   feedbackGuidance?: string;
   selfCheck: string[];
+  /** The task's own discussion prompts, also asked for on 2 October. */
+  discussionPrompts: string[];
+  /** Present only for a graded task. */
+  graded?: GuideGradedTask;
 }
 
 export interface GuideFormative extends GuideFormativeTask {
@@ -614,6 +646,52 @@ export function formativeTask(raw: any): GuideFormativeTask | undefined {
     criteria: strings(raw?.assessmentCriteria),
     feedbackGuidance: str(raw?.feedbackGuidance),
     selfCheck: strings(raw?.selfCheckCriteria),
+    discussionPrompts: strings(raw?.discussionPrompts),
+    graded: raw?.graded ? gradedTask(raw) : undefined,
+  };
+}
+
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+
+/** A graded Step 7 task's marks, brief, rubric and marking guide. */
+function gradedTask(raw: any): GuideGradedTask {
+  const brief = raw?.studentBrief || {};
+  const guide = raw?.markingGuide || {};
+  return {
+    maxMarks: num(raw?.maxMarks),
+    brief: {
+      context: str(brief.context),
+      task: str(brief.task),
+      deliverables: strings(brief.deliverables),
+      conditions: str(brief.conditions),
+      submissionFormat: str(brief.submissionFormat),
+    },
+    rubric: (Array.isArray(raw?.rubric) ? raw.rubric : [])
+      .map(
+        (c: any): GuideRubricCriterion => ({
+          criterion: str(c?.criterion) || '',
+          maxMarks: num(c?.maxMarks),
+          levels: (Array.isArray(c?.levels) ? c.levels : [])
+            .map((l: any) => ({
+              band: str(l?.band) || '',
+              markRange: str(l?.markRange),
+              descriptor: str(l?.descriptor) || '',
+            }))
+            .filter((l: { band: string; descriptor: string }) => l.band && l.descriptor),
+        })
+      )
+      .filter((c: GuideRubricCriterion) => c.criterion),
+    marking: {
+      totalMarks: num(guide.totalMarks),
+      allocations: (Array.isArray(guide.markAllocation) ? guide.markAllocation : [])
+        .map((a: any) => ({
+          component: str(a?.component) || '',
+          marks: num(a?.marks),
+          indicativeContent: str(a?.indicativeContent),
+        }))
+        .filter((a: { component: string }) => a.component),
+      markerNotes: str(guide.markerNotes),
+    },
   };
 }
 

@@ -276,11 +276,73 @@ describe('the formative checks appendix', () => {
 
   it('prints the task with its questions and model answers, and points sessions to it', async () => {
     const text = await textOf(await facultyGuideBuffer(guideFor(2)));
-    expect(text).toContain('Appendix: Formative Checks Used in This Module');
+    expect(text).toContain('Appendix: Assessment Tasks Used in This Module');
     expect(text).toContain('F1. Manager-in-Action Worksheet');
     expect(text).toContain('Storming: visible conflict and unclear ownership.');
     expect(text).toContain('Did I cite evidence from the case?');
     expect(text).toContain('Appendix, F1');
+  });
+
+  it('adds the discussion prompts, and a graded task’s marks, brief, rubric and marking guide', async () => {
+    // Dr. Sherin Thomas asked for both on 2 October 2026.
+    const graded = {
+      step7: {
+        formativeAssessments: [
+          {
+            ...workflow.step7.formativeAssessments[0],
+            discussionPrompts: ['Which model changed your recommendation, and why?'],
+            graded: true,
+            maxMarks: 12,
+            studentBrief: {
+              context: 'A one-week improvement sprint at an online retailer.',
+              task: 'Complete six scenario micro-tasks.',
+              deliverables: ['Q1: functions mapped', 'Q2: PESTLE category'],
+              conditions: '60 minutes; open-book.',
+              submissionFormat: 'One PDF.',
+            },
+            rubric: [
+              {
+                criterion: 'Applies management functions',
+                maxMarks: 4,
+                levels: [
+                  { band: 'Distinction', markRange: '4', descriptor: 'All three correct.' },
+                  { band: 'Pass', markRange: '2', descriptor: 'One correct.' },
+                ],
+              },
+            ],
+            markingGuide: {
+              totalMarks: 12,
+              markAllocation: [
+                {
+                  component: 'Functions',
+                  marks: 4,
+                  indicativeContent: 'Planning, organising, leading.',
+                },
+              ],
+              markerNotes: 'Accept equivalent wording.',
+            },
+          },
+        ],
+      },
+    };
+    const guide = guideModule(
+      { code: 'M01', title: 'Management' },
+      withCheck(1),
+      guideContextFromWorkflow(graded, { mlos: [] })
+    );
+    const text = await textOf(await facultyGuideBuffer(guide));
+    expect(text).toContain('Which model changed your recommendation, and why?');
+    expect(text).toContain('Marks: 12');
+    expect(text).toContain('Complete six scenario micro-tasks.');
+    expect(text).toContain('Applies management functions (4 marks)');
+    expect(text).toContain('4: All three correct.');
+    expect(text).toContain('Planning, organising, leading.');
+    expect(text).toContain('Accept equivalent wording.');
+  });
+
+  it('prints no graded block for an ungraded task', async () => {
+    const text = await textOf(await facultyGuideBuffer(guideFor(1)));
+    expect(text).not.toContain('Graded task');
   });
 
   it('leaves the appendix out when no check names a Step 7 task', async () => {

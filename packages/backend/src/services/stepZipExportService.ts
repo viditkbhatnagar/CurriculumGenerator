@@ -33,8 +33,10 @@ import { expectedLessonCount, isPlanComplete, plannedLessonTarget } from './step
  * 2: keeps check answers, case activities and pacing; labels checks by type; flags partial modules.
  * 3: an appendix sets out each Step 7 formative check with its questions and model answers.
  * 4: a case activity whose time is stored as text prints it ("Time: ..."); it was dropped.
+ * 5: the appendix adds each task's discussion prompts and, for graded tasks, the marks, brief,
+ *    rubric and marking guide (Dr. Sherin Thomas, 2 October 2026).
  */
-export const FACULTY_GUIDE_FORMAT_VERSION = 4;
+export const FACULTY_GUIDE_FORMAT_VERSION = 5;
 
 /** How a module is named in its file inside the archive. */
 function moduleFileName(stepNumber: number, index: number, stub: any, step4Module: any): string {
