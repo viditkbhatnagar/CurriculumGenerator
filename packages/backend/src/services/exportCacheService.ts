@@ -66,7 +66,9 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 // v28: the whole-programme document opens with an Unresolved Issues list.
 // v29: the Unresolved Issues list names topics that look repeated across modules, and Step 5's
 //      source floor is two per weekly topic.
-const EXPORT_FORMAT_VERSION = 'v29';
+// v30: Unresolved Issues adds the declared subject scope and essential competencies no outcome
+//      covers.
+const EXPORT_FORMAT_VERSION = 'v30';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the
