@@ -36,6 +36,9 @@ import { currentOutline } from '../agu/validation/currentFindings';
 import { CourseDraft, Finding } from '../agu/draft/types';
 import { coursePackageBuffer } from '../agu/export/coursePackageDocx';
 import { generateArtefacts } from '../agu/generation/generateArtefacts';
+import { pathwayStatuses } from '../agu/pathways/mbaPathways';
+import { pathwayDocxBuffer } from '../agu/pathways/pathwayDocx';
+import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 
 const router = Router();
 
@@ -196,6 +199,70 @@ async function startIfAllowed(
     releaseGenerationStart(courseCode);
   }
 }
+
+/** Programmes as the pathways need them: title, position, status and publication. */
+async function programmeSummaries() {
+  return CurriculumWorkflow.find({})
+    .select('projectName step1.programTitle currentStep status publication')
+    .lean();
+}
+
+/**
+ * GET /api/agu/pathways
+ * The three MBA pathways and the state of each of their 16 courses (agu/pathways).
+ */
+router.get('/pathways', async (_req: Request, res: Response) => {
+  try {
+    const statuses = pathwayStatuses(
+      AGU_CATALOGUE_V1_4.courses,
+      (await programmeSummaries()) as any
+    );
+    res.json({ success: true, data: statuses });
+  } catch (error) {
+    loggingService.error('Error listing pathways', { error });
+    res.status(500).json({ success: false, error: 'Failed to list the pathways' });
+  }
+});
+
+/**
+ * GET /api/agu/pathways/:pathwayId/export
+ * One pathway as a Word document; a draft while any course is unpublished.
+ */
+router.get('/pathways/:pathwayId/export', async (req: Request, res: Response) => {
+  try {
+    const statuses = pathwayStatuses(
+      AGU_CATALOGUE_V1_4.courses,
+      (await programmeSummaries()) as any
+    );
+    const pathway = statuses.find((s) => s.id === req.params.pathwayId);
+    if (!pathway) return res.status(404).json({ success: false, error: 'No such pathway' });
+    const ids = pathway.courses
+      .filter((c) => c.state === 'published' && c.programmeId)
+      .map((c) => c.programmeId as string);
+    const full = await CurriculumWorkflow.find({ _id: { $in: ids } })
+      .select('step1.programDescription step3.outcomes step4.modules')
+      .lean();
+    const byCode = new Map<string, any>();
+    for (const course of pathway.courses) {
+      const found = full.find((f: any) => String(f._id) === course.programmeId);
+      if (found) byCode.set(course.code, found);
+    }
+    const mba = AGU_CATALOGUE_V1_4.credentials.find((c) => c.id === 'mba');
+    const buffer = await pathwayDocxBuffer(pathway, byCode, mba?.composition || '');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="AGU-MBA-${pathway.id}${pathway.ready ? '' : '-DRAFT'}.docx"`
+    );
+    res.send(buffer);
+  } catch (error) {
+    loggingService.error('Error exporting pathway', { error });
+    res.status(500).json({ success: false, error: 'Failed to export the pathway' });
+  }
+});
 
 /** GET /api/agu/catalogue — the locked catalogue record. */
 router.get('/catalogue', (_req: Request, res: Response) => {

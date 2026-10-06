@@ -38,6 +38,12 @@ export default function AguModulesPage() {
             descriptions are locked to the catalogue; the outcomes, weeks, assessments and readings
             are drafted from verified open-access sources for faculty to review.
           </p>
+          <Link
+            href="/modules/pathways"
+            className="mt-2 inline-block text-sm text-teal-700 underline"
+          >
+            See the three MBA pathways and which courses are published
+          </Link>
           {catalogue && (
             <p className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 inline-block">
               Catalog v{catalogue.edition.version} ({catalogue.edition.published}) ·{' '}

@@ -242,3 +242,30 @@ export async function acceptAguArtefacts(id: string): Promise<void> {
 export async function saveAguDraft(id: string, draft: AguDraftContent): Promise<void> {
   await fetchAPI(`/api/agu/drafts/${id}`, { method: 'PATCH', body: JSON.stringify({ draft }) });
 }
+
+export type PathwayCourseState = 'not_started' | 'in_progress' | 'submitted' | 'published';
+
+export interface AguPathway {
+  id: string;
+  name: string;
+  courses: {
+    code: string;
+    title: string;
+    role: string;
+    credits: number;
+    hours: number;
+    deliveryWindow: string;
+    gateway?: string;
+    state: PathwayCourseState;
+    programmeId?: string;
+    currentStep?: number;
+    publishedAt?: string;
+  }[];
+  totals: { courses: number; credits: number; hours: number; published: number };
+  ready: boolean;
+}
+
+/** The three MBA pathways and the state of each course (backend agu/pathways). */
+export async function getAguPathways(): Promise<AguPathway[]> {
+  return (await fetchAPI('/api/agu/pathways')).data;
+}
