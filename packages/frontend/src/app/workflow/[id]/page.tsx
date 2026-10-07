@@ -277,8 +277,17 @@ export default function WorkflowDetailPage() {
     );
   }
 
-  // Set active step to current step if not set
-  const currentStep = activeStep || (workflow.currentStep as WorkflowStep);
+  // The first step not yet done. The stored position can lag behind the steps (re-running an
+  // earlier step used to move it back), so it is read from the steps themselves: Applied
+  // Fashion Design showed "Step 9 of 14" and opened on the Glossary with Steps 1-12 done.
+  const nextStep = (Array.from({ length: 14 }, (_, i) => i + 1).find(
+    (step) => !isStepDone(workflow, step)
+  ) ?? 14) as WorkflowStep;
+  // The programme's title from Step 1, which the documents use; the stored name can be older.
+  const programmeName = workflow.step1?.programTitle?.trim() || workflow.projectName;
+
+  // Open on the first step not yet done, unless the author has picked one.
+  const currentStep = activeStep || nextStep;
 
   // If showing final review, render that instead
   if (showFinalReview) {
@@ -309,7 +318,7 @@ export default function WorkflowDetailPage() {
                 </button>
                 <div>
                   <h1 className="text-xl font-bold text-teal-800">Final Review & Download</h1>
-                  <p className="text-teal-600 text-sm">{workflow.projectName}</p>
+                  <p className="text-teal-600 text-sm">{programmeName}</p>
                 </div>
               </div>
               <button
@@ -438,7 +447,7 @@ export default function WorkflowDetailPage() {
                 </svg>
               </button>
               <div>
-                <h1 className="text-xl font-bold text-teal-800">{workflow.projectName}</h1>
+                <h1 className="text-xl font-bold text-teal-800">{programmeName}</h1>
                 {/* Read twice as a wait time — "it shows 2 hrs" — when it is the
                     authoring effort for the steps still to do. Name it plainly:
                     it describes the person's remaining work, not a generation. */}
@@ -446,9 +455,8 @@ export default function WorkflowDetailPage() {
                   className="text-teal-600 text-sm"
                   title="How long the remaining steps typically take a person to complete. Nothing is running — this is not a wait time or a countdown."
                 >
-                  Step {workflow.currentStep} of 14 •{' '}
-                  {progress?.estimatedTimeRemaining || '~2.5 hours'} of your time to finish the
-                  remaining steps
+                  Step {nextStep} of 14 • {progress?.estimatedTimeRemaining || '~2.5 hours'} of your
+                  time to finish the remaining steps
                 </p>
               </div>
             </div>

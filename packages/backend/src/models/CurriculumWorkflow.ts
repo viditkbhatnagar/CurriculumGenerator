@@ -20,6 +20,7 @@
  * Total: 3-4 hours of SME time
  */
 
+import { programmeNameFor } from '../utils/programmeName';
 import type { AssessmentRules } from '../services/assessmentRules';
 import mongoose, { Schema, Document } from 'mongoose';
 import { applySoftDeleteFilter, applySoftDeleteToPipeline } from '../utils/softDelete';
@@ -1641,6 +1642,10 @@ CurriculumWorkflowSchema.pre('save', function (next) {
       this.stepProgress.push({ step: 14, status: 'pending' });
     }
   }
+
+  // The programme's name follows its Step 1 title, whichever route changed it.
+  const renamed = programmeNameFor(this.projectName, (this as any).step1?.programTitle);
+  if (renamed) this.projectName = renamed;
 
   next();
 });
