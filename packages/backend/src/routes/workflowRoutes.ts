@@ -1142,8 +1142,6 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
       if (step13?.sectionA) {
         step13.validation = step13Validation(step13, (workflow as any).step3?.outcomes || []);
       }
-      // Step 13: whether an exam is designed, added by the lead, or still a choice to offer.
-      (workflow as any).examPlan = examPlan(workflow);
       // Step 2: which stored passages count as evidence under the current floor.
       for (const item of competencyItemsOf((workflow as any).step2)) {
         if (!item.evidence) continue;
@@ -1221,11 +1219,15 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
      * programme carries around 26MB of teaching content and the module list needs none of it.
      * They fetch a module's lessons from /step10/module/:moduleId when one is opened.
      */
-    const body = req.query.lessons === 'stubs' ? workflow : await withLessons(workflow);
+    const body: any = req.query.lessons === 'stubs' ? workflow : await withLessons(workflow);
+    // Step 13: whether an exam is designed, added by the lead, or still a choice to offer. It is
+    // added to the response, not the document: a field outside the schema is dropped when a
+    // document is serialised, so set on the document it never reached the screen.
+    const plain = typeof body?.toJSON === 'function' ? body.toJSON() : body;
 
     res.json({
       success: true,
-      data: body,
+      data: { ...plain, examPlan: examPlan(workflow) },
     });
   } catch (error) {
     loggingService.error('Error fetching workflow', { error, workflowId: req.params.id });
