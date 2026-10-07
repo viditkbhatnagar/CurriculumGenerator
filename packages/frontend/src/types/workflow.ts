@@ -1943,6 +1943,12 @@ export interface CurriculumWorkflow {
   updatedAt: string;
   /** The institution's assessment rules, as it states them (backend services/assessmentRules). */
   assessmentRules?: AssessmentRules;
+  /** What Step 13 may generate, computed by the API (backend services/step7Authority). */
+  examPlan?: {
+    specified: boolean;
+    addedByLead: boolean;
+    finalAssessments: string[];
+  };
   /** Approval before publication (backend services/publication). */
   publication?: {
     submittedAt?: string;

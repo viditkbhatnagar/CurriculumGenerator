@@ -11,7 +11,12 @@
  * records that predate `purpose` and cannot be told apart.
  */
 
-import { step7SpecifiesExam, approvedSummativeFor } from '../services/step7Authority';
+import {
+  examPlan,
+  withExamAdded,
+  step7SpecifiesExam,
+  approvedSummativeFor,
+} from '../services/step7Authority';
 
 const wf = (step7: any): any => ({ step7 });
 
@@ -207,5 +212,58 @@ describe('approvedSummativeFor', () => {
 
   it('returns nothing for a module Step 7 never assessed', () => {
     expect(approvedSummativeFor(wf({ formativeAssessments: [] }), module)).toBeUndefined();
+  });
+});
+
+describe('adding a final exam from Step 13', () => {
+  // Dr Sherin's Applied Fashion Design (7 October 2026): Step 7's only programme-level
+  // assessment is a portfolio with a viva, so the gate refused, and the only route it offered,
+  // regenerating Step 7, would have thrown away the approved assessments.
+  const fashion = {
+    step7: {
+      userPreferences: { summativeFormat: 'mixed_format' },
+      summativeAssessments: [
+        {
+          title: 'Final Comprehensive Assessment',
+          components: [
+            { name: 'Section D: Pattern, Toile & Garment', componentType: 'making_practical' },
+            {
+              name: 'Section H: Integrated Mini-Collection & Viva',
+              componentType: 'capstone_viva',
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  it('offers the choice, naming the assessment Step 7 already has', () => {
+    expect(examPlan(fashion)).toEqual({
+      specified: false,
+      addedByLead: false,
+      finalAssessments: ['Final Comprehensive Assessment'],
+    });
+  });
+
+  it('opens the gate once the lead adds the exam, recording who and when', () => {
+    const preferences = withExamAdded(
+      fashion.step7.userPreferences,
+      'lead@example.com',
+      new Date('2026-10-07T10:00:00Z')
+    );
+    expect(preferences).toEqual({
+      summativeFormat: 'mixed_format',
+      programmeExam: 'added',
+      programmeExamAddedBy: 'lead@example.com',
+      programmeExamAddedAt: '2026-10-07T10:00:00.000Z',
+    });
+    const decided = { step7: { ...fashion.step7, userPreferences: preferences } };
+    expect(step7SpecifiesExam(decided)).toBe(true);
+    expect(examPlan(decided)).toMatchObject({ specified: true, addedByLead: true });
+  });
+
+  it('does not touch the Step 7 assessments themselves', () => {
+    withExamAdded(fashion.step7.userPreferences, 'lead@example.com');
+    expect(fashion.step7.userPreferences).toEqual({ summativeFormat: 'mixed_format' });
   });
 });

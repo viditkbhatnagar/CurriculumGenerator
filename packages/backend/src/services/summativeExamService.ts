@@ -15,6 +15,7 @@ import { openaiService } from './openaiService';
 import { step13Validation } from './step13Validation';
 import { loggingService } from './loggingService';
 import { buildBookGroundingBlock } from './bookGroundingService';
+import { examPlan } from './step7Authority';
 import {
   CurriculumWorkflow,
   ICurriculumWorkflow,
@@ -44,6 +45,11 @@ interface ExamContext {
   targetMarket: string;
   // Grounding block from this workflow's ingested textbooks (Step 5.5); '' when none.
   bookGrounding?: string;
+  /**
+   * Step 7's own final assessments, when the programme lead added this exam alongside them
+   * (step7Authority.EXAM_ADDED); empty when Step 7 designed the exam itself.
+   */
+  alongside: string[];
 }
 
 export class SummativeExamService {
@@ -396,7 +402,18 @@ export class SummativeExamService {
       // Reuse the target market the SME already set for Step 7 assessments so the
       // exam localises (currency, law, brands, spelling) without re-asking.
       targetMarket: (workflow.step7?.userPreferences as any)?.targetMarket || '',
+      alongside: examPlan(workflow).addedByLead ? examPlan(workflow).finalAssessments : [],
     };
+  }
+
+  /**
+   * Where the exam sits in the programme's grading, when the lead added it alongside Step 7's
+   * own final assessment. Without it the exam describes itself as the programme's final
+   * assessment, which contradicts the one Step 7 already holds (the 21 September review, 6.4).
+   */
+  private gradingContext(context: ExamContext): string {
+    if (!context.alongside.length) return '';
+    return `\n\n**GRADING CONTEXT:** The programme's final assessment, set in Step 7, is: ${context.alongside.join('; ')}. The programme lead added this exam alongside it. Do not describe this exam as the whole programme grade or state its share of the programme grade, and do not repeat that assessment's tasks.`;
   }
 
   /**
@@ -490,7 +507,7 @@ Generate 15-25 Section A questions that collectively cover ALL PLOs. Use scenari
 Return ONLY valid JSON.`;
 
     const response = await openaiService.generateContent(
-      prompt + (context.bookGrounding || ''),
+      prompt + this.gradingContext(context) + (context.bookGrounding || ''),
       systemPrompt,
       {
         responseFormat: 'json_object',
@@ -560,7 +577,7 @@ Generate 2-4 scenarios with 2-3 questions each. Scenarios should be distinct and
 Return ONLY valid JSON.`;
 
     const response = await openaiService.generateContent(
-      prompt + (context.bookGrounding || ''),
+      prompt + this.gradingContext(context) + (context.bookGrounding || ''),
       systemPrompt,
       {
         responseFormat: 'json_object',
@@ -610,7 +627,7 @@ Generate 1-3 applied tasks that assess higher-order PLOs (evaluate, create).
 Return ONLY valid JSON.`;
 
     const response = await openaiService.generateContent(
-      prompt + (context.bookGrounding || ''),
+      prompt + this.gradingContext(context) + (context.bookGrounding || ''),
       systemPrompt,
       {
         responseFormat: 'json_object',

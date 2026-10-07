@@ -24,7 +24,7 @@ import {
   normaliseBloomLevel,
   BLOOM_LEVEL_ORDER,
 } from '../services/workflowService';
-import { step7SpecifiesExam } from '../services/step7Authority';
+import { examPlan, step7SpecifiesExam, withExamAdded } from '../services/step7Authority';
 import { parseBlueprintWorkbook, applyProgrammeHours } from '../services/moduleBlueprintService';
 import { loggingService } from '../services/loggingService';
 import { CurriculumWorkflow, ICurriculumWorkflow } from '../models/CurriculumWorkflow';
@@ -1142,6 +1142,8 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
       if (step13?.sectionA) {
         step13.validation = step13Validation(step13, (workflow as any).step3?.outcomes || []);
       }
+      // Step 13: whether an exam is designed, added by the lead, or still a choice to offer.
+      (workflow as any).examPlan = examPlan(workflow);
       // Step 2: which stored passages count as evidence under the current floor.
       for (const item of competencyItemsOf((workflow as any).step2)) {
         if (!item.evidence) continue;
@@ -6310,11 +6312,28 @@ router.post('/:id/step13', validateJWT, loadUser, async (req: Request, res: Resp
     // not be discovered inside a queued job that then retries it and writes a failure the
     // author has to go looking for.
     if (!step7SpecifiesExam(existingWorkflow)) {
-      return res.status(400).json({
-        success: false,
-        error:
-          "Step 7's assessment design does not specify an exam, so there is no exam for Step 13 to generate. Each module is already graded by its own summative. If the programme should also end in an exam, say so in Step 7 (summative format or components) and regenerate.",
-      });
+      // The programme lead may add an exam here, alongside Step 7's own final assessment.
+      // The decision is recorded in Step 7's preferences, with who and when; Step 7's
+      // assessments are not touched.
+      if (req.body?.addExam !== true || !existingWorkflow.step7) {
+        const plan = examPlan(existingWorkflow);
+        return res.status(400).json({
+          success: false,
+          code: 'EXAM_NOT_SPECIFIED',
+          error: `Step 7's final assessment for this programme${
+            plan.finalAssessments.length ? ` (${plan.finalAssessments.join(', ')})` : ''
+          } has no written exam in it, so Step 13 has nothing to generate yet. If the programme should also end with an exam, choose "Add a final exam": it is added alongside the Step 7 assessment, which stays as it is.`,
+        });
+      }
+      const user = (req as any).user;
+      const step7: any = existingWorkflow.step7;
+      step7.userPreferences = withExamAdded(
+        step7.userPreferences,
+        String(user?.email || user?.id || 'unknown')
+      );
+      existingWorkflow.markModified('step7');
+      await existingWorkflow.save();
+      loggingService.info('Final exam added by the programme lead', { workflowId: id });
     }
 
     // Optional target market set on the Step 13 screen — persist it so the exam

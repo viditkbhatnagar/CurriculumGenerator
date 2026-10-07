@@ -5322,7 +5322,7 @@ CRITICAL VALIDATION:
       const wf = await CurriculumWorkflow.findById(workflowId);
       if (wf && !step7SpecifiesExam(wf)) {
         throw new Error(
-          "Step 7's assessment design does not specify an exam, so there is no exam for Step 13 to generate. If the programme should end in an exam, say so in Step 7 (summative format or components) and regenerate."
+          'Step 7\'s final assessment has no written exam in it, so there is no exam for Step 13 to generate. To add one alongside it, choose "Add a final exam" on the Step 13 screen.'
         );
       }
     }

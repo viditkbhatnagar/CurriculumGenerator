@@ -688,12 +688,16 @@ export function useSubmitStep13() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: string | { id: string; targetMarket?: string }) => {
+    mutationFn: async (
+      input: string | { id: string; targetMarket?: string; addExam?: boolean }
+    ) => {
       const id = typeof input === 'string' ? input : input.id;
       const targetMarket = typeof input === 'string' ? undefined : input.targetMarket;
+      // The programme lead's choice to add an exam alongside Step 7's own final assessment.
+      const addExam = typeof input === 'string' ? undefined : input.addExam;
       const response: WorkflowResponse = await fetchAPI(`${WORKFLOW_BASE}/${id}/step13`, {
         method: 'POST',
-        body: JSON.stringify({ targetMarket }),
+        body: JSON.stringify({ targetMarket, addExam }),
       });
       return response;
     },

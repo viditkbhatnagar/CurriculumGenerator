@@ -42,6 +42,10 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
     }
   );
   const queueStatus = stepStatusData?.status || null;
+  // Step 7 designed no exam: the programme lead chooses whether to add one alongside Step 7's
+  // own final assessment. Regenerating Step 7 to say so would discard its approved work.
+  const examChoiceNeeded = workflow.examPlan?.specified === false;
+  const step7Finals = workflow.examPlan?.finalAssessments || [];
   const [error, setError] = useState<string | null>(null);
   // Market the exam localises to (currency, law, brands, spelling). Prefilled
   // from the Step 7 preference if set; can be entered here so localising the
@@ -102,7 +106,11 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
     startGeneration(workflow._id, 13, 900);
 
     try {
-      await submitStep13.mutateAsync({ id: workflow._id, targetMarket: targetMarket.trim() });
+      await submitStep13.mutateAsync({
+        id: workflow._id,
+        targetMarket: targetMarket.trim(),
+        addExam: examChoiceNeeded || undefined,
+      });
       // Start polling AFTER POST succeeds (old job is now removed, new job is queued)
       startStatusPolling();
       // Also refresh workflow data periodically to detect step13 data arrival
@@ -316,6 +324,18 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
             )}
           </div>
 
+          {examChoiceNeeded && (
+            <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 space-y-2">
+              <p className="font-medium text-amber-900">Step 7 has no written exam</p>
+              <p className="text-sm text-amber-900">
+                This programme&apos;s final assessment in Step 7
+                {step7Finals.length ? ` (${step7Finals.join(', ')})` : ''} does not include a
+                written exam. If the programme should also end with one, add it below. The Step 7
+                assessment stays exactly as it is, and the exam is marked as added alongside it.
+              </p>
+            </div>
+          )}
+
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
               <p className="text-red-400">{error}</p>
@@ -336,6 +356,8 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
               </span>
             ) : !isStep12Approved ? (
               'Approve Step 12 First'
+            ) : examChoiceNeeded ? (
+              'Add a final exam and generate it'
             ) : (
               'Generate Summative Exam'
             )}

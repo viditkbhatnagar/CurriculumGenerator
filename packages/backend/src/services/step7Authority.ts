@@ -57,6 +57,11 @@ export function approvedSummativeFor(workflow: any, module: any): any | undefine
 export function step7SpecifiesExam(workflow: any): boolean {
   const prefs: any = (workflow?.step7 as any)?.userPreferences || {};
 
+  // The programme lead's own decision, made on the Step 13 screen. Before it, the only route
+  // was to regenerate Step 7, which throws away its approved assessments: Dr Sherin's Applied
+  // Fashion Design was left with no way to reach an exam (7 October 2026).
+  if (prefs.programmeExam === EXAM_ADDED) return true;
+
   // The format is a stored enum, so it is compared as one rather than substring-matched.
   // Only `mcq_exam` names an exam by itself. `mixed_format` says the summative has several
   // components without saying what they are, and it is the default every existing programme
@@ -77,4 +82,38 @@ export function step7SpecifiesExam(workflow: any): boolean {
     (sa: any) => sa?.components || []
   );
   return components.some((c) => mentionsExam(c?.componentType) || mentionsExam(c?.name));
+}
+
+/** Recorded in Step 7's preferences when the programme lead adds a final exam from Step 13. */
+export const EXAM_ADDED = 'added';
+
+export interface ExamPlan {
+  /** Whether Step 13 may generate an exam. */
+  specified: boolean;
+  /** The exam is there because the programme lead added it, not because Step 7 designed one. */
+  addedByLead: boolean;
+  /** Step 7's own programme-level assessments, by title, so the screen can name them. */
+  finalAssessments: string[];
+}
+
+/** What Step 13 should offer: an exam Step 7 designed, one the lead added, or a choice. */
+export function examPlan(workflow: any): ExamPlan {
+  const step7: any = workflow?.step7 || {};
+  return {
+    specified: step7SpecifiesExam(workflow),
+    addedByLead: step7.userPreferences?.programmeExam === EXAM_ADDED,
+    finalAssessments: (step7.summativeAssessments || [])
+      .map((sa: any) => String(sa?.title || sa?.name || '').trim())
+      .filter(Boolean),
+  };
+}
+
+/** Step 7's preferences with the lead's decision to add a final exam recorded. */
+export function withExamAdded(preferences: any, by: string, at: Date = new Date()): any {
+  return {
+    ...(preferences || {}),
+    programmeExam: EXAM_ADDED,
+    programmeExamAddedBy: by,
+    programmeExamAddedAt: at.toISOString(),
+  };
 }
