@@ -5297,6 +5297,7 @@ CRITICAL VALIDATION:
       assessmentStrategy: workflow.step7?.userPreferences || {},
       caseStudies: workflow.step8?.caseStudies || [],
       glossaryEntries: workflow.step9?.entries || [],
+      assessmentRules: (workflow as any).assessmentRules,
     };
   }
 

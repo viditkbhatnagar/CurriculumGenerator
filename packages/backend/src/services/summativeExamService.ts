@@ -16,6 +16,7 @@ import { step13Validation } from './step13Validation';
 import { loggingService } from './loggingService';
 import { buildBookGroundingBlock } from './bookGroundingService';
 import { examPlan } from './step7Authority';
+import { AssessmentRules, assessmentRulesForPrompt } from './assessmentRules';
 import {
   CurriculumWorkflow,
   ICurriculumWorkflow,
@@ -50,6 +51,8 @@ interface ExamContext {
    * (step7Authority.EXAM_ADDED); empty when Step 7 designed the exam itself.
    */
   alongside: string[];
+  /** The institution's stated assessment rules (services/assessmentRules). */
+  assessmentRules?: AssessmentRules;
 }
 
 export class SummativeExamService {
@@ -403,6 +406,7 @@ export class SummativeExamService {
       // exam localises (currency, law, brands, spelling) without re-asking.
       targetMarket: (workflow.step7?.userPreferences as any)?.targetMarket || '',
       alongside: examPlan(workflow).addedByLead ? examPlan(workflow).finalAssessments : [],
+      assessmentRules: (workflow as any).assessmentRules,
     };
   }
 
@@ -768,6 +772,9 @@ Return ONLY valid JSON.`;
   "integrityAndSecurity": "Full text covering: academic integrity expectations, plagiarism and misconduct rules, identity verification guidance, randomisation or scenario rotation logic (if online)",
   "accessibilityProvisions": "Full text covering: time extensions, alternative formats, assistive technology allowances, no reduction of standards"
 }
+
+${assessmentRulesForPrompt(context.assessmentRules)}
+Where the institution has stated no rule, describe the arrangements in general terms and say that the institution's own policy applies; do not invent penalties, percentages or amounts of extra time.
 
 Return ONLY valid JSON.`;
 

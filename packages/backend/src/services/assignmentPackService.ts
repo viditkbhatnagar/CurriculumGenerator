@@ -23,6 +23,7 @@ import {
   AssignmentPack,
   ModuleAssignmentPacks,
 } from '../models/CurriculumWorkflow';
+import { AssessmentRules, assessmentRulesForPrompt } from './assessmentRules';
 
 interface ModuleContext {
   moduleId: string;
@@ -69,6 +70,8 @@ interface WorkflowContext {
   assessmentStrategy: any;
   caseStudies: any[];
   glossaryEntries: any[];
+  /** The institution's stated assessment rules (services/assessmentRules). */
+  assessmentRules?: AssessmentRules;
 }
 
 export class AssignmentPackService {
@@ -344,6 +347,9 @@ ${variantGuidance}
 }
 
 Ensure rubric criteria are mapped directly to MLOs with observable, measurable descriptors aligned with Bloom levels. Performance levels must be Fail / Pass / Merit / Distinction.
+
+${assessmentRulesForPrompt(context.assessmentRules)}
+For academicIntegrity and accessibilityOptions, state the institution's rules above where given; where none is given, describe what this assessment permits and requires, and say that the institution's own policy applies.
 
 Return ONLY valid JSON.`;
   }
