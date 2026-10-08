@@ -57,9 +57,13 @@ interface ExamContext {
 
 export class SummativeExamService {
   private readonly SECTION_TIMEOUT = 600000; // 10 minutes per section — GPT-5.2 high thinking needs more time
-  private readonly MAX_TOKENS_SECTION_A = 16000;
-  private readonly MAX_TOKENS_SECTION_B = 12000;
-  private readonly MAX_TOKENS_SECTION_C = 10000;
+  // GPT-5's hidden reasoning counts against these budgets as well as the answer does. At
+  // 12,000, Applied Fashion Design's Section B stopped at 14,413 characters of answer
+  // (8 October 2026), so each section now starts at 24,000 and a cut-off answer is asked for
+  // again with twice that (generateSectionJSON). Only the tokens used are billed.
+  private readonly MAX_TOKENS_SECTION_A = 24000;
+  private readonly MAX_TOKENS_SECTION_B = 24000;
+  private readonly MAX_TOKENS_SECTION_C = 24000;
   private readonly INTER_CALL_DELAY = 1500;
 
   /**
@@ -107,6 +111,36 @@ export class SummativeExamService {
             `Original error: ${firstError instanceof Error ? firstError.message : String(firstError)}`
         );
       }
+    }
+  }
+
+  /**
+   * One section's answer, parsed. An answer cut off at the token budget, which leaves invalid
+   * JSON or no answer at all once reasoning has used the budget, is asked for once more with
+   * twice the budget. Without this a cut-off section failed the whole exam, and the job's
+   * second attempt failed the same way with the same budget.
+   */
+  private async generateSectionJSON(
+    phase: string,
+    prompt: string,
+    systemPrompt: string,
+    maxTokens: number
+  ): Promise<any> {
+    const ask = (tokens: number) =>
+      openaiService.generateContent(prompt, systemPrompt, {
+        responseFormat: 'json_object',
+        maxTokens: tokens,
+        timeout: this.SECTION_TIMEOUT,
+      });
+    try {
+      return this.safeParseJSON(await ask(maxTokens), phase);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/invalid JSON|No content generated/.test(message)) throw error;
+      loggingService.warn(`Phase ${phase}: answer cut off; asking again with twice the budget`, {
+        maxTokens,
+      });
+      return this.safeParseJSON(await ask(maxTokens * 2), phase);
     }
   }
 
@@ -510,17 +544,12 @@ Generate 15-25 Section A questions that collectively cover ALL PLOs. Use scenari
 
 Return ONLY valid JSON.`;
 
-    const response = await openaiService.generateContent(
+    const parsed = await this.generateSectionJSON(
+      'Overview+SectionA',
       prompt + this.gradingContext(context) + (context.bookGrounding || ''),
       systemPrompt,
-      {
-        responseFormat: 'json_object',
-        maxTokens: this.MAX_TOKENS_SECTION_A,
-        timeout: this.SECTION_TIMEOUT,
-      }
+      this.MAX_TOKENS_SECTION_A
     );
-
-    const parsed = this.safeParseJSON(response, 'Overview+SectionA');
     return {
       overview: parsed.overview || {},
       sectionA: parsed.sectionA || [],
@@ -580,17 +609,12 @@ Generate 2-4 scenarios with 2-3 questions each. Scenarios should be distinct and
 
 Return ONLY valid JSON.`;
 
-    const response = await openaiService.generateContent(
+    const parsed = await this.generateSectionJSON(
+      'SectionB',
       prompt + this.gradingContext(context) + (context.bookGrounding || ''),
       systemPrompt,
-      {
-        responseFormat: 'json_object',
-        maxTokens: this.MAX_TOKENS_SECTION_B,
-        timeout: this.SECTION_TIMEOUT,
-      }
+      this.MAX_TOKENS_SECTION_B
     );
-
-    const parsed = this.safeParseJSON(response, 'SectionB');
     return parsed.sectionB || [];
   }
 
@@ -630,17 +654,12 @@ Generate 1-3 applied tasks that assess higher-order PLOs (evaluate, create).
 
 Return ONLY valid JSON.`;
 
-    const response = await openaiService.generateContent(
+    const parsed = await this.generateSectionJSON(
+      'SectionC',
       prompt + this.gradingContext(context) + (context.bookGrounding || ''),
       systemPrompt,
-      {
-        responseFormat: 'json_object',
-        maxTokens: this.MAX_TOKENS_SECTION_C,
-        timeout: this.SECTION_TIMEOUT,
-      }
+      this.MAX_TOKENS_SECTION_C
     );
-
-    const parsed = this.safeParseJSON(response, 'SectionC');
     return parsed.sectionC || [];
   }
 
