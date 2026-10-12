@@ -1,6 +1,7 @@
 import pptxgen from 'pptxgenjs';
 import puppeteer from 'puppeteer';
 import { openaiService } from './openaiService';
+import { activitiesForSlides, caseForSlides, topicForSlides } from './pptLessonContent';
 import { loggingService } from './loggingService';
 import {
   LessonPlan,
@@ -721,8 +722,12 @@ Return ONLY valid JSON, no markdown formatting.`;
     });
 
     // Left Column
-    if (slideData.leftColumn) {
-      slide.addText('Contact Activities', {
+    // Column headings: the slide's own, or the module overview's defaults. A lesson slide with
+    // none passes '' (createSlideFromPPTSlide), so it is not headed "Contact Activities".
+    const leftTitle = (slideData as any).leftTitle ?? 'Contact Activities';
+    const rightTitle = (slideData as any).rightTitle ?? 'Independent Activities';
+    if (slideData.leftColumn && leftTitle) {
+      slide.addText(leftTitle, {
         x: 0.75,
         y: 1.5,
         w: 4.0,
@@ -748,8 +753,8 @@ Return ONLY valid JSON, no markdown formatting.`;
     }
 
     // Right Column
-    if (slideData.rightColumn) {
-      slide.addText('Independent Activities', {
+    if (slideData.rightColumn && rightTitle) {
+      slide.addText(rightTitle, {
         x: 5.25,
         y: 1.5,
         w: 4.0,
@@ -983,14 +988,11 @@ Return ONLY valid JSON, no markdown formatting.`;
           .join('\n')
       : 'No glossary entries available';
 
-    // Build activities context
-    const activitiesText =
-      lesson.activitySequence
-        ?.map(
-          (a: any) =>
-            `- ${a.activityType}: ${a.title || a.description || 'Activity'} (${a.duration || '?'}min)`
-        )
-        .join('\n') || 'No activities specified';
+    // The lesson's activities, topic and case, under the field names lessons store
+    // (pptLessonContent). It read `activitySequence` and `caseStudyActivity.title`, which
+    // lessons do not have, so the slide writer saw neither.
+    const activitiesText = activitiesForSlides(lesson);
+    const topicText = topicForSlides(lesson);
 
     // Build objectives
     const objectivesText =
@@ -1006,12 +1008,11 @@ Return ONLY valid JSON, no markdown formatting.`;
           .join('\n')
       : 'No formative checks';
 
-    // Build case study context
-    const caseStudyText = lesson.caseStudyActivity
-      ? `Title: ${lesson.caseStudyActivity.title || 'N/A'}\nDescription: ${lesson.caseStudyActivity.description || 'N/A'}\nQuestions: ${lesson.caseStudyActivity.discussionQuestions?.join('; ') || 'N/A'}`
-      : 'No case study for this lesson';
+    const caseStudyText = caseForSlides(lesson);
 
-    const systemPrompt = `You are a senior instructional designer and academic content developer creating production-grade PowerPoint slides for self-paced higher education learning materials.
+    const systemPrompt = `You are a senior academic and instructional designer writing the slides a lecturer presents to students in a university class.
+
+The slides teach the subject. They show students the academic content: concepts, definitions, frameworks, models, comparisons, worked examples with real figures, and the questions students work on. The lesson plan you are given describes what the lecturer will do; turn that into the content students should see. Never put instructions to the lecturer on a slide ("Explain…", "Instructor:", "Facilitate…", "Ask students to…"); those belong in the notes.
 
 Each slide MUST contain TWO layers:
 1. Slide Content (concise bullets/tables for students)
@@ -1031,12 +1032,15 @@ Bloom's Level: ${lesson.bloomLevel || 'N/A'}
 **LEARNING OBJECTIVES:**
 ${objectivesText}
 
+**TOPIC TAUGHT:**
+${topicText}
+
 **MODULE CONTEXT:**
 Program: ${context.programTitle}
 Module: ${context.moduleCode} — ${context.moduleTitle}
 Delivery Mode: ${context.deliveryMode}
 
-**ACTIVITY SEQUENCE:**
+**ACTIVITY SEQUENCE (what the lecturer does; teach its content on the slides):**
 ${activitiesText}
 
 **CASE STUDY:**
@@ -1093,7 +1097,9 @@ ${glossaryText}
       "title": "slide title (max 60 chars)",
       "content": "string for paragraphs OR array of strings for bullets (max 80 chars each)",
       "table": { "headers": ["Col1", "Col2"], "rows": [["val1", "val2"]] },
+      "leftTitle": "heading of the left column (two_column only)",
       "leftColumn": ["item1", "item2"],
+      "rightTitle": "heading of the right column (two_column only)",
       "rightColumn": ["item1", "item2"],
       "notes": "Detailed instructor/study notes (REQUIRED for every slide)"
     }
@@ -1208,8 +1214,10 @@ Return ONLY valid JSON.`;
           table: raw.table,
           leftColumn: raw.leftColumn,
           rightColumn: raw.rightColumn,
+          ...(raw.leftTitle ? { leftTitle: String(raw.leftTitle).substring(0, 60) } : {}),
+          ...(raw.rightTitle ? { rightTitle: String(raw.rightTitle).substring(0, 60) } : {}),
           notes: raw.notes || '',
-        },
+        } as any,
         speakerNotes: raw.notes || '',
       });
     }
@@ -2699,7 +2707,16 @@ Return ONLY valid JSON.`;
         this.createTableSlide(slide, content, colors);
         break;
       case 'two_column':
-        this.createTwoColumnSlide(slide, content, colors);
+        // A lesson slide's columns carry its own headings, or none.
+        this.createTwoColumnSlide(
+          slide,
+          {
+            ...content,
+            leftTitle: (content as any).leftTitle ?? '',
+            rightTitle: (content as any).rightTitle ?? '',
+          } as any,
+          colors
+        );
         break;
       default:
         this.createContentSlide(slide, content, colors);

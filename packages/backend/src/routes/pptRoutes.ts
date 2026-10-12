@@ -6,6 +6,59 @@ import { loggingService } from '../services/loggingService';
 import { validateJWT, loadUser } from '../middleware/auth';
 import JSZip from 'jszip';
 import { moduleCodeOf, moduleFileSlugOf } from '../utils/moduleIdentity';
+import { hydrateModuleDecks } from '../services/pptDeckStore';
+import { StoredDeck, storedDeckFor } from '../services/pptLessonContent';
+
+/** The AI-written decks Step 11 holds for a module, with their slides restored from S3. */
+async function storedDecksFor(workflow: any, modulePlan: any): Promise<StoredDeck[]> {
+  const entry = (workflow.step11?.modulePPTDecks || []).find(
+    (m: any) =>
+      (m?.moduleId && m.moduleId === modulePlan.moduleId) ||
+      (m?.moduleCode && m.moduleCode === modulePlan.moduleCode)
+  );
+  if (!entry) return [];
+  return (await hydrateModuleDecks(entry)).pptDecks || [];
+}
+
+/**
+ * Add a module's lessons to a zip: each lesson's AI-written Step 11 deck where one exists, and
+ * otherwise an outline built from the lesson plan, named _OUTLINE so it cannot pass for teaching
+ * slides. Downloads used to build every deck from the outline template, so the teaching slides
+ * Step 11 wrote were never served (Dr Sherin, 12 October 2026). Returns the outline count.
+ */
+async function addModuleDecks(
+  zip: JSZip,
+  workflow: any,
+  modulePlan: any,
+  context: any,
+  folder = ''
+): Promise<number> {
+  const decks = await storedDecksFor(workflow, modulePlan);
+  let outlines = 0;
+  for (const lesson of modulePlan.lessons || []) {
+    try {
+      const stored = storedDeckFor(lesson, decks);
+      const deck: any = stored || pptGenerationService.generateLessonPPTFallback(lesson, context);
+      if (!stored) outlines++;
+      const pptxBuffer = await pptGenerationService.exportPPTX(deck);
+      const name = `${folder}Lesson${lesson.lessonNumber}_${String(lesson.lessonTitle || '')
+        .replace(/[^a-zA-Z0-9]/g, '_')
+        .substring(0, 50)}${stored ? '' : '_OUTLINE'}.pptx`;
+      zip.file(name, pptxBuffer);
+    } catch (error: any) {
+      loggingService.error('Failed to build PPT for lesson', {
+        error: error.message,
+        moduleCode: modulePlan.moduleCode,
+        lessonNumber: lesson.lessonNumber,
+      });
+    }
+  }
+  return outlines;
+}
+
+const OUTLINE_NOTE =
+  'Files ending _OUTLINE are outlines built from the lesson plan: Step 11 has not yet written ' +
+  'teaching slides for those lessons. Generate Step 11 for their module, then download again.\n';
 
 /** Load a workflow with Step 10 lesson bodies attached, or null when there is no such workflow. */
 async function loadWorkflowWithLessons(workflowId: string): Promise<any | null> {
@@ -217,12 +270,8 @@ router.post('/generate/all/:workflowId', async (req: Request, res: Response) => 
     // Create ZIP file
     const zip = new JSZip();
 
+    let outlines = 0;
     for (const modulePlan of moduleLessonPlans) {
-      // Always regenerate from the current Step 10 lesson plans. The
-      // cached Step 11 PPT decks have no staleness signal, so any edit to
-      // a lesson would otherwise return out-of-date content. Bulk export
-      // uses the templated lesson generator (fast, no LLM); per-module
-      // "Generate" still calls the LLM via pptRoutes /generate/module.
       const context = {
         programTitle: workflow.step1?.programTitle || 'Program',
         academicLevel: workflow.step1?.academicLevel || '',
@@ -232,22 +281,15 @@ router.post('/generate/all/:workflowId', async (req: Request, res: Response) => 
         sources: workflow.step5?.sources || [],
         glossaryEntries: workflow.step9?.entries || [],
       };
-
-      for (const lesson of modulePlan.lessons) {
-        try {
-          const deck = pptGenerationService.generateLessonPPTFallback(lesson, context);
-          const pptxBuffer = await pptGenerationService.exportPPTX(deck);
-          const filename = `${modulePlan.moduleCode}_Lesson${lesson.lessonNumber}_${lesson.lessonTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.pptx`;
-          zip.file(filename, pptxBuffer);
-        } catch (error: any) {
-          loggingService.error('Failed to generate PPT for lesson', {
-            error: error.message,
-            moduleCode: modulePlan.moduleCode,
-            lessonNumber: lesson.lessonNumber,
-          });
-        }
-      }
+      outlines += await addModuleDecks(
+        zip,
+        workflow,
+        modulePlan,
+        context,
+        `${modulePlan.moduleCode}_`
+      );
     }
+    if (outlines) zip.file('README.txt', OUTLINE_NOTE);
 
     // Generate ZIP buffer
     const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
@@ -336,9 +378,6 @@ router.post('/download/module/:workflowId/:moduleIndex', async (req: Request, re
 
     const zip = new JSZip();
 
-    // Always regenerate from the current Step 10 lesson plans. The
-    // cached Step 11 decks have no staleness signal, so any edit to a
-    // lesson would otherwise return out-of-date content.
     const context = {
       programTitle: workflow.step1?.programTitle || 'Program',
       academicLevel: workflow.step1?.academicLevel || '',
@@ -348,20 +387,8 @@ router.post('/download/module/:workflowId/:moduleIndex', async (req: Request, re
       sources: workflow.step5?.sources || [],
       glossaryEntries: workflow.step9?.entries || [],
     };
-
-    for (const lesson of modulePlan.lessons) {
-      try {
-        const deck = pptGenerationService.generateLessonPPTFallback(lesson, context);
-        const pptxBuffer = await pptGenerationService.exportPPTX(deck);
-        const filename = `Lesson${lesson.lessonNumber}_${lesson.lessonTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50)}.pptx`;
-        zip.file(filename, pptxBuffer);
-      } catch (error: any) {
-        loggingService.error('Failed to generate PPT for lesson', {
-          error: error.message,
-          moduleCode: modulePlan.moduleCode,
-          lessonNumber: lesson.lessonNumber,
-        });
-      }
+    if (await addModuleDecks(zip, workflow, modulePlan, context)) {
+      zip.file('README.txt', OUTLINE_NOTE);
     }
 
     // Generate ZIP buffer
