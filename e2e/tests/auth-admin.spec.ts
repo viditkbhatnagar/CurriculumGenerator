@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { apiFetch } from './_env';
+import { adminCredentials, apiFetch } from './_env';
 
 /**
  * Built-in email + password auth — full faculty lifecycle:
- *   1. Logan (superadmin) signs in via the login screen.
- *   2. Logan invites a fresh faculty member; the temporary password is
+ *   1. The test administrator signs in via the login screen.
+ *   2. It invites a fresh faculty member; the temporary password is
  *      shown in a one-time modal — we copy it from the page.
- *   3. We log Logan out.
+ *   3. We log the administrator out.
  *   4. We log in as the new faculty member with that exact password.
  *   5. The faculty's session is established (auth/me returns role=faculty).
  *   6. Cleanup: delete the test faculty record via API.
@@ -14,10 +14,8 @@ import { apiFetch } from './_env';
 test.describe('Faculty admin UI', () => {
   const testEmail = `playwright-test-${Date.now()}@example.test`;
 
-  // Logan's seeded credentials — set on the backend via SUPERADMIN_EMAIL/PASSWORD,
-  // override in CI via E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD if rotated.
-  const adminEmail = process.env.E2E_ADMIN_EMAIL || 'loganpacey@gmail.com';
-  const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'loganPacey123!';
+  // The dedicated test administrator (see _env.ts), from E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD.
+  const { email: adminEmail, password: adminPassword } = adminCredentials();
 
   let createdUserId: string | null = null;
 

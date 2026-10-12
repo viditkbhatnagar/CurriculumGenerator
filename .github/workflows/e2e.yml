@@ -76,6 +76,9 @@ jobs:
           E2E_FRONTEND_URL: ${{ inputs.frontend_url || 'https://curriculum-frontend-xfyx.onrender.com' }}
           E2E_API_URL: ${{ inputs.api_url || 'https://curriculum-api-bsac.onrender.com' }}
           E2E_SYLLABUS_WORKFLOW_ID: ${{ inputs.syllabus_workflow_id || '69df99d849f3cbb71b41d901' }}
+          # A dedicated test administrator, not a person's account (see tests/_env.ts).
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
         run: npm test
 
       - name: Upload Playwright report

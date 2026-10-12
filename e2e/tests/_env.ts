@@ -4,14 +4,36 @@
  * local / staging / production without code changes.
  */
 
+/**
+ * The account the suite signs in with: a dedicated administrator, never a person's own
+ * account. Set E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD (GitHub secrets of the same names in CI).
+ *
+ * There is no default. The suite used to fall back to the AGU super admin's real address and a
+ * password committed here; when that password was changed (6 October 2026) every sign-in test
+ * failed each night, and the password had been readable by anyone with the repository.
+ */
+function required(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(
+      `${name} is not set. The E2E suite signs in with a dedicated test administrator: set ` +
+        `E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD (in CI, as repository secrets).`
+    );
+  }
+  return value;
+}
+
+export const adminCredentials = () => ({
+  email: required('E2E_ADMIN_EMAIL'),
+  password: required('E2E_ADMIN_PASSWORD'),
+});
+
 export const env = {
   frontendUrl: process.env.E2E_FRONTEND_URL || 'https://curriculum-frontend-xfyx.onrender.com',
   apiUrl: process.env.E2E_API_URL || 'https://curriculum-api-bsac.onrender.com',
   // Bearer token used for raw API calls in tests. Lazy-fetched via
   // /api/auth/login the first time apiFetch needs it.
   authToken: process.env.E2E_AUTH_TOKEN || '',
-  adminEmail: process.env.E2E_ADMIN_EMAIL || 'loganpacey@gmail.com',
-  adminPassword: process.env.E2E_ADMIN_PASSWORD || 'loganPacey123!',
   // Workflow that has reached currentStep=13 with step13 approved (so
   // step 14 is reachable). The default is the airline workflow used during
   // initial development. Override per environment.
@@ -27,7 +49,7 @@ async function getAdminToken(): Promise<string> {
   const res = await fetch(`${env.apiUrl}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: env.adminEmail, password: env.adminPassword }),
+    body: JSON.stringify(adminCredentials()),
   });
   if (!res.ok) {
     throw new Error(

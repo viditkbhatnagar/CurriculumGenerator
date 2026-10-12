@@ -1,5 +1,5 @@
 import { test as base, expect } from '@playwright/test';
-import { apiFetch } from './_env';
+import { adminCredentials, apiFetch } from './_env';
 
 /**
  * Custom Playwright fixture that pre-authenticates each test as the
@@ -11,20 +11,17 @@ import { apiFetch } from './_env';
  * should import from `@playwright/test` directly instead of this file.
  */
 
-const adminEmail = process.env.E2E_ADMIN_EMAIL || 'loganpacey@gmail.com';
-const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'loganPacey123!';
-
 export const test = base.extend<Record<string, never>>({
   page: async ({ page }, use) => {
     // Get a fresh admin JWT once and stash it in localStorage for this page.
     const loginRes = await apiFetch('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email: adminEmail, password: adminPassword }),
+      body: JSON.stringify(adminCredentials()),
     });
     if (!loginRes.ok) {
       throw new Error(
         `E2E admin login failed (status ${loginRes.status}). ` +
-          `Make sure SUPERADMIN_EMAIL/PASSWORD are seeded on the backend.`
+          `Check E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD match the test administrator on the backend.`
       );
     }
     const body = (await loginRes.json()) as { token?: string };
