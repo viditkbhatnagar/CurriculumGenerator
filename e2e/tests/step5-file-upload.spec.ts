@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { env, apiFetch } from './_env';
+import { adminCredentials, env, apiFetch } from './_env';
 
 /**
  * Regression coverage for SME file uploads on Step 5 sources
@@ -29,9 +29,11 @@ test.describe('Step 5 file upload', () => {
     const loginRes = await fetch(`${env.apiUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: env.adminEmail, password: env.adminPassword }),
+      body: JSON.stringify(adminCredentials()),
     });
-    if (!loginRes.ok) return;
+    // A failed sign-in is a broken suite, not a missing fixture: skipping here hid this
+    // test for a week when the credentials changed.
+    if (!loginRes.ok) throw new Error(`E2E admin login failed (status ${loginRes.status})`);
     token = ((await loginRes.json()) as { token?: string }).token || '';
 
     workflowId = env.syllabusWorkflowId;
