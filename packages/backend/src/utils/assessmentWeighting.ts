@@ -38,6 +38,14 @@ export function isUngraded(a: WeightableAssessment): boolean {
   return a.graded === false || a.purpose === 'formative';
 }
 
+/**
+ * An assessment that is explicitly graded: a module summative. Records written before the
+ * purpose field existed carry neither mark, and are left to the caller.
+ */
+export function isGraded(a: WeightableAssessment): boolean {
+  return a.graded === true || a.purpose === 'module_summative';
+}
+
 /** Percentages are stored to one decimal place; more precision than an awarding body uses. */
 const DECIMALS = 1;
 const round = (n: number): number => Number(n.toFixed(DECIMALS));

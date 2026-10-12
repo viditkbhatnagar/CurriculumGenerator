@@ -93,6 +93,24 @@ describe('LessonPlanService - Assessment Integration', () => {
   // Requirement 4.2: Align assessments with lesson MLOs
   // ==========================================================================
 
+  describe('graded module summatives stay out of lessons', () => {
+    // Every lesson of the BBA and Applied Fashion Design carried one check that was the
+    // module's graded summative (Dr Sherin, 12 October 2026). It belongs in Step 12 only.
+    it('never makes a check of a graded summative, even when it is the only match', () => {
+      const lessons = [createMockLesson('L1', ['mlo-1'])];
+      const assessments = [
+        { id: 'f1', moduleId: 'm', alignedMLOs: ['mlo-1'], purpose: 'formative' },
+        { id: 's1', moduleId: 'm', alignedMLOs: ['mlo-1'], purpose: 'module_summative' },
+        { id: 's2', moduleId: 'm', alignedMLOs: ['mlo-1'], graded: true },
+      ];
+      const [lesson] = service.integrateAssessments(lessons, assessments, 'm');
+      expect(lesson.formativeChecks.map((c) => c.checkId)).toEqual(['f1']);
+
+      const [alone] = service.integrateAssessments(lessons, assessments.slice(1), 'm');
+      expect(alone.formativeChecks).toEqual([]);
+    });
+  });
+
   describe('Requirement 4.2: Align assessments with lesson MLOs', () => {
     it('should match assessments to lessons based on MLO alignment', () => {
       const lessons = [

@@ -11,6 +11,7 @@
 
 import {
   applyAssessmentWeightings,
+  isGraded,
   isUngraded,
   weightingsAreComplete,
   type WeightableAssessment,
@@ -84,5 +85,18 @@ describe('applyAssessmentWeightings', () => {
     );
     expect(totals).toEqual([{ moduleId: 'M9', total: 0 }]);
     expect(weightingsAreComplete(totals)).toBe(false);
+  });
+});
+
+describe('isGraded', () => {
+  it('is true for a module summative, whichever way it is marked', () => {
+    expect(isGraded({ purpose: 'module_summative' })).toBe(true);
+    expect(isGraded({ graded: true })).toBe(true);
+  });
+
+  it('is false for ungraded activity and for records that say neither', () => {
+    expect(isGraded({ purpose: 'formative' })).toBe(false);
+    expect(isGraded({ graded: false })).toBe(false);
+    expect(isGraded({})).toBe(false);
   });
 });

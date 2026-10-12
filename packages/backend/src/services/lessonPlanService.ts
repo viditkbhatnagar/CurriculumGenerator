@@ -29,6 +29,7 @@ import {
   CharacterBrief,
 } from '../models/CurriculumWorkflow';
 import { topicTitle } from '../utils/topicShape';
+import { isGraded } from '../utils/assessmentWeighting';
 
 // ============================================================================
 // INTERFACES
@@ -2771,6 +2772,12 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
     const matchingAssessments: Array<{ assessment: any; matchScore: number }> = [];
 
     for (const assessment of assessments) {
+      // A module's graded summative is never a lesson check. It is the module's final
+      // assessment, delivered as the Step 12 assignment pack. Sorting ungraded activity first
+      // was not enough: wherever a lesson had fewer than three ungraded matches, the graded
+      // one filled the slot, and every lesson of the BBA and Applied Fashion Design carried
+      // one (Dr Sherin, 12 October 2026).
+      if (isGraded(assessment)) continue;
       const assessmentMloIds = assessment.alignedMLOs || assessment.mloIds || [];
 
       // Calculate match score based on MLO overlap
