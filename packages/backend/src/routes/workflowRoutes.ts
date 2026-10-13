@@ -104,6 +104,9 @@ import { step13Validation } from '../services/step13Validation';
 import { applyStep12Edit } from '../utils/step12Edit';
 import { BLOCKING_KINDS, publicationProblem } from '../services/publication';
 import { cleanAssessmentRules, missingAssessmentRules } from '../services/assessmentRules';
+import { criteriaRun, startUnitCriteria } from '../services/othm/unitCriteriaRunner';
+import { othmUnits } from '../services/othm/othmModel';
+import { OTHM_DOCUMENTS, OthmDocumentKind } from '../services/othm/othmDocx';
 import { checkCompetencyEvidence } from '../services/competencyEvidenceRunner';
 import {
   competencyItemsOf,
@@ -6944,6 +6947,84 @@ router.get('/:id/unresolved-issues', async (req: Request, res: Response) => {
     res.json({ success: true, data: unresolvedIssues(workflow, new Date().getFullYear()) });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to list unresolved issues' });
+  }
+});
+
+/**
+ * POST /api/v3/workflow/:id/othm/prepare
+ * Start writing each unit's assessment criteria, indicative content and aim (services/othm),
+ * which the OTHM-layout documents need. Runs in the background; units already done are skipped.
+ */
+router.post('/:id/othm/prepare', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const run = await startUnitCriteria(req.params.id);
+    res.status(202).json({ success: true, data: run });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to start';
+    res.status(/not found/i.test(message) ? 404 : 500).json({ success: false, error: message });
+  }
+});
+
+/**
+ * GET /api/v3/workflow/:id/othm/status
+ * Which units have current assessment criteria and an assessment to brief, and the latest run.
+ */
+router.get('/:id/othm/status', async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const workflow: any = await CurriculumWorkflow.findById(req.params.id).lean();
+    if (!workflow) return res.status(404).json({ success: false, error: 'Workflow not found' });
+    const units = othmUnits(workflow).map((u) => ({
+      code: u.code,
+      title: u.title,
+      criteriaReady: !u.outcomes.some((o) => o.missing),
+      briefReady: !!u.brief,
+    }));
+    res.json({ success: true, data: { units, run: criteriaRun(req.params.id) || null } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to read OTHM status' });
+  }
+});
+
+/**
+ * GET /api/v3/workflow/:id/export/othm/:kind
+ * kind: qualification-specification | unit-specifications | assignment-briefs. Built from the
+ * stored programme each time (no AI), so it always reflects the current content.
+ */
+router.get('/:id/export/othm/:kind', async (req: Request, res: Response) => {
+  try {
+    const doc = OTHM_DOCUMENTS[req.params.kind as OthmDocumentKind];
+    if (!doc) return res.status(404).json({ success: false, error: 'Unknown document' });
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const workflow: any = await CurriculumWorkflow.findById(req.params.id).lean();
+    if (!workflow) return res.status(404).json({ success: false, error: 'Workflow not found' });
+    if (!workflow.step4?.modules?.length) {
+      return res.status(400).json({ success: false, error: 'Step 4 (modules) is needed first' });
+    }
+    const buffer = await doc.build(workflow);
+    const slug = String(
+      workflow.step1?.programTitle || workflow.projectName || 'programme'
+    ).replace(/[^a-zA-Z0-9]+/g, '-');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${slug}-${doc.name}.docx"`);
+    res.send(buffer);
+  } catch (error) {
+    loggingService.error('Error exporting OTHM document', {
+      workflowId: req.params.id,
+      kind: req.params.kind,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({ success: false, error: 'Failed to build the document' });
   }
 });
 
