@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useWorkflow, useExportWorkflow } from '@/hooks/useWorkflow';
 import { STEP_NAMES, WorkflowStep } from '@/types/workflow';
 import StepDownloadButton from '@/components/workflow/StepDownloadButton';
+import OthmDocumentsPanel from '@/components/workflow/OthmDocumentsPanel';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -195,6 +196,11 @@ export default function ExportPage() {
             </p>
           )}
         </div>
+
+        <OthmDocumentsPanel
+          workflowId={workflow._id}
+          programName={workflow.step1?.programTitle || workflow.projectName}
+        />
 
         {/* Document Contents Preview */}
         <div className="bg-white rounded-xl border border-teal-200/50 p-6 mb-8 shadow-sm">

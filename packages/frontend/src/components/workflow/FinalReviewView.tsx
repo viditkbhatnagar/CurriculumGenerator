@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CurriculumWorkflow } from '@/types/workflow';
 import PublicationPanel from './PublicationPanel';
+import OthmDocumentsPanel from './OthmDocumentsPanel';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -145,6 +146,11 @@ export default function FinalReviewView({ workflow, onChanged }: Props) {
       </div>
 
       <PublicationPanel workflow={workflow} onChanged={onChanged || (() => undefined)} />
+
+      <OthmDocumentsPanel
+        workflowId={workflow._id}
+        programName={workflow.step1?.programTitle || workflow.projectName}
+      />
 
       {/* Curriculum Summary */}
       <div className="bg-white/50 rounded-xl border border-teal-200/50 p-6 mb-6">
