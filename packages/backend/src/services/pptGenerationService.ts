@@ -1,7 +1,13 @@
 import pptxgen from 'pptxgenjs';
 import puppeteer from 'puppeteer';
 import { openaiService } from './openaiService';
-import { activitiesForSlides, caseForSlides, topicForSlides } from './pptLessonContent';
+import {
+  activitiesForSlides,
+  caseForSlides,
+  deckComplete,
+  topicForSlides,
+  withoutCIPD,
+} from './pptLessonContent';
 import { loggingService } from './loggingService';
 import {
   LessonPlan,
@@ -21,8 +27,15 @@ import { xmlSafeDeep } from '../utils/xmlSafe';
  * Enhanced for Step 10: Generates PPT decks based on lesson plans
  */
 
+/**
+ * The longest bullet kept. Slides were capped at 80-character bullets and cut at 100, which made
+ * them too brief to teach from (Dr Sherin, 14 October 2026); bullets are now full explanatory
+ * sentences.
+ */
+const MAX_BULLET = 240;
+
 export interface SlideContent {
-  type: 'title' | 'content' | 'table' | 'two_column' | 'bullets';
+  type: 'title' | 'content' | 'table' | 'two_column' | 'bullets' | 'concept' | 'process' | 'matrix';
   title: string;
   content?: string | string[];
   table?: {
@@ -31,6 +44,18 @@ export interface SlideContent {
   };
   leftColumn?: string[];
   rightColumn?: string[];
+  leftTitle?: string;
+  rightTitle?: string;
+  /** "concept": a key idea taught in full (Dr Sherin, 14 October 2026: slides too brief). */
+  definition?: string;
+  explanation?: string;
+  example?: string;
+  /** "process": 3-6 stages of a sequence, drawn as connected boxes. */
+  steps?: { title: string; text?: string }[];
+  /** "matrix": a 2x2 model, quadrants in reading order, with its two axes. */
+  quadrants?: { title: string; text?: string }[];
+  xAxis?: string;
+  yAxis?: string;
   notes?: string;
 }
 
@@ -727,7 +752,7 @@ Return ONLY valid JSON, no markdown formatting.`;
     const leftTitle = (slideData as any).leftTitle ?? 'Contact Activities';
     const rightTitle = (slideData as any).rightTitle ?? 'Independent Activities';
     // Only the heading is optional. Making the whole column depend on it left every lesson
-    // slide's columns blank (Dr Sherin, 14 October 2026: M02 Lesson 4, slides 6 and 12).
+    // slide's columns blank (12 October 2026: Dr Sherin's M02 Lesson 4, slides 6 and 12).
     const columnTop = leftTitle || rightTitle ? 2.1 : 1.5;
     if (slideData.leftColumn) {
       if (leftTitle) {
@@ -784,6 +809,162 @@ Return ONLY valid JSON, no markdown formatting.`;
           valign: 'top',
         }
       );
+    }
+  }
+
+  private slideTitle(slide: any, title: string, colors: any): void {
+    slide.background = { color: colors.white };
+    slide.addText(String(title || ''), {
+      x: 0.5,
+      y: 0.4,
+      w: 9.0,
+      h: 0.7,
+      fontSize: 26,
+      bold: true,
+      color: colors.primary,
+    });
+  }
+
+  /** A key concept taught in full: definition, explanation and a business example. */
+  private createConceptSlide(slide: any, d: SlideContent, colors: any): void {
+    this.slideTitle(slide, d.title, colors);
+    const block = (label: string, text: string | undefined) =>
+      text
+        ? [
+            { text: `${label}  `, options: { bold: true, color: colors.secondary } },
+            { text: String(text), options: { breakLine: true } },
+            { text: ' ', options: { breakLine: true, fontSize: 6 } },
+          ]
+        : [];
+    slide.addText(
+      [
+        ...block('Definition', d.definition),
+        ...block('Explanation', d.explanation),
+        ...block('Business example', d.example),
+      ],
+      {
+        x: 0.6,
+        y: 1.3,
+        w: 8.8,
+        h: 4.0,
+        fontSize: 15,
+        color: colors.text,
+        valign: 'top',
+        shrinkText: true,
+      }
+    );
+  }
+
+  /** A sequence drawn as connected boxes: stages of a process, steps of a framework. */
+  private createProcessSlide(slide: any, d: SlideContent, colors: any): void {
+    this.slideTitle(slide, d.title, colors);
+    const steps = (d.steps || []).filter((x) => x?.title).slice(0, 6);
+    if (!steps.length) return;
+    const gap = 0.3;
+    const w = (9.0 - gap * (steps.length - 1)) / steps.length;
+    steps.forEach((step, i) => {
+      const x = 0.5 + i * (w + gap);
+      slide.addText(
+        [
+          { text: String(step.title), options: { bold: true, breakLine: !!step.text } },
+          ...(step.text ? [{ text: String(step.text), options: { fontSize: 11 } }] : []),
+        ],
+        {
+          shape: 'roundRect',
+          x,
+          y: 1.6,
+          w,
+          h: 2.6,
+          rectRadius: 0.1,
+          fill: { color: i % 2 ? 'E8F0FA' : 'D6E4F5' },
+          line: { color: colors.secondary, width: 1 },
+          fontSize: 13,
+          color: colors.text,
+          align: 'center',
+          valign: 'middle',
+          shrinkText: true,
+        }
+      );
+      if (i < steps.length - 1) {
+        slide.addShape('rightArrow', {
+          x: x + w + 0.02,
+          y: 2.75,
+          w: gap - 0.04,
+          h: 0.3,
+          fill: { color: colors.secondary },
+          line: { color: colors.secondary },
+        });
+      }
+    });
+    if (d.content) {
+      slide.addText(Array.isArray(d.content) ? d.content.join(' ') : String(d.content), {
+        x: 0.5,
+        y: 4.4,
+        w: 9.0,
+        h: 0.9,
+        fontSize: 13,
+        color: colors.text,
+        shrinkText: true,
+      });
+    }
+  }
+
+  /** A 2x2 model: four quadrants with labelled axes. */
+  private createMatrixSlide(slide: any, d: SlideContent, colors: any): void {
+    this.slideTitle(slide, d.title, colors);
+    const quads = (d.quadrants || []).filter((q) => q?.title).slice(0, 4);
+    if (!quads.length) return;
+    const left = 1.4;
+    const top = 1.25;
+    const w = 3.9;
+    const h = 1.85;
+    quads.forEach((q, i) => {
+      slide.addText(
+        [
+          { text: String(q.title), options: { bold: true, breakLine: !!q.text } },
+          ...(q.text ? [{ text: String(q.text), options: { fontSize: 11 } }] : []),
+        ],
+        {
+          shape: 'rect',
+          x: left + (i % 2) * (w + 0.1),
+          y: top + Math.floor(i / 2) * (h + 0.1),
+          w,
+          h,
+          fill: { color: ['D6E4F5', 'E8F0FA', 'E8F0FA', 'D6E4F5'][i] },
+          line: { color: colors.secondary, width: 1 },
+          fontSize: 13,
+          color: colors.text,
+          align: 'center',
+          valign: 'middle',
+          shrinkText: true,
+        }
+      );
+    });
+    if (d.yAxis) {
+      slide.addText(String(d.yAxis), {
+        x: 0.2,
+        y: top,
+        w: 1.1,
+        h: 2 * h + 0.1,
+        fontSize: 12,
+        bold: true,
+        color: colors.secondary,
+        align: 'center',
+        valign: 'middle',
+        shrinkText: true,
+      });
+    }
+    if (d.xAxis) {
+      slide.addText(String(d.xAxis), {
+        x: left,
+        y: top + 2 * h + 0.15,
+        w: 2 * w + 0.1,
+        h: 0.35,
+        fontSize: 12,
+        bold: true,
+        color: colors.secondary,
+        align: 'center',
+      });
     }
   }
 
@@ -939,40 +1120,67 @@ Return ONLY valid JSON, no markdown formatting.`;
       moduleCode: context.moduleCode,
     });
 
-    try {
-      const slides = await this.generateLessonSlidesWithLLM(lesson, context);
-
-      const deck: PPTDeck = {
-        deckId: `${lesson.lessonId}-PPT`,
+    // A deck cut off at the token budget used to be kept as it was: JSON repair closed the
+    // brackets and 7 slides were stored as the whole lesson (Dr Sherin, 14 October 2026: M02
+    // Lesson 23, M32 Lesson 19). An incomplete deck is asked for again with twice the budget.
+    let slides: PPTSlide[] = [];
+    let lastError: unknown;
+    for (const maxTokens of [32000, 64000]) {
+      let attempt: PPTSlide[];
+      try {
+        attempt = await this.generateLessonSlidesWithLLM(lesson, context, maxTokens);
+      } catch (error) {
+        // The AI service has already retried; a larger budget does not mend a failed call.
+        lastError = error;
+        break;
+      }
+      if (deckComplete(attempt) || attempt.length > slides.length) slides = attempt;
+      if (deckComplete(slides)) break;
+      loggingService.warn('Lesson PPT incomplete; asking again with more room', {
         lessonId: lesson.lessonId,
-        moduleCode: context.moduleCode,
-        lessonNumber: lesson.lessonNumber,
-        lessonTitle: lesson.lessonTitle,
-        slides,
-        slideCount: slides.length,
-        deliveryMode: context.deliveryMode,
-        generatedAt: new Date(),
-        validation: {
-          slideCountValid: slides.length >= 8 && slides.length <= 15,
-          mlosCovered: this.validateMLOCoverage(lesson, slides),
-          citationsValid: this.validateCitations(lesson, context),
-          glossaryTermsDefined: this.validateGlossaryTermsInGeneration(lesson, context),
-        },
-      };
-
-      loggingService.info('Lesson PPT generated via LLM', {
-        lessonId: lesson.lessonId,
-        slideCount: deck.slideCount,
+        slideCount: attempt.length,
+        maxTokens,
       });
-
-      return deck;
-    } catch (error) {
-      loggingService.warn('LLM PPT generation failed, falling back to templates', {
-        lessonId: lesson.lessonId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return this.generateLessonPPTFallback(lesson, context);
     }
+
+    if (!slides.length) {
+      loggingService.warn('LLM PPT generation failed, building an outline from the lesson plan', {
+        lessonId: lesson.lessonId,
+        error: lastError instanceof Error ? lastError.message : String(lastError),
+      });
+      // Marked as an outline, so downloads label it rather than serve it as teaching slides.
+      return withoutCIPD({
+        ...this.generateLessonPPTFallback(lesson, context),
+        generatedBy: 'outline',
+      } as PPTDeck);
+    }
+
+    const deck: PPTDeck = {
+      deckId: `${lesson.lessonId}-PPT`,
+      lessonId: lesson.lessonId,
+      moduleCode: context.moduleCode,
+      lessonNumber: lesson.lessonNumber,
+      lessonTitle: lesson.lessonTitle,
+      slides,
+      slideCount: slides.length,
+      deliveryMode: context.deliveryMode,
+      generatedAt: new Date(),
+      generatedBy: 'ai',
+      complete: deckComplete(slides),
+      validation: {
+        slideCountValid: slides.length >= 10 && slides.length <= 20,
+        mlosCovered: this.validateMLOCoverage(lesson, slides),
+        citationsValid: this.validateCitations(lesson, context),
+        glossaryTermsDefined: this.validateGlossaryTermsInGeneration(lesson, context),
+      },
+    } as PPTDeck;
+
+    loggingService.info('Lesson PPT generated via LLM', {
+      lessonId: lesson.lessonId,
+      slideCount: deck.slideCount,
+      complete: deckComplete(slides),
+    });
+    return deck;
   }
 
   /**
@@ -980,7 +1188,8 @@ Return ONLY valid JSON, no markdown formatting.`;
    */
   private async generateLessonSlidesWithLLM(
     lesson: LessonPlan,
-    context: PPTContext
+    context: PPTContext,
+    maxTokens = 32000
   ): Promise<PPTSlide[]> {
     const durationHours = Math.floor(lesson.duration / 60);
     const durationMinutes = lesson.duration % 60;
@@ -1028,7 +1237,7 @@ Each slide MUST contain TWO layers:
 Professional UK academic tone. No emojis. No marketing language.
 Return ONLY valid JSON, no markdown.`;
 
-    const userPrompt = `Convert this lesson into a structured PowerPoint with 8-15 slides.
+    const userPrompt = `Convert this lesson into a structured teaching PowerPoint of 12-18 slides.
 
 **LESSON INFORMATION:**
 Title: ${lesson.lessonTitle}
@@ -1059,65 +1268,59 @@ ${formativeText}
 **RELEVANT GLOSSARY TERMS:**
 ${glossaryText}
 
-**REQUIRED SLIDE STRUCTURE:**
-1. Cover — Program title, module code & title, lesson title, duration
-2. Orientation — Learning objectives, how to use this lesson (watch, practice, check)
-3. Core Content (2-6 slides) — Key concepts, definitions, frameworks, plain-language explanations
-4. Worked Examples — Step-by-step walkthroughs, realistic scenarios, before/after comparisons
-5. Practice & Reflection — Scenario questions, short practice prompts, self-check
-6. Assessment Connection — Which assignment this lesson supports, common mistakes to avoid
-7. Summary — 3-5 key takeaways only
+**REQUIRED SLIDE STRUCTURE (12-18 slides):**
+1. Cover: programme, module code and title, lesson title, duration.
+2. Objectives: what students will be able to do.
+3. Core content: one "concept" slide for EACH key concept the lesson teaches, giving a definition, an explanation of 2-3 sentences (how it works, why it matters) and a concrete business example.
+4. At least one diagram slide: a "process" slide for any sequence, cycle or framework with stages, and a "matrix" slide for any 2x2 model. Use a "table" for comparisons.
+5. Worked examples: at least two, step by step with realistic figures or data, showing how to apply the concepts.
+6. Business application: how a real type of organisation uses this, built on the lesson's case where it has one.
+7. Practice: questions or a short task students work on in class.
+8. Assessment connection: which assessment this lesson supports, and common mistakes.
+9. Summary: 3-5 key takeaways. The deck MUST end with this slide.
 
-**STRICT FORMATTING RULES:**
-- Maximum 6 bullets per slide. If you need more, create another slide.
-- Maximum 80 characters per bullet point. Be concise.
-- One core idea per slide. Never overcrowd.
-- Slide titles max 60 characters, sentence case.
-- Tables: max 4 columns, max 5 rows.
-- Two-column slides: max 4 items per column.
+**CONTENT RULES:**
+- The slides teach the subject in full, so a lecturer can teach from them without writing new content.
+- Bullets are complete, explanatory statements of up to 25 words; at most 6 bullets per slide.
+- Slide titles at most 60 characters, sentence case. Tables at most 4 columns and 6 rows.
+- Name concepts and frameworks by what they are. NEVER attribute them to a professional body, publisher or source: write "PESTLE analysis", never "CIPD PESTLE". Organisations appear only as examples or in cases.
+- Instructions to the lecturer ("Explain...", "Ask students to...") go only in the notes.
 
 **SLIDE TYPES:**
-- "title" for cover slide
-- "bullets" for lists and key points
-- "table" for comparisons or structured data
-- "two_column" for contrasting concepts (e.g., theory vs practice)
-- "content" for single paragraph explanations (max 3 sentences)
+- "title" for the cover
+- "concept": "definition", "explanation", "example"
+- "process": "steps" (3-6 items, each {"title", "text"}), plus optional "content" (one sentence)
+- "matrix": "quadrants" (4 items in reading order, each {"title", "text"}), "xAxis", "yAxis"
+- "table": "table" {"headers", "rows"}
+- "two_column": "leftTitle", "leftColumn", "rightTitle", "rightColumn"
+- "bullets": "content" as an array of bullets
 
-**INSTRUCTOR NOTES MUST:**
-- Expand (not repeat) slide content
-- Be written as if speaking to learners
-- Include deeper explanations, mini-examples, probing questions
-- Highlight common misconceptions
-- Be usable by both human instructor and AI avatar narrator
-
-**SELF-CHECK:** Before returning, review each slide:
-- Is there ONE clear idea per slide?
-- Are bullets concise and non-repetitive?
-- Do notes ADD value beyond slide text?
-- Is the lesson understandable without an instructor?
+**NOTES (every slide):** expand on the slide as if speaking to students: deeper explanation, a mini-example, a probing question and a common misconception.
 
 **OUTPUT FORMAT (JSON):**
 {
   "slides": [
     {
-      "type": "title|bullets|content|table|two_column",
-      "title": "slide title (max 60 chars)",
-      "content": "string for paragraphs OR array of strings for bullets (max 80 chars each)",
-      "table": { "headers": ["Col1", "Col2"], "rows": [["val1", "val2"]] },
-      "leftTitle": "heading of the left column (two_column only)",
-      "leftColumn": ["item1", "item2"],
-      "rightTitle": "heading of the right column (two_column only)",
-      "rightColumn": ["item1", "item2"],
-      "notes": "Detailed instructor/study notes (REQUIRED for every slide)"
+      "type": "title|concept|process|matrix|table|two_column|bullets",
+      "title": "",
+      "content": ["bullet"],
+      "definition": "", "explanation": "", "example": "",
+      "steps": [{"title": "", "text": ""}],
+      "quadrants": [{"title": "", "text": ""}], "xAxis": "", "yAxis": "",
+      "table": {"headers": [""], "rows": [[""]]},
+      "leftTitle": "", "leftColumn": [""], "rightTitle": "", "rightColumn": [""],
+      "notes": ""
     }
   ]
 }
+Include only the fields each slide's type uses.
 
 Return ONLY valid JSON.`;
 
-    const response = await openaiService.generateContent(userPrompt, systemPrompt, {
+    // CIPD is taken out of what the writer is shown and of what it returns (withoutCIPD).
+    const response = await openaiService.generateContent(withoutCIPD(userPrompt), systemPrompt, {
       responseFormat: 'json_object',
-      maxTokens: 32000,
+      maxTokens,
       timeout: 600000, // 10 minutes — medium reasoning is much faster
       reasoningEffort: 'medium', // Medium reasoning for PPTs — enough for good structure, much faster
     });
@@ -1130,9 +1333,7 @@ Return ONLY valid JSON.`;
     const rawSlides = parsed.slides || [];
 
     // Post-process slides for quality and length limits
-    const processedSlides = this.postProcessSlides(rawSlides, lesson, context);
-
-    return processedSlides;
+    return withoutCIPD(this.postProcessSlides(rawSlides, lesson, context));
   }
 
   /**
@@ -1156,12 +1357,16 @@ Return ONLY valid JSON.`;
           const firstHalf = content
             .slice(0, 6)
             .map((b: string) =>
-              String(b).length > 100 ? String(b).substring(0, 97) + '...' : String(b)
+              String(b).length > MAX_BULLET
+                ? String(b).substring(0, MAX_BULLET - 3) + '...'
+                : String(b)
             );
           const secondHalf = content
             .slice(6)
             .map((b: string) =>
-              String(b).length > 100 ? String(b).substring(0, 97) + '...' : String(b)
+              String(b).length > MAX_BULLET
+                ? String(b).substring(0, MAX_BULLET - 3) + '...'
+                : String(b)
             );
 
           // Add first slide
@@ -1195,7 +1400,7 @@ Return ONLY valid JSON.`;
         }
 
         content = content.map((b: string) =>
-          String(b).length > 100 ? String(b).substring(0, 97) + '...' : String(b)
+          String(b).length > MAX_BULLET ? String(b).substring(0, MAX_BULLET - 3) + '...' : String(b)
         );
       } else if (typeof content === 'string') {
         content = String(content);
@@ -1208,7 +1413,22 @@ Return ONLY valid JSON.`;
         content: 'content',
         table: 'content',
         two_column: 'content',
+        concept: 'concepts',
+        process: 'content',
+        matrix: 'content',
       };
+      const cleanText = (v: unknown, max = 400) =>
+        typeof v === 'string' && v.trim() ? v.trim().substring(0, max) : undefined;
+      const boxes = (v: unknown, n: number) =>
+        Array.isArray(v)
+          ? v
+              .map((x: any) => ({
+                title: cleanText(x?.title, 60) || '',
+                text: cleanText(x?.text, 160),
+              }))
+              .filter((x) => x.title)
+              .slice(0, n)
+          : undefined;
 
       processed.push({
         slideNumber,
@@ -1223,6 +1443,13 @@ Return ONLY valid JSON.`;
           rightColumn: raw.rightColumn,
           ...(raw.leftTitle ? { leftTitle: String(raw.leftTitle).substring(0, 60) } : {}),
           ...(raw.rightTitle ? { rightTitle: String(raw.rightTitle).substring(0, 60) } : {}),
+          definition: cleanText(raw.definition),
+          explanation: cleanText(raw.explanation, 700),
+          example: cleanText(raw.example, 500),
+          steps: boxes(raw.steps, 6),
+          quadrants: boxes(raw.quadrants, 4),
+          xAxis: cleanText(raw.xAxis, 80),
+          yAxis: cleanText(raw.yAxis, 80),
           notes: raw.notes || '',
         } as any,
         speakerNotes: raw.notes || '',
@@ -2640,7 +2867,8 @@ Return ONLY valid JSON.`;
    * @returns Buffer containing PPTX file
    */
   async exportPPTX(deck: PPTDeck): Promise<Buffer> {
-    deck = xmlSafeDeep(deck);
+    // Decks stored before CIPD was ruled out still name it; no file carries it (withoutCIPD).
+    deck = xmlSafeDeep(withoutCIPD(deck));
     loggingService.info('Exporting PPT deck as PPTX', {
       deckId: deck.deckId,
       slideCount: deck.slideCount,
@@ -2714,6 +2942,15 @@ Return ONLY valid JSON.`;
       case 'table':
         this.createTableSlide(slide, content, colors);
         break;
+      case 'concept':
+        this.createConceptSlide(slide, content as SlideContent, colors);
+        break;
+      case 'process':
+        this.createProcessSlide(slide, content as SlideContent, colors);
+        break;
+      case 'matrix':
+        this.createMatrixSlide(slide, content as SlideContent, colors);
+        break;
       case 'two_column':
         // A lesson slide's columns carry its own headings, or none.
         this.createTwoColumnSlide(
@@ -2740,6 +2977,7 @@ Return ONLY valid JSON.`;
    * @returns Buffer containing PDF file
    */
   async exportPDF(deck: PPTDeck): Promise<Buffer> {
+    deck = withoutCIPD(deck);
     loggingService.info('Exporting PPT deck as PDF', {
       deckId: deck.deckId,
       slideCount: deck.slideCount,
@@ -2867,7 +3105,7 @@ Return ONLY valid JSON.`;
    */
   private generateHTMLForSlide(slide: PPTSlide): string {
     const content = slide.content;
-    let html = `<h2>${slide.title}</h2>`;
+    let html = `<h2>${this.escapeHTML(String(slide.title || ''))}</h2>`;
 
     if (content.type === 'bullets' && Array.isArray(content.content)) {
       html += '<ul>';
@@ -2917,6 +3155,32 @@ Return ONLY valid JSON.`;
         html += '</ul></div>';
       }
       html += '</div>';
+    } else if (content.type === 'concept') {
+      const parts: Array<[string, string | undefined]> = [
+        ['Definition', content.definition],
+        ['Explanation', content.explanation],
+        ['Business example', content.example],
+      ];
+      parts
+        .filter(([, text]) => text)
+        .forEach(([label, text]) => {
+          html += `<p><strong>${label}:</strong> ${this.escapeHTML(String(text))}</p>`;
+        });
+    } else if (content.type === 'process' || content.type === 'matrix') {
+      const boxes = (content.type === 'process' ? content.steps : content.quadrants) || [];
+      if (content.type === 'matrix' && (content.yAxis || content.xAxis)) {
+        html += `<p><em>${this.escapeHTML([content.yAxis, content.xAxis].filter(Boolean).join(' × '))}</em></p>`;
+      }
+      html += content.type === 'process' ? '<ol>' : '<ul>';
+      boxes.forEach((box) => {
+        const text = box.text ? `: ${this.escapeHTML(box.text)}` : '';
+        html += `<li><strong>${this.escapeHTML(box.title)}</strong>${text}</li>`;
+      });
+      html += content.type === 'process' ? '</ol>' : '</ul>';
+      const caption = Array.isArray(content.content)
+        ? content.content.map(String).join(' ')
+        : String(content.content || '');
+      if (caption) html += `<p>${this.escapeHTML(caption)}</p>`;
     }
 
     return html;

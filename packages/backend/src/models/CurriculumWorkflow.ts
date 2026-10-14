@@ -260,7 +260,15 @@ export interface PPTSlide {
     | 'references';
   title: string;
   content: {
-    type: 'title' | 'content' | 'table' | 'two_column' | 'bullets';
+    type:
+      | 'title'
+      | 'content'
+      | 'table'
+      | 'two_column'
+      | 'bullets'
+      | 'concept'
+      | 'process'
+      | 'matrix';
     title: string;
     content?: string | string[];
     table?: {
@@ -269,6 +277,15 @@ export interface PPTSlide {
     };
     leftColumn?: string[];
     rightColumn?: string[];
+    leftTitle?: string;
+    rightTitle?: string;
+    definition?: string;
+    explanation?: string;
+    example?: string;
+    steps?: { title: string; text?: string }[];
+    quadrants?: { title: string; text?: string }[];
+    xAxis?: string;
+    yAxis?: string;
     notes?: string;
   };
   speakerNotes: string;
@@ -285,6 +302,10 @@ export interface PPTDeck {
   slideCount: number;
   deliveryMode: string;
   generatedAt: Date;
+  /** "ai" for slides the model wrote; "outline" for a fallback built from the lesson plan. */
+  generatedBy?: 'ai' | 'outline';
+  /** Ends with its summary slide and has at least 10 slides (pptLessonContent.deckComplete). */
+  complete?: boolean;
   validation: {
     slideCountValid: boolean;
     mlosCovered: boolean;
