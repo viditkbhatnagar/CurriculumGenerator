@@ -311,6 +311,26 @@ describe('CIPD', () => {
     llm.mockRestore();
   });
 
+  it('tells the writer not to pass remembered statistics off as real data', async () => {
+    const llm = jest
+      .spyOn(openaiService, 'generateContent')
+      .mockResolvedValue(JSON.stringify({ slides: [] }));
+    await (pptGenerationService as any).generateLessonSlidesWithLLM(
+      { lessonId: 'L4', lessonNumber: 4, lessonTitle: 'Radar', duration: 90, activities: [] },
+      {
+        programTitle: 'BBA',
+        moduleCode: 'M02',
+        moduleTitle: 'Economics',
+        deliveryMode: 'in_person',
+      }
+    );
+    const prompt = String(llm.mock.calls[0][0]);
+    expect(prompt).toMatch(/Worked example \(illustrative figures\)/);
+    expect(prompt).toMatch(/Never present statistics you remember/);
+    expect(prompt).not.toMatch(/real figures/);
+    llm.mockRestore();
+  });
+
   it('is not in a downloaded file of a deck stored before it was ruled out', async () => {
     const text = await slideTexts(
       deckOf([

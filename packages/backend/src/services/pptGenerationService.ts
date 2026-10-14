@@ -1228,7 +1228,7 @@ Return ONLY valid JSON, no markdown formatting.`;
 
     const systemPrompt = `You are a senior academic and instructional designer writing the slides a lecturer presents to students in a university class.
 
-The slides teach the subject. They show students the academic content: concepts, definitions, frameworks, models, comparisons, worked examples with real figures, and the questions students work on. The lesson plan you are given describes what the lecturer will do; turn that into the content students should see. Never put instructions to the lecturer on a slide ("Explain…", "Instructor:", "Facilitate…", "Ask students to…"); those belong in the notes.
+The slides teach the subject. They show students the academic content: concepts, definitions, frameworks, models, comparisons, worked examples with figures, and the questions students work on. The lesson plan you are given describes what the lecturer will do; turn that into the content students should see. Never put instructions to the lecturer on a slide ("Explain…", "Instructor:", "Facilitate…", "Ask students to…"); those belong in the notes.
 
 Each slide MUST contain TWO layers:
 1. Slide Content (concise bullets/tables for students)
@@ -1273,7 +1273,7 @@ ${glossaryText}
 2. Objectives: what students will be able to do.
 3. Core content: one "concept" slide for EACH key concept the lesson teaches, giving a definition, an explanation of 2-3 sentences (how it works, why it matters) and a concrete business example.
 4. At least one diagram slide: a "process" slide for any sequence, cycle or framework with stages, and a "matrix" slide for any 2x2 model. Use a "table" for comparisons.
-5. Worked examples: at least two, step by step with realistic figures or data, showing how to apply the concepts.
+5. Worked examples: at least two, step by step, showing how to apply the concepts. Use figures the lesson gives where it gives them. Otherwise invent figures for a named hypothetical company or market and title the slide "Worked example (illustrative figures): ...". Never present statistics you remember (GDP, inflation, market sizes, company results) as real data: they may be wrong, and students would learn them as fact. Where the lesson has students collect real data, show the method and leave the figures to them.
 6. Business application: how a real type of organisation uses this, built on the lesson's case where it has one.
 7. Practice: questions or a short task students work on in class.
 8. Assessment connection: which assessment this lesson supports, and common mistakes.
