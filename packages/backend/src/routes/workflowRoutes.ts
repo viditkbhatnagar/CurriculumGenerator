@@ -105,6 +105,7 @@ import { applyStep12Edit } from '../utils/step12Edit';
 import { BLOCKING_KINDS, publicationProblem } from '../services/publication';
 import { cleanAssessmentRules, missingAssessmentRules } from '../services/assessmentRules';
 import { criteriaRun, startUnitCriteria } from '../services/othm/unitCriteriaRunner';
+import { deckRun, startDeckRegeneration } from '../services/pptDeckRegenerator';
 import { othmUnits } from '../services/othm/othmModel';
 import { OTHM_DOCUMENTS, OthmDocumentKind } from '../services/othm/othmDocx';
 import { checkCompetencyEvidence } from '../services/competencyEvidenceRunner';
@@ -6948,6 +6949,48 @@ router.get('/:id/unresolved-issues', async (req: Request, res: Response) => {
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to list unresolved issues' });
   }
+});
+
+/**
+ * POST /api/v3/workflow/:id/step11/regenerate-decks  { selection: 'problems' | 'all', modules?: string[] }
+ * Write chosen decks again in the background: those cut off, built as outlines, or naming CIPD
+ * ('problems'), or every deck of the given modules ('all'). Administrators only: it spends.
+ */
+router.post(
+  '/:id/step11/regenerate-decks',
+  validateJWT,
+  loadUser,
+  async (req: Request, res: Response) => {
+    try {
+      if (!isValidObjectId(req.params.id)) {
+        return res.status(404).json({ success: false, error: 'Workflow not found' });
+      }
+      if ((req as any).user?.role !== 'administrator') {
+        return res
+          .status(403)
+          .json({ success: false, error: 'Only an administrator can regenerate decks' });
+      }
+      const selection = req.body?.selection === 'all' ? 'all' : 'problems';
+      const modules = Array.isArray(req.body?.modules)
+        ? req.body.modules.filter((m: unknown) => typeof m === 'string')
+        : undefined;
+      if (selection === 'all' && !modules?.length) {
+        return res
+          .status(400)
+          .json({ success: false, error: 'Name the modules to regenerate in full' });
+      }
+      const run = await startDeckRegeneration(req.params.id, { selection, moduleCodes: modules });
+      res.status(202).json({ success: true, data: run });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start';
+      res.status(/not found/i.test(message) ? 404 : 500).json({ success: false, error: message });
+    }
+  }
+);
+
+/** GET /api/v3/workflow/:id/step11/regenerate-decks — the latest regeneration run. */
+router.get('/:id/step11/regenerate-decks', async (req: Request, res: Response) => {
+  res.json({ success: true, data: deckRun(req.params.id) || null });
 });
 
 /**
