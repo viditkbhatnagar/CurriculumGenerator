@@ -726,22 +726,27 @@ Return ONLY valid JSON, no markdown formatting.`;
     // none passes '' (createSlideFromPPTSlide), so it is not headed "Contact Activities".
     const leftTitle = (slideData as any).leftTitle ?? 'Contact Activities';
     const rightTitle = (slideData as any).rightTitle ?? 'Independent Activities';
-    if (slideData.leftColumn && leftTitle) {
-      slide.addText(leftTitle, {
-        x: 0.75,
-        y: 1.5,
-        w: 4.0,
-        h: 0.5,
-        fontSize: 20,
-        bold: true,
-        color: colors.secondary,
-      });
+    // Only the heading is optional. Making the whole column depend on it left every lesson
+    // slide's columns blank (Dr Sherin, 14 October 2026: M02 Lesson 4, slides 6 and 12).
+    const columnTop = leftTitle || rightTitle ? 2.1 : 1.5;
+    if (slideData.leftColumn) {
+      if (leftTitle) {
+        slide.addText(leftTitle, {
+          x: 0.75,
+          y: 1.5,
+          w: 4.0,
+          h: 0.5,
+          fontSize: 20,
+          bold: true,
+          color: colors.secondary,
+        });
+      }
 
       slide.addText(
         slideData.leftColumn.map((item) => ({ text: item, options: { bullet: true } })),
         {
           x: 0.75,
-          y: 2.1,
+          y: columnTop,
           w: 4.0,
           h: 3.5,
           fontSize: 14,
@@ -753,22 +758,24 @@ Return ONLY valid JSON, no markdown formatting.`;
     }
 
     // Right Column
-    if (slideData.rightColumn && rightTitle) {
-      slide.addText(rightTitle, {
-        x: 5.25,
-        y: 1.5,
-        w: 4.0,
-        h: 0.5,
-        fontSize: 18,
-        bold: true,
-        color: colors.secondary,
-      });
+    if (slideData.rightColumn) {
+      if (rightTitle) {
+        slide.addText(rightTitle, {
+          x: 5.25,
+          y: 1.5,
+          w: 4.0,
+          h: 0.5,
+          fontSize: 18,
+          bold: true,
+          color: colors.secondary,
+        });
+      }
 
       slide.addText(
         slideData.rightColumn.map((item) => ({ text: item, options: { bullet: true } })),
         {
           x: 5.25,
-          y: 2.1,
+          y: columnTop,
           w: 4.0,
           h: 3.5,
           fontSize: 14,
@@ -1845,6 +1852,7 @@ Return ONLY valid JSON.`;
       group_work: 'Show collaboration frameworks or group task instructions',
       assessment: 'Use clear question formatting with answer options',
       break: 'N/A',
+      ai_activity: 'Show the AI tool output beside the criteria students use to judge it',
     };
     return suggestions[activityType] || 'Use relevant visuals to support content';
   }
