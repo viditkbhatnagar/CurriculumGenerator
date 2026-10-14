@@ -1,6 +1,7 @@
 /**
  * Writes chosen Step 11 decks again, in the background: the decks with problems (cut off,
- * outlines, or naming CIPD), or every deck of chosen modules.
+ * outlines, or naming CIPD), or every deck of chosen modules, optionally only those written
+ * before a given time (chosenForRewrite), which makes a run restartable.
  *
  * Each module's archive in S3 is copied to a dated backup before it is replaced, and the module's
  * entry in the workflow is replaced with a positional update, so nothing else in Step 11 is
@@ -14,7 +15,7 @@ import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { loadModulePlans } from './step10Store';
 import { hydrateModuleDecks, offloadModuleDecks } from './pptDeckStore';
 import { getS3Client, isS3Configured } from './s3Service';
-import { deckProblems, replacesDeck } from './pptLessonContent';
+import { chosenForRewrite, deckProblems, replacesDeck } from './pptLessonContent';
 
 export type DeckSelection = 'problems' | 'all';
 
@@ -24,6 +25,8 @@ export interface DeckRun {
   startedAt: string;
   finishedAt?: string;
   selection: DeckSelection;
+  /** Only decks written before this time are rewritten. */
+  before?: string;
   modules: string[];
   decksPlanned: number;
   decksWritten: number;
@@ -33,7 +36,7 @@ export interface DeckRun {
   errors: string[];
 }
 
-const LESSONS_IN_FLIGHT = 4;
+const LESSONS_IN_FLIGHT = 6;
 const runs = new Map<string, DeckRun>();
 export const deckRun = (workflowId: string) => runs.get(workflowId);
 
@@ -50,7 +53,11 @@ async function backup(key: string) {
 
 export async function startDeckRegeneration(
   workflowId: string,
-  { selection, moduleCodes }: { selection: DeckSelection; moduleCodes?: string[] }
+  {
+    selection,
+    moduleCodes,
+    before,
+  }: { selection: DeckSelection; moduleCodes?: string[]; before?: Date }
 ): Promise<DeckRun> {
   const existing = runs.get(workflowId);
   if (existing?.running) return existing;
@@ -66,6 +73,7 @@ export async function startDeckRegeneration(
     running: true,
     startedAt: new Date().toISOString(),
     selection,
+    before: before?.toISOString(),
     modules: entries.map((m) => m.moduleCode),
     decksPlanned: 0,
     decksWritten: 0,
@@ -76,6 +84,22 @@ export async function startDeckRegeneration(
   runs.set(workflowId, run);
 
   void (async () => {
+    try {
+      await rewriteModules();
+    } catch (error) {
+      run.errors.push(`run stopped: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      run.running = false;
+      run.finishedAt = new Date().toISOString();
+      loggingService.info('Step 11 deck regeneration finished', {
+        ...run,
+        errors: run.errors.slice(0, 20),
+      });
+    }
+  })();
+  return run;
+
+  async function rewriteModules() {
     const plans = await loadModulePlans(workflowId);
     const { PPTGenerationService } = await import('./pptGenerationService');
     const ppt = new PPTGenerationService();
@@ -96,7 +120,7 @@ export async function startDeckRegeneration(
         const targets = decks
           .map((d, i) => ({ d, i }))
           .filter(({ d }) => lessons.has(d.lessonId))
-          .filter(({ d }) => selection === 'all' || deckProblems(d).length);
+          .filter(({ d }) => chosenForRewrite(d, selection, before));
         run.decksPlanned += targets.length;
         if (!targets.length) continue;
         const written = run.decksWritten;
@@ -156,12 +180,5 @@ export async function startDeckRegeneration(
         );
       }
     }
-    run.running = false;
-    run.finishedAt = new Date().toISOString();
-    loggingService.info('Step 11 deck regeneration finished', {
-      ...run,
-      errors: run.errors.slice(0, 20),
-    });
-  })();
-  return run;
+  }
 }

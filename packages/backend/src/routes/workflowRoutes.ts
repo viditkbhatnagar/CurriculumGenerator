@@ -6952,9 +6952,11 @@ router.get('/:id/unresolved-issues', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/v3/workflow/:id/step11/regenerate-decks  { selection: 'problems' | 'all', modules?: string[] }
+ * POST /api/v3/workflow/:id/step11/regenerate-decks
+ *   { selection: 'problems' | 'all', modules?: string[], before?: ISO time }
  * Write chosen decks again in the background: those cut off, built as outlines, or naming CIPD
- * ('problems'), or every deck of the given modules ('all'). Administrators only: it spends.
+ * ('problems'), or every deck ('all') of the given modules, or of every module written before
+ * `before`. Administrators only: it spends.
  */
 router.post(
   '/:id/step11/regenerate-decks',
@@ -6974,12 +6976,21 @@ router.post(
       const modules = Array.isArray(req.body?.modules)
         ? req.body.modules.filter((m: unknown) => typeof m === 'string')
         : undefined;
-      if (selection === 'all' && !modules?.length) {
-        return res
-          .status(400)
-          .json({ success: false, error: 'Name the modules to regenerate in full' });
+      const before = req.body?.before ? new Date(req.body.before) : undefined;
+      if (before && Number.isNaN(before.getTime())) {
+        return res.status(400).json({ success: false, error: 'before is not a valid time' });
       }
-      const run = await startDeckRegeneration(req.params.id, { selection, moduleCodes: modules });
+      if (selection === 'all' && !modules?.length && !before) {
+        return res.status(400).json({
+          success: false,
+          error: 'Name the modules to regenerate in full, or give a before time',
+        });
+      }
+      const run = await startDeckRegeneration(req.params.id, {
+        selection,
+        moduleCodes: modules,
+        before,
+      });
       res.status(202).json({ success: true, data: run });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start';

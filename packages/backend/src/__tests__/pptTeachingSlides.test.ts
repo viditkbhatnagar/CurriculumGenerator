@@ -6,6 +6,7 @@ import JSZip from 'jszip';
 import {
   deckComplete,
   deckProblems,
+  chosenForRewrite,
   replacesDeck,
   storedDeckFor,
   withoutCIPD,
@@ -79,6 +80,20 @@ describe('deck completeness and problems', () => {
     expect(replacesDeck(cipd, cutOff)).toBe(false);
     expect(replacesDeck(sound, sound)).toBe(true);
     expect(replacesDeck(sound, cutOff)).toBe(false);
+  });
+
+  it('chooses decks to rewrite so that a restarted run carries on where it stopped', () => {
+    const sound = { ...deckOf([...body, slide('bullets', 'Summary')]), generatedBy: 'ai' };
+    const cutOff = deckOf(body.slice(0, 7));
+    const cutoff = new Date('2026-10-14T08:42:00Z');
+    const old = { generatedAt: '2026-09-30T10:00:00Z' };
+    const rewritten = { generatedAt: '2026-10-14T09:00:00Z' };
+    expect(chosenForRewrite({ ...sound, ...old }, 'all', cutoff)).toBe(true);
+    expect(chosenForRewrite({ ...sound, ...rewritten }, 'all', cutoff)).toBe(false);
+    expect(chosenForRewrite({ ...sound, generatedAt: undefined }, 'all', cutoff)).toBe(true);
+    expect(chosenForRewrite({ ...sound, ...old }, 'problems')).toBe(false);
+    expect(chosenForRewrite({ ...cutOff, ...old }, 'problems', cutoff)).toBe(true);
+    expect(chosenForRewrite({ ...cutOff, ...rewritten }, 'problems', cutoff)).toBe(false);
   });
 
   it('never serves an outline as teaching slides', () => {

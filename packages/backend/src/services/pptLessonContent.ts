@@ -58,6 +58,7 @@ export interface StoredDeck {
   lessonId?: string;
   lessonTitle?: string;
   generatedBy?: string;
+  generatedAt?: string | Date;
   slides?: Array<{ content?: unknown; title?: string }>;
 }
 
@@ -153,4 +154,19 @@ export function withoutCIPD<T>(value: T): T {
     ) as T;
   }
   return value;
+}
+
+/**
+ * Whether a regeneration run should write a deck again: every deck ('all'), or only those with
+ * problems ('problems'), in either case only decks written before `before` when it is given. A
+ * run cut short by a restart is resumed by starting it again with the same `before`: the decks it
+ * already wrote are newer and are skipped.
+ */
+export function chosenForRewrite(
+  deck: StoredDeck,
+  selection: 'problems' | 'all',
+  before?: Date
+): boolean {
+  if (before && deck?.generatedAt && new Date(deck.generatedAt) >= before) return false;
+  return selection === 'all' || deckProblems(deck).length > 0;
 }
