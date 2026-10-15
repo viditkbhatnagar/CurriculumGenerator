@@ -34,6 +34,49 @@ import { xmlSafeDeep } from '../utils/xmlSafe';
  */
 const MAX_BULLET = 240;
 
+/** The table area of a lesson slide, in inches (16:9 slide, below the title). */
+const TABLE_WIDTH = 8.5;
+const TABLE_HEIGHT = 3.8;
+const MIN_TABLE_FONT = 8;
+
+/** Lines a cell's text wraps to, at a given number of characters per line. */
+function wrappedLines(text: string, perLine: number): number {
+  let lines = 1;
+  let used = 0;
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const len = word.length;
+    if (used === 0) {
+      lines += Math.floor(Math.max(0, len - 1) / perLine);
+      used = len % perLine || perLine;
+    } else if (used + 1 + len <= perLine) {
+      used += 1 + len;
+    } else {
+      lines += 1 + Math.floor(Math.max(0, len - 1) / perLine);
+      used = len % perLine || perLine;
+    }
+  }
+  return lines;
+}
+
+/**
+ * The largest font size, from 12pt down to MIN_TABLE_FONT, at which a table fits the given
+ * area, estimated from wrapped line counts (average character about half the font size wide);
+ * null when none does.
+ */
+export function tableFontSize(rows: string[][], width: number, height: number): number | null {
+  const columns = Math.max(1, ...rows.map((row) => row.length));
+  const columnPt = (width * 72) / columns;
+  for (let size = 12; size >= MIN_TABLE_FONT; size--) {
+    const perLine = Math.max(1, Math.floor((columnPt - 10) / (size * 0.5)));
+    const total = rows.reduce((sum, row) => {
+      const lines = Math.max(1, ...row.map((cell) => wrappedLines(String(cell), perLine)));
+      return sum + lines * size * 1.2 + 8;
+    }, 0);
+    if (total <= height * 72) return size;
+  }
+  return null;
+}
+
 export interface SlideContent {
   type: 'title' | 'content' | 'table' | 'two_column' | 'bullets' | 'concept' | 'process' | 'matrix';
   title: string;
@@ -713,17 +756,26 @@ Return ONLY valid JSON, no markdown formatting.`;
 
     // Table
     if (slideData.table) {
-      const tableRows = [slideData.table.headers, ...slideData.table.rows];
+      const tableRows = [slideData.table.headers, ...slideData.table.rows].map((row) =>
+        (row || []).map((cell) => String(cell ?? ''))
+      );
+      const columns = Math.max(1, ...tableRows.map((row) => row.length));
+      // Sized to fit the slide. Letting pptxgenjs page a long table spilled its last words onto
+      // an extra slide of their own (M32 Lesson 15: a slide reading only "calibration").
+      const fontSize = tableFontSize(tableRows, TABLE_WIDTH, TABLE_HEIGHT);
 
       slide.addTable(tableRows, {
         x: 0.75,
         y: 1.5,
-        w: 8.5,
-        fontSize: 12,
+        w: TABLE_WIDTH,
+        colW: Array(columns).fill(TABLE_WIDTH / columns),
+        fontSize: fontSize ?? MIN_TABLE_FONT,
+        valign: 'top',
         color: colors.text,
         border: { pt: 1, color: colors.secondary },
         fill: { color: colors.lightGray },
-        autoPage: true,
+        // Paged only when even the smallest size cannot fit, so no content is lost.
+        autoPage: fontSize === null,
         autoPageCharH: 0.4,
       });
     }

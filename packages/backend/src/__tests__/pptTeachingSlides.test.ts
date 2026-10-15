@@ -12,7 +12,7 @@ import {
   withoutCIPD,
 } from '../services/pptLessonContent';
 import { openaiService } from '../services/openaiService';
-import { pptGenerationService } from '../services/pptGenerationService';
+import { pptGenerationService, tableFontSize } from '../services/pptGenerationService';
 
 const slide = (type: string, title: string, extra: Record<string, unknown> = {}) => ({
   slideNumber: 1,
@@ -118,6 +118,75 @@ describe('rendering', () => {
     expect(text).toContain('Demand shifts right');
     expect(text).toContain('Supply shifts left');
     expect(text).not.toContain('Contact Activities');
+  });
+
+  it('fits a long table on its own slide instead of spilling words onto another', async () => {
+    // M32 Lesson 15, slide 7: the last word of its last cell was paged onto a slide of its own.
+    const table = {
+      headers: ['Metric', 'Formula sketch', 'Strengths', 'Limitations / avoid when'],
+      rows: [
+        [
+          'MAE',
+          'avg |y − ŷ|',
+          'Simple, robust, interpretable in units',
+          'Not comparable across scales; ignores cost asymmetry',
+        ],
+        [
+          'MAPE',
+          'avg |(y − ŷ)/y|',
+          'Scale-free, intuitive percentages',
+          'Undefined at y=0; over-penalises low actuals',
+        ],
+        [
+          'sMAPE',
+          'avg 2|y − ŷ|/(|y|+|ŷ|)',
+          'Symmetric, bounded 0–200%',
+          'Still sensitive when |y|+|ŷ| small',
+        ],
+        [
+          'Weighted MAE',
+          'avg w_t |y − ŷ|',
+          'Encodes business costs, focus on peaks',
+          'Requires justified weights; risk of gaming',
+        ],
+        [
+          'Weighted sMAPE',
+          'avg w_t 2|y − ŷ|/(|y|+|ŷ|)',
+          'Combines scale-free with cost focus',
+          'Complex to explain; weight–denominator interactions',
+        ],
+        [
+          'Quantile loss',
+          'avg ρ_τ (y − ŷ)',
+          'Asymmetric penalties via τ',
+          'Less intuitive; needs calibration',
+        ],
+      ],
+    };
+    const deck = deckOf([slide('table', 'Compare MAE, MAPE, sMAPE, weighted', { table })]);
+    const zip = await JSZip.loadAsync(await pptGenerationService.exportPPTX(deck as any));
+    const slides = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n));
+    expect(slides).toHaveLength(1);
+    expect(await slideTexts(deck)).toContain('needs calibration');
+  });
+
+  it('chooses the largest table font that fits, and none when nothing fits', () => {
+    expect(
+      tableFontSize(
+        [
+          ['a', 'b'],
+          ['c', 'd'],
+        ],
+        8.5,
+        3.8
+      )
+    ).toBe(12);
+    const long = Array.from({ length: 7 }, () => Array(4).fill('word '.repeat(12).trim()));
+    const size = tableFontSize(long, 8.5, 3.8);
+    expect(size).toBeLessThan(12);
+    expect(size).toBeGreaterThanOrEqual(8);
+    const huge = Array.from({ length: 30 }, () => Array(4).fill('word '.repeat(40).trim()));
+    expect(tableFontSize(huge, 8.5, 3.8)).toBeNull();
   });
 
   it('draws concept, process and matrix slides', async () => {
