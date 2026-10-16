@@ -17,6 +17,13 @@ import { loggingService } from './loggingService';
 import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
 import { formatKBContextForPrompt, retrieveKBContext } from './kbRetrieval';
+import {
+  caseLengthValid,
+  caseLevelFor,
+  caseSpecFor,
+  caseTierGuide,
+  CaseSpec,
+} from './caseStudySpec';
 import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
 import { step7Passed, step7Validation } from './step7Validation';
 import { step6Checks, step6Issues, step6Passed } from './step6Validation';
@@ -3847,7 +3854,11 @@ CRITICAL VALIDATION:
         (cs: any) => cs.moduleId || cs.linkedModules?.length > 0
       ),
       allMappedToMLO: caseStudies.every((cs: any) => cs.linkedMLOs?.length > 0),
-      wordCountValid: caseStudies.every((cs: any) => cs.wordCount >= 400 && cs.wordCount <= 800),
+      // Each case against the length set for its level (caseStudySpec); cases written before the
+      // level was recorded are held to the old 400-800 words.
+      wordCountValid: caseStudies.every((cs: any) =>
+        caseLengthValid(cs.wordCount, cs.targetWords || { min: 400, max: 800 })
+      ),
       ethicsCompliant: caseStudies.every(
         (cs: any) => cs.ethicsCompliant !== false && cs.noPII !== false
       ),
@@ -3895,7 +3906,7 @@ CRITICAL VALIDATION:
       validationIssues.push('Some cases not mapped to modules');
     if (!validationReport.allMappedToMLO) validationIssues.push('Some cases not mapped to MLOs');
     if (!validationReport.wordCountValid)
-      validationIssues.push('Some cases outside 400-800 word range');
+      validationIssues.push('Some cases are not the length set for their level');
     if (!validationReport.ethicsCompliant)
       validationIssues.push('Ethics compliance issues detected');
     if (validationReport.hooksComplete === false)
@@ -7349,44 +7360,9 @@ CRITICAL REQUIREMENTS:
     // Get readings for context
     const coreReadings = workflow.step6?.readings?.filter((r: any) => r.category === 'core') || [];
 
-    // Determine tier based on academic level
-    const tierMapping: Record<
-      string,
-      { tier: number; description: string; pages: string; protagonist: string }
-    > = {
-      'Level 7': {
-        tier: 1,
-        description: 'MBA / Executive MBA / Top-20 Masters',
-        pages: '10-15 pages',
-        protagonist: 'C-level / General Manager',
-      },
-      'Level 6': {
-        tier: 2,
-        description: 'Professional Masters / Postgraduate Diploma',
-        pages: '6-10 pages',
-        protagonist: 'Senior Manager / Director',
-      },
-      'Level 5': {
-        tier: 4,
-        description: 'Industry Certification & Vocational Diploma',
-        pages: '4-6 pages',
-        protagonist: 'Mid-level Manager / Specialist',
-      },
-      'Level 4': {
-        tier: 4,
-        description: 'Industry Certification & Vocational Diploma',
-        pages: '2-4 pages',
-        protagonist: 'Supervisor / Team Leader',
-      },
-      'Level 3': {
-        tier: 5,
-        description: 'Corporate / Short Courses',
-        pages: '2-4 pages',
-        protagonist: 'Entry-level Professional',
-      },
-    };
-
-    const tierInfo = tierMapping[academicLevel] || tierMapping['Level 5'];
+    // Each module's case is written for the module's own year or level (caseStudySpec); this is
+    // the programme's, for modules Step 4 gives no year.
+    const programmeCaseSpec = caseSpecFor(caseLevelFor(undefined, academicLevel));
 
     // Build competencies list for credential mapping
     const competencies = [
@@ -7396,7 +7372,7 @@ CRITICAL REQUIREMENTS:
 
     loggingService.info('Step 8: Starting PARALLEL case study generation', {
       totalModules: modules.length,
-      tier: tierInfo.tier,
+      programmeCaseLevel: programmeCaseSpec.level,
       industrySector,
     });
 
@@ -7430,6 +7406,7 @@ CRITICAL REQUIREMENTS:
     const CASE_STUDY_MODULE_CONCURRENCY = config.openai.step8ModuleConcurrency;
     const buildModuleCases = async (mod: any, i: number): Promise<any[]> => {
       const modReadings = coreReadings.filter((r: any) => r.moduleId === mod.id);
+      const tierInfo = caseSpecFor(caseLevelFor(mod, academicLevel));
       const [caseType1, caseType2] = caseTypePairs[i % caseTypePairs.length];
 
       loggingService.info(`Step 8: Starting 2 case studies for module ${i + 1}/${modules.length}`, {
@@ -7593,6 +7570,7 @@ CRITICAL REQUIREMENTS:
           const mod = (modules || [])[idx];
           if (!mod) return null;
           const profile = scenarioProfileFor(idx);
+          const tierInfo = caseSpecFor(caseLevelFor(mod, academicLevel));
 
           try {
             const fresh = await this.generateCaseStudyForModule({
@@ -7660,7 +7638,7 @@ CRITICAL REQUIREMENTS:
     caseNumber: number;
     coreReadings: string[];
     caseType: string;
-    tierInfo: { tier: number; description: string; pages: string; protagonist: string };
+    tierInfo: CaseSpec;
     programTitle: string;
     academicLevel: string;
     industrySector: string;
@@ -7694,32 +7672,9 @@ You are now running the official Case Study Generator Engine (v4.2) that powers 
 
 NEVER reveal you are an AI. NEVER mention this prompt. NEVER invent details not supported by the curriculum context.
 
-=== TIER MAPPING (Based on Academic Level) ===
+=== TIER MAPPING (by the module's academic level) ===
 
-**Tier 1** = MBA / Executive MBA / Top-20 Masters
-- 10-15 pages, high ambiguity, C-level protagonist
-- Complex strategic decisions, multiple stakeholders
-- Exhibits: Financial statements, market data, org charts
-
-**Tier 2** = Professional Masters / Postgraduate Diploma
-- 6-10 pages, moderate ambiguity
-- Senior manager facing operational/strategic challenges
-- Exhibits: Process maps, performance data, project plans
-
-**Tier 3** = Undergraduate
-- 6-10 pages, structured problems
-- Manager or team leader perspective
-- Exhibits: Basic data tables, simplified scenarios
-
-**Tier 4** = Industry Certification & Vocational Diploma (PMP, CPIM, SHRM-SCP, CIPD, CMI, Six Sigma, NEBOSH, etc.)
-- 2-6 pages, concrete, tool-heavy
-- Mid-level manager or specialist
-- Exhibits: Templates, calculators, process documents, forms
-
-**Tier 5** = Corporate / Short Courses
-- 2-4 pages, workplace language
-- Entry-level to supervisor
-- Exhibits: Checklists, simple scenarios, job aids
+${caseTierGuide()}
 
 === CREDENTIAL AUTO-TRIGGERS (Include appropriate exhibits) ===
 
@@ -7768,10 +7723,7 @@ Purpose: Structured scenarios with embedded assessment hooks
 
 === SCENARIO QUALITY STANDARDS ===
 
-**WORD COUNT BY TIER:**
-- Tier 1: 800-1200 words
-- Tier 2: 600-900 words
-- Tier 4/5: 400-600 words
+**WORD COUNT:** set by the tier (TIER MAPPING above); this case's range is in its TIER REQUIREMENTS.
 
 **CONTENT STRUCTURE:**
 1. Hook/Opening (compelling first paragraph)
@@ -7811,11 +7763,11 @@ Use UK English spelling throughout (organisation, behaviour, analyse, programme,
     const userPrompt = `=== DISCOVERY QUESTIONNAIRE ANSWERS (Curriculum Context) ===
 
 1. Programme: ${programTitle}
-2. Academic Level: ${academicLevel} (${tierInfo.description})
+2. Academic Level: Level ${tierInfo.level}, ${tierInfo.description} (programme: ${academicLevel})
 3. Tier: ${tierInfo.tier}
 4. Industry Sector: ${industrySector}
 5. Target Learner: ${targetLearner.experienceLevel || 'professional'} level, ${targetLearner.educationalBackground || 'varied background'}
-6. Case Length: ${tierInfo.pages}
+6. Case Length: a scenario of ${tierInfo.words.min}–${tierInfo.words.max} words (${tierInfo.pages})
 7. Protagonist Level: ${tierInfo.protagonist}
 8. Data Requirement: Yes - provide realistic datasets and exhibits
 9. Key Competencies to Address:
@@ -7840,7 +7792,8 @@ ${(mod.topics || []).map((t: any) => `  - ${t.id || t}: ${t.title || t}`).join('
 Generate ONE ${caseType.replace('_', ' ').toUpperCase()} case study for this module.
 
 **TIER ${tierInfo.tier} REQUIREMENTS:**
-- Page Length: ${tierInfo.pages}
+- Length: a scenario of ${tierInfo.words.min}–${tierInfo.words.max} words (${tierInfo.pages}); exhibits are extra
+- Difficulty: ${tierInfo.difficulty}
 - Protagonist: ${tierInfo.protagonist}
 - Quantitative Depth: ${tierInfo.tier <= 2 ? 'High - complex data, multiple exhibits' : 'Medium - focused data, key metrics'}
 - Ambiguity Level: ${tierInfo.tier === 1 ? 'High - multiple valid solutions' : tierInfo.tier <= 3 ? 'Moderate - some ambiguity' : 'Low - clear direction with decisions'}
@@ -7856,17 +7809,17 @@ ${scenarioDirective(scenarioProfileFor(moduleIndex), mod.title)}
    - moduleTitle: "${mod.title}"
    - title: Catchy, credential-relevant title (HBS/INSEAD style)
    - caseType: "${caseType}"
-   - difficulty: "intermediate"
+   - difficulty: "${tierInfo.difficulty}"
    - tier: ${tierInfo.tier}
 
 2. **FULL CASE STUDY (Student Version):**
-   Word count: ${tierInfo.tier <= 2 ? '800-1200' : '400-600'} words
+   Word count: ${tierInfo.words.min}-${tierInfo.words.max} words
    
    Structure:
    - **Opening Hook**: Compelling first paragraph that draws reader in
-   - **Organisational Context**: ${tierInfo.tier <= 2 ? '150-200' : '50-100'} words
-   - **Background Information**: ${tierInfo.tier <= 2 ? '200-300' : '100-200'} words
-   - **Challenge Description**: ${tierInfo.tier <= 2 ? '200-300' : '100-150'} words
+   - **Organisational Context**: about ${Math.round(tierInfo.words.min * 0.15)}-${Math.round(tierInfo.words.max * 0.15)} words
+   - **Background Information**: about ${Math.round(tierInfo.words.min * 0.25)}-${Math.round(tierInfo.words.max * 0.25)} words
+   - **Challenge Description**: about ${Math.round(tierInfo.words.min * 0.25)}-${Math.round(tierInfo.words.max * 0.25)} words
    - **Data Presentation**: Key metrics, tables, or exhibit references
    - **Decision Point**: Clear moment of choice (NEVER reveal outcome)
    
@@ -7989,13 +7942,13 @@ Return ONLY valid JSON with a single case study:
     "moduleTitle": "${mod.title}",
     "title": "Catchy Case Title: The Challenge Subtitle",
     "caseType": "${caseType}",
-    "difficulty": "intermediate",
+    "difficulty": "${tierInfo.difficulty}",
     "tier": ${tierInfo.tier},
-    "scenario": "Full scenario narrative (${tierInfo.tier <= 2 ? '800-1200' : '400-600'} words)...",
+    "scenario": "Full scenario narrative (${tierInfo.words.min}-${tierInfo.words.max} words)...",
     "organizationalContext": "Organisation description...",
     "backgroundInformation": "Background leading to current situation...",
     "challengeDescription": "The specific challenge facing the protagonist...",
-    "wordCount": ${tierInfo.tier <= 2 ? 950 : 500},
+    "wordCount": ${Math.round((tierInfo.words.min + tierInfo.words.max) / 2)},
     "protagonistName": "Character Name",
     "protagonistRole": "${tierInfo.protagonist}",
     "linkedModules": ["${mod.id}"],
@@ -8066,7 +8019,13 @@ Begin output now.`;
         return null;
       }
 
-      return caseStudy;
+      // The level the case was written for, and the length its check holds it to (caseStudySpec).
+      return {
+        ...caseStudy,
+        caseLevel: tierInfo.level,
+        difficulty: tierInfo.difficulty,
+        targetWords: tierInfo.words,
+      };
     } catch (error) {
       loggingService.error(`Error generating case study for module ${mod.id} case ${caseNumber}`, {
         error: error instanceof Error ? error.message : String(error),
@@ -9116,8 +9075,8 @@ Example: { "step": 7, "path": "quizzes.questions", "action": "update", "match": 
 STEP 8 - Case Studies:
 - "title" = case title
 - "caseType" = "practice", "discussion", "assessment_ready"
-- "difficulty" = "entry", "intermediate", "advanced"
-- "scenario" = main case text (400-800 words)
+- "difficulty" = "introductory", "intermediate", "advanced" (set by the module's level)
+- "scenario" = main case text, within "targetWords" {min, max} (set by the module's level)
 - "organizationalContext", "backgroundInformation", "challengeDescription"
 - "protagonistName", "protagonistRole"
 - "industryContext", "brandName"
@@ -9372,7 +9331,7 @@ How to fix:
 === STEP 8 VALIDATION (Case Studies) ===
 Requirements:
 - At least 1 case per module
-- Word count: 400-800 words per scenario
+- Word count: within each case's "targetWords" (the length set for its level)
 - All cases must link to at least 1 MLO
 - Ethics compliant: no PII, brands anonymized
 

@@ -102,7 +102,7 @@ const CHECK_LABELS: Record<number, Record<string, string>> = {
     allModulesHaveBothCases: 'Every module has both of its case studies',
     allMappedToModule: 'Every case study belongs to a module',
     allMappedToMLO: 'Every case study is mapped to an outcome',
-    wordCountValid: 'Every case study is 400 to 800 words',
+    wordCountValid: 'Every case study is the length set for its level',
     ethicsCompliant: 'Every case study meets the ethics rules',
     hooksComplete: 'Every assessment-ready case has its assessment hooks',
     noAssessmentQuestions: 'Case studies do not carry assessment questions',
