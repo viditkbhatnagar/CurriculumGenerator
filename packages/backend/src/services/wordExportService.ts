@@ -13,7 +13,6 @@ import {
   Bookmark,
   InternalHyperlink,
 } from 'docx';
-import OpenAI from 'openai';
 import { loggingService } from './loggingService';
 import { moduleLabelOf } from '../utils/moduleIdentity';
 import { bloomIndex, statedBloom } from './assessmentGeneratorService';
@@ -27,7 +26,7 @@ import { entryRequirementsLabel } from '../utils/entryRequirements';
 import { step12SummaryFromPacks, step12ValidationFromPacks } from './deliverableValidation';
 import { normaliseTopic } from '../utils/topicShape';
 import { cleanModelOutput, xmlSafeDeep } from '../utils/xmlSafe';
-import { buildWithReflows, inReflowSlot, reflowFromScope, Reflowed } from './reflowScope';
+import { layoutProse, LaidOut, paragraphsOf } from '../utils/proseLayout';
 
 interface WorkflowData {
   projectName: string;
@@ -108,132 +107,30 @@ const PARA_SPACING = {
 };
 
 /**
- * Text this long or shorter is used as written instead of being sent to the model to reflow.
- * The model is asked for paragraphs of four to seven lines, which is about this many
- * characters, so there is nothing to restructure. Sending everything made the BBA's
- * whole-programme document wait on 751 model calls in a row (382 of them glossary definitions
- * under 300 characters) and take over 15 minutes, and it let the model reword approved text.
+ * Text this long or shorter is kept as one paragraph. Longer text is split where its author split
+ * it, or between sentences (utils/proseLayout); its words are never changed.
  */
 const SINGLE_PARAGRAPH_CHARS = 500;
 
 export class WordExportService {
-  private openai: OpenAI;
-
-  constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-  }
-
   /**
-   * Intelligently format text using OpenAI
-   * - Breaks long paragraphs into 4-7 line chunks
-   * - Detects and converts appropriate content to bullet lists
-   * - Removes duplicates and improves readability
+   * A passage laid out as paragraphs, or as a list when it is written as one. Approved text is
+   * printed exactly as approved: this used to ask GPT-4o-mini to reflow long passages, which
+   * could reword them (Rejin's audit, 16 October 2026).
    */
-  private async formatTextIntelligently(text: string, context: string): Promise<Reflowed> {
+  private async layoutText(text: string, _context: string): Promise<LaidOut> {
     if (!text || text.trim().length === 0) {
       return { paragraphs: [], bullets: [] };
     }
-    if (text.trim().length <= SINGLE_PARAGRAPH_CHARS) {
+    if (text.trim().length <= SINGLE_PARAGRAPH_CHARS && !text.includes('\n')) {
       return { paragraphs: [text.trim()], bullets: [] };
     }
-    // Inside a section build the passage is fetched with the section's others (reflowScope).
-    return (
-      reflowFromScope(text, context) ?? inReflowSlot(() => this.reflowWithModel(text, context))
-    );
+    return layoutProse(text);
   }
 
-  /** One model reflow of a long passage. Never throws: on failure, the text as written. */
-  private async reflowWithModel(text: string, context: string): Promise<Reflowed> {
-    try {
-      const prompt = `You are formatting curriculum content for a professional academic document.
-
-Context: ${context}
-
-Content to format:
-${text}
-
-Rules:
-1. Break long blocks of text into logical academic paragraphs (4-7 lines each)
-2. Identify content that should be bullet points (lists, competencies, aims, pathways, etc.)
-3. Remove duplicate sentences
-4. Maintain academic tone and meaning
-5. DO NOT add new content
-
-Return ONLY a JSON object with this structure:
-{
-  "paragraphs": ["paragraph 1", "paragraph 2", ...],
-  "bullets": ["bullet 1", "bullet 2", ...] or []
-}
-
-If the content is better as paragraphs, put it all in paragraphs array and leave bullets empty.
-If the content is better as bullets, put it in bullets array and leave paragraphs empty.`;
-
-      const response = await this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are a curriculum formatting expert. Return only valid JSON, no markdown formatting.',
-          },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.3,
-        response_format: { type: 'json_object' },
-      });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error('No response from OpenAI');
-      }
-
-      // The answer goes into the document after the export has already removed the characters
-      // XML forbids, so it is cleaned here: raw and escaped control characters alike.
-      const result = JSON.parse(cleanModelOutput(content, true));
-      return {
-        paragraphs: result.paragraphs || [],
-        bullets: result.bullets || [],
-      };
-    } catch (error) {
-      // Fallback: return original text as single paragraph
-      loggingService.error('OpenAI formatting failed, using fallback', { error, context });
-      return {
-        paragraphs: [text],
-        bullets: [],
-      };
-    }
-  }
-
-  /**
-   * Split prose into readable paragraphs WITHOUT an OpenAI round-trip.
-   * Used for content that is already well-formed (e.g. generated lesson-plan
-   * guidance) where calling formatTextIntelligently per item would add a
-   * network call per lesson and make large exports time out. Honours existing
-   * blank-line breaks; otherwise groups sentences into ~4-sentence blocks.
-   */
+  /** Prose as paragraphs: its own blank-line breaks, or groups of about four sentences. */
   private splitIntoParagraphs(text: string): string[] {
-    const trimmed = (text || '').trim();
-    if (!trimmed) return [];
-    const byBlankLine = trimmed
-      .split(/\n\s*\n+/)
-      .map((p) => p.replace(/\s+/g, ' ').trim())
-      .filter(Boolean);
-    if (byBlankLine.length > 1) return byBlankLine;
-    const sentences = trimmed.replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [
-      trimmed,
-    ];
-    const paras: string[] = [];
-    for (let i = 0; i < sentences.length; i += 4) {
-      paras.push(
-        sentences
-          .slice(i, i + 4)
-          .join('')
-          .trim()
-      );
-    }
-    return paras.filter(Boolean);
+    return paragraphsOf(text);
   }
 
   /**
@@ -248,7 +145,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     text: string,
     context: string
   ): Promise<{ paragraphs: string[]; bullets: string[] }> {
-    const formatted = await this.formatTextIntelligently(text, context);
+    const formatted = await this.layoutText(text, context);
     return {
       paragraphs: [...formatted.paragraphs, ...formatted.bullets.map((b) => `• ${b}`)],
       bullets: [],
@@ -581,10 +478,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     // Program Description with intelligent formatting
     if (step1.programDescription) {
       contentChildren.push(this.createH2('Program Description'));
-      const formatted = await this.formatTextIntelligently(
-        step1.programDescription,
-        'Program Description'
-      );
+      const formatted = await this.layoutText(step1.programDescription, 'Program Description');
       if (formatted.paragraphs.length > 0) {
         contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
       }
@@ -598,10 +492,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     // Executive Summary with intelligent formatting
     if (step1.executiveSummary) {
       contentChildren.push(this.createH2('Executive Summary'));
-      const formatted = await this.formatTextIntelligently(
-        step1.executiveSummary,
-        'Executive Summary'
-      );
+      const formatted = await this.layoutText(step1.executiveSummary, 'Executive Summary');
       if (formatted.paragraphs.length > 0) {
         contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
       }
@@ -655,7 +546,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     if (step1.programAims?.length) {
       contentChildren.push(this.createH2('Program Aims'));
       const aimsText = step1.programAims.join('; ');
-      const formatted = await this.formatTextIntelligently(aimsText, 'Program Aims List');
+      const formatted = await this.layoutText(aimsText, 'Program Aims List');
       if (formatted.bullets.length > 0) {
         contentChildren.push(
           ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
@@ -689,10 +580,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           })
         );
       }
-      const formatted = await this.formatTextIntelligently(
-        step1.entryRequirements,
-        'Entry Requirements'
-      );
+      const formatted = await this.layoutText(step1.entryRequirements, 'Entry Requirements');
       if (formatted.paragraphs.length > 0) {
         contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
       }
@@ -1658,7 +1546,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
             })
           );
 
-          const formatted = await this.formatTextIntelligently(
+          const formatted = await this.layoutText(
             assessment.instructions,
             'Assessment Instructions'
           );
@@ -4215,15 +4103,14 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     if (step13.integrityAndSecurity) {
       const sectionNum = step13.sectionBIncluded ? '13.6' : '13.5';
       contentChildren.push(this.createH2(`${sectionNum} Integrity & Security`));
-      const formatted = await this.formatTextIntelligently(
+      const formatted = await this.layoutText(
         step13.integrityAndSecurity,
         'Exam Integrity and Security'
       );
       if (formatted.paragraphs.length > 0) {
         contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
       }
-      // formatTextIntelligently may return the content as bullets instead of
-      // paragraphs; without this the whole section rendered blank in the export.
+      // Text written as a list comes back as bullets; without this the section rendered blank.
       if (formatted.bullets.length > 0) {
         contentChildren.push(
           ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
@@ -4235,15 +4122,14 @@ If the content is better as bullets, put it in bullets array and leave paragraph
     if (step13.accessibilityProvisions) {
       const sectionNum = step13.sectionBIncluded ? '13.7' : '13.6';
       contentChildren.push(this.createH2(`${sectionNum} Accessibility Provisions`));
-      const formatted = await this.formatTextIntelligently(
+      const formatted = await this.layoutText(
         step13.accessibilityProvisions,
         'Exam Accessibility Provisions'
       );
       if (formatted.paragraphs.length > 0) {
         contentChildren.push(...this.createFormattedParagraphs(formatted.paragraphs));
       }
-      // formatTextIntelligently may return the content as bullets instead of
-      // paragraphs; without this the whole section rendered blank in the export.
+      // Text written as a list comes back as bullets; without this the section rendered blank.
       if (formatted.bullets.length > 0) {
         contentChildren.push(
           ...this.createFormattedParagraphs(formatted.bullets, { isBullet: true })
@@ -4429,11 +4315,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       13: 'Summative Exam',
     };
 
-    // Each step section renders into its own children array so the
-    // per-section OpenAI reflow calls run concurrently rather than one
-    // step after another. Promise.all preserves input order, so the
-    // arrays are concatenated back in document order afterwards. The
-    // rendered document is byte-identical to the sequential version.
+    // Each step section renders into its own children array; Promise.all preserves input order,
+    // so the arrays are concatenated back in document order afterwards.
     const sectionBuilders: Array<{ step: number; build: (out: any[]) => Promise<void> }> = [];
     const addSection = (step: number, build: (out: any[]) => Promise<void>) => {
       sectionBuilders.push({ step, build });
@@ -4522,14 +4405,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           `Step ${step}: ${stepNames[step]}`,
           `Formatting ${stepNames[step].toLowerCase()}...`
         );
-        const children = await buildWithReflows(
-          async () => {
-            const out: any[] = [];
-            await build(out);
-            return out;
-          },
-          (text, context) => this.reflowWithModel(text, context)
-        );
+        const children: any[] = [];
+        await build(children);
         sectionsCompleted++;
         reportProgress(
           `Step ${step}: ${stepNames[step]}`,
@@ -4716,8 +4593,7 @@ If the content is better as bullets, put it in bullets array and leave paragraph
       }
     }
 
-    // Call the appropriate section generator, into a fresh list each time: the step is built
-    // with its model reflows fetched together (see reflowScope).
+    // Call the appropriate section generator.
     const renderStep = async (children: any[]) => {
       switch (stepNumber) {
         case 1:
@@ -4778,14 +4654,8 @@ If the content is better as bullets, put it in bullets array and leave paragraph
           break;
       }
     };
-    const contentChildren = await buildWithReflows(
-      async () => {
-        const children: any[] = [];
-        await renderStep(children);
-        return children;
-      },
-      (text, context) => this.reflowWithModel(text, context)
-    );
+    const contentChildren: any[] = [];
+    await renderStep(contentChildren);
 
     const doc = new Document({
       sections: [titleSection, { properties: {}, children: contentChildren }],

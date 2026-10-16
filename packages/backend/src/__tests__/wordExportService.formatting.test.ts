@@ -22,7 +22,6 @@ jest.mock('openai', () => ({
 
 import { wordExportService } from '../services/wordExportService';
 
-const answer = (json: string) => ({ choices: [{ message: { content: json } }] });
 const LONG = 'The warehouse team recorded every inbound pallet by hand. '.repeat(12);
 
 async function documentXml(buffer: Buffer): Promise<string> {
@@ -39,7 +38,9 @@ const base = {
 
 beforeEach(() => mockCreate.mockReset());
 
-describe('model reformatting in the Word export', () => {
+describe('laying out text in the Word export', () => {
+  // Rejin's audit, 16 October 2026: approved text must be printed as approved, so no model
+  // reformats it on the way into the document.
   it('uses short text as written, without a model call', async () => {
     const workflow = {
       ...base,
@@ -52,55 +53,51 @@ describe('model reformatting in the Word export', () => {
     expect(text).toContain('The time from order to delivery.');
   });
 
-  it('keeps text the model returned as a list in a section that renders paragraphs', async () => {
-    mockCreate.mockResolvedValue(
-      answer(
-        JSON.stringify({
-          paragraphs: [],
-          bullets: ['Pallets were counted by hand', 'Errors reached 4%'],
-        })
-      )
-    );
+  it('prints a long passage word for word, without a model call', async () => {
+    const scenario = LONG + 'The warehouse team recorded every inbound pallet by hand.';
     const workflow = {
       ...base,
-      step8: {
-        caseStudies: [{ id: 'cs1', title: 'Inbound errors', moduleId: 'mod-a', scenario: LONG }],
-      },
+      step8: { caseStudies: [{ id: 'cs1', title: 'Inbound', moduleId: 'mod-a', scenario }] },
     };
     const text = textOf(
       await documentXml(await wordExportService.generateStepDocument(workflow, 8))
     );
-    expect(mockCreate).toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
+    const said = text.match(/The warehouse team recorded every inbound pallet by hand\./g) || [];
+    // Every repetition survives: the model used to be told to remove duplicate sentences.
+    expect(said.length).toBeGreaterThanOrEqual(13);
+  });
+
+  it('keeps text written as a list in a section that renders paragraphs', async () => {
+    const scenario = `${LONG}\nFindings:\n- Pallets were counted by hand\n- Errors reached 4%`;
+    const workflow = {
+      ...base,
+      step8: { caseStudies: [{ id: 'cs1', title: 'Inbound errors', moduleId: 'mod-a', scenario }] },
+    };
+    const text = textOf(
+      await documentXml(await wordExportService.generateStepDocument(workflow, 8))
+    );
     expect(text).toContain('Pallets were counted by hand');
     expect(text).toContain('Errors reached 4%');
   });
 
-  it('cleans an escaped control character out of the model answer', async () => {
-    // Valid JSON: parsing turns "\\u0014" into a raw U+0014, which XML forbids.
-    mockCreate.mockResolvedValue(answer('{"paragraphs": ["Margin \\u0014 cost"], "bullets": []}'));
+  it('keeps characters XML forbids out of the document', async () => {
     const workflow = {
       ...base,
       step8: {
-        caseStudies: [{ id: 'cs1', title: 'Margins', moduleId: 'mod-a', scenario: LONG }],
+        caseStudies: [
+          {
+            id: 'cs1',
+            title: 'Margins',
+            moduleId: 'mod-a',
+            scenario: `${LONG} Margin \u0014 cost.`,
+          },
+        ],
       },
     };
     const xml = await documentXml(await wordExportService.generateStepDocument(workflow, 8));
     // These are the characters that made the M42 guide "not well-formed" to every XML parser.
     expect(xml).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/);
-    expect(textOf(xml)).toContain('Margin  cost');
-  });
-
-  it('keeps the model answer when it holds a raw control character', async () => {
-    // A raw U+001F inside a JSON string is invalid JSON, so the answer used to be thrown away.
-    mockCreate.mockResolvedValue(answer('{"paragraphs": ["Units\u001f sold"], "bullets": []}'));
-    const workflow = {
-      ...base,
-      step8: {
-        caseStudies: [{ id: 'cs1', title: 'Units', moduleId: 'mod-a', scenario: LONG }],
-      },
-    };
-    const xml = await documentXml(await wordExportService.generateStepDocument(workflow, 8));
-    expect(xml).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/);
-    expect(textOf(xml)).toContain('Units sold');
+    expect(textOf(xml)).toContain('Margin');
   });
 });

@@ -73,7 +73,9 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 //      stated.
 // v33: Step 2 prints the evidence behind each competency statement, and Unresolved Issues lists
 //      statements without evidence and likely duplicates.
-const EXPORT_FORMAT_VERSION = 'v33';
+// v34: long passages are laid out by rule (utils/proseLayout) instead of being reflowed by
+//      GPT-4o-mini, which could reword approved text.
+const EXPORT_FORMAT_VERSION = 'v34';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the
