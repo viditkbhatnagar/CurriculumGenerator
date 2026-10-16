@@ -1,5 +1,5 @@
 {
-  "count": 220,
+  "count": 218,
   "signatures": [
     "src/data/mockRepository.ts|TS2339|Property 'createdAt' does not exist on type 'T'.",
     "src/data/mockRepository.ts|TS2352|Conversion of type 'Omit<T, \"createdAt\" | \"updatedAt\" | \"_id\"> & { _id: string; createdAt: Date; updatedAt: Date; }' to type 'T' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.",
@@ -218,8 +218,6 @@
     "src/services/workflowService.ts|TS2353|Object literal may only specify known properties, and 'temperature' does not exist in type 'OpenAIGenerateOptions'.",
     "src/services/workflowService.ts|TS2353|Object literal may only specify known properties, and 'temperature' does not exist in type 'OpenAIGenerateOptions'.",
     "src/services/workflowService.ts|TS2353|Object literal may only specify known properties, and 'terms' does not exist in type '{ entries: { id: string; term: string; definition: string; exampleSentence?: string; technicalNote?: string; relatedTerms: string[]; broaderTerms: string[]; narrowerTerms: string[]; synonyms: string[]; moduleIds: string[]; source: \"description\" | ... 4 more ... | \"outcome\"; }[]; ... 4 more ...; generatedAt: Date; }'.",
-    "src/services/workflowService.ts|TS2554|Expected 0-2 arguments, but got 3.",
-    "src/services/workflowService.ts|TS2554|Expected 0-2 arguments, but got 3.",
     "src/services/workflowService.ts|TS2739|Type '{ earlyModulesValid: boolean; middleModulesValid: boolean; lateModulesValid: boolean; }' is missing the following properties from type '{ earlyModulesLowerLevel: boolean; laterModulesHigherLevel: boolean; }': earlyModulesLowerLevel, laterModulesHigherLevel"
   ],
   "referenceErrors": [

@@ -14,9 +14,9 @@ import mongoose from 'mongoose';
 import { CurriculumWorkflow, ICurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { openaiService } from './openaiService';
 import { loggingService } from './loggingService';
-import { RAGEngine } from './ragEngine';
 import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
+import { formatKBContextForPrompt, retrieveKBContext } from './kbRetrieval';
 import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
 import { step7Passed, step7Validation } from './step7Validation';
 import { step6Checks, step6Issues, step6Passed } from './step6Validation';
@@ -76,7 +76,6 @@ import {
 } from './sourceRelevanceService';
 
 // Initialize RAG Engine and Knowledge Base Service for context retrieval
-const ragEngine = new RAGEngine();
 const knowledgeBaseService = new KnowledgeBaseService();
 import {
   Step1ProgramFoundation,
@@ -159,128 +158,6 @@ function calculateCredits(
     independentHours,
     contactPercent,
   };
-}
-
-// ============================================================================
-// KNOWLEDGE BASE CONTEXT RETRIEVAL
-// ============================================================================
-
-interface KBContext {
-  content: string;
-  source: string;
-  relevance: number;
-}
-
-/**
- * Retrieve relevant context from the knowledge base for curriculum generation
- * Uses RAG engine for semantic search across ingested documents
- */
-async function retrieveKBContext(
-  queries: string[],
-  options: {
-    maxResults?: number;
-    minSimilarity?: number;
-    domains?: string[];
-    // When set, prepend this workflow's ingested-textbook nodes (highest
-    // priority, cited). mloIds narrows the nodes to those serving the outcomes.
-    workflowId?: string;
-    mloIds?: string[];
-    // Which step is asking, so an empty result can be traced to the content it left ungrounded.
-    stage?: string;
-  } = {}
-): Promise<KBContext[]> {
-  const { maxResults = 15, minSimilarity = 0.65, domains, workflowId, mloIds, stage } = options;
-  const allResults: KBContext[] = [];
-
-  try {
-    for (const query of queries) {
-      const results = await ragEngine.semanticSearch(query, {
-        maxSources: Math.ceil(maxResults / queries.length),
-        minSimilarity,
-        domains,
-      });
-
-      for (const result of results) {
-        allResults.push({
-          content: result.content,
-          source: result.source?.title || 'Knowledge Base',
-          relevance: result.similarityScore,
-        });
-      }
-    }
-
-    // Deduplicate by content similarity and sort by relevance
-    const uniqueResults = allResults
-      .filter(
-        (item, index, self) =>
-          index ===
-          self.findIndex((t) => t.content.substring(0, 100) === item.content.substring(0, 100))
-      )
-      .sort((a, b) => b.relevance - a.relevance)
-      .slice(0, maxResults);
-
-    // Prepend this workflow's own ingested-textbook nodes (highest priority).
-    let results = uniqueResults;
-    if (workflowId) {
-      const bookCtx = await getWorkflowBookGrounding(workflowId, mloIds, Math.min(8, maxResults));
-      if (bookCtx.length) results = [...bookCtx, ...uniqueResults];
-    }
-    // An empty result used to pass unremarked, which is how every step ran without
-    // knowledge-base context while the vector index did not exist. /health reports the index.
-    if (results.length === 0) {
-      loggingService.warn(
-        'Generating without knowledge-base evidence: retrieval returned nothing',
-        {
-          stage,
-          workflowId,
-          queries: queries.length,
-          domains,
-        }
-      );
-    } else {
-      loggingService.info('Knowledge-base passages retrieved', {
-        stage,
-        workflowId,
-        passages: results.length,
-      });
-    }
-    return results;
-  } catch (error) {
-    loggingService.warn('KB context retrieval failed, proceeding without KB context', { error });
-    // Book grounding is independent of KB search — still return it if present.
-    if (workflowId) {
-      try {
-        return await getWorkflowBookGrounding(workflowId, mloIds, Math.min(8, maxResults));
-      } catch {
-        /* fall through */
-      }
-    }
-    return [];
-  }
-}
-
-/**
- * Format KB context for inclusion in prompts
- */
-function formatKBContextForPrompt(contexts: KBContext[]): string {
-  if (contexts.length === 0) {
-    return '';
-  }
-
-  const formattedContexts = contexts
-    .slice(0, 10) // Limit to top 10 most relevant
-    .map((ctx, idx) => `[SOURCE ${idx + 1}: ${ctx.source}]\n${ctx.content.substring(0, 800)}`)
-    .join('\n\n---\n\n');
-
-  return `
-=== KNOWLEDGE BASE REFERENCE MATERIALS ===
-The following content has been retrieved from authoritative sources in the knowledge base.
-Use this information to ensure accuracy and alignment with established curriculum standards.
-
-${formattedContexts}
-
-=== END KNOWLEDGE BASE MATERIALS ===
-`;
 }
 
 /**
@@ -470,7 +347,8 @@ class WorkflowService {
       try {
         generatedContent = await this.generateStep1Content(
           { ...input, targetLearner: targetLearnerProfile, jobRoles: normalizedJobRoles },
-          creditCalc
+          creditCalc,
+          workflowId
         );
       } catch (err) {
         loggingService.error('Failed to generate Step 1 AI content', { error: err });
@@ -670,7 +548,11 @@ class WorkflowService {
     return score;
   }
 
-  private async generateStep1Content(input: any, creditCalc: CreditCalculation): Promise<any> {
+  private async generateStep1Content(
+    input: any,
+    creditCalc: CreditCalculation,
+    workflowId?: string
+  ): Promise<any> {
     // Build target learner info from structured profile
     const targetLearner = input.targetLearner || {};
     const targetLearnerInfo =
@@ -720,6 +602,7 @@ class WorkflowService {
       minSimilarity: 0.6,
       domains: ['curriculum-design', 'accreditation', 'competency-framework', 'standards'],
       stage: 'step1',
+      workflowId,
     });
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
@@ -917,7 +800,7 @@ IMPORTANT:
     loggingService.info('Processing Step 2: Competency Framework (KSC)', { workflowId });
 
     // Generate KSC items using AI
-    const kscContent = await this.generateStep2Content(workflow.step1, input);
+    const kscContent = await this.generateStep2Content(workflow.step1, input, workflowId);
 
     // Store step data - use competencyItems for new format, but also store as attitudeItems for backward compatibility
     workflow.step2 = {
@@ -974,7 +857,7 @@ IMPORTANT:
     }
   }
 
-  private async generateStep2Content(step1: any, input: any): Promise<any> {
+  private async generateStep2Content(step1: any, input: any, workflowId?: string): Promise<any> {
     // Build benchmark info
     const benchmarkList =
       input.benchmarkPrograms && input.benchmarkPrograms.length > 0
@@ -1034,6 +917,7 @@ IMPORTANT:
       minSimilarity: 0.55,
       domains: ['competency-framework', 'standards', 'accreditations', 'curriculum-design'],
       stage: 'step2',
+      workflowId,
     });
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
@@ -1274,7 +1158,12 @@ IMPORTANT:
     loggingService.info('Processing Step 3: Program Learning Outcomes', { workflowId });
 
     // Generate PLOs using AI
-    const ploContent = await this.generateStep3Content(workflow.step1, workflow.step2, input);
+    const ploContent = await this.generateStep3Content(
+      workflow.step1,
+      workflow.step2,
+      input,
+      workflowId
+    );
 
     // Never trade approved outcomes for nothing. Even with the generator now
     // throwing on failure, a response that parses to an empty list would still
@@ -1358,7 +1247,12 @@ IMPORTANT:
     return workflow;
   }
 
-  private async generateStep3Content(step1: any, step2: any, input: any): Promise<any> {
+  private async generateStep3Content(
+    step1: any,
+    step2: any,
+    input: any,
+    workflowId?: string
+  ): Promise<any> {
     // Get competency items (handle both new competencyItems and legacy attitudeItems)
     const competencyItems = step2.competencyItems || step2.attitudeItems || [];
     const knowledgeItems = step2.knowledgeItems || [];
@@ -1405,6 +1299,7 @@ IMPORTANT:
       minSimilarity: 0.55,
       domains: ['curriculum-design', 'standards', 'accreditations'],
       stage: 'step3',
+      workflowId,
     });
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
@@ -2029,7 +1924,8 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       workflow.step1,
       workflow.step2,
       workflow.step3,
-      (workflow.step4 as any)?.requestedModuleCount
+      (workflow.step4 as any)?.requestedModuleCount,
+      workflowId
     );
 
     // Process modules to add phase and validate
@@ -2216,7 +2112,8 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     step1: any,
     step2: any,
     step3: any,
-    requestedModuleCount?: number
+    requestedModuleCount?: number,
+    workflowId?: string
   ): Promise<any> {
     const creditFramework = step1.creditFramework || {};
     const totalHours = creditFramework.totalHours || 120;
@@ -2276,6 +2173,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       minSimilarity: 0.55,
       domains: ['curriculum-design', 'standards', 'typeOfOutputs'],
       stage: 'step4',
+      workflowId,
     });
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
@@ -4315,7 +4213,6 @@ CRITICAL VALIDATION:
 
     // Import services
     const { LessonPlanService } = await import('./lessonPlanService');
-    const { PPTGenerationService } = await import('./pptGenerationService');
 
     // Save after each lesson, so an interruption costs one lesson rather than a module.
     //
@@ -4412,12 +4309,7 @@ CRITICAL VALIDATION:
       }
     };
 
-    const pptGenerationService = new PPTGenerationService();
-    const lessonPlanService = new LessonPlanService(
-      undefined,
-      lessonProgressCallback,
-      pptGenerationService
-    );
+    const lessonPlanService = new LessonPlanService(undefined, lessonProgressCallback);
 
     // Build context
     const context = this.buildWorkflowContext(workflow);
@@ -5750,6 +5642,10 @@ CRITICAL VALIDATION:
     const industrySector = workflow.step1?.targetLearner?.industrySector || 'general';
     const programTitle = workflow.step1?.programTitle || 'Program';
     const academicLevel = workflow.step1?.academicLevel || 'Level 5';
+    // Each module's search is recorded afresh (recordKbEvidence); drop the last run's records.
+    await CurriculumWorkflow.collection
+      .updateOne({ _id: workflow._id as any }, { $unset: { 'kbEvidence.step5': '' } })
+      .catch(() => undefined);
 
     loggingService.info('Step 5: Starting PARALLEL source generation', {
       totalModules: modules.length,
@@ -5782,6 +5678,7 @@ CRITICAL VALIDATION:
           industrySector,
           currentYear,
           fiveYearsAgo,
+          workflowId: String(workflow._id),
         });
 
         loggingService.info(`Step 5: Module ${mod.id} complete`, {
@@ -5825,6 +5722,7 @@ CRITICAL VALIDATION:
     industrySector: string;
     currentYear: number;
     fiveYearsAgo: number;
+    workflowId?: string;
   }): Promise<any[]> {
     // Retrieve KB context for this specific module
     const kbQueries = [
@@ -5837,6 +5735,8 @@ CRITICAL VALIDATION:
       minSimilarity: 0.5,
       domains: ['standards', 'accreditations', 'Subject Books'],
       stage: 'step5',
+      workflowId: moduleInfo.workflowId,
+      moduleId: moduleInfo.moduleId,
     });
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
@@ -8283,7 +8183,6 @@ Begin output now.`;
     // Import LessonPlanService and PPTGenerationService
     loggingService.info('  📦 Loading services');
     const { LessonPlanService } = await import('./lessonPlanService');
-    const { PPTGenerationService } = await import('./pptGenerationService');
 
     // Progress callback to save intermediate results
     const progressCallback = async (progress: any) => {
@@ -8304,12 +8203,7 @@ Begin output now.`;
       await workflow.save();
     };
 
-    const pptGenerationService = new PPTGenerationService();
-    const lessonPlanService = new LessonPlanService(
-      undefined,
-      progressCallback,
-      pptGenerationService
-    );
+    const lessonPlanService = new LessonPlanService(undefined, progressCallback);
     loggingService.info('  ✓ Services loaded');
 
     // Build comprehensive context from all 9 previous steps

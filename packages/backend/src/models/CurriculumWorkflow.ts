@@ -1349,6 +1349,8 @@ export interface ICurriculumWorkflow extends Document {
 
   // The institution's assessment rules, as it states them (services/assessmentRules).
   assessmentRules?: AssessmentRules;
+  /** Passages each step's knowledge-base search gave the model (services/kbEvidence). */
+  kbEvidence?: import('../services/kbEvidence').KbEvidence;
 
   // Approval before publication (services/publication).
   publication?: {
@@ -1593,6 +1595,8 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
     publication: { type: Schema.Types.Mixed },
     // The institution's assessment rules, as it states them (services/assessmentRules).
     assessmentRules: { type: Schema.Types.Mixed },
+    // How many knowledge-base passages each step's search gave the model (services/kbEvidence).
+    kbEvidence: { type: Schema.Types.Mixed },
   },
   {
     timestamps: true,

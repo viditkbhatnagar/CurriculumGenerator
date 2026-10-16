@@ -24,6 +24,7 @@ import { step7ValidationOf } from './step7Validation';
 import { step13Validation } from './step13Validation';
 import { programmeLessonsHeld, validationFromStubs } from './step10Completion';
 import { step11ValidationFromDecks, step12ValidationFromPacks } from './deliverableValidation';
+import { kbEvidenceGaps } from './kbEvidence';
 
 export type IssueKind = 'fail' | 'not_checked' | 'missing' | 'proposal' | 'review';
 
@@ -176,6 +177,15 @@ export function unresolvedIssues(workflow: Workflowish, currentYear: number): Un
 
   for (let step = 1; step <= 13; step++) {
     if (!w[`step${step}`]) add(step, 'missing', 'This step has not been generated');
+  }
+
+  // Steps written without a single knowledge-base passage (Rejin's audit, 16 October 2026).
+  const moduleLabel = (id: string) => {
+    const m = modules.find((x: Workflowish) => x?.id === id);
+    return m?.code || m?.moduleCode || id;
+  };
+  for (const gap of kbEvidenceGaps(w.kbEvidence, moduleLabel)) {
+    if (w[`step${gap.step}`]) add(gap.step, 'review', gap.issue);
   }
 
   const scope = w.step1 ? scopeIssue(w.step1) : null;
