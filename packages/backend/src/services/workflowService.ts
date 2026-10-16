@@ -17,6 +17,7 @@ import { loggingService } from './loggingService';
 import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
 import { formatKBContextForPrompt, retrieveKBContext } from './kbRetrieval';
+import { CREDIT_MULTIPLIERS, creditsForHours, hoursPerCredit } from '../utils/credits';
 import {
   caseLengthValid,
   caseLevelFor,
@@ -111,15 +112,6 @@ interface CreditCalculation {
   independentHours: number;
   contactPercent: number;
 }
-
-// Support both frontend ('uk') and backend ('uk_credits') naming
-const CREDIT_MULTIPLIERS: Record<string, number> = {
-  uk: 10, // Frontend naming
-  uk_credits: 10, // 1 UK credit = 10 hours
-  ects: 25, // 1 ECTS = 25 hours (using lower bound)
-  us_semester: 45, // 1 US credit = 45 total hours
-  non_credit: 1, // Direct hours entry
-};
 
 const DEFAULT_CONTACT_PERCENT: Record<string, number> = {
   uk: 30, // Frontend naming
@@ -1951,7 +1943,11 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
         totalHours: m.totalHours,
         contactHours: m.contactHours,
         selfStudyHours: m.independentHours || m.totalHours - m.contactHours,
-        credits: m.credits || Math.round(m.totalHours / 10),
+        // In the programme's own credit system: this was hours / 10 (UK credits) for every
+        // system, so an ECTS or US programme's module credits were wrong (Rejin's audit).
+        credits:
+          m.credits ||
+          creditsForHours(m.totalHours, (workflow.step1 as any)?.creditFramework?.system),
         prerequisites: m.prerequisites || [],
         linkedPLOs:
           m.linkedPLOs ||
@@ -2274,7 +2270,11 @@ Create exactly ${suggestedModules} MODULES with the following structure:
    - totalHours: Module duration (use ~15 hour guideline)
    - contactHours: Exactly ${contactPercent}% of totalHours
    - independentHours: Exactly ${100 - contactPercent}% of totalHours
-   - credits: totalHours / 10 (for UK credit calculation)
+   - credits: ${
+     step1.creditFramework?.system === 'non_credit'
+       ? 'omit (the programme is not credit-bearing)'
+       : `totalHours / ${hoursPerCredit(step1.creditFramework?.system)} (${step1.creditFramework?.system || 'uk_credits'} credits)`
+   }
    
    ⚠️ VERIFY: Sum of all module totalHours MUST equal exactly ${totalHours}
 
