@@ -80,6 +80,12 @@ export async function saveModulePlan(
   );
 
   await writeStub(workflowId, moduleStub({ ...plan, totalLessons: held }, step4Module));
+
+  // Re-check the module's content for level, discipline and jurisdiction faults
+  // (contentAuditRunner). Not awaited, and it never throws: the audit must not slow or stop a save.
+  void import('./contentAuditRunner')
+    .then((m) => m.auditSavedModule(workflowId, plan, step4Module))
+    .catch(() => undefined);
 }
 
 /**

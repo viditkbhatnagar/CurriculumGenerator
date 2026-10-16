@@ -72,7 +72,9 @@ export const TECHNIQUE_LEVEL_FLOOR: { pattern: RegExp; name: string; floor: Acad
   { pattern: /monte[- ]carlo/i, name: 'Monte Carlo simulation', floor: 6 },
   { pattern: /\bCUPED\b/i, name: 'CUPED', floor: 6 },
   {
-    pattern: /difference[- ]in[- ]differences|\bDiD\b/i,
+    // Case-sensitive: with /i, "DiD" matched every "did" in the lessons, and the first run on the
+    // BBA put this Level 6 technique in 20 first-year modules.
+    pattern: /[Dd]ifference[- ]in[- ][Dd]ifferences|\bDiD\b/,
     name: 'difference-in-differences',
     floor: 6,
   },

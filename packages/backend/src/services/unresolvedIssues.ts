@@ -25,6 +25,7 @@ import { step13Validation } from './step13Validation';
 import { programmeLessonsHeld, validationFromStubs } from './step10Completion';
 import { step11ValidationFromDecks, step12ValidationFromPacks } from './deliverableValidation';
 import { kbEvidenceGaps } from './kbEvidence';
+import { contentAuditIssues } from './contentAuditIssues';
 
 export type IssueKind = 'fail' | 'not_checked' | 'missing' | 'proposal' | 'review';
 
@@ -293,6 +294,11 @@ export function unresolvedIssues(workflow: Workflowish, currentYear: number): Un
         validationFromStubs(modules, w.step10) as unknown as Record<string, unknown>
       )
     );
+    // The faults the subject expert found by reading every module (contentAuditIssues).
+    const hasLessons = (w.step10.moduleLessonPlans || []).length > 0;
+    for (const { kind, issue } of contentAuditIssues(w.contentAudit, hasLessons)) {
+      add(10, kind, issue);
+    }
   }
   if (w.step11) {
     const decks = (w.step11.modulePPTDecks || []).flatMap((m: Workflowish) => m?.pptDecks || []);

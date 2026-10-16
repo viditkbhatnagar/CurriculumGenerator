@@ -6952,6 +6952,25 @@ router.get('/:id/unresolved-issues', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/v3/workflow/:id/content-audit
+ * Check every module's stored lessons for level, discipline, jurisdiction and repeated-activity
+ * faults (services/curriculumDrift), and record the findings for the unresolved issues. Reads the
+ * lessons only; writes nothing but the findings.
+ */
+router.post('/:id/content-audit', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const { auditProgrammeContent } = await import('../services/contentAuditRunner');
+    res.json({ success: true, data: await auditProgrammeContent(req.params.id) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Content audit failed';
+    res.status(/not found/i.test(message) ? 404 : 500).json({ success: false, error: message });
+  }
+});
+
+/**
  * POST /api/v3/workflow/:id/step11/regenerate-decks
  *   { selection: 'problems' | 'all', modules?: string[], before?: ISO time }
  * Write chosen decks again in the background: those cut off, built as outlines, or naming CIPD
