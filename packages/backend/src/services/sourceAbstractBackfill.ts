@@ -2,7 +2,7 @@
  * Gives a programme's Step 5 sources their abstracts, looked up by DOI.
  *
  * Step 5 has always read each OpenAlex paper's abstract (to judge relevance) and then thrown it
- * away, so programmes generated before 17 October 2026 hold citations only. The abstract is the
+ * away, so programmes generated before 16 October 2026 hold citations only. The abstract is the
  * one piece of a source's own content the lesson writer can be given (services/lessonSources).
  * Each source is updated in place by its id; nothing else in Step 5 is touched.
  */
