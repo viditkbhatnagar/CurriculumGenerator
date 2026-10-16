@@ -516,6 +516,36 @@ export async function searchAcademicSources(
   return sources.slice(0, limit);
 }
 
+/** A DOI as OpenAlex reports it, without its resolver prefix, in lower case. */
+export function normaliseDoi(doi: unknown): string {
+  return String(doi || '')
+    .trim()
+    .replace(/^https?:\/\/(dx\.)?doi\.org\//i, '')
+    .replace(/^doi:\s*/i, '')
+    .toLowerCase();
+}
+
+/**
+ * Abstracts of works by DOI, fifty to a request. Used to give sources stored before abstracts
+ * were kept their abstract, which the lesson writer is given (services/lessonSources).
+ */
+export async function abstractsByDoi(dois: string[]): Promise<Map<string, string>> {
+  const found = new Map<string, string>();
+  const wanted = [...new Set(dois.map(normaliseDoi).filter(Boolean))];
+  for (let i = 0; i < wanted.length; i += 50) {
+    const batch = wanted.slice(i, i + 50);
+    const url =
+      `${OPENALEX}/works?filter=doi:${batch.map(encodeURIComponent).join('|')}` +
+      `&select=doi,abstract_inverted_index&per-page=50&mailto=${CONTACT}`;
+    const data = await paced(() => getJson(url));
+    for (const work of data?.results || []) {
+      const abstract = reconstructAbstract(work?.abstract_inverted_index);
+      if (abstract) found.set(normaliseDoi(work.doi), abstract);
+    }
+  }
+  return found;
+}
+
 /**
  * Confirm a DOI exists and return what it actually is.
  *

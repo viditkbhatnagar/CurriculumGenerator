@@ -6952,6 +6952,24 @@ router.get('/:id/unresolved-issues', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/v3/workflow/:id/step5/abstracts
+ * Give Step 5 sources stored without an abstract their abstract from OpenAlex, by DOI
+ * (services/sourceAbstractBackfill). The lesson writer is given it.
+ */
+router.post('/:id/step5/abstracts', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const { backfillSourceAbstracts } = await import('../services/sourceAbstractBackfill');
+    res.json({ success: true, data: await backfillSourceAbstracts(req.params.id) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Abstract lookup failed';
+    res.status(/not found/i.test(message) ? 404 : 500).json({ success: false, error: message });
+  }
+});
+
+/**
  * POST /api/v3/workflow/:id/content-audit
  * Check every module's stored lessons for level, discipline, jurisdiction and repeated-activity
  * faults (services/curriculumDrift), and record the findings for the unresolved issues. Reads the

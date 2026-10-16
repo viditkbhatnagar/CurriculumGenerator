@@ -5525,6 +5525,8 @@ CRITICAL VALIDATION:
           doi: s.doi || undefined,
           citation: `${citationAuthors(s.authors)} (${s.year}). ${s.title}. ${s.venue}.${s.doi ? ` https://doi.org/${s.doi}` : ''}`,
           url: s.pdfUrl || s.url,
+          // What the paper says, which the lesson writer is given (services/lessonSources).
+          abstract: s.abstract || undefined,
           category: s.isPeerReviewed ? 'peer_reviewed_journal' : 'open_access',
           type: 'academic',
           accessStatus: s.pdfUrl
