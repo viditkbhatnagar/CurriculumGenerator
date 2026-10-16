@@ -30,6 +30,7 @@ import {
 } from '../models/CurriculumWorkflow';
 import { topicTitle } from '../utils/topicShape';
 import { isGraded } from '../utils/assessmentWeighting';
+import { BookPassage, lessonSourcesBlock, lessonSourcesFor } from './lessonSources';
 
 // ============================================================================
 // INTERFACES
@@ -118,6 +119,9 @@ export interface WorkflowContext {
 
   // Step 4: Course Framework
   modules: ModuleData[];
+
+  // The programme, so the lesson writer can be given its ingested textbook passages.
+  workflowId?: string;
 
   // Step 5: Sources
   topicSources: any[];
@@ -956,6 +960,7 @@ export class LessonPlanService {
       // call falls back (or omits a field), synthesise per-lesson defaults so
       // Topic Coverage / Independent Activity — and their Student Evidence — are
       // always shown lesson-wise rather than blank.
+      ...(aiEnhancedContent.groundedIn ? { groundedIn: aiEnhancedContent.groundedIn } : {}),
       topicCoverage: this.ensureTopicCoverage(aiEnhancedContent.topicCoverage, block, lessonTitle),
       independentActivity: this.ensureIndependentActivity(
         aiEnhancedContent.independentActivity,
@@ -1115,6 +1120,7 @@ topic above is actually about that; those belong to the modules that own them.
     discussionPrompts: string[];
     topicCoverage?: LessonPlan['topicCoverage'];
     independentActivity?: LessonPlan['independentActivity'];
+    groundedIn?: LessonPlan['groundedIn'];
   }> {
     try {
       loggingService.info('      🧠 Calling OpenAI for AI-enhanced content', {
@@ -1173,11 +1179,22 @@ topic above is actually about that; those belong to the modules that own them.
        */
       const topicGuidance = this.buildTopicGuidance(block, module);
 
+      // The lesson's readings and textbook passages, to teach from (services/lessonSources).
+      const mloIds = block.assignedMLOs.map((m) => m.id);
+      const sources = lessonSourcesFor(
+        mloIds,
+        context.moduleReadingLists || [],
+        context.topicSources || []
+      );
+      const passages = await this.bookPassagesFor(context.workflowId, mloIds);
+      const sourcesBlock = lessonSourcesBlock(sources, passages);
+
       const prompt = `You are an expert curriculum designer creating a detailed lesson plan.
 
 ${levelGuidance}${topicGuidance}
 CONTEXT FROM PREVIOUS STEPS:
 ${contextSummary}
+${sourcesBlock}
 
 LESSON DETAILS:
 - Lesson Number: ${block.lessonNumber}
@@ -1319,6 +1336,11 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
         discussionPrompts: parsed.discussionPrompts,
         topicCoverage: parsed.topicCoverage,
         independentActivity: parsed.independentActivity,
+        groundedIn: {
+          sourceIds: sources.map((s) => s.sourceId || s.citation),
+          bookPassages: passages.length,
+          at: new Date(),
+        },
       };
     } catch (error) {
       // An unusable API key is not a per-lesson hiccup, it is an outage: every remaining lesson
@@ -1364,6 +1386,27 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
         commonMisconceptions: [],
         discussionPrompts: [],
       };
+    }
+  }
+
+  /**
+   * Passages from textbooks ingested for the programme (Step 5.5) that serve these outcomes.
+   * Never throws: a lesson is still written without them.
+   */
+  private async bookPassagesFor(
+    workflowId: string | undefined,
+    mloIds: string[]
+  ): Promise<BookPassage[]> {
+    if (!workflowId) return [];
+    try {
+      const { getWorkflowBookGrounding } = await import('./bookGroundingService');
+      const nodes = await getWorkflowBookGrounding(workflowId, mloIds, 3);
+      return nodes.map((n: any) => ({
+        source: String(n.source || 'textbook'),
+        content: String(n.content || ''),
+      }));
+    } catch {
+      return [];
     }
   }
 
@@ -1423,16 +1466,7 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
       parts.push(`Prerequisites: ${module.prerequisites.join(', ')}`);
     }
 
-    // Step 5-6: Reading materials (relevant to this lesson's MLOs)
-    const readingRefs = this.getReadingReferences(block.assignedMLOs, context);
-    if (readingRefs.length > 0) {
-      parts.push(`\nREADING MATERIALS: ${readingRefs.length} sources available`);
-      const citations = readingRefs
-        .slice(0, 2)
-        .map((r) => r.citation)
-        .join('; ');
-      parts.push(`Key sources: ${citations}`);
-    }
+    // Steps 5-6: the lesson's readings are given in full, in the SOURCES block (lessonSources).
 
     // Step 7: Assessment context
     if (context.formativeAssessments && context.formativeAssessments.length > 0) {

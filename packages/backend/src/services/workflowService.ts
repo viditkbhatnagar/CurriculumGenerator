@@ -8290,8 +8290,13 @@ Begin output now.`;
         independentActivities: mod.independentActivities || [],
       })),
 
-      // Step 5: Sources
-      topicSources: step5?.topicSources || [],
+      // The programme, so lessons can be given its ingested textbook passages.
+      workflowId: String(workflow._id),
+
+      // Step 5: Sources (generated programmes store them as `sources`)
+      topicSources: step5?.topicSources?.length
+        ? step5.topicSources
+        : (step5 as any)?.sources || [],
 
       // Step 6: Reading Lists (bridge the flat persisted shape → nested form)
       moduleReadingLists: this.deriveModuleReadingLists(step6),
@@ -8334,6 +8339,11 @@ Begin output now.`;
       linkedMLOs: r.linkedMLOs || r.mloIds || [],
       estimatedMinutes: r.estimatedMinutes ?? r.estimatedReadingMinutes ?? 30,
       complexityLevel: r.complexityLevel || 'intermediate',
+      // What Step 6 says to read and why, which the lesson writer is given (lessonSources).
+      title: r.title,
+      specificChapters: r.specificChapters,
+      focusAreas: r.focusAreas,
+      whyThisReading: r.whyThisReading,
     });
     return Object.entries(byModule).map(([moduleId, readings]) => ({
       moduleId,

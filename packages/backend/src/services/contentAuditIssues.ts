@@ -16,6 +16,9 @@ export interface ModuleAudit {
   moduleCode: string;
   findings: DriftFinding[];
   checkedAt: string | Date;
+  /** Lessons held, and of those, lessons written without any source to teach from. */
+  lessons?: number;
+  ungroundedLessons?: number;
 }
 
 export interface ContentAudit {
@@ -58,6 +61,23 @@ export function contentAuditIssues(
       : [];
   }
   const issues: { kind: 'review'; issue: string }[] = [];
+  // Lessons written from the model's memory rather than the programme's readings (lessonSources).
+  const ungrounded = modules
+    .filter((m) => (m.ungroundedLessons || 0) > 0)
+    .sort((a, b) => a.moduleCode.localeCompare(b.moduleCode, undefined, { numeric: true }));
+  if (ungrounded.length) {
+    const total = ungrounded.reduce((n, m) => n + (m.ungroundedLessons || 0), 0);
+    const named = ungrounded
+      .slice(0, MODULES_NAMED)
+      .map((m) => `${m.moduleCode} (${m.ungroundedLessons} of ${m.lessons})`)
+      .join(', ');
+    issues.push({
+      kind: 'review',
+      issue: `${total} lessons in ${ungrounded.length} module${ungrounded.length === 1 ? '' : 's'} were written without a programme reading to teach from: ${named}${
+        ungrounded.length > MODULES_NAMED ? '…' : ''
+      }`,
+    });
+  }
   for (const { rules, heading } of RULE_HEADINGS) {
     const affected = modules
       .map((m) => ({

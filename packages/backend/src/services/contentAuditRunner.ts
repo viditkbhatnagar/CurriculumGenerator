@@ -33,11 +33,20 @@ export function findingsFor(module: any, plan: any): DriftFinding[] {
   return [...auditModule(drift, JSON.stringify(lessons)), ...auditProportion(drift, lessons)];
 }
 
+/** Lessons written without any reading or textbook passage to teach from (lessonSources). */
+export function ungroundedCount(plan: any): number {
+  const lessons: any[] = Array.isArray(plan?.lessons) ? plan.lessons : [];
+  return lessons.filter((l) => !(l?.groundedIn?.sourceIds?.length || l?.groundedIn?.bookPassages))
+    .length;
+}
+
 function recordOf(module: any, plan: any): ModuleAudit {
   return {
     moduleCode: String(driftModuleOf(module, plan).moduleCode || ''),
     findings: findingsFor(module, plan),
     checkedAt: new Date(),
+    lessons: Array.isArray(plan?.lessons) ? plan.lessons.length : 0,
+    ungroundedLessons: ungroundedCount(plan),
   };
 }
 

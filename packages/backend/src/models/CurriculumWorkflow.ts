@@ -118,6 +118,12 @@ export interface FormativeCheck {
 }
 
 export interface LessonPlan {
+  /**
+   * The sources the lesson writer was given and told to teach from (services/lessonSources):
+   * Step 6 readings by source id, and passages from the programme's ingested textbooks.
+   * Absent on lessons written before 17 October 2026 and on template fallbacks.
+   */
+  groundedIn?: { sourceIds: string[]; bookPassages: number; at: Date | string };
   // Metadata
   lessonId: string;
   lessonNumber: number;
