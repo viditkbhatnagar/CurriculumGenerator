@@ -26,6 +26,7 @@ import { programmeLessonsHeld, validationFromStubs } from './step10Completion';
 import { step11ValidationFromDecks, step12ValidationFromPacks } from './deliverableValidation';
 import { kbEvidenceGaps } from './kbEvidence';
 import { contentAuditIssues } from './contentAuditIssues';
+import { occupationEvidenceIssues } from './occupations/occupationIndex';
 
 export type IssueKind = 'fail' | 'not_checked' | 'missing' | 'proposal' | 'review';
 
@@ -187,6 +188,14 @@ export function unresolvedIssues(workflow: Workflowish, currentYear: number): Un
   };
   for (const gap of kbEvidenceGaps(w.kbEvidence, moduleLabel)) {
     if (w[`step${gap.step}`]) add(gap.step, 'review', gap.issue);
+  }
+
+  // The job roles against national occupation codes (Rejin, 16 October 2026).
+  if (w.step1) {
+    const hasRoles = (w.step1.jobRoles || []).length > 0;
+    for (const { kind, issue } of occupationEvidenceIssues(w.occupationEvidence, hasRoles)) {
+      add(1, kind, issue);
+    }
   }
 
   const scope = w.step1 ? scopeIssue(w.step1) : null;

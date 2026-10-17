@@ -1359,6 +1359,8 @@ export interface ICurriculumWorkflow extends Document {
   kbEvidence?: import('../services/kbEvidence').KbEvidence;
   /** Faults found in the stored lessons (services/contentAuditRunner). */
   contentAudit?: import('../services/contentAuditIssues').ContentAudit;
+  /** The job roles' matched national occupation codes (services/occupations). */
+  occupationEvidence?: import('../services/occupations/occupationIndex').OccupationEvidence;
 
   // Approval before publication (services/publication).
   publication?: {
@@ -1607,6 +1609,8 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
     kbEvidence: { type: Schema.Types.Mixed },
     // Level, discipline and jurisdiction faults found in the stored lessons (contentAuditRunner).
     contentAudit: { type: Schema.Types.Mixed },
+    // The job roles' matched national occupation codes (services/occupations/occupationStore).
+    occupationEvidence: { type: Schema.Types.Mixed },
   },
   {
     timestamps: true,

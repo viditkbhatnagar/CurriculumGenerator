@@ -43,6 +43,7 @@ import folderRoutes from './routes/folderRoutes';
 import aguRoutes from './routes/aguRoutes';
 import step7StreamRoutes from './routes/step7StreamRoutes';
 import pptRoutes from './routes/pptRoutes';
+import occupationRoutes from './routes/occupationRoutes';
 import standaloneRoutes from './routes/standaloneRoutes';
 import { EXPORT_PATHS, exportRequestSlot } from './middleware/exportLimit';
 import { requireLoginWhenEnabled } from './middleware/auth';
@@ -257,6 +258,7 @@ app.use('/api/v3/workflow', step7StreamRoutes);
 
 // PPT Generation routes (Phase 2) - PowerPoint generation for modules
 app.use('/api/v3/ppt', pptRoutes);
+app.use('/api/v3/occupations', occupationRoutes);
 
 // Standalone Step Execution routes - Execute individual steps without workflow
 app.use('/api/v3/standalone', standaloneRoutes);

@@ -6952,6 +6952,47 @@ router.get('/:id/unresolved-issues', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/v3/workflow/:id/occupations
+ * Match the Step 1 job roles to national occupation codes (India, US, UK, Singapore) and record
+ * them; GET returns what was matched, with each occupation's description and tasks.
+ */
+router.post('/:id/occupations', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const { matchProgrammeOccupations } = await import('../services/occupations/occupationStore');
+    res.json({ success: true, data: await matchProgrammeOccupations(req.params.id) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Matching failed';
+    res
+      .status(/not found/i.test(message) ? 404 : /not been loaded/.test(message) ? 409 : 500)
+      .json({ success: false, error: message });
+  }
+});
+
+router.get('/:id/occupations', async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const wf: any = await CurriculumWorkflow.findById(req.params.id, {
+      occupationEvidence: 1,
+    }).lean();
+    if (!wf) return res.status(404).json({ success: false, error: 'Workflow not found' });
+    const evidence = wf.occupationEvidence || null;
+    const keys = (evidence?.roles || []).flatMap((r: any) =>
+      r.matches.map((m: any) => ({ system: m.system, code: m.code }))
+    );
+    const { Occupation } = await import('../models/Occupation');
+    const details = keys.length ? await Occupation.find({ $or: keys }).lean() : [];
+    res.json({ success: true, data: { evidence, occupations: details } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to read occupation matches' });
+  }
+});
+
+/**
  * POST /api/v3/workflow/:id/step5/abstracts
  * Give Step 5 sources stored without an abstract their abstract from OpenAlex, by DOI
  * (services/sourceAbstractBackfill). The lesson writer is given it.

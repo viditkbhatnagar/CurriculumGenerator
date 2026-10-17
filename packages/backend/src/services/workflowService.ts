@@ -17,6 +17,7 @@ import { loggingService } from './loggingService';
 import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
 import { formatKBContextForPrompt, retrieveKBContext } from './kbRetrieval';
+import { occupationPromptBlock } from './occupations/occupationStore';
 import { CREDIT_MULTIPLIERS, creditsForHours, hoursPerCredit } from '../utils/credits';
 import {
   caseLengthValid,
@@ -920,6 +921,8 @@ IMPORTANT:
     });
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
+    // The job roles' matched national occupations and their tasks (occupationStore).
+    const occupationSection = workflowId ? await occupationPromptBlock(workflowId) : '';
 
     const systemPrompt = `You are a senior competency framework specialist with expertise in:
 
@@ -956,7 +959,7 @@ Use UK English spelling throughout (e.g., "analyse", "behaviour", "organisation"
 
     const userPrompt = `Generate a comprehensive Competency Framework (KSC) for this vocational education program.
 
-${kbContextSection}
+${kbContextSection}${occupationSection}
 
 === PROGRAM CONTEXT ===
 
@@ -1537,6 +1540,8 @@ IMPORTANT:
     const plosText = ((workflow.step3 as any)?.outcomes || [])
       .map((o: any) => `${o.code || o.id}: ${o.statement} [${o.bloomLevel}]`)
       .join('\n');
+    // The job roles' matched national occupations and their tasks (occupationStore).
+    const occupationSection = await occupationPromptBlock(String(workflow._id));
 
     const systemPrompt = `You are a senior curriculum architect outlining the module structure of a programme.
 
@@ -1548,7 +1553,7 @@ ${programmeCredits ? `Credits: ${programmeCredits}` : ''} | Total hours: ${total
 
 PROGRAMME LEARNING OUTCOMES the modules must collectively deliver:
 ${plosText}
-
+${occupationSection}
 Sequence the modules so earlier ones build foundations and later ones move into analysis, evaluation and independent work, finishing with a capstone or project module. Use UK English.`;
 
     const userPrompt = `Propose exactly ${moduleTarget} modules${creditPerModule ? ` of about ${creditPerModule} credits each` : ''}.
@@ -2180,6 +2185,8 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     });
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
+    // The job roles' matched national occupations and their tasks (occupationStore).
+    const occupationSection = workflowId ? await occupationPromptBlock(workflowId) : '';
 
     const systemPrompt = `You are a senior curriculum architect with expertise in:
 - Vocational education programme design
@@ -2227,7 +2234,7 @@ Use UK English spelling throughout (e.g., "programme", "analyse", "behaviour").`
 
     const userPrompt = `Design a complete Course Framework for this accredited vocational education programme.
 
-${kbContextSection}
+${kbContextSection}${occupationSection}
 
 === PROGRAMME CONTEXT ===
 
