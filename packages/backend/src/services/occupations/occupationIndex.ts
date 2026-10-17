@@ -16,11 +16,13 @@ export const INDEX_DIMENSIONS = 512;
 /** Matches kept per role and country. */
 export const MATCHES_PER_COUNTRY = 3;
 /**
- * Cosine similarity below which an occupation is not a match. Calibrated on production after
- * the first sync (see occupationStore): related role and occupation texts score well above it,
- * unrelated ones below.
+ * Cosine similarity below which an occupation is not a match. Calibrated on production on
+ * 17 October 2026 with the BBA's job roles and two controls: real roles' best match in each
+ * country scored 0.58-0.77 (Business Analyst: UK "Business analysts and consultants" 0.749,
+ * US "Management Analysts" 0.683); an invented role ("Chief Happiness Unicorn") scored at most
+ * 0.36, and lorem ipsum at most 0.26.
  */
-export const MATCH_FLOOR = 0.4;
+export const MATCH_FLOOR = 0.45;
 
 export const COUNTRIES: { country: OccupationCountry; system: OccupationSystem; name: string }[] = [
   { country: 'IN', system: 'NCO 2015', name: 'India' },
