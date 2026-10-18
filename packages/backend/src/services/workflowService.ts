@@ -331,8 +331,15 @@ class WorkflowService {
       jobRoles: normalizedJobRoles,
     });
 
-    // Generate AI content if completeness is sufficient
+    // Generate AI content if completeness is sufficient.
+    //
+    // A failure here used to be logged and swallowed: the step was saved as complete with no
+    // summary, aims or career pathways, and a regeneration that failed wiped the ones already
+    // there. The BBA was built from August to October without aims that way (found 18 October
+    // 2026). Now the SME's inputs are still saved, the previous generated content is kept, and
+    // the step is left incomplete and reported as failed below.
     let generatedContent: any = {};
+    let generationError: string | null = null;
     if (completenessScore >= 70) {
       try {
         generatedContent = await this.generateStep1Content(
@@ -342,9 +349,22 @@ class WorkflowService {
         );
       } catch (err) {
         loggingService.error('Failed to generate Step 1 AI content', { error: err });
-        // Continue without generated content
+        generationError = err instanceof Error ? err.message : String(err);
+      }
+      if (!generationError && !(generatedContent?.programAims || []).length) {
+        generationError = 'The AI returned no programme aims';
+      }
+      if (generationError) {
+        const previous: any = workflow.step1 || {};
+        generatedContent = {
+          executiveSummary: previous.executiveSummary,
+          programAims: previous.programAims,
+          entryRequirements: previous.entryRequirements,
+          careerPathways: previous.careerPathways,
+        };
       }
     }
+    const step1Complete = completenessScore >= 70 && !generationError;
 
     // Store step data (with v2.2 structured format)
     workflow.step1 = {
@@ -383,6 +403,9 @@ class WorkflowService {
       // Generated, never supplied by the institution: the export presents it as a proposal.
       entryRequirementsOrigin: 'proposal',
       careerPathways: generatedContent.careerPathways,
+      ...(generationError
+        ? { generationError: { message: generationError, at: new Date().toISOString() } }
+        : {}),
       completenessScore,
       validatedAt: new Date(),
     };
@@ -398,14 +421,14 @@ class WorkflowService {
       step1Progress = workflow.stepProgress.find((p) => p.step === 1);
     }
     if (step1Progress) {
-      step1Progress.status = completenessScore >= 70 ? 'completed' : 'in_progress';
+      step1Progress.status = step1Complete ? 'completed' : 'in_progress';
       step1Progress.startedAt = step1Progress.startedAt || new Date();
-      if (completenessScore >= 70) {
+      if (step1Complete) {
         step1Progress.completedAt = new Date();
       }
     }
 
-    workflow.status = completenessScore >= 70 ? 'step1_complete' : 'step1_pending';
+    workflow.status = step1Complete ? 'step1_complete' : 'step1_pending';
 
     // Keep the workflow's display name (shown in the header and the
     // dashboard) in sync with the program title entered in Step 1.
@@ -420,6 +443,14 @@ class WorkflowService {
       completenessScore,
       status: workflow.status,
     });
+
+    // The inputs are saved; the generation is reported as the failure it is, so the screen
+    // shows an error instead of a completed step with nothing in it.
+    if (generationError) {
+      throw new Error(
+        `Your Step 1 details were saved, but the AI could not write the summary, aims, entry requirements and career pathways (${generationError}). Generate Step 1 again.`
+      );
+    }
 
     return workflow;
   }

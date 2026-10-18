@@ -202,6 +202,16 @@ export function unresolvedIssues(workflow: Workflowish, currentYear: number): Un
     }
   }
 
+  // A Step 1 whose AI content never arrived used to be saved as complete: the BBA was built
+  // from August to October with no aims, summary or career pathways (found 18 October 2026).
+  if (w.step1 && !(Array.isArray(w.step1.programAims) && w.step1.programAims.length)) {
+    add(
+      1,
+      'missing',
+      'Step 1 has no programme aims: the AI did not write them (or the summary and career pathways), so outcomes cannot be mapped to aims. Generate Step 1 again.'
+    );
+  }
+
   const scope = w.step1 ? scopeIssue(w.step1) : null;
   if (scope) add(1, scope.kind, scope.issue);
   if (w.step1?.entryRequirements && w.step1?.entryRequirementsOrigin !== 'institution') {

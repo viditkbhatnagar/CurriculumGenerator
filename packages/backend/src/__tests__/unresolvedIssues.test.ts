@@ -35,6 +35,20 @@ describe('unresolvedIssues', () => {
     expect(hours?.kind).toBe('not_checked');
   });
 
+  it('reports a Step 1 that holds no programme aims, as the BBA did for two months', () => {
+    const without = unresolvedIssues({ step1: { creditFramework: {}, jobRoles: [] } }, 2026);
+    expect(
+      without.find((i) => i.step === 1 && i.issue.startsWith('Step 1 has no programme aims'))
+    ).toMatchObject({
+      kind: 'missing',
+    });
+    const withAims = unresolvedIssues(
+      { step1: { creditFramework: {}, jobRoles: [], programAims: ['To develop…'] } },
+      2026
+    );
+    expect(withAims.some((i) => i.issue.startsWith('Step 1 has no programme aims'))).toBe(false);
+  });
+
   it('does not report case studies short when the author recorded none are needed', () => {
     const issues = unresolvedIssues(
       { step8: { notRequired: true, validationReport: { hasCaseStudies: false } } },
