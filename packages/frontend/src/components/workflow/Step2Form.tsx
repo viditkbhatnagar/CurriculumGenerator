@@ -423,7 +423,9 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
       }
     } catch (err: any) {
       console.error('Framework upload failed:', err);
-      setError(err.message || 'Failed to upload framework');
+      // The server's own explanation (the upload is refused until uploads are used), not
+      // axios's "Request failed with status code 501".
+      setError(err?.response?.data?.error || err.message || 'Failed to upload framework');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {

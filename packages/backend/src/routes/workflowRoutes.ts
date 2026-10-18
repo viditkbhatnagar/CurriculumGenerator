@@ -9117,15 +9117,14 @@ router.post('/upload-framework', validateJWT, loadUser, async (req: Request, res
       fileName: file?.originalname,
     });
 
-    // TODO: Implement file upload handling with multer
-    // For now, return a placeholder response
-    res.json({
-      success: true,
-      data: {
-        id: `fw-${Date.now()}`,
-        name: file?.originalname || 'Uploaded Framework',
-        status: 'uploaded',
-      },
+    // This endpoint used to answer "uploaded" and discard the file: nothing stored it, and Step 2
+    // never read it, so a faculty member who uploaded the CIPD Profession Map believed the
+    // competency framework was built from it (found 18 October 2026). Until uploads are
+    // ingested into the programme's knowledge base, it says so instead.
+    res.status(501).json({
+      success: false,
+      error:
+        'Uploading framework documents is not available yet: the file would not be used by Step 2. Name the framework in the list instead, or send the document to the team to add to the knowledge base.',
     });
   } catch (error: any) {
     loggingService.error('Framework upload failed', { error });
