@@ -19,6 +19,12 @@ import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundi
 import { formatKBContextForPrompt, retrieveKBContext } from './kbRetrieval';
 import { occupationPromptBlock } from './occupations/occupationStore';
 import { programmeContextBlock, programmeFraming } from './programmeFraming';
+import {
+  competencyCeiling,
+  jobTaskIndex,
+  jobTaskPromptLines,
+  tidyStep2Output,
+} from './competencyFramework';
 import { CREDIT_MULTIPLIERS, creditsForHours, hoursPerCredit } from '../utils/credits';
 import {
   caseLengthValid,
@@ -795,6 +801,9 @@ IMPORTANT:
       // Legacy compatibility
       attitudeItems: kscContent.competencyItems || [],
       benchmarkingReport: kscContent.benchmarkingReport,
+      // Areas of the job roles the model found no supplied evidence for (Rejin, 17 Oct 2026:
+      // "what happens if the evidence supports only 8 items?" The answer is now: it says so).
+      evidenceGaps: kscContent.evidenceGaps || [],
       totalItems:
         (kscContent.knowledgeItems?.length || 0) +
         (kscContent.skillItems?.length || 0) +
@@ -840,23 +849,28 @@ IMPORTANT:
   }
 
   private async generateStep2Content(step1: any, input: any, workflowId?: string): Promise<any> {
-    // Build benchmark info
+    // Only the names of benchmark programmes reach the model: their curricula are never
+    // fetched. The prompt used to call them "programs to analyse" and ask for findings about
+    // them (Rejin's audit, 17 October 2026); it now says what they are.
     const benchmarkList =
       input.benchmarkPrograms && input.benchmarkPrograms.length > 0
         ? input.benchmarkPrograms
             .map((b: any) => {
               const parts = [b.programName];
               if (b.institution) parts.push(`(${b.institution})`);
-              if (b.url) parts.push(`- ${b.url}`);
-              return parts.join(' ');
+              return `- ${parts.join(' ')}`;
             })
             .join('\n')
-        : 'Benchmark programs from knowledge base';
+        : '- None named';
 
     const frameworksList =
       input.industryFrameworks && input.industryFrameworks.length > 0
         ? input.industryFrameworks.join(', ')
-        : 'SHRM, PMI, SFIA, CIPD, ASCM (as relevant)';
+        : 'None named';
+
+    const framing = programmeFraming(step1);
+    const tasks = jobTaskIndex(step1.jobRoles);
+    const ceiling = competencyCeiling(step1.creditFramework?.totalHours);
 
     // Extract target learner info
     const targetLearner = step1.targetLearner || {};
@@ -869,26 +883,12 @@ IMPORTANT:
         ? 'professional'
         : targetLearner.experienceLevel || 'professional';
 
-    // Build job roles info with tasks
-    const jobRolesInfo = Array.isArray(step1.jobRoles)
-      ? step1.jobRoles
-          .map((r: any) => {
-            if (typeof r === 'string') return `- ${r}`;
-            const tasks =
-              Array.isArray(r.tasks) && r.tasks.length > 0
-                ? `\n  Tasks: ${r.tasks.join('; ')}`
-                : '';
-            return `- ${r.title}${tasks}`;
-          })
-          .join('\n')
-      : '- General professional roles';
-
     // === RETRIEVE KNOWLEDGE BASE CONTEXT ===
     const kbQueries = [
       `${step1.programTitle} competency framework`,
       `${industrySector} professional competencies skills knowledge`,
-      `${frameworksList} competency standards`,
-      `${step1.academicLevel} learning outcomes competencies`,
+      ...(input.industryFrameworks?.length ? [`${frameworksList} competency standards`] : []),
+      `${framing.typeLabel} learning outcomes competencies`,
       ...(step1.jobRoles || [])
         .slice(0, 3)
         .map((r: any) => `${typeof r === 'string' ? r : r.title} job competencies skills`),
@@ -903,60 +903,54 @@ IMPORTANT:
     });
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
+    // The passages in the order the prompt labels them [SOURCE 1]..[SOURCE n].
+    const passageSources = kbContexts.slice(0, 10).map((c) => c.source);
     // The job roles' matched national occupations and their tasks (occupationStore).
     const occupationSection = workflowId ? await occupationPromptBlock(workflowId) : '';
 
-    const systemPrompt = `You are a senior competency framework specialist with expertise in:
+    const systemPrompt = `You are a competency framework specialist. You build a programme's knowledge, skills and behaviours from the evidence you are given: knowledge-base passages, national occupational standards matched to the job roles, and what the subject-matter expert (SME) supplied. You do not attribute anything to a professional body, standard or framework unless a supplied passage comes from it.
 
-- SHRM (Society for Human Resource Management) Body of Competency and Knowledge
-- PMI (Project Management Institute) Talent Triangle
-- SFIA (Skills Framework for the Information Age)
-- CIPD (Chartered Institute of Personnel and Development) Profession Map
-- ASCM (Association for Supply Chain Management) Body of Knowledge
-- Other industry-recognized competency frameworks
-
-YOUR TASK: Generate a comprehensive Knowledge, Skills, and Competencies (KSC) framework that:
-1. Aligns with established industry standards
-2. Maps directly to workplace requirements
+YOUR TASK: Build a Knowledge, Skills and Competencies (KSC) framework that:
+1. Rests on the supplied evidence, and says so where it does not
+2. Maps to the SME's job tasks, by their ids
 3. Supports measurable learning outcomes
-4. Follows UK qualification framework expectations
+4. Fits the programme type and level descriptor given below
 
-CRITICAL DEFINITIONS:
-- KNOWLEDGE (K): Theoretical understanding - what learners need to UNDERSTAND
+DEFINITIONS (in a knowledge-skills-behaviours model, "C" is the behaviours):
+- KNOWLEDGE (K): what learners need to UNDERSTAND
   * Concepts, principles, theories, frameworks
-  * Factual information and domain expertise
-  * Example: "Principles of strategic workforce planning"
+  * Example: "Principles of [a concept central to this programme]"
 
-- SKILLS (S): Practical abilities - what learners need to be able to DO
-  * Applied competencies and technical proficiencies
-  * Demonstrable actions and procedures
-  * Example: "Analyse workforce data to identify skill gaps"
+- SKILLS (S): what learners need to be able to DO
+  * Applied abilities and technical proficiencies
+  * Example: "Analyse [data or situations this programme deals with] to [purpose]"
 
-- COMPETENCIES (C): Professional behaviors - how learners need to BEHAVE
-  * Workplace dispositions and professional attitudes
-  * Values, ethical conduct, interpersonal qualities
-  * Example: "Demonstrate professional integrity in handling sensitive employee data"
+- COMPETENCIES (C): professional BEHAVIOURS, how learners need to act
+  * Professional conduct, ethics, interpersonal qualities
+  * Example: "Demonstrate integrity when [a situation the job roles face]"
 
 Use UK English spelling throughout (e.g., "analyse", "behaviour", "organisation").`;
 
-    const userPrompt = `Generate a comprehensive Competency Framework (KSC) for this vocational education program.
+    const userPrompt = `Build the competency framework (KSC) for ${framing.phrase}.
+
+${programmeContextBlock(framing)}
 
 ${kbContextSection}${occupationSection}
 
-=== PROGRAM CONTEXT ===
+=== PROGRAMME CONTEXT ===
 
-PROGRAM TITLE: ${step1.programTitle}
-ACADEMIC LEVEL: ${step1.academicLevel}
+PROGRAMME TITLE: ${step1.programTitle}
 INDUSTRY SECTOR: ${industrySector}
-TARGET AUDIENCE: ${experienceLevel} level professionals
+TARGET AUDIENCE: ${experienceLevel} level learners
+TOTAL HOURS: ${step1.creditFramework?.totalHours || 'not recorded'}
 
-PROGRAM PURPOSE:
-${step1.programPurpose || 'Prepare professionals for advanced roles in this field'}
+PROGRAMME PURPOSE:
+${step1.programPurpose || 'Not provided'}
 
-BENCHMARK PROGRAMS TO ANALYSE:
+BENCHMARK PROGRAMMES NAMED BY THE SME (names only: their curricula, outcomes and modules were not supplied, so you cannot analyse them and must not report findings about them):
 ${benchmarkList}
 
-INDUSTRY FRAMEWORKS TO REFERENCE:
+PROFESSIONAL FRAMEWORKS NAMED BY THE SME (attribute an item to one only where a [SOURCE n] passage above comes from it):
 ${frameworksList}
 
 ${
@@ -965,56 +959,50 @@ ${
     : ''
 }
 
-TARGET JOB ROLES AND WORKPLACE TASKS:
-${jobRolesInfo}
+TARGET JOB ROLES AND THEIR TASKS (supplied by the SME; link to tasks by id):
+${jobTaskPromptLines(step1.jobRoles, tasks)}
 
-=== GENERATION REQUIREMENTS ===
+=== WHAT TO GENERATE ===
 
-Using the knowledge base materials as authoritative reference, generate 15-25 KSC items with this distribution:
+Generate AT MOST ${ceiling} KSC items. This is a ceiling for a programme of this size, not a quota.
+Return fewer when the evidence supports fewer. There are no fixed proportions of knowledge, skills
+and behaviours: the balance follows from the job roles and the evidence. Do not add items to fill
+space. Where a job role or task has no supporting passage or occupational task, say so in
+"evidenceGaps" rather than inventing coverage.
 
-**KNOWLEDGE ITEMS (K): 30-40% of total**
-Generate knowledge items that specify what learners must UNDERSTAND:
+KNOWLEDGE ITEMS (K): what learners must UNDERSTAND, such as:
 - Theoretical foundations and conceptual frameworks
-- Industry principles and standards
-- Domain-specific terminology and models
-- Regulatory and compliance requirements
-- Best practices from the field
+- Principles and standards of the field
+- Regulatory and compliance requirements, only where a [SOURCE n] passage states them. No jurisdiction has been recorded for this programme, so do not name laws, regulations or regulators from your own knowledge.
 
-**SKILL ITEMS (S): 40-50% of total**
-Generate skill items that specify what learners must be able to DO:
+SKILL ITEMS (S): what learners must be able to DO, such as:
 - Practical application of knowledge
-- Technical and analytical abilities
-- Problem-solving and decision-making
-- Communication and presentation skills
-- Tool and technology proficiency
+- Analysis, problem-solving and decision-making
+- Communication
+- Tools and technologies, only where a [SOURCE n] passage, an occupational task or the SME names them
 
-**COMPETENCY ITEMS (C): 15-25% of total**
-Generate competency items that specify professional BEHAVIOURS:
+COMPETENCY ITEMS (C): professional BEHAVIOURS, such as:
 - Professional ethics and integrity
-- Interpersonal and collaborative behaviours
+- Collaboration and influence
 - Adaptability and continuous learning
-- Leadership and influence
-- Cultural awareness and inclusivity
 
 FOR EACH ITEM INCLUDE:
-1. **id**: Sequential identifier (K1, K2, K3... S1, S2, S3... C1, C2, C3...)
+1. **id**: K1, K2... S1, S2... C1, C2...
 2. **type**: "knowledge" | "skill" | "competency"
-3. **statement**: Clear, concise statement (max 50 words)
-   - Start with an appropriate verb:
-     * Knowledge: "Understanding of...", "Principles of...", "Theories underpinning..."
-     * Skills: "Ability to...", "Apply...", "Analyse...", "Evaluate..."
-     * Competencies: "Demonstrate...", "Exhibit...", "Display professional..."
-4. **description**: Supporting explanation (30-60 words)
-5. **importance**: 
-   - "essential" if it:
-     * Maps directly to specified job tasks
-     * Is fundamental to professional practice
-     * Appears in majority of benchmark frameworks
-   - "desirable" if it:
-     * Enhances but isn't critical to role performance
-     * Represents advanced or specialist knowledge
-6. **source**: Reference to benchmark program or framework (e.g., "SHRM BoCK", "PMI Talent Triangle")
-7. **linkedJobTasks**: Array of job tasks this KSC supports
+3. **statement**: clear and concise (max 50 words)
+   - Knowledge: "Understanding of...", "Principles of..."
+   - Skills: "Ability to...", "Apply...", "Analyse...", "Evaluate..."
+   - Competencies: "Demonstrate...", "Exhibit..."
+4. **description**: supporting explanation (30-60 words)
+5. **importance**:
+   - "essential" if it maps directly to one of the SME's job tasks or an occupational task, or a [SOURCE n] passage treats it as core to practice
+   - "desirable" if it enhances but is not critical to performance in the roles
+6. **evidence**: what the item rests on, exactly one of:
+   - "SOURCE n": the label of the passage above it rests on (only a number that appears above)
+   - "OCCUPATION": the occupational standards' tasks above
+   - "SME": the SME's job tasks or purpose
+   - "GENERAL": your own knowledge, with no supplied source. Say so rather than attribute it.
+7. **linkedJobTaskIds**: ids of the SME's tasks this item supports, e.g. ["JT1", "JT4"]; only ids listed above
 
 === OUTPUT FORMAT ===
 
@@ -1024,68 +1012,49 @@ Return ONLY valid JSON:
     {
       "id": "K1",
       "type": "knowledge",
-      "statement": "Principles of strategic workforce planning and forecasting",
-      "description": "Comprehensive understanding of methodologies for analysing current workforce composition, projecting future needs, and aligning talent strategy with organisational objectives.",
+      "statement": "...",
+      "description": "...",
       "importance": "essential",
-      "source": "SHRM BoCK - Talent Acquisition Domain",
-      "linkedJobTasks": ["Conduct workforce analysis", "Develop staffing plans"]
+      "evidence": "SOURCE 2",
+      "linkedJobTaskIds": ["JT1"]
     }
   ],
   "skillItems": [
-    {
-      "id": "S1",
-      "type": "skill",
-      "statement": "Analyse workforce data using quantitative and qualitative methods",
-      "description": "Apply statistical techniques and analytical frameworks to interpret workforce metrics, identify patterns, and generate actionable insights for decision-making.",
-      "importance": "essential",
-      "source": "CIPD Profession Map - Analytics",
-      "linkedJobTasks": ["Analyse workforce data", "Generate reports"]
-    }
+    { "id": "S1", "type": "skill", "statement": "...", "description": "...", "importance": "essential", "evidence": "OCCUPATION", "linkedJobTaskIds": ["JT2", "JT3"] }
   ],
   "competencyItems": [
-    {
-      "id": "C1",
-      "type": "competency",
-      "statement": "Demonstrate ethical judgement in handling sensitive employee information",
-      "description": "Exhibit professional integrity and discretion when managing confidential workforce data, ensuring compliance with data protection regulations and organisational policies.",
-      "importance": "essential",
-      "source": "CIPD Profession Map - Professional Behaviours",
-      "linkedJobTasks": ["Handle employee records", "Maintain confidentiality"]
-    }
+    { "id": "C1", "type": "competency", "statement": "...", "description": "...", "importance": "essential", "evidence": "SME", "linkedJobTaskIds": ["JT1"] }
+  ],
+  "evidenceGaps": [
+    "Area of the job roles for which no passage or occupational task gave evidence"
   ],
   "benchmarkingReport": {
-    "programsAnalyzed": [
-      { "programName": "Program Name", "institution": "Institution", "relevance": "high/medium" }
-    ],
     "keyFindings": [
-      "Finding 1: Common competency areas across benchmarks",
-      "Finding 2: Gap areas identified",
-      "Finding 3: Emerging skills in the field"
+      "Findings about how the items cover the job tasks and the supplied evidence (not about the benchmark programmes, which you have not seen)"
     ],
-    "coverageAnalysis": "Detailed analysis of how the KSC items comprehensively cover the specified job tasks, industry requirements, and academic level expectations.",
-    "distributionSummary": {
-      "knowledgePercent": 35,
-      "skillPercent": 45,
-      "competencyPercent": 20,
-      "essentialCount": 15,
-      "desirableCount": 8
-    }
+    "coverageAnalysis": "How the items cover the SME's job tasks and the level descriptor, and where the evidence was thin."
   }
 }
 
 IMPORTANT:
-- Use knowledge base materials to ensure accuracy and industry alignment
-- Ensure each item is specific to ${step1.programTitle}, not generic
+- Make each item specific to ${step1.programTitle}, not generic
 - All items must be assessable and measurable
-- Link items to the specific job tasks mentioned`;
+- Link items only to task ids listed above`;
 
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 128000, // MAXIMUM
         timeout: 1200000, // 20 minutes
+        responseFormat: 'json_object',
       });
 
-      const parsed = this.parseJSON(response, 'step2');
+      // Each item's evidence and task links checked against what was supplied; the
+      // distribution counted rather than reported (services/competencyFramework).
+      const parsed = tidyStep2Output(this.parseJSON(response, 'step2'), {
+        passageSources,
+        tasks,
+        benchmarkPrograms: input.benchmarkPrograms,
+      });
 
       // Ensure backward compatibility by also setting attitudeItems
       if (parsed.competencyItems && !parsed.attitudeItems) {
