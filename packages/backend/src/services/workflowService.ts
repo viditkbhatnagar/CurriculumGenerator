@@ -22,6 +22,12 @@ import { programmeContextBlock, programmeFraming } from './programmeFraming';
 import { normaliseBloomLevel } from '../utils/bloomLevels';
 import { aimIndex, step3CoverageReport, tidyOutcome } from './outcomeCoverage';
 import {
+  moduleReadingSummary,
+  readingBudgetFor,
+  sourceComplexity,
+  tidyModuleReadings,
+} from './readingCuration';
+import {
   deliveryGuidance,
   moduleCountFor,
   progressionGuidance,
@@ -2805,7 +2811,7 @@ CRITICAL:
 
     const sources = ((workflow.step5 as any)?.sources || []) as any[];
     const programTitle = (workflow.step1 as any)?.programTitle || 'Program';
-    const academicLevel = (workflow.step1 as any)?.academicLevel || 'Level 5';
+    const framing = programmeFraming(workflow.step1);
 
     const repaired: string[] = [];
     const stillMissing: any[] = [];
@@ -2813,28 +2819,30 @@ CRITICAL:
 
     for (const mod of missing) {
       const modSources = sources.filter((s) => s.moduleId === mod.id);
-      const independentHours = mod.selfStudyHours || mod.independentHours || 10;
+      if (!modSources.length) {
+        stillMissing.push({
+          moduleId: mod.id,
+          moduleTitle: mod.title,
+          message: 'Step 5 found no sources for this module, so no reading list can be built',
+        });
+        continue;
+      }
       try {
         const result = await this.generateReadingsForModule({
           moduleId: mod.id,
           moduleTitle: mod.title,
-          independentHours,
-          independentMinutes: independentHours * 60,
+          independentHours: mod.selfStudyHours || mod.independentHours || 0,
+          budget: readingBudgetFor(mod),
+          topics: (mod.topics || [])
+            .map((t: any) => (typeof t === 'string' ? t : t?.title || ''))
+            .filter(Boolean),
           mlos: (mod.mlos || []).map((mlo: any) => ({ id: mlo.id, statement: mlo.statement })),
-          availableSources: modSources.map((s: any) => ({
-            id: s.id,
-            title: s.title,
-            authors: s.authors,
-            year: s.year,
-            citation: s.citation,
-            category: s.category,
-            type: s.type,
-            linkedMLOs: s.linkedMLOs,
-            complexity: s.complexityLevel || 'intermediate',
-            complianceBadges: s.complianceBadges,
-          })),
+          sources: modSources,
           programTitle,
-          academicLevel,
+          framingPhrase: framing.phrase,
+          levelLine: framing.level
+            ? `EQF level ${framing.level} (${framing.typeLabel})`
+            : `${framing.typeLabel}; level not recorded`,
         });
         added.push(...(result.readings || []));
         repaired.push(mod.id);
@@ -5465,7 +5473,9 @@ CRITICAL:
           // supports depends on what the other sources cover.
           linkedMLOs: [] as string[],
           relevantTopics: (module.topics || []).slice(0, 3),
-          complexityLevel: 'intermediate',
+          // Not assessed: nothing here reads the paper. This was stamped "intermediate" on
+          // every source, and Step 6 then sized reading time from it (Rejin, 17 Oct 2026).
+          complexityLevel: undefined,
           estimatedReadingHours: 1.5,
         }));
         // Was hard-set to true. Measured against the same rules the programme-level checks use.
@@ -5988,7 +5998,6 @@ Return ONLY valid JSON:
     const modules = workflow.step4?.modules || [];
     const sources = workflow.step5?.sources || [];
     const programTitle = workflow.step1?.programTitle || 'Program';
-    const academicLevel = workflow.step1?.academicLevel || 'Level 5';
 
     // Build source list by module
     const sourcesByModule: Record<string, any[]> = {};
@@ -6003,11 +6012,41 @@ Return ONLY valid JSON:
       totalSources: sources.length,
     });
 
+    const framing = programmeFraming(workflow.step1);
+
     // Generate readings for ALL modules in PARALLEL (much faster!)
     const modulePromises = modules.map(async (mod: any, i: number) => {
-      const modSources = sourcesByModule[mod.id] || sources.slice(0, 10);
-      const independentHours = mod.selfStudyHours || mod.independentHours || 10;
-      const mlos = mod.mlos || [];
+      // A module with no Step 5 sources used to be given the first ten sources of the whole
+      // programme, so its reading list came from other modules' material. It now gets none,
+      // and says why, so the gap is fixed in Step 5 rather than hidden here.
+      const modSources = sourcesByModule[mod.id] || [];
+      if (!modSources.length) {
+        return {
+          readings: [],
+          summary: null,
+          failure: {
+            moduleId: mod.id,
+            moduleTitle: mod.title,
+            message: 'Step 5 found no sources for this module, so no reading list can be built',
+          },
+        };
+      }
+      const moduleInfo = {
+        moduleId: mod.id,
+        moduleTitle: mod.title,
+        independentHours: mod.selfStudyHours || mod.independentHours || 0,
+        budget: readingBudgetFor(mod),
+        topics: (mod.topics || [])
+          .map((t: any) => (typeof t === 'string' ? t : t?.title || ''))
+          .filter(Boolean),
+        mlos: (mod.mlos || []).map((mlo: any) => ({ id: mlo.id, statement: mlo.statement })),
+        sources: modSources,
+        programTitle,
+        framingPhrase: framing.phrase,
+        levelLine: framing.level
+          ? `EQF level ${framing.level} (${framing.typeLabel})`
+          : `${framing.typeLabel}; level not recorded`,
+      };
 
       loggingService.info(`Step 6: Starting module ${i + 1}/${modules.length}`, {
         moduleId: mod.id,
@@ -6015,27 +6054,7 @@ Return ONLY valid JSON:
       });
 
       try {
-        const moduleReadings = await this.generateReadingsForModule({
-          moduleId: mod.id,
-          moduleTitle: mod.title,
-          independentHours,
-          independentMinutes: independentHours * 60,
-          mlos: mlos.map((mlo: any) => ({ id: mlo.id, statement: mlo.statement })),
-          availableSources: modSources.map((s: any) => ({
-            id: s.id,
-            title: s.title,
-            authors: s.authors,
-            year: s.year,
-            citation: s.citation,
-            category: s.category,
-            type: s.type,
-            linkedMLOs: s.linkedMLOs,
-            complexity: s.complexityLevel || 'intermediate',
-            complianceBadges: s.complianceBadges,
-          })),
-          programTitle,
-          academicLevel,
-        });
+        const moduleReadings = await this.generateReadingsForModule(moduleInfo);
 
         loggingService.info(`Step 6: Module ${mod.id} complete`, {
           readingsGenerated: moduleReadings.readings.length,
@@ -6049,27 +6068,7 @@ Return ONLY valid JSON:
           error: firstError instanceof Error ? firstError.message : String(firstError),
         });
         try {
-          const retried = await this.generateReadingsForModule({
-            moduleId: mod.id,
-            moduleTitle: mod.title,
-            independentHours,
-            independentMinutes: independentHours * 60,
-            mlos: mlos.map((mlo: any) => ({ id: mlo.id, statement: mlo.statement })),
-            availableSources: modSources.map((s: any) => ({
-              id: s.id,
-              title: s.title,
-              authors: s.authors,
-              year: s.year,
-              citation: s.citation,
-              category: s.category,
-              type: s.type,
-              linkedMLOs: s.linkedMLOs,
-              complexity: s.complexityLevel || 'intermediate',
-              complianceBadges: s.complianceBadges,
-            })),
-            programTitle,
-            academicLevel,
-          });
+          const retried = await this.generateReadingsForModule(moduleInfo);
           loggingService.info(`Step 6: Module ${mod.id} recovered on retry`, {
             readingsGenerated: retried.readings.length,
           });
@@ -6137,271 +6136,129 @@ Return ONLY valid JSON:
     moduleId: string;
     moduleTitle: string;
     independentHours: number;
-    independentMinutes: number;
+    budget: { minutes: number; basis: string };
+    topics: string[];
     mlos: { id: string; statement: string }[];
-    availableSources: any[];
+    sources: any[];
     programTitle: string;
-    academicLevel: string;
+    framingPhrase: string;
+    levelLine: string;
   }): Promise<{ readings: any[]; summary: any }> {
-    const systemPrompt = `You are an expert academic librarian specialising in reading list curation for vocational education programmes. Your task is to create structured, pedagogically sound reading lists that:
-1. Support Module Learning Outcomes directly
-2. Fit within independent study time allocations
-3. Balance essential and enrichment materials
-4. Progress from foundational to advanced content
+    // Rejin's audit (17 October 2026): chapters and "realistic estimates" of page ranges for
+    // sources the model had never seen; 9-14 readings from 5-6 sources; a 50%/65% budget that
+    // ignored Step 4's reading hours; an assumed 8-10 week module; "required for assessments"
+    // and "distinction-level work" before any assessment or grading scheme existed; module
+    // topics never sent; and "Academic: undefined" printed for every source. What the model
+    // returns is now held to the Step 5 records in code (services/readingCuration).
+    const describe = (s: any) => {
+      const badges = s.complianceBadges || {};
+      const yesNo = (v: unknown) => (v === true ? 'yes' : v === false ? 'no' : 'not recorded');
+      const abstract = typeof s.abstract === 'string' ? s.abstract.trim() : '';
+      return [
+        `**${s.id}: "${s.title}"**`,
+        `- Authors: ${Array.isArray(s.authors) ? s.authors.join(', ') : s.authors || 'Unknown'}`,
+        `- Year: ${s.year || 'not recorded'}`,
+        `- Category: ${s.category || 'not recorded'}; type: ${s.type || 'not recorded'}`,
+        `- Complexity: ${sourceComplexity(s) || 'not assessed'}`,
+        `- Peer-reviewed: ${yesNo(badges.peerReviewed)}; free full text: ${yesNo(badges.fullTextAvailable)}${badges.verifiedVia ? `; verified via ${badges.verifiedVia}` : ''}`,
+        `- Linked MLOs (Step 5): ${s.linkedMLOs?.join(', ') || 'none'}`,
+        `- Relevant topics (Step 5): ${
+          (s.relevantTopics || [])
+            .map((t: any) => (typeof t === 'string' ? t : t?.title))
+            .filter(Boolean)
+            .join('; ') || 'none'
+        }`,
+        Array.isArray(s.chapters) && s.chapters.length
+          ? `- Chapters (from the source record): ${s.chapters.map((c: any) => (typeof c === 'string' ? c : c?.title)).join('; ')}`
+          : '- Chapters and pages: not known',
+        abstract
+          ? `- Abstract: ${abstract.slice(0, 500)}${abstract.length > 500 ? '…' : ''}`
+          : '- Abstract: not available',
+      ].join('\n');
+    };
 
-=== READING LIST CLASSIFICATION ===
+    const systemPrompt = `You are an academic librarian curating the reading list for one module of ${moduleInfo.framingPhrase}. You choose which of the module's verified sources learners should read, and why. You do not have the sources' texts, so you do not state chapters, sections or page numbers unless the source record below lists them.
 
-**CORE (Indicative) Readings: 4-6 per module**
-Purpose: Essential for achieving MLOs and succeeding in assessments
-Characteristics:
-- Directly supports specific MLOs (must have linkedMLOs)
-- Required reading for assessments
-- Foundation for module understanding
-- Must be read by all learners
-- HIGH assessment relevance
-- Covers foundational concepts first, then advanced topics
+=== CLASSIFICATION ===
 
-**SUPPLEMENTARY (Additional) Readings: 5-8 per module**
-Purpose: Deepen understanding and provide alternative perspectives
-Characteristics:
-- Extends beyond core requirements
-- Provides alternative viewpoints or deeper dives
-- For learners seeking deeper knowledge
-- Optional but recommended for distinction-level work
-- MEDIUM to LOW assessment relevance
-- Includes industry/applied perspectives
+CORE (required): every learner reads these. They directly support specific MLOs (linkedMLOs required).
+SUPPLEMENTARY (recommended): they deepen understanding or offer an alternative perspective; optional.
 
-=== EFFORT ESTIMATION FORMULA ===
+There is no fixed number of readings. Use each source at most once: do not split one article or report into several readings to make up a count. Select as many core and supplementary readings as the sources and the module's reading time support; leave a source out if it does not serve the module.
 
-Base reading speed: 200 words per minute (academic content)
+=== READING TIME ===
 
-**Complexity Multipliers:**
-- Introductory: ×1.0 (entry-level, clear language, basic concepts)
-- Intermediate: ×1.2 (standard academic text, discipline-specific terminology)
-- Advanced: ×1.5 (dense theoretical content, complex arguments, expert-level)
+Estimate the minutes a learner needs for each reading, at about 200 words a minute adjusted for density. The length of most sources is not recorded, so this is your estimate and will be shown as one. Keep the total within the module's reading budget.
 
-**Example Calculation:**
-- 40-page chapter (~10,000 words) at intermediate complexity
-- Base time: 10,000 / 200 = 50 minutes
-- With multiplier: 50 × 1.2 = 60 minutes
+=== SEQUENCE ===
 
-**CRITICAL CONSTRAINT:**
-- Total Core reading time ≤ 50% of independent study minutes
-- Total ALL reading time ≤ 65% of independent study minutes
-- Remaining time: practice exercises, assignments, reflection
+Do not assign weeks: the teaching schedule is set later. Give each reading a relative sequence: "foundation" (read first), "development", or "extension" (read last or optionally).
 
-=== STUDY SCHEDULING FRAMEWORK ===
-
-For a typical 8-10 week module:
-- **Weeks 1-2:** Foundational core readings (introductory complexity)
-- **Weeks 3-4:** Application-focused core readings (intermediate complexity)
-- **Weeks 5-6:** Analysis and synthesis readings (intermediate-advanced)
-- **Weeks 7-8:** Assessment preparation, supplementary deep-dives (advanced)
-
-**Scheduling Principles:**
-- Build knowledge progressively
-- Core readings distributed across weeks 1-6
-- Supplementary readings clustered in weeks 5-8
-- Allow time for assessment preparation in final weeks
-
-=== READING SPECIFICITY REQUIREMENTS ===
-
-For each reading, specify:
-1. **Specific chapters/sections** - Not "entire book", but "Chapters 3-5: Financial Analysis"
-2. **Page ranges** - Realistic estimates, e.g., "pp. 45-92"
-3. **Focus areas** - What specifically to extract from the reading
-4. **Why this reading** - Connection to specific MLO(s)
+=== FOR EACH READING STATE ===
+- focusAreas: what to concentrate on in the work, in terms of the module's topics
+- whyThisReading: how it supports the linked MLOs
 
 Use UK English spelling throughout (e.g., "organisation", "behaviour", "analyse").`;
 
-    const userPrompt = `Create a comprehensive, structured reading list for this specific module.
+    const userPrompt = `Curate the reading list for this module.
 
-=== PROGRAMME CONTEXT ===
+=== PROGRAMME ===
 
-PROGRAMME TITLE: ${moduleInfo.programTitle}
-ACADEMIC LEVEL: ${moduleInfo.academicLevel}
+PROGRAMME: ${moduleInfo.programTitle} (${moduleInfo.levelLine})
 
 === MODULE: ${moduleInfo.moduleId} - ${moduleInfo.moduleTitle} ===
 
-**TIME ALLOCATION:**
-- Independent Study Time: ${moduleInfo.independentMinutes} minutes (${moduleInfo.independentHours} hours)
-- ⚠️ CORE Reading Budget: MAX ${Math.round(moduleInfo.independentMinutes * 0.5)} minutes (50% of independent time)
-- ⚠️ TOTAL Reading Budget: MAX ${Math.round(moduleInfo.independentMinutes * 0.65)} minutes (65% of independent time)
+READING BUDGET: ${moduleInfo.budget.minutes} minutes (${moduleInfo.budget.basis}). Independent study in total: ${moduleInfo.independentHours} hours.
 
-=== MODULE LEARNING OUTCOMES (MLOs) ===
+MODULE TOPICS (Step 4):
+${moduleInfo.topics.map((t) => `- ${t}`).join('\n') || '- None recorded'}
 
-${moduleInfo.mlos.map((mlo) => `- **${mlo.id}**: ${mlo.statement}`).join('\n')}
+MODULE LEARNING OUTCOMES (MLOs):
+${moduleInfo.mlos.map((mlo) => `- ${mlo.id}: ${mlo.statement}`).join('\n')}
 
-=== AVAILABLE SOURCES FROM STEP 5 (${moduleInfo.availableSources.length}) ===
+=== THIS MODULE'S VERIFIED SOURCES FROM STEP 5 (${moduleInfo.sources.length}) ===
 
-${moduleInfo.availableSources
-  .map(
-    (s) => `
-**${s.id}: "${s.title}"**
-- Authors: ${s.authors?.join(', ') || 'Unknown'}
-- Year: ${s.year}
-- Category: ${s.category}
-- Type: ${s.type || 'academic'}
-- Complexity: ${s.complexity || 'intermediate'}
-- Linked MLOs: ${s.linkedMLOs?.join(', ') || 'All module MLOs'}
-- Citation: ${s.citation}
-- Compliance: ${s.complianceBadges ? `Peer-reviewed: ${s.complianceBadges.peerReviewed}, Academic: ${s.complianceBadges.academicText}` : 'Standard'}`
-  )
-  .join('\n')}
-
-=== GENERATION REQUIREMENTS ===
-
-Generate a complete reading list with:
-- **4-6 CORE readings** (category: "core") - Essential, directly support MLOs, HIGH assessment relevance
-- **5-8 SUPPLEMENTARY readings** (category: "supplementary") - Additional depth, MEDIUM relevance
-
-**FOR EACH READING ITEM:**
-
-1. **Identification:**
-   - id: Unique identifier (format: "r-${moduleInfo.moduleId}-core-1" or "r-${moduleInfo.moduleId}-supp-1")
-   - sourceId: Reference to Step 5 source ID from list above
-
-2. **Source Details (inherited from Step 5):**
-   - title: Full source title
-   - authors: Array of author names
-   - year: Publication year
-   - citation: Full APA 7th citation
-
-3. **Specific Assignment:**
-   - specificChapters: Specific chapters/sections (e.g., "Chapter 3: Strategic Analysis", "Part II: Implementation")
-   - pageRange: Page numbers if applicable (e.g., "pp. 45-92")
-
-4. **Classification:**
-   - category: "core" | "supplementary"
-   - complexity: "introductory" | "intermediate" | "advanced"
-
-5. **Effort Estimation:**
-   - estimatedReadingMinutes: Calculated using formula above
-     (Consider: page count, word density, complexity level)
-
-6. **Study Scheduling:**
-   - suggestedWeek: When to complete (e.g., "Week 1-2", "Week 5")
-
-7. **Curriculum Mapping (REQUIRED for Core readings):**
-   - linkedMLOs: Array of specific MLO IDs this reading supports
-   - assessmentRelevance: "high" | "medium" | "low"
-
-8. **Compliance (inherited from Step 5):**
-   - agiCompliant: true
-   - complianceBadges: { peerReviewed, academicText, recent, etc. }
-
-=== CRITICAL VALIDATION ===
-
-✓ Total CORE reading time ≤ ${Math.round(moduleInfo.independentMinutes * 0.5)} minutes
-✓ Total ALL reading time ≤ ${Math.round(moduleInfo.independentMinutes * 0.65)} minutes
-✓ Every Core reading has linkedMLOs specified
-✓ All sources are from the Step 5 approved list above
-✓ Core readings include a mix of complexity levels
-✓ Study scheduling progresses logically (foundational → advanced)
-✓ Each MLO is covered by at least one core reading
+${moduleInfo.sources.map(describe).join('\n\n')}
 
 === OUTPUT FORMAT ===
 
-Return ONLY valid JSON (no markdown, no explanations):
+Return ONLY valid JSON:
 {
   "readings": [
     {
       "id": "r-${moduleInfo.moduleId}-core-1",
-      "sourceId": "src-${moduleInfo.moduleId}-1",
-      "moduleId": "${moduleInfo.moduleId}",
+      "sourceId": "${moduleInfo.sources[0]?.id || 'src-1'}",
       "category": "core",
-      "title": "Source Title from Step 5",
-      "authors": ["Author, A.", "Author, B."],
-      "year": 2024,
-      "citation": "Full APA 7th citation...",
-      "specificChapters": "Chapters 1-3: Introduction and Framework",
-      "pageRange": "pp. 1-75",
-      "complexity": "intermediate",
-      "estimatedReadingMinutes": 90,
-      "suggestedWeek": "Week 1-2",
-      "linkedMLOs": ["${moduleInfo.mlos[0]?.id || 'M1-LO1'}", "${moduleInfo.mlos[1]?.id || 'M1-LO2'}"],
-      "assessmentRelevance": "high",
-      "agiCompliant": true,
-      "complianceBadges": {
-        "peerReviewed": false,
-        "academicText": true,
-        "professionalBody": false,
-        "recent": true,
-        "seminal": false,
-        "verifiedAccess": true,
-        "apaValidated": true
-      }
-    },
-    {
-      "id": "r-${moduleInfo.moduleId}-supp-1",
-      "sourceId": "src-${moduleInfo.moduleId}-3",
-      "moduleId": "${moduleInfo.moduleId}",
-      "category": "supplementary",
-      "title": "Alternative Perspective Source",
-      "authors": ["Expert, J."],
-      "year": 2023,
-      "citation": "Full APA citation...",
-      "specificChapters": "Chapter 5: Advanced Applications",
-      "pageRange": "pp. 98-125",
-      "complexity": "advanced",
-      "estimatedReadingMinutes": 40,
-      "suggestedWeek": "Week 5-6",
-      "linkedMLOs": [],
-      "assessmentRelevance": "medium",
-      "agiCompliant": true,
-      "complianceBadges": {
-        "peerReviewed": true,
-        "academicText": false,
-        "recent": true
-      }
+      "focusAreas": "What to concentrate on, in terms of the module's topics",
+      "whyThisReading": "How it supports the linked MLOs",
+      "complexity": "introductory | intermediate | advanced",
+      "estimatedReadingMinutes": 60,
+      "sequence": "foundation",
+      "linkedMLOs": ["${moduleInfo.mlos[0]?.id || 'M1-LO1'}"],
+      "mloRelevance": "high | medium | low"
     }
-  ],
-  "summary": {
-    "moduleId": "${moduleInfo.moduleId}",
-    "coreCount": 5,
-    "supplementaryCount": 6,
-    "totalReadingMinutes": 450,
-    "coreReadingMinutes": 280,
-    "supplementaryReadingMinutes": 170,
-    "independentMinutes": ${moduleInfo.independentMinutes},
-    "percentageUsed": 46,
-    "mlosCovered": ["${moduleInfo.mlos.map((m) => m.id).join('", "')}"],
-    "validWorkload": true
-  }
+  ]
 }
 
-CRITICAL REQUIREMENTS:
-- Use ONLY sources from the Step 5 list provided above
-- Ensure reading times are realistic and fit within budget
-- Core readings MUST map to specific MLOs
-- Create a logical reading progression through the module (Weeks 1-2 foundational → Weeks 7-8 advanced)
-- Generate 9-14 total readings for comprehensive coverage`;
+RULES:
+- sourceId must be one of the ids listed above; each at most once
+- Every core reading has linkedMLOs
+- Do not write titles, authors, citations, chapters, pages or compliance badges: they are taken from the Step 5 records
+- Do not refer to assessments or grades: they are designed in later steps`;
 
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 32000, // Good size for detailed single-module reading list
-        timeout: 600000, // 10 minutes — GPT-5.2 high thinking needs more time
+        timeout: 600000, // 10 minutes
+        responseFormat: 'json_object',
       });
 
       const parsed = this.parseJSON(response, `step6-${moduleInfo.moduleId}`);
+      const readings = tidyModuleReadings(parsed.readings, moduleInfo.sources);
 
       return {
-        readings: parsed.readings || [],
-        summary: parsed.summary || {
-          moduleId: moduleInfo.moduleId,
-          coreCount: (parsed.readings || []).filter((r: any) => r.category === 'core').length,
-          supplementaryCount: (parsed.readings || []).filter(
-            (r: any) => r.category === 'supplementary'
-          ).length,
-          totalReadingMinutes: (parsed.readings || []).reduce(
-            (sum: number, r: any) => sum + (r.estimatedReadingMinutes || 0),
-            0
-          ),
-          coreReadingMinutes: (parsed.readings || [])
-            .filter((r: any) => r.category === 'core')
-            .reduce((sum: number, r: any) => sum + (r.estimatedReadingMinutes || 0), 0),
-          independentMinutes: moduleInfo.independentMinutes,
-        },
+        readings,
+        summary: moduleReadingSummary(moduleInfo.moduleId, readings, moduleInfo.budget),
       };
     } catch (error) {
       loggingService.error(`Error generating readings for module ${moduleInfo.moduleId}`, {
