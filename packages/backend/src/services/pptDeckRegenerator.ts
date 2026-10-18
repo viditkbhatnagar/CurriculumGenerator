@@ -16,6 +16,7 @@ import { loadModulePlans } from './step10Store';
 import { hydrateModuleDecks, offloadModuleDecks } from './pptDeckStore';
 import { getS3Client, isS3Configured } from './s3Service';
 import { chosenForRewrite, deckProblems, replacesDeck } from './pptLessonContent';
+import { withUsageContext } from './usageContext';
 
 export type DeckSelection = 'problems' | 'all';
 
@@ -85,7 +86,7 @@ export async function startDeckRegeneration(
 
   void (async () => {
     try {
-      await rewriteModules();
+      await withUsageContext({ workflowId, step: 11 }, rewriteModules);
     } catch (error) {
       run.errors.push(`run stopped: ${error instanceof Error ? error.message : String(error)}`);
     } finally {

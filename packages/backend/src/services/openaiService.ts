@@ -5,6 +5,8 @@ import { monitoringService } from './monitoringService';
 import { errorTrackingService } from './errorTrackingService';
 import { analyticsStorageService } from './analyticsStorageService';
 import { cleanModelOutput, stripXmlInvalid } from '../utils/xmlSafe';
+import { costOf, usageFrom } from '../utils/modelPricing';
+import { currentUsageContext } from './usageContext';
 
 /**
  * Unified OpenAI Service
@@ -115,32 +117,7 @@ export class OpenAIService {
 
         const embedding = response.data[0].embedding;
 
-        // Record metrics
-        const duration = Date.now() - startTime;
-        const tokens = response.usage?.total_tokens || 0;
-        const cost = this.calculateEmbeddingCost(tokens);
-
-        loggingService.logLLMCall('openai', config.openai.embeddingModel, tokens, cost, duration);
-        monitoringService.recordLLMCost('openai', config.openai.embeddingModel, tokens, cost);
-
-        // Store in database for historical tracking
-        analyticsStorageService
-          .recordTokenUsage({
-            tokensUsed: tokens,
-            provider: 'openai',
-            model: config.openai.embeddingModel,
-            cost: cost,
-          })
-          .catch((err) => loggingService.error('Failed to store token analytics', { error: err }));
-
-        analyticsStorageService
-          .recordApiCost({
-            cost: cost,
-            provider: 'openai',
-            model: config.openai.embeddingModel,
-            tokensUsed: tokens,
-          })
-          .catch((err) => loggingService.error('Failed to store cost analytics', { error: err }));
+        this.recordUsage(config.openai.embeddingModel, response.usage, Date.now() - startTime);
 
         return embedding;
       } catch (error) {
@@ -180,34 +157,7 @@ export class OpenAIService {
             dimensions: 1536,
           });
 
-          // Record metrics for batch
-          const duration = Date.now() - startTime;
-          const tokens = response.usage?.total_tokens || 0;
-          const cost = this.calculateEmbeddingCost(tokens);
-
-          loggingService.logLLMCall('openai', config.openai.embeddingModel, tokens, cost, duration);
-          monitoringService.recordLLMCost('openai', config.openai.embeddingModel, tokens, cost);
-
-          // Store in database
-          analyticsStorageService
-            .recordTokenUsage({
-              tokensUsed: tokens,
-              provider: 'openai',
-              model: config.openai.embeddingModel,
-              cost: cost,
-            })
-            .catch((err) =>
-              loggingService.error('Failed to store token analytics', { error: err })
-            );
-
-          analyticsStorageService
-            .recordApiCost({
-              cost: cost,
-              provider: 'openai',
-              model: config.openai.embeddingModel,
-              tokensUsed: tokens,
-            })
-            .catch((err) => loggingService.error('Failed to store cost analytics', { error: err }));
+          this.recordUsage(config.openai.embeddingModel, response.usage, Date.now() - startTime);
 
           return response.data.map((d) => d.embedding);
         } catch (error) {
@@ -310,32 +260,7 @@ export class OpenAIService {
           throw new Error('No content generated from OpenAI');
         }
 
-        // Record metrics
-        const duration = Date.now() - startTime;
-        const tokens = response.usage?.total_tokens || 0;
-        const cost = this.calculateChatCost(tokens, model);
-
-        loggingService.logLLMCall('openai', model, tokens, cost, duration);
-        monitoringService.recordLLMCost('openai', model, tokens, cost);
-
-        // Store in database
-        analyticsStorageService
-          .recordTokenUsage({
-            tokensUsed: tokens,
-            provider: 'openai',
-            model: model,
-            cost: cost,
-          })
-          .catch((err) => loggingService.error('Failed to store token analytics', { error: err }));
-
-        analyticsStorageService
-          .recordApiCost({
-            cost: cost,
-            provider: 'openai',
-            model: model,
-            tokensUsed: tokens,
-          })
-          .catch((err) => loggingService.error('Failed to store cost analytics', { error: err }));
+        this.recordUsage(model, response.usage, Date.now() - startTime);
 
         // The model sometimes emits control characters (U+0014 where a dash was meant). Stored,
         // they make every Word or PowerPoint export of that content invalid. See xmlSafe.
@@ -413,32 +338,7 @@ export class OpenAIService {
           throw new Error('No content generated from OpenAI');
         }
 
-        // Record metrics
-        const duration = Date.now() - startTime;
-        const tokens = response.usage?.total_tokens || 0;
-        const cost = this.calculateChatCost(tokens, model);
-
-        loggingService.logLLMCall('openai', model, tokens, cost, duration);
-        monitoringService.recordLLMCost('openai', model, tokens, cost);
-
-        // Store in database
-        analyticsStorageService
-          .recordTokenUsage({
-            tokensUsed: tokens,
-            provider: 'openai',
-            model: model,
-            cost: cost,
-          })
-          .catch((err) => loggingService.error('Failed to store token analytics', { error: err }));
-
-        analyticsStorageService
-          .recordApiCost({
-            cost: cost,
-            provider: 'openai',
-            model: model,
-            tokensUsed: tokens,
-          })
-          .catch((err) => loggingService.error('Failed to store cost analytics', { error: err }));
+        this.recordUsage(model, response.usage, Date.now() - startTime);
 
         return this.safeParseJSON(
           cleanModelOutput(content, true),
@@ -667,37 +567,36 @@ export class OpenAIService {
   }
 
   /**
-   * Calculate cost for embedding API calls
-   * text-embedding-3-large: $0.00013 per 1K tokens
+   * Log one AI call: its model, its input/output/reasoning split, its price from that split,
+   * and the programme and step it served. See utils/modelPricing and services/usageContext.
+   * The write is fire-and-forget; a failed write is logged and never fails the call.
    */
-  private calculateEmbeddingCost(tokens: number): number {
-    return (tokens / 1000) * 0.00013;
-  }
+  private recordUsage(model: string, rawUsage: unknown, duration: number): void {
+    const usage = usageFrom(rawUsage);
+    const { cost, priceAssumed } = costOf(model, usage);
+    const context = currentUsageContext();
+    const tokens = usage.totalTokens;
 
-  /**
-   * Calculate cost for chat completion API calls
-   * Updated for GPT-5 models (August 2025)
-   * Pricing per 1M tokens: gpt-5 ($1.25 in / $10 out), gpt-5-mini ($0.25 in / $2 out), gpt-5-nano ($0.05 in / $0.40 out)
-   */
-  private calculateChatCost(tokens: number, model: string): number {
-    // Cost per 1K tokens (average of input/output)
-    const costPer1kTokens: Record<string, number> = {
-      // GPT-5 models (per 1K = per 1M / 1000)
-      'gpt-5.2': 0.00625, // GPT-5.2 with reasoning — similar pricing to GPT-5
-      'gpt-5': 0.005625, // ($1.25 + $10) / 2 / 1000 = avg $5.625/1M = $0.005625/1K
-      'gpt-5-mini': 0.001125, // ($0.25 + $2) / 2 / 1000 = avg $1.125/1M = $0.001125/1K
-      'gpt-5-nano': 0.000225, // ($0.05 + $0.40) / 2 / 1000 = avg $0.225/1M = $0.000225/1K
-      // Legacy GPT-4 models
-      'gpt-4': 0.045,
-      'gpt-4-turbo': 0.02,
-      'gpt-4-turbo-preview': 0.02,
-      'gpt-4o': 0.00625, // ($2.50 + $10) / 2 / 1000
-      'gpt-4o-mini': 0.000375, // ($0.15 + $0.60) / 2 / 1000
-      'gpt-3.5-turbo': 0.002,
+    loggingService.logLLMCall('openai', model, tokens, cost, duration);
+    monitoringService.recordLLMCost('openai', model, tokens, cost);
+
+    const metadata = {
+      promptTokens: usage.promptTokens,
+      cachedTokens: usage.cachedTokens,
+      completionTokens: usage.completionTokens,
+      reasoningTokens: usage.reasoningTokens,
+      durationMs: duration,
+      ...(priceAssumed ? { priceAssumed } : {}),
+      ...(context?.workflowId ? { workflowId: context.workflowId } : {}),
+      ...(context?.step !== undefined ? { step: context.step } : {}),
     };
 
-    const rate = costPer1kTokens[model] || 0.005625; // Default to gpt-5
-    return (tokens / 1000) * rate;
+    analyticsStorageService
+      .recordTokenUsage({ tokensUsed: tokens, provider: 'openai', model, cost, metadata })
+      .catch((err) => loggingService.error('Failed to store token analytics', { error: err }));
+    analyticsStorageService
+      .recordApiCost({ cost, provider: 'openai', model, tokensUsed: tokens, metadata })
+      .catch((err) => loggingService.error('Failed to store cost analytics', { error: err }));
   }
 
   /**

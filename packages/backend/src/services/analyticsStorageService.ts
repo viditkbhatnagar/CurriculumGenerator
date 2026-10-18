@@ -24,7 +24,9 @@ class AnalyticsStorageService {
         metricType: 'token_usage',
         tokensUsed: data.tokensUsed,
         provider: data.provider,
-        model: data.model,
+        // The schema field is modelName; written as `model` it was silently dropped, so no
+        // record since December said which model it was for.
+        modelName: data.model,
         cost: data.cost,
         currency: 'USD',
         projectId: data.projectId,
@@ -53,7 +55,9 @@ class AnalyticsStorageService {
         cost: data.cost,
         currency: 'USD',
         provider: data.provider,
-        model: data.model,
+        // The schema field is modelName; written as `model` it was silently dropped, so no
+        // record since December said which model it was for.
+        modelName: data.model,
         tokensUsed: data.tokensUsed,
         projectId: data.projectId,
         metadata: data.metadata,
@@ -199,7 +203,7 @@ class AnalyticsStorageService {
         },
         {
           $group: {
-            _id: { provider: '$provider', model: '$model' },
+            _id: { provider: '$provider', model: { $ifNull: ['$modelName', '$model'] } },
             totalTokens: { $sum: '$tokensUsed' },
             totalCost: { $sum: '$cost' },
             count: { $sum: 1 },
@@ -229,7 +233,7 @@ class AnalyticsStorageService {
         },
         {
           $group: {
-            _id: { provider: '$provider', model: '$model' },
+            _id: { provider: '$provider', model: { $ifNull: ['$modelName', '$model'] } },
             totalCost: { $sum: '$cost' },
             totalTokens: { $sum: '$tokensUsed' },
             count: { $sum: 1 },

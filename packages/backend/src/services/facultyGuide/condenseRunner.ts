@@ -9,6 +9,7 @@
  */
 import { openaiService } from '../openaiService';
 import { loggingService } from '../loggingService';
+import { withUsageContext } from '../usageContext';
 import { CurriculumWorkflow } from '../../models/CurriculumWorkflow';
 import { ModuleLessonPlan } from '../../models/ModuleLessonPlan';
 import { loadModulePlan, saveModulePlan } from '../step10Store';
@@ -176,7 +177,9 @@ export async function startCondensing(
   void (async () => {
     for (const module of modules) {
       try {
-        await condenseModule(workflowId, workflow, module, run);
+        await withUsageContext({ workflowId, step: 'faculty-guide' }, () =>
+          condenseModule(workflowId, workflow, module, run)
+        );
       } catch (error) {
         run.errors.push(
           `${module.code || module.id}: ${error instanceof Error ? error.message : String(error)}`

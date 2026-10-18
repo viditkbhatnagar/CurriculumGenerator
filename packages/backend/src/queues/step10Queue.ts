@@ -13,6 +13,7 @@
 import Bull, { Queue, Job } from 'bull';
 import { loggingService } from '../services/loggingService';
 import { workflowService } from '../services/workflowService';
+import { withUsageContext } from '../services/usageContext';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import config from '../config';
 import { completedModuleIds, nextIncompleteModuleIndex } from '../services/step10Completion';
@@ -184,9 +185,8 @@ if (step10Queue) {
         totalModules,
       });
 
-      const updatedWorkflow = await workflowService.processStep10NextModule(
-        workflowId,
-        nextModuleIndex
+      const updatedWorkflow = await withUsageContext({ workflowId, step: 10 }, () =>
+        workflowService.processStep10NextModule(workflowId, nextModuleIndex)
       );
 
       await job.progress(90);

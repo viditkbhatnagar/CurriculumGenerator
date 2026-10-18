@@ -13,6 +13,7 @@
 import { recordStepFailed } from '../services/stepGating';
 import Bull, { Queue, Job } from 'bull';
 import { loggingService } from '../services/loggingService';
+import { withUsageContext } from '../services/usageContext';
 import { workflowService } from '../services/workflowService';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import config from '../config';
@@ -126,9 +127,11 @@ if (stepQueue) {
     try {
       await job.progress(0);
 
-      const updatedWorkflow = await processStepJob(stepNumber, workflowId, input, (pct: number) => {
-        job.progress(pct);
-      });
+      const updatedWorkflow = await withUsageContext({ workflowId, step: stepNumber }, () =>
+        processStepJob(stepNumber, workflowId, input, (pct: number) => {
+          job.progress(pct);
+        })
+      );
 
       await job.progress(100);
 
