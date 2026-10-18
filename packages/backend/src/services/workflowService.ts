@@ -22,6 +22,14 @@ import { programmeContextBlock, programmeFraming } from './programmeFraming';
 import { normaliseBloomLevel } from '../utils/bloomLevels';
 import { aimIndex, step3CoverageReport, tidyOutcome } from './outcomeCoverage';
 import {
+  deliveryGuidance,
+  moduleCountFor,
+  progressionGuidance,
+  smeConstraintLines,
+  StructureOrigin,
+  structureStatusLine,
+} from './moduleFramework';
+import {
   competencyCeiling,
   jobTaskIndex,
   jobTaskPromptLines,
@@ -110,7 +118,7 @@ import {
   BloomLevel,
 } from '../types/newWorkflow';
 import { normaliseTopic } from '../utils/topicShape';
-import { step4ValidationReport, studentHoursOf } from './step4Validation';
+import { essentialKscIdsOf, step4ValidationReport, studentHoursOf } from './step4Validation';
 
 // ============================================================================
 // CREDIT CALCULATION UTILITIES
@@ -170,28 +178,13 @@ function calculateCredits(
 }
 
 /**
- * How many modules a programme should be built from.
- *
- * Previously `round(totalHours / 15)` clamped to 6-8. That clamp suits a short
- * vocational course but caps a degree: a 180-credit BBA came out as eight
- * modules, each several times the size of a real one. Credit-bearing programmes
- * are built from modules of a standard size, so derive the count from credits
- * and fall back to hours only when no credits are recorded.
+ * How many modules a programme should be built from: the author's number, else credits over a
+ * typical module size in the programme's own credit system, else hours (services/moduleFramework).
+ * It used to divide every system's credits by 6, which suits ECTS but made a 60-credit UK
+ * certificate ten modules and a 36-credit US MBA six.
  */
 export function suggestedModuleCount(step1: any, requested?: number): number {
-  // An author-set target wins: they are exploring what the generator proposes at
-  // a given size, and the credit-derived number is only a default.
-  if (Number.isInteger(requested) && (requested as number) >= 4 && (requested as number) <= 40) {
-    return requested as number;
-  }
-  const framework = step1?.creditFramework || {};
-  const MODULE_CREDIT_SIZE = 6;
-  const MIN_MODULES = 4;
-  const MAX_MODULES = 40;
-  const credits = framework.credits || 0;
-  const hours = framework.totalHours || 120;
-  const derived = credits ? Math.round(credits / MODULE_CREDIT_SIZE) : Math.round(hours / 120);
-  return Math.min(MAX_MODULES, Math.max(MIN_MODULES, derived));
+  return moduleCountFor(step1, requested).count;
 }
 
 /**
@@ -1436,38 +1429,80 @@ IMPORTANT:
       .join('\n');
     // The job roles' matched national occupations and their tasks (occupationStore).
     const occupationSection = await occupationPromptBlock(String(workflow._id));
+    const framing = programmeFraming(step1);
+    const countBasis = moduleCountFor(step1, (workflow.step4 as any)?.requestedModuleCount).basis;
+    const aims = aimIndex(step1?.programAims);
+    const step2: any = workflow.step2 || {};
+    const essentialText = [
+      ...(step2.knowledgeItems || []),
+      ...(step2.skillItems || []),
+      ...(step2.competencyItems || step2.attitudeItems || []),
+    ]
+      .filter((i: any) => i?.importance === 'essential')
+      .map((i: any) => `${i.id}: ${i.statement}`)
+      .join('\n');
+    // The outline decides what the modules are, so it gets the same evidence the single-call
+    // path always had (Rejin's audit, 17 October 2026: above eight modules, the architecture was
+    // decided without the knowledge-base passages or the competencies).
+    const kbContextSection = formatKBContextForPrompt(
+      await retrieveKBContext(
+        [
+          `${step1?.programTitle} course structure modules`,
+          `${step1?.programTitle} ${framing.typeLabel} curriculum module structure`,
+          `${step1?.targetLearner?.industrySector || step1?.programTitle} programme modules`,
+        ],
+        {
+          maxResults: 12,
+          minSimilarity: 0.55,
+          domains: ['curriculum-design', 'standards', 'typeOfOutputs'],
+          stage: 'step4',
+          workflowId: String(workflow._id),
+        }
+      )
+    );
 
-    const systemPrompt = `You are a senior curriculum architect outlining the module structure of a programme.
+    const systemPrompt = `You are a senior curriculum architect outlining the module structure of ${framing.phrase}.
 
-Return the module list only — titles and sequence. Do not write learning outcomes, topics or activities; those are commissioned separately.
+Return the module list only: titles, credits and sequence. Do not write learning outcomes, topics or activities; those are commissioned separately.
 
-PROGRAMME: ${step1?.programTitle} (${step1?.academicLevel})
+${programmeContextBlock(framing)}
+
+PROGRAMME: ${step1?.programTitle}
 ${step1?.programDescription || ''}
 ${programmeCredits ? `Credits: ${programmeCredits}` : ''} | Total hours: ${totalHours}
 
+PROGRAMME AIMS:
+${aims.map((a) => `${a.id}: ${a.text}`).join('\n') || '- None recorded'}
+
 PROGRAMME LEARNING OUTCOMES the modules must collectively deliver:
 ${plosText}
-${occupationSection}
-Sequence the modules so earlier ones build foundations and later ones move into analysis, evaluation and independent work, finishing with a capstone or project module. Use UK English.`;
 
-    const userPrompt = `Propose exactly ${moduleTarget} modules${creditPerModule ? ` of about ${creditPerModule} credits each` : ''}.
+ESSENTIAL COMPETENCIES the modules must between them teach (Step 2):
+${essentialText || '- None recorded'}
+
+${smeConstraintLines(workflow.step3)}
+${kbContextSection}${occupationSection}
+Draw module boundaries from coherent bodies of knowledge and practice in the competencies and outcomes, not from a generic template. ${progressionGuidance(framing.level)} Include a capstone, dissertation or project module only if the programme's type, level and purpose call for one; it is not required. Use UK English.`;
+
+    const userPrompt = `Propose exactly ${moduleTarget} modules (${countBasis}).${programmeCredits ? ` Their credits must total ${programmeCredits}; a module's credits may differ from the others' where its weight does (for example a larger project module).` : ''}
 
 Return JSON only:
 { "modules": [ { "code": "M01", "title": "…", "credits": ${creditPerModule ?? 6}, "group": "Year 1" } ] }
 
-- code: sequential, M01 upwards
+- code: sequential, M01 upwards (a provisional code; the institution assigns formal codes)
 - title: the module name, no numbering
+- credits: this module's credits
 - group: the stage or year it belongs to, for progression
 Return all ${moduleTarget} modules.`;
 
     const response = await openaiService.generateContent(userPrompt, systemPrompt, {
       maxTokens: 16000,
-      timeout: 600000, // 10 minutes
-      // Naming and sequencing modules against a set of outcomes does not need
-      // deep reasoning, and this call sits in front of every batch — so it is
-      // pure waiting before any content appears. The batches that write the
-      // actual outcomes keep the default effort.
-      reasoningEffort: 'low',
+      timeout: 900000, // 15 minutes
+      responseFormat: 'json_object',
+      // This call decides what the modules are, which everything after it inherits. It was
+      // 'low' to save waiting; Rejin's audit asked why the most consequential decision got the
+      // least reasoning, and it is one call per programme.
+      reasoningEffort: 'high',
     });
     const parsed = this.parseJSON(response, 'step4-outline');
     const proposed: any[] = Array.isArray(parsed?.modules) ? parsed.modules : [];
@@ -1509,7 +1544,8 @@ Return all ${moduleTarget} modules.`;
    */
   private async processStep4FromBlueprint(
     workflow: ICurriculumWorkflow,
-    blueprint: any[]
+    blueprint: any[],
+    origin: StructureOrigin = 'uploaded'
   ): Promise<ICurriculumWorkflow> {
     const BATCH_SIZE = 6;
     const workflowId = String(workflow._id);
@@ -1535,6 +1571,11 @@ Return all ${moduleTarget} modules.`;
     ]
       .map((i: any) => `${i.id}: ${i.statement}`)
       .join('\n');
+    const framing = programmeFraming(step1);
+    const aims = aimIndex(step1?.programAims);
+    // The job roles' matched national occupations and their tasks (occupationStore). Batches had
+    // neither these nor any knowledge-base passages, though the single-call path had both.
+    const occupationSection = await occupationPromptBlock(workflowId);
 
     const detailed: any[] = [];
 
@@ -1549,12 +1590,37 @@ Return all ${moduleTarget} modules.`;
         )
         .join('\n');
 
-      const systemPrompt = `You are a senior curriculum architect writing module specifications for an approved programme structure.
+      const kbContextSection = formatKBContextForPrompt(
+        await retrieveKBContext(
+          batch.map((m: any) => `${m.title} ${step1.programTitle} module content`),
+          {
+            maxResults: 10,
+            minSimilarity: 0.55,
+            domains: ['curriculum-design', 'standards', 'typeOfOutputs'],
+            stage: 'step4',
+            workflowId,
+          }
+        )
+      );
+      // What earlier batches already wrote, so this one neither repeats their topics nor leaves
+      // gaps between them (Rejin's audit: batches could not see each other).
+      const writtenSoFar = detailed.length
+        ? detailed
+            .map((m: any) => `${m.code} ${m.title}: ${(m.topics || []).slice(0, 8).join('; ')}`)
+            .join('\n')
+        : '';
 
-The module list is fixed. It has been approved by the awarding institution. You must not add, remove, merge, split, rename or re-credit any module. Your task is to write the teaching content for each module exactly as listed.
+      const systemPrompt = `You are a senior curriculum architect writing module specifications for ${framing.phrase}.
 
-PROGRAMME: ${step1.programTitle} (${step1.academicLevel})
+${structureStatusLine(origin)} Your task is to write the teaching content for each module exactly as listed.
+
+${programmeContextBlock(framing)}
+
+PROGRAMME: ${step1.programTitle}
 ${step1.programDescription || ''}
+
+PROGRAMME AIMS:
+${aims.map((a) => `${a.id}: ${a.text}`).join('\n') || '- None recorded'}
 
 PROGRAMME LEARNING OUTCOMES:
 ${plosText}
@@ -1562,33 +1628,36 @@ ${plosText}
 KNOWLEDGE, SKILLS AND COMPETENCIES available to link:
 ${kscText}
 
-Write outcomes at a level appropriate to where the module sits in the programme: earlier years build understanding and application, later years analysis, evaluation and creation.
+${smeConstraintLines(step3)}
+${kbContextSection}${occupationSection}
+${progressionGuidance(framing.level)} Pitch each module to where it sits in the programme.
 
-Use UK English in all prose. The bloomLevel field is a fixed key, not prose — use exactly: understand | apply | analyze | evaluate | create.`;
+Use UK English in all prose. The bloomLevel field is a fixed key, not prose: use exactly remember | understand | apply | analyze | evaluate | create.`;
 
       const userPrompt = `Write the specification for these ${batch.length} modules (batch ${batchNumber} of ${Math.ceil(blueprint.length / BATCH_SIZE)}):
 
 ${batchText}
-
+${writtenSoFar ? `\nMODULES ALREADY SPECIFIED (do not repeat their topics; build on them where these modules come later):\n${writtenSoFar}\n` : ''}
 For EACH module return:
 - code: exactly as given above
 - description: 2-3 sentences on the module's focus
-- topics: 5-8 topic titles covered
-- mlos: 3-4 Module Learning Outcomes, each with:
+- topics: as many as the module's content needs (usually 4-8), each named specifically enough that sources could be searched for it
+- mlos: as many Module Learning Outcomes as the module's distinct assessable capabilities need (usually 2-5, more for a larger module), each with:
     - id: "<code>-LO1", "<code>-LO2", …
-    - statement: [Bloom verb] + [task] + [context], max 30 words
-    - bloomLevel: understand | apply | analyze | evaluate | create
+    - statement: [verb] + [task] + [context], max 30 words, narrower than the PLOs it serves
+    - bloomLevel: remember | understand | apply | analyze | evaluate | create
     - verb: the action verb used
     - linkedPLOs: array of PLO codes this supports
     - linkedKSCs: array of K/S/C ids from the list above
 - contactActivities: 3-5 in-class activity descriptions
-- independentActivities: 3-5 self-study activity descriptions
+- independentActivities: 3-5 self-study activity descriptions (say "directed reading", not specific chapters: readings are chosen in Step 6; and "assessment preparation", not a specific assignment: assessment is designed in Step 7)
 
 Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [...], "mlos": [...], "contactActivities": [...], "independentActivities": [...] } ] }`;
 
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 32000,
         timeout: 1200000, // 20 minutes
+        responseFormat: 'json_object',
       });
       const parsed = this.parseJSON(response, `step4-blueprint-batch-${batchNumber}`);
       const byCode = new Map<string, any>(
@@ -1667,7 +1736,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       });
     }
 
-    return this.finaliseStep4(workflowId, detailed, blueprint);
+    return this.finaliseStep4(workflowId, detailed, origin === 'uploaded' ? blueprint : []);
   }
 
   /** Write the assembled modules plus the validation/summary block Step 4 exposes. */
@@ -1706,6 +1775,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       ploIds: [...ploIds] as string[],
       declaredHours,
       declaredContactHours: step1?.creditFramework?.contactHours,
+      essentialKscIds: essentialKscIdsOf(workflow.step2),
     });
     // Approval is blocked only by a computed failure, not by a check that could not run.
     const hoursMatch = validationReport.hoursMatch !== false;
@@ -1804,7 +1874,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
         moduleTarget,
       });
       const outline = await this.generateStep4Outline(workflow, moduleTarget);
-      if (outline.length > 0) return this.processStep4FromBlueprint(workflow, outline);
+      if (outline.length > 0) return this.processStep4FromBlueprint(workflow, outline, 'outline');
       loggingService.warn('Step 4 outline came back empty — falling back to a single call', {
         workflowId,
       });
@@ -1848,6 +1918,8 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
           m.credits ||
           creditsForHours(m.totalHours, (workflow.step1 as any)?.creditFramework?.system),
         prerequisites: m.prerequisites || [],
+        // The model proposes a sequence; formal prerequisites are the institution's rule.
+        prerequisiteStatus: 'proposed',
         linkedPLOs:
           m.linkedPLOs ||
           m.mlos
@@ -1921,6 +1993,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       // Only targets Step 1 declares: the totals above fall back to an assumed 120 hours and 30%.
       declaredHours: (creditFramework as { totalHours?: number }).totalHours || 0,
       declaredContactHours: (creditFramework as { contactHours?: number }).contactHours,
+      essentialKscIds: essentialKscIdsOf(workflow.step2),
     });
     const allPLOsCovered = validationReport.allPLOsCovered !== false;
     const hoursIntegrity = validationReport.hoursMatch !== false;
@@ -2024,7 +2097,14 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     const independentHours = totalHours - contactHours;
     const deliveryMode = step1.delivery?.mode || 'hybrid';
 
-    const suggestedModules = suggestedModuleCount(step1, requestedModuleCount);
+    const { count: suggestedModules, basis: countBasis } = moduleCountFor(
+      step1,
+      requestedModuleCount
+    );
+    const framing = programmeFraming(step1);
+    const aims = aimIndex(step1?.programAims);
+    const exampleHours = Math.max(1, Math.round(totalHours / suggestedModules));
+    const exampleContact = Math.round((exampleHours * contactPercent) / 100);
 
     // Build PLO list with details
     const plos = (step3.outcomes || []).map((o: any) => ({
@@ -2064,7 +2144,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     const subject = step1.targetLearner?.industrySector || step1.programTitle;
     const kbQueries = [
       `${step1.programTitle} course structure modules`,
-      `${step1.programTitle} ${step1.academicLevel} curriculum design module structure`,
+      `${step1.programTitle} ${framing.typeLabel} curriculum design module structure`,
       `${subject} training programme modules`,
       `${step1.programTitle} module learning outcomes`,
       `${subject} progressive complexity curriculum design`,
@@ -2082,65 +2162,54 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     // The job roles' matched national occupations and their tasks (occupationStore).
     const occupationSection = workflowId ? await occupationPromptBlock(workflowId) : '';
 
-    const systemPrompt = `You are a senior curriculum architect with expertise in:
-- Vocational education programme design
-- Module-based learning structures
-- Contact and independent learning hour allocation
-- Bloom's Taxonomy and progressive complexity
-- Learning activity design for different delivery modes
-- UK/EU qualification frameworks
+    // Rejin's audit (17 October 2026): "6-8 modules", "~15 hours per module", the programme's
+    // contact ratio copied into every module, fixed Bloom quotas per phase, "Core Reading:
+    // Chapter 1-3" and "assignment" before readings and assessments exist, delivery guidance that
+    // never matched a stored mode, and an "accredited vocational education programme". The
+    // model's own validationSummary was asked for and discarded; checks are computed after.
+    const systemPrompt = `You are a senior curriculum architect designing the module framework of ${framing.phrase}.
 
-YOUR TASK: Design a comprehensive course framework that:
-1. Organises the program into 6-8 logically sequenced modules
-2. Distributes hours precisely (MUST total exactly ${totalHours} hours)
-3. Ensures all PLOs from Step 3 are addressed by MLOs
-4. Implements progressive complexity across modules
-5. Includes appropriate learning activities for the delivery mode
+YOUR TASK: Design a course framework that:
+1. Organises the programme into exactly ${suggestedModules} logically sequenced modules (${countBasis})
+2. Distributes hours precisely (they MUST total exactly ${totalHours} hours)
+3. Ensures every PLO from Step 3 is developed by MLOs, to the PLO's level by the final module that carries it
+4. Teaches every essential competency from Step 2 somewhere in the modules
+5. Shows progression across the modules
+6. Includes learning activities suited to the delivery mode
 
-CRITICAL HOURS CALCULATION:
-- Total Program Hours: ${totalHours}
-- Contact Hours: ${contactHours} (${contactPercent}%)
-- Independent Hours: ${independentHours} (${100 - contactPercent}%)
-- Guideline: ~15 hours per module (adjust to sum exactly to ${totalHours})
+HOURS:
+- Total Programme Hours: ${totalHours}
+- Contact Hours across all modules: ${contactHours} (${contactPercent}% of the programme)
+- Independent Hours across all modules: ${independentHours}
+- Size each module by its curricular weight; modules need not be equal.
+- A module's own contact ratio may differ from the programme's where its nature calls for it (a project or dissertation module needs less contact, a lab or studio module more), as long as the programme totals above are met.
 
-PROGRESSIVE COMPLEXITY REQUIREMENTS:
-**Early Phase (Modules 1-2):** Foundation building
-- ≥60% of MLOs at Remember/Understand/Apply levels
-- Focus on core concepts, terminology, and basic applications
-- Lower cognitive load to build confidence
+PROGRESSION: ${progressionGuidance(framing.level)}
 
-**Middle Phase (Modules 3-5):** Development
-- Balanced distribution across Apply/Analyse levels
-- More complex applications and analytical tasks
-- Building on earlier modules
-
-**Late Phase (Modules 6+):** Mastery
-- ≥30% of MLOs at Analyse/Evaluate/Create levels
-- Synthesis, critical evaluation, and original work
-- Integration across the program
-
-DELIVERY MODE: ${deliveryMode}
-${deliveryMode === 'online' ? 'Online: Prioritise asynchronous activities, recorded lectures, discussion forums, digital assessments' : ''}
-${deliveryMode === 'classroom' ? 'Classroom: Prioritise face-to-face lectures, workshops, group activities, in-person assessments' : ''}
-${deliveryMode === 'hybrid' ? 'Hybrid: Balance synchronous online sessions, self-paced content, occasional in-person workshops' : ''}
+DELIVERY MODE: ${deliveryGuidance(deliveryMode)}
 
 Use UK English spelling throughout (e.g., "programme", "analyse", "behaviour").`;
 
-    const userPrompt = `Design a complete Course Framework for this accredited vocational education programme.
+    const userPrompt = `Design the complete course framework for ${framing.phrase}.
+
+${programmeContextBlock(framing)}
 
 ${kbContextSection}${occupationSection}
 
 === PROGRAMME CONTEXT ===
 
 PROGRAMME TITLE: ${step1.programTitle}
-ACADEMIC LEVEL: ${step1.academicLevel}
 INDUSTRY SECTOR: ${step1.targetLearner?.industrySector || 'general'}
+
+PROGRAMME AIMS (Step 1):
+${aims.map((a) => `${a.id}: ${a.text}`).join('\n') || '- None recorded'}
 
 HOURS ALLOCATION (MUST BE EXACT):
 - Total Programme Hours: ${totalHours} hours
 - Contact Hours: ${contactHours} hours (${contactPercent}%)
 - Independent Study Hours: ${independentHours} hours (${100 - contactPercent}%)
-- Delivery Mode: ${deliveryMode}
+
+${smeConstraintLines(step3)}
 
 === PROGRAMME LEARNING OUTCOMES (Step 3) ===
 
@@ -2158,82 +2227,54 @@ Create exactly ${suggestedModules} MODULES with the following structure:
 
 1. **IDENTIFICATION**
    - id: Unique identifier (e.g., "mod1", "mod2")
-   - moduleCode: Formal code (e.g., "MOD101", "MOD102")
-   - title: Descriptive, engaging title
+   - moduleCode: a provisional code (e.g., "M01"); the institution assigns formal codes
+   - title: Descriptive title
    - description: 2-3 sentences explaining module focus
 
 2. **SEQUENCING**
    - sequenceOrder: Position in the programme (1 to ${suggestedModules})
    - phase: "early" | "middle" | "late"
-   - prerequisites: Array of module IDs that must be completed first
+   - prerequisites: ids of modules whose content this one builds on. This is a proposed sequence; formal prerequisites are the institution's decision.
 
-3. **HOURS ALLOCATION** (CRITICAL - must be mathematically precise)
-   - totalHours: Module duration (use ~15 hour guideline)
-   - contactHours: Exactly ${contactPercent}% of totalHours
-   - independentHours: Exactly ${100 - contactPercent}% of totalHours
+3. **HOURS ALLOCATION** (must be arithmetically exact)
+   - totalHours: this module's hours, by its curricular weight
+   - contactHours and independentHours: they sum to totalHours; the ratio may differ by module
    - credits: ${
      step1.creditFramework?.system === 'non_credit'
        ? 'omit (the programme is not credit-bearing)'
        : `totalHours / ${hoursPerCredit(step1.creditFramework?.system)} (${step1.creditFramework?.system || 'uk_credits'} credits)`
    }
-   
-   ⚠️ VERIFY: Sum of all module totalHours MUST equal exactly ${totalHours}
 
-4. **MODULE LEARNING OUTCOMES (MLOs)** - Generate 2-4 per module
+   VERIFY: the module totalHours sum to exactly ${totalHours}, and the contactHours to exactly ${contactHours}
+
+4. **MODULE LEARNING OUTCOMES (MLOs)**: as many as the module's distinct assessable capabilities need (usually 2-5; more for a larger module)
    Each MLO must include:
    - id: Unique identifier (e.g., "M1-LO1", "M1-LO2")
-   - statement: [Bloom's Verb] + [Specific Task] + [Real-World Context] (max 30 words)
-   - bloomLevel: understand | apply | analyze | evaluate | create
-     (use exactly these spellings — this is a fixed key the system matches on,
+   - statement: [verb] + [specific task] + [context] (max 30 words)
+   - bloomLevel: remember | understand | apply | analyze | evaluate | create
+     (use exactly these spellings: this is a fixed key the system matches on,
       not prose, so "analyze" here even though the statements use UK English)
    - verb: The action verb used
    - linkedPLOs: Array of PLO IDs this MLO supports
    - linkedKSCs: Array of K/S/C IDs from Step 2
-   
-   MLOs must be MORE SPECIFIC than PLOs - operationalising them at module level
 
-5. **TOPICS** - 3-5 topics per module
-   - id: Unique identifier
-   - title: Topic name
-   - sequence: Order within module
-   - hours: Approximate hours for this topic
+   MLOs must be MORE SPECIFIC than PLOs, operationalising them at module level
 
-6. **CONTACT ACTIVITIES** (total must equal contactHours)
-   Types by delivery mode:
-   - lecture: Instructor-led presentation
-   - workshop: Hands-on practical session
-   - seminar: Discussion-based session
-   - tutorial: Small group guidance
-   - lab: Technical/software practice
-   
-   Each includes: type, title, hours
+5. **TOPICS**: as many as the content needs (usually 3-8), each named specifically enough that academic sources could be searched for it ("Introduction" or "Practical Applications" alone is not a topic)
+   - id, title, sequence
+   - hours: the share of the module's totalHours spent on this topic. Topic hours sum to the module's totalHours; they are a second view of the same workload as the activities, not additional to it.
 
-7. **INDEPENDENT ACTIVITIES** (total must equal independentHours)
+6. **CONTACT ACTIVITIES** (their hours total the module's contactHours)
+   Types: lecture, workshop, seminar, tutorial, lab. Each includes: type, title, hours
+
+7. **INDEPENDENT ACTIVITIES** (their hours total the module's independentHours)
    Types:
-   - reading: Core and supplementary reading
-   - practice: Self-study exercises
-   - research: Independent investigation
-   - assignment: Summative work preparation
-   - reflection: Learning journals, portfolios
-   
+   - reading: directed reading (the readings themselves are chosen in Step 6; do not name chapters)
+   - practice: self-study exercises
+   - research: independent investigation
+   - assignment: preparation for the module's assessment (the assessment itself is designed in Step 7)
+   - reflection: learning journals, portfolios
    Each includes: type, title, hours
-
-=== PROGRESSIVE COMPLEXITY CHECK ===
-
-EARLY PHASE (Modules 1-2):
-- ≥60% of MLOs at Remember/Understand/Apply
-- Focus: Foundations, terminology, basic application
-- Prerequisites: None or minimal
-
-MIDDLE PHASE (Modules 3-5):
-- Balanced Apply/Analyse distribution
-- Focus: Deeper application, analysis
-- Prerequisites: Build on early modules
-
-LATE PHASE (Modules 6+):
-- ≥30% of MLOs at Analyse/Evaluate/Create
-- Focus: Synthesis, evaluation, creation
-- Prerequisites: Multiple earlier modules
 
 === OUTPUT FORMAT ===
 
@@ -2242,71 +2283,44 @@ Return ONLY valid JSON:
   "modules": [
     {
       "id": "mod1",
-      "moduleCode": "MOD101",
-      "title": "Introduction to [Domain]",
-      "description": "This foundation module introduces learners to the fundamental concepts and principles of... Learners will develop...",
+      "moduleCode": "M01",
+      "title": "[Module title]",
+      "description": "[What the module covers and what learners will be able to do]",
       "sequenceOrder": 1,
       "phase": "early",
-      "totalHours": 15,
-      "contactHours": ${Math.round((15 * contactPercent) / 100)},
-      "independentHours": ${15 - Math.round((15 * contactPercent) / 100)},
-      "credits": 1.5,
+      "totalHours": ${exampleHours},
+      "contactHours": ${exampleContact},
+      "independentHours": ${exampleHours - exampleContact},
       "prerequisites": [],
       "linkedPLOs": ["PLO1", "PLO2"],
       "mlos": [
         {
           "id": "M1-LO1",
-          "statement": "Describe the fundamental principles of workforce planning within contemporary organisational contexts",
-          "bloomLevel": "understand",
-          "verb": "Describe",
-          "linkedPLOs": ["PLO1"],
-          "linkedKSCs": ["K1", "K2", "S1"]
-        },
-        {
-          "id": "M1-LO2",
-          "statement": "Apply basic workforce analysis techniques to identify staffing requirements for departmental planning",
+          "statement": "[Verb] [specific task] [context]",
           "bloomLevel": "apply",
-          "verb": "Apply",
-          "linkedPLOs": ["PLO2"],
-          "linkedKSCs": ["S2", "S3"]
+          "verb": "[Verb]",
+          "linkedPLOs": ["PLO1"],
+          "linkedKSCs": ["K1", "S1"]
         }
       ],
       "topics": [
-        { "id": "t1-1", "title": "Introduction to [Topic]", "sequence": 1, "hours": 3 },
-        { "id": "t1-2", "title": "[Core Concept]", "sequence": 2, "hours": 5 },
-        { "id": "t1-3", "title": "Practical Applications", "sequence": 3, "hours": 4 },
-        { "id": "t1-4", "title": "Industry Context", "sequence": 4, "hours": 3 }
+        { "id": "t1-1", "title": "[Specific topic]", "sequence": 1, "hours": 0 }
       ],
       "contactActivities": [
-        { "type": "lecture", "title": "Module Introduction and Overview", "hours": 1 },
-        { "type": "lecture", "title": "Core Concepts Presentation", "hours": 2 },
-        { "type": "workshop", "title": "Practical Application Workshop", "hours": ${Math.round((15 * contactPercent) / 100) - 3} }
+        { "type": "lecture", "title": "[Activity]", "hours": 0 }
       ],
       "independentActivities": [
-        { "type": "reading", "title": "Core Reading: Chapter 1-3", "hours": 4 },
-        { "type": "practice", "title": "Self-Assessment Exercises", "hours": 3 },
-        { "type": "reflection", "title": "Learning Journal Entry", "hours": ${15 - Math.round((15 * contactPercent) / 100) - 7} }
-      ],
-      "bloomDistribution": {
-        "understand": 1,
-        "apply": 1
-      }
+        { "type": "reading", "title": "Directed reading on [topic]", "hours": 0 }
+      ]
     }
-  ],
-  "validationSummary": {
-    "totalModuleHours": ${totalHours},
-    "hoursMatchesTarget": true,
-    "allPLOsCovered": true,
-    "progressiveComplexityMet": true
-  }
+  ]
 }
 
-CRITICAL VALIDATION:
-✓ Sum of all module totalHours MUST equal exactly ${totalHours}
-✓ Each module's contactHours + independentHours = totalHours
-✓ All ${plos.length} PLOs are addressed by at least one MLO
-✓ Progressive complexity is implemented across phases
-✓ All hours are mathematically consistent`;
+CRITICAL:
+- Sum of all module totalHours MUST equal exactly ${totalHours}, and contactHours exactly ${contactHours}
+- Each module's contactHours + independentHours = totalHours
+- All ${plos.length} PLOs are developed by at least one MLO, and every essential competency is carried by some MLO
+- Nothing listed under EXCLUSIONS appears anywhere`;
 
     try {
       loggingService.info('Starting Step 4 OpenAI generation', {
@@ -2323,6 +2337,7 @@ CRITICAL VALIDATION:
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 128000, // MAXIMUM
         timeout: 1800000, // 30 minutes (user said cost is not an issue)
+        responseFormat: 'json_object',
       });
 
       loggingService.info('Received Step 4 OpenAI response', {

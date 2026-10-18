@@ -29,6 +29,22 @@ export interface Step4ValidationReport {
   progressionValid: boolean | null;
   noCircularDeps: boolean | null;
   minMLOsPerModule: boolean | null;
+  /**
+   * Every competency Step 2 called essential is carried by some MLO. Step 3 lets an essential item
+   * be deferred to modules, so without this check it could vanish between Steps 2 and 4 (Rejin's
+   * audit, 17 October 2026). Null when Step 2 marks nothing essential.
+   */
+  essentialCompetenciesTaught: boolean | null;
+}
+
+/** The ids of the competencies Step 2 marked essential. */
+export function essentialKscIdsOf(step2: any): string[] {
+  const competencies = step2?.competencyItems?.length
+    ? step2.competencyItems
+    : step2?.attitudeItems || [];
+  return [...(step2?.knowledgeItems || []), ...(step2?.skillItems || []), ...competencies]
+    .filter((i: any) => i?.importance === 'essential' && i?.id)
+    .map((i: any) => String(i.id));
 }
 
 const HOURS_TOLERANCE = 0.05;
@@ -65,6 +81,7 @@ export function step4ValidationReport(input: {
   ploIds: string[];
   declaredHours: number;
   declaredContactHours?: number;
+  essentialKscIds?: string[];
 }): Step4ValidationReport {
   const modules = input.modules || [];
   const order = new Map(
@@ -99,6 +116,19 @@ export function step4ValidationReport(input: {
       : null,
     noCircularDeps: modules.length ? !hasCycle(modules, prerequisitesOf) : null,
     minMLOsPerModule: modules.length ? modules.every((m) => (m.mlos || []).length >= 2) : null,
+    essentialCompetenciesTaught: (() => {
+      const essential = input.essentialKscIds || [];
+      if (!essential.length || !modules.length) return null;
+      const carried = new Set(
+        modules.flatMap((m) =>
+          (m.mlos || []).flatMap((o: any) => [
+            ...(o?.competencyLinks || []),
+            ...(o?.linkedKSCs || []),
+          ])
+        )
+      );
+      return essential.every((id) => carried.has(id));
+    })(),
   };
 }
 

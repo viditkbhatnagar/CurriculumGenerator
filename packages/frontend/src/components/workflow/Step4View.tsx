@@ -1947,6 +1947,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                     ['progressionValid', 'Progression', 'warn'],
                     ['noCircularDeps', 'No Circular Deps', 'fail'],
                     ['minMLOsPerModule', 'Min MLOs', 'warn'],
+                    ['essentialCompetenciesTaught', 'Essential KSCs', 'warn'],
                   ] as const
                 ).map(([key, label, failure]) => {
                   // true passed, false failed, null not checked (nothing to check against).

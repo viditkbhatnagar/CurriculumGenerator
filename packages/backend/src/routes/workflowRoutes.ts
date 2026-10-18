@@ -94,7 +94,7 @@ import { isValidObjectId } from 'mongoose';
 import { deleteConfirmationProblem } from '../utils/softDelete';
 import { hasActiveGeneration } from '../services/generationActivity';
 import { step4ApprovalProblems } from '../services/step4Approval';
-import { step4ValidationReport } from '../services/step4Validation';
+import { essentialKscIdsOf, step4ValidationReport } from '../services/step4Validation';
 import { step6ReportOf } from '../services/step6Validation';
 import { step7ValidationOf } from '../services/step7Validation';
 import { step13Validation } from '../services/step13Validation';
@@ -1078,6 +1078,7 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
         ploIds: ((workflow as any).step3?.outcomes || []).map((o: any) => o.code || o.id),
         declaredHours: (workflow as any).step1?.creditFramework?.totalHours || 0,
         declaredContactHours: (workflow as any).step1?.creditFramework?.contactHours,
+        essentialKscIds: essentialKscIdsOf((workflow as any).step2),
       });
     }
 

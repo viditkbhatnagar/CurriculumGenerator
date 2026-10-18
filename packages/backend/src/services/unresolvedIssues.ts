@@ -14,7 +14,7 @@
  * Each check is recomputed from the stored content, the same way the screens compute it, so
  * the list cannot disagree with them. Pure, so it can be tested.
  */
-import { repeatedTopics, step4ValidationReport } from './step4Validation';
+import { essentialKscIdsOf, repeatedTopics, step4ValidationReport } from './step4Validation';
 import { scopeIssue } from './capabilityScope';
 import { missingAssessmentRules } from './assessmentRules';
 import { currentDuplicates, evidenceSummary } from './competencyEvidence';
@@ -62,6 +62,8 @@ const CHECK_LABELS: Record<number, Record<string, string>> = {
     progressionValid: 'Every prerequisite is a module that comes earlier',
     noCircularDeps: 'No module depends on itself through its prerequisites',
     minMLOsPerModule: 'Every module has at least two learning outcomes',
+    essentialCompetenciesTaught:
+      'Every essential competency from Step 2 is taught by a module outcome',
   },
   5: {
     allSourcesApproved: 'Every source is from an approved category',
@@ -259,6 +261,7 @@ export function unresolvedIssues(workflow: Workflowish, currentYear: number): Un
           ploIds: outcomes.map((o: Workflowish) => o.code || o.id),
           declaredHours: w.step1?.creditFramework?.totalHours || 0,
           declaredContactHours: w.step1?.creditFramework?.contactHours,
+          essentialKscIds: essentialKscIdsOf(w.step2),
         }) as unknown as Record<string, unknown>
       )
     );

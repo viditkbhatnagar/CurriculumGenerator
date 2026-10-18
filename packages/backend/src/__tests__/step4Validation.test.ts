@@ -21,7 +21,24 @@ describe('step4ValidationReport', () => {
       progressionValid: true,
       noCircularDeps: true,
       minMLOsPerModule: true,
+      essentialCompetenciesTaught: null, // nothing marked essential
     });
+  });
+
+  it('fails when an essential competency is carried by no module outcome', () => {
+    const modules = [
+      mod('m1', 1, {
+        mlos: [
+          { id: 'a', competencyLinks: ['K1'] },
+          { id: 'b', linkedKSCs: ['S1'] },
+        ],
+      }),
+    ];
+    const report = (essentialKscIds: string[]) =>
+      step4ValidationReport({ modules, ploIds: ['PLO1'], declaredHours: 120, essentialKscIds })
+        .essentialCompetenciesTaught;
+    expect(report(['K1', 'S1'])).toBe(true);
+    expect(report(['K1', 'K2'])).toBe(false);
   });
 
   it('fails a prerequisite that comes later, or that names no module', () => {
