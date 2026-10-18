@@ -10,6 +10,7 @@
  * - occupationPromptBlock: the matched occupations' official tasks, for the Step 2 and Step 4
  *   writers, as evidence of what the work involves (Logan's next steps, Phase 3).
  */
+import { inPromptCapture } from '../promptCapture';
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
@@ -184,10 +185,13 @@ export async function matchProgrammeOccupations(workflowId: string): Promise<Occ
       matches: topMatches(vectors[i], index),
     })),
   };
-  await CurriculumWorkflow.collection.updateOne(
-    { _id: new mongoose.Types.ObjectId(workflowId) },
-    { $set: { occupationEvidence: evidence } }
-  );
+  // A prompt capture changes nothing on the programme (services/promptCapture).
+  if (!inPromptCapture()) {
+    await CurriculumWorkflow.collection.updateOne(
+      { _id: new mongoose.Types.ObjectId(workflowId) },
+      { $set: { occupationEvidence: evidence } }
+    );
+  }
   return evidence;
 }
 

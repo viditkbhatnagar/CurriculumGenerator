@@ -9067,6 +9067,39 @@ router.post('/replace-source', validateJWT, loadUser, async (req: Request, res: 
 });
 
 /**
+ * POST /api/v3/workflow/:id/prompt-capture  { step, moduleIndex?, variant? }
+ *
+ * The exact prompts a step would send for this programme, with its knowledge-base passages,
+ * occupations and settings expanded, captured without calling the model and without writing
+ * anything (workflowService.capturePromptsForStep). For reviewers who need to see what the
+ * model is actually given, not the template.
+ */
+router.post('/:id/prompt-capture', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const step = Number(req.body?.step);
+    const moduleIndex =
+      req.body?.moduleIndex === undefined ? undefined : Number(req.body.moduleIndex);
+    const variant = typeof req.body?.variant === 'string' ? req.body.variant : undefined;
+    if (![1, 2, 3, 4, 6, 7].includes(step)) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'step must be one of 1, 2, 3, 4, 6, 7' });
+    }
+    if (moduleIndex !== undefined && (!Number.isInteger(moduleIndex) || moduleIndex < 0)) {
+      return res.status(400).json({ success: false, error: 'moduleIndex must be a whole number' });
+    }
+    const result = await workflowService.capturePromptsForStep(req.params.id, step, {
+      moduleIndex,
+      variant,
+    });
+    res.json({ success: true, data: { step, moduleIndex, variant, ...result } });
+  } catch (error: any) {
+    loggingService.error('Prompt capture failed', { error: error?.message });
+    res.status(500).json({ success: false, error: error?.message || 'Prompt capture failed' });
+  }
+});
+
+/**
  * POST /api/v3/workflow/upload-framework
  * Upload a custom framework document for a specific workflow
  */

@@ -18,6 +18,7 @@ import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
 import { formatKBContextForPrompt, retrieveKBContext } from './kbRetrieval';
 import { occupationPromptBlock } from './occupations/occupationStore';
+import { capturePrompts, CapturedPrompt } from './promptCapture';
 import { programmeContextBlock, programmeFraming } from './programmeFraming';
 import { normaliseBloomLevel } from '../utils/bloomLevels';
 import { aimIndex, step3CoverageReport, tidyOutcome } from './outcomeCoverage';
@@ -1841,6 +1842,159 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       declaredHours,
     });
     return workflow;
+  }
+
+  /**
+   * The exact prompts a step would send for this programme, captured without sending them
+   * (services/promptCapture). Runs a step's own prompt-building, retrieval included, and never
+   * its process*: Step 1's processor saves the step even when generation fails, which would
+   * overwrite the programme. Nothing here writes, and the model is never called.
+   *
+   * Step 4 has three variants: "batch" (an uploaded module list), "outline" (a programme of
+   * more than eight modules, before its batches) and "single" (eight or fewer). Steps 6 and 7
+   * capture one module, by index. Step 7's "programme" and "samples" variants capture the
+   * optional programme-level summative and one sample-question prompt.
+   */
+  async capturePromptsForStep(
+    workflowId: string,
+    step: number,
+    opts: { moduleIndex?: number; variant?: string } = {}
+  ): Promise<{ prompts: CapturedPrompt[]; error?: string }> {
+    const workflow = await CurriculumWorkflow.findById(workflowId);
+    if (!workflow) throw new Error('Workflow not found');
+    const wf: any = workflow;
+    const modules: any[] = wf.step4?.modules || [];
+    const moduleIndex = Math.max(0, Math.min(modules.length - 1, opts.moduleIndex ?? 0));
+
+    switch (step) {
+      case 1:
+        return capturePrompts(async () => {
+          const s1 = wf.step1 || {};
+          const cf = s1.creditFramework || {};
+          await this.generateStep1Content(
+            { ...s1, creditSystem: cf.system || cf.creditSystem, deliveryMode: s1.delivery?.mode },
+            {
+              totalHours: cf.totalHours,
+              contactHours: cf.contactHours,
+              contactPercent: cf.contactHoursPercent,
+              independentHours: cf.independentHours,
+            } as unknown as CreditCalculation,
+            workflowId
+          );
+        }, 1);
+      case 2:
+        return capturePrompts(
+          () =>
+            this.generateStep2Content(
+              wf.step1,
+              {
+                benchmarkPrograms: wf.step2?.benchmarkPrograms,
+                industryFrameworks: wf.step2?.industryFrameworks,
+                institutionalFrameworks: wf.step2?.institutionalFrameworks,
+              },
+              workflowId
+            ),
+          1
+        );
+      case 3: {
+        const s3 = wf.step3 || {};
+        return capturePrompts(
+          () =>
+            this.generateStep3Content(
+              wf.step1,
+              wf.step2,
+              {
+                bloomLevels: s3.bloomLevels?.length
+                  ? s3.bloomLevels
+                  : ['apply', 'analyze', 'evaluate'],
+                priorityCompetencies: s3.priorityCompetencies || [],
+                outcomeEmphasis: s3.outcomeEmphasis || 'mixed',
+                targetCount: s3.targetCount || s3.outcomes?.length || 6,
+                contextConstraints: s3.contextConstraints,
+                preferredVerbs: s3.preferredVerbs,
+                avoidVerbs: s3.avoidVerbs,
+                stakeholderPriorities: s3.stakeholderPriorities,
+                exclusions: s3.exclusions,
+              },
+              workflowId
+            ),
+          1
+        );
+      }
+      case 4: {
+        const variant = opts.variant || (wf.step4?.moduleBlueprint?.length ? 'batch' : 'single');
+        if (variant === 'batch') {
+          const blueprint = wf.step4?.moduleBlueprint || [];
+          if (!blueprint.length)
+            return { prompts: [], error: 'This programme has no uploaded module list' };
+          return capturePrompts(
+            () => this.processStep4FromBlueprint(workflow, blueprint, 'uploaded'),
+            1
+          );
+        }
+        if (variant === 'outline') {
+          return capturePrompts(
+            () =>
+              this.generateStep4Outline(
+                workflow,
+                suggestedModuleCount(wf.step1, wf.step4?.requestedModuleCount)
+              ),
+            1
+          );
+        }
+        return capturePrompts(
+          () =>
+            this.generateStep4Content(
+              wf.step1,
+              wf.step2,
+              wf.step3,
+              wf.step4?.requestedModuleCount,
+              workflowId
+            ),
+          1
+        );
+      }
+      case 6: {
+        if (!modules.length) return { prompts: [], error: 'Step 4 has no modules' };
+        // One module: a copy of the programme holding only that module, so Step 6's own
+        // module loop builds exactly the prompt it would send for it.
+        const single = {
+          ...wf.toObject(),
+          step4: { ...wf.step4, modules: [modules[moduleIndex]] },
+        };
+        return capturePrompts(() => this.generateStep6Content(single as ICurriculumWorkflow), 1);
+      }
+      case 7: {
+        if (!modules.length) return { prompts: [], error: 'Step 4 has no modules' };
+        const prefs = wf.step7?.userPreferences;
+        if (!prefs) return { prompts: [], error: 'Step 7 has no saved preferences' };
+        // Imported here, as elsewhere in this file, to avoid a circular import.
+        const { assessmentGeneratorService } = await import('./assessmentGeneratorService');
+        const generator: any = assessmentGeneratorService;
+        if (opts.variant === 'programme' || opts.variant === 'samples') {
+          const request = generator.buildRequest(workflow, prefs);
+          return capturePrompts(
+            () =>
+              opts.variant === 'programme'
+                ? generator.generateSummativeAssessments(request)
+                : generator.generateSampleQuestionsByType(request, 'sjt', 3),
+            1
+          );
+        }
+        return capturePrompts(
+          () =>
+            assessmentGeneratorService.generateFormativesForModules(workflow, prefs, [
+              modules[moduleIndex].id,
+            ]),
+          4
+        );
+      }
+      default:
+        return {
+          prompts: [],
+          error: `Prompt capture covers Steps 1, 2, 3, 4, 6 and 7, not ${step}`,
+        };
+    }
   }
 
   /**

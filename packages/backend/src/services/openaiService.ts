@@ -7,6 +7,7 @@ import { analyticsStorageService } from './analyticsStorageService';
 import { cleanModelOutput, stripXmlInvalid } from '../utils/xmlSafe';
 import { costOf, usageFrom } from '../utils/modelPricing';
 import { currentUsageContext } from './usageContext';
+import { captureAndStop, inPromptCapture } from './promptCapture';
 
 /**
  * Unified OpenAI Service
@@ -204,6 +205,17 @@ export class OpenAIService {
       options.reasoningEffort ||
       (model.includes('gpt-5') ? config.openai.reasoningEffort : undefined);
 
+    // Prompt capture (services/promptCapture): record what would be sent, and send nothing.
+    if (inPromptCapture()) {
+      captureAndStop({
+        label: 'generateContent',
+        model,
+        systemPrompt,
+        userPrompt: prompt,
+        options: { maxTokens, responseFormat, reasoningEffort: reasoningEffort || 'model default' },
+      });
+    }
+
     const startTime = Date.now();
 
     return this.retryWithExponentialBackoff(async () => {
@@ -303,6 +315,16 @@ export class OpenAIService {
     const reasoningEffort =
       options.reasoningEffort ||
       (model.includes('gpt-5') ? config.openai.reasoningEffort : undefined);
+
+    if (inPromptCapture()) {
+      captureAndStop({
+        label: 'generateStructuredContent',
+        model,
+        systemPrompt,
+        userPrompt: prompt,
+        options: { maxTokens, reasoningEffort: reasoningEffort || 'model default' },
+      });
+    }
 
     const startTime = Date.now();
 

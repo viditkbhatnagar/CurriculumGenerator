@@ -5,6 +5,7 @@
  *
  * Moved out of workflowService so it can be tested on its own.
  */
+import { inPromptCapture } from './promptCapture';
 import mongoose from 'mongoose';
 import { RAGEngine } from './ragEngine';
 import { loggingService } from './loggingService';
@@ -141,6 +142,8 @@ async function recordKbEvidence(
   books: number
 ): Promise<void> {
   if (!workflowId || !stage || !mongoose.isValidObjectId(workflowId)) return;
+  // A prompt capture changes nothing on the programme (services/promptCapture).
+  if (inPromptCapture()) return;
   try {
     await CurriculumWorkflow.collection.updateOne(
       { _id: new mongoose.Types.ObjectId(workflowId) },
