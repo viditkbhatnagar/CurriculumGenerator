@@ -97,6 +97,8 @@ const CHECK_LABELS: Record<number, Record<string, string>> = {
     allModulesCovered: 'Every module has at least one assessment',
     bloomFloorMet: 'Every assessment reaches the Bloom level of its outcomes',
     formativeCountMet: 'Every module has the configured number of formative activities',
+    marksConsistent:
+      "Every graded assessment's marking guide and rubric add up to its mark total and split it the same way",
   },
   8: {
     hasCaseStudies: 'Case studies were generated',

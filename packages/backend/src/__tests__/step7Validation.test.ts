@@ -31,8 +31,23 @@ describe('step7Validation', () => {
       allModulesCovered: true,
       bloomFloorMet: true,
       formativeCountMet: true,
+      marksConsistent: null, // no graded assessments in this set
     });
     expect(step7Passed(v)).toBe(true);
+  });
+
+  it('fails a graded assessment whose guide and rubric split the marks differently', () => {
+    const graded = {
+      moduleId: 'm1',
+      alignedMLOs: ['m1-1'],
+      graded: true,
+      maxMarks: 20,
+      markingGuide: { markAllocation: [{ marks: 10 }, { marks: 10 }] },
+      rubric: [{ maxMarks: 15 }, { maxMarks: 5 }],
+    };
+    expect(step7Validation({ ...base(), formatives: [graded] as any }).marksConsistent).toBe(false);
+    const agreed = { ...graded, rubric: [{ maxMarks: 10 }, { maxMarks: 10 }] };
+    expect(step7Validation({ ...base(), formatives: [agreed] as any }).marksConsistent).toBe(true);
   });
 
   it('fails a run that produced no assessments, instead of passing it', () => {

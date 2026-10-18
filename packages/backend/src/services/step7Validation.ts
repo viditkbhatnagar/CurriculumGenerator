@@ -10,9 +10,12 @@
  * tested.
  */
 import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
+import { markConsistency } from './assessmentMarks';
 
 interface AssessmentLike {
   moduleId?: string;
+  graded?: boolean;
+  purpose?: string;
   alignedMLOs?: unknown[];
   alignedPLOs?: unknown[];
 }
@@ -31,6 +34,12 @@ export interface Step7Validation {
   allModulesCovered: boolean | null;
   bloomFloorMet: boolean | null;
   formativeCountMet: boolean | null;
+  /**
+   * Every graded module assessment's marking guide, rubric and question points add up to its
+   * mark total and split it the same way. Asked of the model; checked here. Null when there are
+   * no graded assessments.
+   */
+  marksConsistent: boolean | null;
 }
 
 export const MIN_SAMPLE_QUESTIONS = 20;
@@ -88,6 +97,12 @@ export function step7Validation(input: {
     allModulesCovered: moduleIds.length ? moduleIds.every((id) => assessedModules.has(id)) : null,
     bloomFloorMet: input.bloomFloorMet,
     formativeCountMet: input.formativeGapCount === null ? null : input.formativeGapCount === 0,
+    marksConsistent: (() => {
+      const graded = formatives.filter(
+        (f) => f?.graded === true || f?.purpose === 'module_summative'
+      );
+      return graded.length ? graded.every((f) => markConsistency(f).consistent) : null;
+    })(),
   };
 }
 

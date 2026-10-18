@@ -872,6 +872,8 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
         ['All Modules Covered', validation.allModulesCovered],
         ['Bloom Level Met', validation.bloomFloorMet],
         ['Formative Count Met', validation.formativeCountMet],
+        // Guide, rubric and points agree with the mark total (backend: assessmentMarks).
+        ['Marks Consistent', (validation as { marksConsistent?: boolean | null }).marksConsistent],
       ]
     : [];
   const step7Frame = validationFrame(step7Checks.map(([, value]) => value));

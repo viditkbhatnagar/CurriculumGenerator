@@ -16,6 +16,8 @@
  * - Progress tracking and resume capability
  */
 
+import { programmeContextBlock, programmeFraming } from './programmeFraming';
+import { markConsistency } from './assessmentMarks';
 import { ICurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { openaiService } from './openaiService';
 import { loggingService } from './loggingService';
@@ -123,6 +125,29 @@ export {
 } from './bloomTaxonomy';
 export type { AssessmentSlot, FormatPlan, BloomAudit, BloomReport } from './bloomTaxonomy';
 
+/**
+ * Rejin's audit (17 October 2026): "localise regulatory references to the market" told the
+ * model to recall what it believes a country's law says. A fictional organisation is fine; a
+ * fictional or misremembered regulation is not.
+ */
+const NO_REGULATION_FROM_MEMORY =
+  'Do not cite specific laws, regulations, regulators, legal thresholds or tax rules from memory: none have been supplied or verified for this programme. Where an obligation matters to the task, describe it in general terms, or state the rule in full inside the question as given information.';
+
+/** No certification body's blueprint is ever supplied, so its name is a style, not a standard. */
+function certificationStyleLine(styles: string[] | undefined): string {
+  const named = (styles || []).filter((s) => s && s !== 'None');
+  return named.length
+    ? `- Style preference only: write in the style of ${named.join(', ')} assessments where that suits the outcome. No certification body's blueprint or standard has been supplied, so do not claim alignment with one or reproduce its content.`
+    : '- No specific certification style';
+}
+
+/**
+ * Tasks may only demand what the module teaches (Rejin's audit: an assessment could look
+ * aligned while testing a framework or rule the learner was never taught).
+ */
+const CONTENT_SCOPE_RULE =
+  'Do not require knowledge of a model, framework, formula, regulation or fact that is not among the topics and outcomes listed here, unless the question supplies it in full.';
+
 export class AssessmentGeneratorService {
   /**
    * Modules whose assessments could not be generated, even after a retry.
@@ -165,7 +190,7 @@ export class AssessmentGeneratorService {
       // programme. Spelling is a house style; it is not a jurisdiction.
       return 'Use UK English spelling throughout ("organisation", "analyse", "programme"). This is a SPELLING convention only — it does not mean the scenario is set in the UK, and must not lead to UK companies, UK cities, GBP or UK regulators. The setting is specified separately below.';
     }
-    return `Localise this assessment to the ${market} context: use the English spelling, examples, brand/organisation names, currency and regulatory references appropriate to ${market}. Do NOT use UK-specific brands, currency (£/GBP) or regulators unless ${market} explicitly is the UK.`;
+    return `Localise this assessment to the ${market} context: use the English spelling, examples, organisation names and currency appropriate to ${market}. Do NOT use UK-specific brands, currency (£/GBP) or regulators unless ${market} explicitly is the UK. ${NO_REGULATION_FROM_MEMORY}`;
   }
 
   /**
@@ -176,7 +201,7 @@ export class AssessmentGeneratorService {
   private marketContextBlock(request: AssessmentGenerationRequest): string {
     const market = request.userPreferences?.targetMarket?.trim();
     if (!market) return '';
-    return `\n=== TARGET MARKET ===\nLocalise all examples, scenarios, brand/organisation names, currency and regulatory references to: ${market}.\n`;
+    return `\n=== TARGET MARKET ===\nLocalise all examples, scenarios, organisation names and currency to: ${market}. ${NO_REGULATION_FROM_MEMORY}\n`;
   }
 
   /**
@@ -588,7 +613,7 @@ export class AssessmentGeneratorService {
     // graded because the prompt made grading non-optional. The two purposes are now written
     // separately, in the awarding body's own terms.
     const systemPrompt = isSummative
-      ? `You are an educational assessment designer producing SUMMATIVE module assessments for vocational and professional education.
+      ? `You are an educational assessment designer producing SUMMATIVE module assessments for ${programmeFraming(request.programFoundation).phrase}.
 
 A summative assessment is used at the END of the learning process. It evaluates achievement
 against the module's learning outcomes and assessment criteria, and it is GRADED. It carries
@@ -601,17 +626,19 @@ You design assessments that are:
 - Markable by a second marker who was not present for the teaching
 
 ${this.spellingDirective(request)}`
-      : `You are an educational designer producing FORMATIVE learning activities for vocational and professional education.
+      : `You are an educational designer producing FORMATIVE learning activities for ${programmeFraming(request.programFoundation).phrase}.
 
-A formative activity is used DURING the learning process. It provides feedback on
-learning-in-process. It is DIALOGUE-BASED and UNGRADED.
+A formative activity is used DURING the learning process. It GENERATES FEEDBACK on
+learning-in-process and is UNGRADED. It may take any form that produces feedback: a
+low-stakes quiz with automatic feedback, a self-assessment, peer review, a practice task, a
+draft for comment, a worked problem, or a discussion.
 
 This means, without exception:
 - NO marks, NO mark total, NO percentage weighting, NO grade, NO pass/fail decision
 - NO banded rubric and NO marking guide — nobody is awarding anything
 - Its purpose is to reveal what the learner has and has not yet grasped, early enough to act
-- Its output is a conversation: what the tutor says back, what the learner checks themselves
-  against, what the group discusses
+- Its output is feedback: what the tutor or the activity says back, what the learner checks
+  themselves against, what the group discusses
 - A wrong answer here is useful information, not a penalty
 
 You design activities that are:
@@ -631,8 +658,9 @@ ${repairNote ? `\n!! THIS IS A SECOND ATTEMPT. The previous one was rejected:\n$
 ${this.marketContextBlock(request)}
 === PROGRAMME CONTEXT ===
 Programme: ${request.programFoundation?.programTitle || 'Professional Development Programme'}
-Level: ${request.programFoundation?.academicLevel || 'Certificate'}
 Industry: ${request.programFoundation?.targetLearner?.industrySector || 'General'}
+
+${programmeContextBlock(programmeFraming(request.programFoundation))}
 
 === MODULE: ${module.id} - ${module.title} ===
 Module Code: ${module.moduleCode || `MOD${moduleIndex + 1}`}
@@ -701,18 +729,13 @@ outcomes unassessed while appearing to satisfy the requirement.`
 - Workplace Performance Alignment: ${request.userPreferences.alignToWorkplacePerformance ? 'Yes' : 'No'}
 
 **Certification Style Influence:**
-${
-  request.userPreferences.certificationStyles.includes('None')
-    ? '- No specific certification style'
-    : `- Align with: ${request.userPreferences.certificationStyles.join(', ')} standards where applicable`
-}
+${certificationStyleLine(request.userPreferences.certificationStyles)}
 
-Generate EXACTLY ONE formative assessment, in the format "${assignedFormat}", that:
-1. Each assesses 2-4 MLOs from this module
-2. Uses different assessment types from the requested list
-3. Includes clear instructions for learners
-4. Provides assessment criteria (3-5 high-level criteria, not full rubric)
-5. Is appropriate for formative (low-stakes) use
+This ${isSummative ? 'summative assessment' : 'formative activity'}, in the format "${assignedFormat}", must:
+1. Evidence every outcome listed under "THE OUTCOMES THIS ASSESSMENT MUST EVIDENCE", and only those
+2. Include clear instructions for learners
+3. ${isSummative ? 'State 3-5 assessment criteria, which the rubric then expands' : 'State 3-5 criteria the learner can check their own work against'}
+4. ${CONTENT_SCOPE_RULE}
 
 === OUTPUT FORMAT ===
 
@@ -726,7 +749,6 @@ Return ONLY valid JSON with COMPLETE QUESTIONS:
       "assessmentType": "${assignedFormat}",
       "description": "<what the learner does in this assessment, at ${slotBloom.toUpperCase()} level>",
       "instructions": "<what the learner is told before starting: the setting, what is supplied, what to hand in, and how long it should take>",
-      "alignedPLOs": ["PLO1", "PLO2"],
       "alignedMLOs": ${JSON.stringify(assignedSlot?.mloIds || [])},
       "assessmentCriteria": [
         "<criterion describing what is being judged, at ${slotBloom.toUpperCase()} level>",
@@ -735,7 +757,7 @@ Return ONLY valid JSON with COMPLETE QUESTIONS:
       ],
 ${
   isSummative
-    ? `      "maxMarks": 12,
+    ? `      "maxMarks": <total marks, sized to the tasks and the criteria>,
       "studentBrief": {
         "context": "One or two sentences setting the scenario the learner is working in.",
         "task": "What the learner must actually do, in plain imperative language.",
@@ -744,21 +766,19 @@ ${
         "submissionFormat": "e.g. single PDF, 500 words, or completed online quiz"
       },
       "markingGuide": {
-        "totalMarks": 12,
+        "totalMarks": <the same total as maxMarks>,
         "markAllocation": [
-          { "component": "Section or question group", "marks": 6, "indicativeContent": "What a correct response contains, specific enough to mark against." }
+          { "component": "Section or question group", "marks": <marks>, "indicativeContent": "What a correct response contains, specific enough to mark against." }
         ],
         "markerNotes": "Guidance for the marker: common misconceptions, what to accept as equivalent, where to award partial credit."
       },
       "rubric": [
         {
           "criterion": "Name the criterion, drawn from assessmentCriteria",
-          "maxMarks": 6,
+          "maxMarks": <marks for this criterion>,
           "levels": [
-            { "band": "Distinction", "markRange": "5-6", "descriptor": "What performance at this band looks like for THIS criterion." },
-            { "band": "Merit", "markRange": "4", "descriptor": "..." },
-            { "band": "Pass", "markRange": "3", "descriptor": "..." },
-            { "band": "Fail", "markRange": "0-2", "descriptor": "..." }
+            { "band": "<the institution's band name, if its rules above state a grading scheme; otherwise a descriptive level: Excellent, Good, Satisfactory or Not yet demonstrated>", "markRange": "<marks>", "descriptor": "What performance at this level looks like for THIS criterion." }
+            // one entry per level, highest first
           ]
         }
       ],`
@@ -776,7 +796,7 @@ ${
         {
           "questionNumber": 1,
           "questionText": "<the complete task, with any case, data or figures the learner needs included in full>",
-          "questionType": "one of: mcq | short_answer | scenario | calculation | practical | file_upload",
+          "questionType": "one of: mcq | short_answer | scenario | calculation | practical | file_upload (file_upload means the learner submits a file; say in questionText what the work is: a report, a portfolio, a recorded presentation)",
           "options": ["<only for mcq — otherwise omit this field>"],
           "correctAnswer": "<for mcq, the full text of the correct option; otherwise the expected response or marking points>",
 ${isSummative ? '          "points": 2,' : ''}
@@ -826,6 +846,10 @@ CRITICAL REQUIREMENTS:
     views of ONE mark split. In an earlier bank both summed correctly while splitting the
     marks differently in 35 of 92 assessments, so two markers using the two documents awarded
     different marks for identical work.
+12b. Use the grading scheme in the institution's rules above for the rubric's bands. If none
+    is stated, use descriptive levels (Excellent, Good, Satisfactory, Not yet demonstrated),
+    never grade names such as Distinction, Merit, Pass, Fail, A or B: the grading scheme is
+    the institution's, and it has not been given.
 13. Rubric descriptors must be specific to this module's content — a descriptor that would read
     identically on any assessment ("shows good understanding") is not usable for marking.
 14. Do NOT invent a percentage weighting; the programme's formative/summative split is applied
@@ -907,6 +931,9 @@ CRITICAL REQUIREMENTS:
           delete fa.markingGuide;
           delete fa.studentBrief;
           for (const q of fa?.questions || []) delete q.points;
+        } else {
+          // Checked, not just asked for: totals and the guide/rubric split (assessmentMarks).
+          fa.markCheck = markConsistency(fa);
         }
 
         const validMloIds = new Set((assignedSlot?.mloIds || []).map(String));
@@ -1053,7 +1080,8 @@ CRITICAL REQUIREMENTS:
       format: request.userPreferences.summativeFormat,
     });
 
-    const systemPrompt = `You are a senior assessment designer specializing in summative assessments for vocational and professional certification programmes.
+    const framing = programmeFraming(request.programFoundation);
+    const systemPrompt = `You are a senior assessment designer writing the optional programme-level summative assessment for ${framing.phrase}.
 
 Summative assessments are high-stakes, comprehensive evaluations that:
 - Assess achievement of programme/module learning outcomes
@@ -1067,7 +1095,6 @@ You design assessments that:
 - Use appropriate assessment methods for the learning outcomes
 - Include detailed marking models (criteria or rubrics)
 - Are fair, valid, and reliable
-- Meet professional/certification body standards where applicable
 
 ${this.spellingDirective(request)}`;
 
@@ -1078,23 +1105,27 @@ ${this.spellingDirective(request)}`;
 ${this.marketContextBlock(request)}
 === PROGRAMME CONTEXT ===
 Programme: ${request.programFoundation?.programTitle || 'Professional Development Programme'}
-Level: ${request.programFoundation?.academicLevel || 'Certificate'}
 Industry: ${request.programFoundation?.targetLearner?.industrySector || 'General'}
 Total Modules: ${modules.length}
 
+${programmeContextBlock(framing)}
+
 **PROGRAMME LEARNING OUTCOMES (PLOs):**
-${plos.map((plo: any) => `- ${plo.id || plo.code}: ${plo.statement} [${plo.bloomLevel}]`).join('\n')}
+${plos
+  .map(
+    (plo: any) =>
+      `- ${plo.id || plo.code}: ${plo.statement} [${plo.bloomLevel}]${plo.examSuitable === false ? ' [NOT examinable by a timed written or MCQ component alone]' : ''}${plo.evidenceRequired ? ` (evidence needed: ${plo.evidenceRequired})` : ''}`
+  )
+  .join('\n')}
 
 === MODULES COVERED ===
 ${modules
   .map(
     (mod: any, idx: number) => `
 **Module ${idx + 1}: ${mod.id} - ${mod.title}**
-MLOs: ${(mod.mlos || []).map((mlo: any) => mlo.id).join(', ')}
-Topics: ${(mod.topics || [])
-      .slice(0, 3)
-      .map((t: any) => t.title || t)
-      .join(', ')}
+MLOs:
+${(mod.mlos || []).map((mlo: any) => `  - ${mlo.id}: ${mlo.statement}`).join('\n')}
+Topics: ${(mod.topics || []).map((t: any) => t.title || t).join('; ')}
 `
   )
   .join('\n')}
@@ -1121,21 +1152,18 @@ ${request.userPreferences.higherOrderPloRules ? `- Higher-Order Rules: ${request
   rejected that reading explicitly.
 
 **Certification Style Influence:**
-${
-  request.userPreferences.certificationStyles.includes('None')
-    ? '- No specific certification style'
-    : `- Align with: ${request.userPreferences.certificationStyles.join(', ')} assessment patterns`
-}
+${certificationStyleLine(request.userPreferences.certificationStyles)}
 
 **Academic Types (if applicable):**
 ${request.userPreferences.academicTypes.filter((t) => t !== 'None').join(', ') || 'None specified'}
 
-Generate 1 course-level summative assessment with:
-1. Multiple components (sections) that together assess all PLOs
-2. Clear alignment table showing which PLOs are assessed by which components
-3. Component weightings that sum to 100%
-4. Appropriate marking model (criteria-based or full rubric)
-5. Integration across modules where appropriate
+Generate 1 course-level summative assessment, in the "${request.userPreferences.summativeFormat}" format, with:
+1. Components (sections) that assess the PLOs needing an integrated, programme-level demonstration. The module assessments already assess each module's outcomes, so this assessment need not re-assess every PLO; say which PLOs it assesses in the alignment table.
+2. No PLO marked "NOT examinable by a timed written or MCQ component alone" assessed by such a component
+3. An alignment table showing which PLOs are assessed by which components
+4. Component weights that sum to 100% of THIS assessment (not of the programme grade)
+5. A marking model whose criteria are specific to this programme: "demonstrates comprehensive understanding" would read the same on any assessment and is not usable
+6. ${CONTENT_SCOPE_RULE}
 
 === OUTPUT FORMAT ===
 
@@ -1155,16 +1183,16 @@ Return ONLY valid JSON. NO markdown. NO additional text. JUST the JSON object be
       "components": [
         {
           "id": "comp-001",
-          "name": "Section A: Multiple Choice Examination",
-          "componentType": "mcq_section",
-          "weight": 40,
-          "description": "60 MCQ questions testing knowledge integration across all modules"
+          "name": "<a component suited to the ${request.userPreferences.summativeFormat} format>",
+          "componentType": "<its type>",
+          "weight": <its share of this assessment>,
+          "description": "<what the learner does in it, and which modules it integrates>"
         }
       ],
       "markingModel": {
         "type": "criteria_only",
         "criteria": [
-          {"name": "Knowledge and Understanding", "description": "Demonstrates comprehensive understanding", "weight": 30}
+          {"name": "<criterion>", "description": "<what this programme's learners must show, specific to its content>", "weight": <share>}
         ]
       }
     }
@@ -1176,7 +1204,7 @@ JSON FORMATTING RULES - CRITICAL:
 2. NO trailing commas after last array/object items
 3. ALL property names must be in double quotes
 4. NO comments in the JSON
-5. Ensure ALL PLOs are mapped to at least one component
+5. Map every PLO this assessment assesses to at least one component
 6. Component weights must sum to 100%
 7. Keep descriptions concise (under 200 chars each)
 8. Return VALID JSON ONLY - test your JSON before responding`;
@@ -1197,6 +1225,15 @@ JSON FORMATTING RULES - CRITICAL:
 
         const parsed = this.parseJSON(response, 'summative-assessments');
         summatives = parsed.summativeAssessments || [];
+        // Only outcomes the programme has: the alignment table is the model's own claim.
+        const ploIdSet = new Set(plos.map((plo: any) => String(plo?.id || plo?.code)));
+        for (const summ of summatives) {
+          if (Array.isArray(summ?.alignmentTable)) {
+            summ.alignmentTable = summ.alignmentTable.filter((row: any) =>
+              ploIdSet.has(String(row?.ploId))
+            );
+          }
+        }
 
         if (progressCallback) {
           progressCallback({
@@ -1328,14 +1365,42 @@ JSON FORMATTING RULES - CRITICAL:
   ): Promise<any[]> {
     const plos = request.courseFramework.programLearningOutcomes || [];
     const modules = request.modules || [];
+    const framing = programmeFraming(request.programFoundation);
+
+    // Rejin's audit (17 October 2026): only the MCQ prompt saw the PLOs; the SJT prompt saw only
+    // the industry, and the case, essay and practical prompts saw nothing, yet each returned
+    // "alignedPLOs". Every sample prompt now gets the same programme, outcomes and modules, and
+    // ids the programme does not have are dropped after.
+    const sampleContext = `=== PROGRAMME ===
+${request.programFoundation?.programTitle || 'Programme'} (${request.programFoundation?.targetLearner?.industrySector || 'general'})
+
+${programmeContextBlock(framing)}
+
+PROGRAMME LEARNING OUTCOMES (align each sample to these ids only):
+${plos.map((plo: any) => `- ${plo.id || plo.code}: ${plo.statement} [${plo.bloomLevel}]`).join('\n')}
+
+MODULES AND TOPICS (the content learners are taught):
+${modules
+  .map(
+    (m: any) =>
+      `- ${m.title}: ${(m.topics || [])
+        .map((t: any) => t?.title || t)
+        .slice(0, 8)
+        .join('; ')}`
+  )
+  .join('\n')}
+
+RULES: ${CONTENT_SCOPE_RULE} ${NO_REGULATION_FROM_MEMORY} Pitch every sample to the level above.
+
+`;
 
     // Build type-specific prompt
     const typePrompts: Record<string, { system: string; user: string }> = {
       mcq: {
         system: `You are an MCQ design expert creating high-quality multiple-choice questions for professional assessment.`,
-        user: `Generate ${count} MCQ sample questions covering the programme learning outcomes.
+        user: `${sampleContext}Generate ${count} MCQ sample questions covering the programme learning outcomes.
 
-**PLOs:** ${plos.map((plo: any) => `${plo.id}: ${plo.statement}`).join('; ')}
+Each item tests understanding or application, not recall of a definition. Every option is within 20% of the others in length and has the same grammatical shape: the correct option must not be the longest or most qualified. A distractor is wrong on the subject, never because it is vaguer.
 
 Return JSON:
 {
@@ -1354,9 +1419,9 @@ For each question set "correctAnswer" to the FULL TEXT of the correct option, co
       },
       sjt: {
         system: `You are an SJT (Situational Judgment Test) design expert creating workplace scenario questions.`,
-        user: `Generate ${count} SJT sample questions for professional workplace scenarios.
+        user: `${sampleContext}Generate ${count} SJT sample questions for workplace scenarios the programme's job roles face.
 
-**Industry:** ${request.programFoundation?.targetLearner?.industrySector}
+The ranking of responses must rest on a stated basis: a competency or professional behaviour from the programme, an ethical principle, or a rule given in the scenario. Name that basis in "guidance"; do not rank by preference alone.
 
 Return JSON:
 {
@@ -1375,7 +1440,7 @@ Return JSON:
       },
       caseQuestions: {
         system: `You are a case study designer creating realistic business/professional case scenarios.`,
-        user: `Generate ${count} case study samples with prompts.
+        user: `${sampleContext}Generate ${count} case study samples with prompts, set in fictional organisations.
 
 Return JSON:
 {
@@ -1390,7 +1455,7 @@ Return JSON:
       },
       essayPrompts: {
         system: `You are an academic writing prompt designer.`,
-        user: `Generate ${count} essay prompt samples.
+        user: `${sampleContext}Generate ${count} essay prompt samples.
 
 Return JSON:
 {
@@ -1404,8 +1469,8 @@ Return JSON:
 }`,
       },
       practicalTasks: {
-        system: `You are a practical assessment designer for vocational/professional education.`,
-        user: `Generate ${count} practical task samples.
+        system: `You are a practical assessment designer for ${framing.phrase}.`,
+        user: `${sampleContext}Generate ${count} practical task samples.
 
 Return JSON:
 {
@@ -1438,6 +1503,12 @@ Return JSON:
 
       const parsed = this.parseJSON(response, `samples-${type}`);
       const samples = parsed.samples || [];
+      const ploIdSet = new Set(plos.map((plo: any) => String(plo?.id || plo?.code)));
+      for (const sample of samples) {
+        if (Array.isArray(sample?.alignedPLOs)) {
+          sample.alignedPLOs = sample.alignedPLOs.filter((id: unknown) => ploIdSet.has(String(id)));
+        }
+      }
       // Reconcile MCQ correct-answer with its rationale (text ↔ index).
       if (type === 'mcq') {
         for (const s of samples) normalizeMcqAnswer(s);
