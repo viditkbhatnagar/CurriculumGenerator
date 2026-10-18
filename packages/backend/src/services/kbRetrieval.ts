@@ -171,10 +171,17 @@ export function formatKBContextForPrompt(contexts: KBContext[]): string {
     .map((ctx, idx) => `[SOURCE ${idx + 1}: ${ctx.source}]\n${ctx.content.substring(0, 800)}`)
     .join('\n\n---\n\n');
 
+  // The header used to call every passage "authoritative" and tell the model to align with it.
+  // The passages are whatever the search ranked nearest, and for the BBA that meant a retail
+  // skills framework for India, a health supply-chain framework and a Level 7 specification
+  // (captured 19 October 2026). The model is now told to judge each one, and to set aside one
+  // that does not apply rather than build on it.
   return `
 === KNOWLEDGE BASE REFERENCE MATERIALS ===
-The following content has been retrieved from authoritative sources in the knowledge base.
-Use this information to ensure accuracy and alignment with established curriculum standards.
+The passages below were retrieved from the knowledge base because they resemble this programme's
+searches. Each is authoritative only for what it actually says. Some may concern a different
+subject, sector or level, or be fragments of a page: ignore any passage that does not apply to
+this programme, and never present a passage's content as applying when it does not.
 
 ${formattedContexts}
 
