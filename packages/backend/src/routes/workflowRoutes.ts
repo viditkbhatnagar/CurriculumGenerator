@@ -16,14 +16,11 @@
  * 9. Glossary - Auto-Generated (5 min)
  */
 
+import { step3CoverageReport } from '../services/outcomeCoverage';
 import { Router, Request, Response, NextFunction } from 'express';
 import JSZip from 'jszip';
 import { validateJWT, loadUser } from '../middleware/auth';
-import {
-  workflowService,
-  normaliseBloomLevel,
-  BLOOM_LEVEL_ORDER,
-} from '../services/workflowService';
+import { workflowService, normaliseBloomLevel } from '../services/workflowService';
 import { examPlan, step7SpecifiesExam, withExamAdded } from '../services/step7Authority';
 import { parseBlueprintWorkbook, applyProgrammeHours } from '../services/moduleBlueprintService';
 import { loggingService } from '../services/loggingService';
@@ -681,55 +678,22 @@ function syncStep2CompetencyMirror(step2: any): void {
 /**
  * Recompute step3's Bloom distribution and coverage figures from the outcomes
  * actually on file. The generated report is a snapshot; adding, editing or
- * deleting a PLO leaves it describing a set that no longer exists.
+ * deleting a PLO leaves it describing a set that no longer exists. Counted by
+ * the same function generation uses (services/outcomeCoverage), so the figures
+ * mean the same thing before and after an edit.
  *
  * Mutates the given step3 in place. Caller marks step3 modified and saves.
  */
-function refreshStep3Coverage(step3: any, step2: any): void {
+function refreshStep3Coverage(step3: any, step2: any, step1: any): void {
   const outcomes: any[] = Array.isArray(step3?.outcomes) ? step3.outcomes : [];
-
-  const bloomDistribution: Record<string, number> = {};
-  for (const level of BLOOM_LEVEL_ORDER) bloomDistribution[level] = 0;
-  for (const plo of outcomes) {
-    const level = normaliseBloomLevel(plo?.bloomLevel);
-    if (level) bloomDistribution[level] += 1;
-  }
-
-  const linkedKSCIds = new Set<string>();
-  for (const plo of outcomes) {
-    for (const ksc of plo?.linkedKSCs || plo?.competencyLinks || []) linkedKSCIds.add(ksc);
-  }
-
-  const competencyItems = step2?.competencyItems?.length
-    ? step2.competencyItems
-    : step2?.attitudeItems || [];
-  const totalKSCItems =
-    (step2?.knowledgeItems?.length || 0) +
-    (step2?.skillItems?.length || 0) +
-    competencyItems.length;
-
-  const counts = Object.values(bloomDistribution);
-  step3.bloomDistribution = bloomDistribution;
-  step3.coverageReport = {
-    ...(step3.coverageReport || {}),
-    competenciesCovered: linkedKSCIds.size,
-    totalEssentialCompetencies: totalKSCItems,
-    coveragePercent: totalKSCItems ? Math.round((linkedKSCIds.size / totalKSCItems) * 100) : 0,
-    bloomDistribution,
-    validation: {
-      hasLowerLevel: ['remember', 'understand', 'apply'].some((l) => bloomDistribution[l] > 0),
-      hasHigherLevel: ['analyze', 'evaluate', 'create'].some((l) => bloomDistribution[l] > 0),
-      noSingleLevelOver50: outcomes.length === 0 || Math.max(0, ...counts) <= outcomes.length / 2,
-      allUnique:
-        new Set(
-          outcomes.map((o) =>
-            String(o?.statement || '')
-              .trim()
-              .toLowerCase()
-          )
-        ).size === outcomes.length,
-    },
-  };
+  const report = step3CoverageReport(
+    outcomes,
+    step2,
+    step1,
+    step3?.coverageReport?.deferredToModules
+  );
+  step3.bloomDistribution = report.bloomDistribution;
+  step3.coverageReport = report;
 }
 
 /**
@@ -1741,6 +1705,8 @@ router.post('/:id/step3', validateJWT, loadUser, async (req: Request, res: Respo
       contextConstraints,
       preferredVerbs,
       avoidVerbs,
+      stakeholderPriorities,
+      exclusions,
     } = req.body;
 
     // Validation stays synchronous
@@ -1766,6 +1732,10 @@ router.post('/:id/step3', validateJWT, loadUser, async (req: Request, res: Respo
       contextConstraints,
       preferredVerbs,
       avoidVerbs,
+      // The form sends both and the prompt uses both, but this route dropped them, so an SME's
+      // exclusions never reached generation (found 18 October 2026).
+      stakeholderPriorities,
+      exclusions: Array.isArray(exclusions) ? exclusions : [],
     };
 
     if (stepQueue) {
@@ -1866,7 +1836,7 @@ router.post('/:id/step3/plo', validateJWT, loadUser, async (req: Request, res: R
     };
 
     step3.outcomes.push(newPlo);
-    refreshStep3Coverage(step3, workflow.step2);
+    refreshStep3Coverage(step3, workflow.step2, workflow.step1);
     workflow.markModified('step3');
     await workflow.save();
 
@@ -1916,7 +1886,7 @@ router.put('/:id/step3/plo/:ploId', validateJWT, loadUser, async (req: Request, 
     if (assessmentAlignment !== undefined) plo.assessmentAlignment = assessmentAlignment;
     if (jobTaskMapping !== undefined) plo.jobTaskMapping = jobTaskMapping;
 
-    refreshStep3Coverage(workflow.step3, workflow.step2);
+    refreshStep3Coverage(workflow.step3, workflow.step2, workflow.step1);
 
     // Mark the step3 field as modified so Mongoose saves the changes
     workflow.markModified('step3');
@@ -9758,7 +9728,7 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
     // and the legacy competency mirror drifts out of sync again.
     syncStep2CompetencyMirror(workflow.step2);
     if (workflow.step3?.outcomes?.length) {
-      refreshStep3Coverage(workflow.step3, workflow.step2);
+      refreshStep3Coverage(workflow.step3, workflow.step2, workflow.step1);
       workflow.markModified('step3');
     }
     workflow.markModified('step2');

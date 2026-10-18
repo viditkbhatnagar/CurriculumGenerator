@@ -53,7 +53,6 @@ const BLOOM_DESCRIPTIONS: Record<BloomLevel, string> = {
 
 // Lower and higher level classifications
 const LOWER_LEVELS: BloomLevel[] = ['remember', 'understand', 'apply'];
-const HIGHER_LEVELS: BloomLevel[] = ['analyze', 'evaluate', 'create'];
 
 /**
  * Bloom levels reach us in both spellings — outcomes carry "analyze" while
@@ -502,9 +501,10 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
   }
 
   // Validation: check Bloom's level requirements
-  const hasLowerLevel = formData.bloomLevels.some((l) => LOWER_LEVELS.includes(l));
-  const hasHigherLevel = formData.bloomLevels.some((l) => HIGHER_LEVELS.includes(l));
-  const bloomValid = hasLowerLevel && hasHigherLevel;
+  // Two levels at least, as the server requires. A lower AND a higher level used to be
+  // compulsory, which stopped a master's programme from choosing only Analyse, Evaluate and
+  // Create for its exit outcomes (Rejin's audit, 17 October 2026).
+  const bloomValid = formData.bloomLevels.length >= 2;
 
   const toggleBloomLevel = (level: BloomLevel) => {
     setFormData((prev) => ({
@@ -547,9 +547,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
 
     // Validate Bloom's levels
     if (!bloomValid) {
-      setError(
-        'You must select at least 1 lower level (Remember/Understand/Apply) AND 1 higher level (Analyze/Evaluate/Create)'
-      );
+      setError("Select at least 2 Bloom's levels");
       return;
     }
 
@@ -685,12 +683,10 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
     .filter((item) => item?.id && !linkedKSCIds.has(item.id))
     .sort((a, b) => Number(b.importance === 'essential') - Number(a.importance === 'essential'));
 
+  // Aim and essential-competency coverage are counted by the server from the outcomes on
+  // file (services/outcomeCoverage), and recounted there on every edit.
+  const stored = coverageReport?.computedBy === 'code' ? coverageReport.validation : undefined;
   const bloomValidation = {
-    hasLowerLevel: LOWER_LEVELS.some((level) => (bloomDistribution[level] || 0) > 0),
-    hasHigherLevel: HIGHER_LEVELS.some((level) => (bloomDistribution[level] || 0) > 0),
-    noSingleLevelOver50:
-      outcomes.length === 0 ||
-      Math.max(0, ...Object.values(bloomDistribution)) <= outcomes.length / 2,
     allUnique:
       new Set(outcomes.map((plo) => plo.statement?.trim().toLowerCase())).size === outcomes.length,
   };
@@ -804,7 +800,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                       d="M5 13l4 4L19 7"
                     />
                   </svg>
-                  Valid selection: has both lower and higher levels
+                  Valid selection
                 </>
               ) : (
                 <>
@@ -816,8 +812,7 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
                       d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                     />
                   </svg>
-                  {!hasLowerLevel && 'Select at least 1 lower level. '}
-                  {!hasHigherLevel && 'Select at least 1 higher level.'}
+                  Select at least 2 levels.
                 </>
               )}
             </div>
@@ -1142,22 +1137,22 @@ export default function Step3Form({ workflow, onComplete, onRefresh, onOpenCanva
               <div className="mt-4 pt-4 border-t border-teal-200">
                 <p className="text-sm text-teal-600 mb-2">Validation</p>
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <span
-                    className={bloomValidation.hasLowerLevel ? 'text-emerald-400' : 'text-red-400'}
-                  >
-                    {bloomValidation.hasLowerLevel ? '✓' : '✗'} Has lower level
-                  </span>
-                  <span
-                    className={bloomValidation.hasHigherLevel ? 'text-emerald-400' : 'text-red-400'}
-                  >
-                    {bloomValidation.hasHigherLevel ? '✓' : '✗'} Has higher level
+                  <span className={stored?.allAimsCovered ? 'text-emerald-400' : 'text-amber-400'}>
+                    {stored?.allAimsCovered ? '✓' : '⚠'} Every programme aim served
+                    {coverageReport?.uncoveredAims?.length
+                      ? ` (not: ${coverageReport.uncoveredAims.join(', ')})`
+                      : ''}
                   </span>
                   <span
                     className={
-                      bloomValidation.noSingleLevelOver50 ? 'text-emerald-400' : 'text-amber-400'
+                      stored?.allEssentialAccountedFor ? 'text-emerald-400' : 'text-amber-400'
                     }
                   >
-                    {bloomValidation.noSingleLevelOver50 ? '✓' : '⚠'} No level &gt;50%
+                    {stored?.allEssentialAccountedFor ? '✓' : '⚠'} Essential competencies carried
+                    or deferred
+                    {coverageReport?.uncoveredEssential?.length
+                      ? ` (not: ${coverageReport.uncoveredEssential.join(', ')})`
+                      : ''}
                   </span>
                   <span className={bloomValidation.allUnique ? 'text-emerald-400' : 'text-red-400'}>
                     {bloomValidation.allUnique ? '✓' : '✗'} All unique

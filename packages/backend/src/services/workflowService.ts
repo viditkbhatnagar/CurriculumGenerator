@@ -19,6 +19,8 @@ import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundi
 import { formatKBContextForPrompt, retrieveKBContext } from './kbRetrieval';
 import { occupationPromptBlock } from './occupations/occupationStore';
 import { programmeContextBlock, programmeFraming } from './programmeFraming';
+import { normaliseBloomLevel } from '../utils/bloomLevels';
+import { aimIndex, step3CoverageReport, tidyOutcome } from './outcomeCoverage';
 import {
   competencyCeiling,
   jobTaskIndex,
@@ -202,30 +204,8 @@ export function suggestedModuleCount(step1: any, requested?: number): number {
  */
 const SINGLE_CALL_MODULE_LIMIT = 8;
 
-/** Bloom's levels in taxonomy order, in the spelling the app keys on. */
-export const BLOOM_LEVEL_ORDER = [
-  'remember',
-  'understand',
-  'apply',
-  'analyze',
-  'evaluate',
-  'create',
-] as const;
-
-/**
- * Fold a Bloom level onto the canonical spelling.
- *
- * Generated content comes back in either spelling — "analyse" or "analyze" —
- * and the two never meet: a distribution keyed on one is invisible to a lookup
- * using the other. Returns null for anything that is not a Bloom level.
- */
-export function normaliseBloomLevel(level?: string): string | null {
-  const key = String(level || '')
-    .trim()
-    .toLowerCase()
-    .replace('analyse', 'analyze');
-  return (BLOOM_LEVEL_ORDER as readonly string[]).includes(key) ? key : null;
-}
+// Moved to utils/bloomLevels so pure, testable modules can use them; re-exported for callers.
+export { BLOOM_LEVEL_ORDER, normaliseBloomLevel } from '../utils/bloomLevels';
 
 // ============================================================================
 // WORKFLOW SERVICE CLASS
@@ -1131,26 +1111,30 @@ IMPORTANT:
       );
     }
 
-    // The model answers in whichever spelling the prompt led it to, so an
-    // outcome can come back as "analyse" while the rest of the app keys on
-    // "analyze". Left alone that outcome counts towards a level nothing else
-    // looks up: the dashboard's Analyze column reads zero and every downstream
-    // consumer (Step 4 alignment, exports, the LMS) sees an unknown level.
-    // Fold onto the canonical spelling before anything is stored.
-    const outcomes = (ploContent.outcomes || []).map((plo: any) => {
-      const level = normaliseBloomLevel(plo.bloomLevel);
-      return level && level !== plo.bloomLevel ? { ...plo, bloomLevel: level } : plo;
-    });
-
-    // Every level is present as a key, so a level with no outcomes reads as 0
-    // rather than being absent.
-    const bloomDistribution: Record<string, number> = Object.fromEntries(
-      BLOOM_LEVEL_ORDER.map((level) => [level, 0])
+    // Links kept only where they point at aims, competencies and tasks that exist; the Bloom
+    // level folded onto the spelling the app keys on ("analyse" -> "analyze"); and every
+    // coverage figure counted here rather than taken from the model (services/outcomeCoverage).
+    const kscIds = new Set(
+      [
+        ...((workflow.step2 as any).knowledgeItems || []),
+        ...((workflow.step2 as any).skillItems || []),
+        ...((workflow.step2 as any).competencyItems || (workflow.step2 as any).attitudeItems || []),
+      ].map((i: any) => String(i.id))
     );
-    for (const plo of outcomes) {
-      const level = normaliseBloomLevel(plo.bloomLevel);
-      if (level) bloomDistribution[level] += 1;
-    }
+    const outcomes = (ploContent.outcomes || []).map((plo: any) =>
+      tidyOutcome(plo, {
+        kscIds,
+        aims: aimIndex((workflow.step1 as any).programAims),
+        tasks: jobTaskIndex((workflow.step1 as any).jobRoles),
+      })
+    );
+    const coverageReport = step3CoverageReport(
+      outcomes,
+      workflow.step2,
+      workflow.step1,
+      ploContent.deferredToModules
+    );
+    const bloomDistribution = coverageReport.bloomDistribution;
 
     // Store step data
     workflow.step3 = {
@@ -1167,8 +1151,10 @@ IMPORTANT:
       exclusions: input.exclusions,
       // Generated content
       outcomes,
-      coverageReport: { ...(ploContent.coverageReport || {}), bloomDistribution },
+      coverageReport,
       bloomDistribution,
+      conflicts: Array.isArray(ploContent.conflicts) ? ploContent.conflicts.filter(Boolean) : [],
+      countConcern: typeof ploContent.countConcern === 'string' ? ploContent.countConcern : '',
       // Legacy compatibility
       configuration: {
         targetCount: input.targetCount,
@@ -1230,21 +1216,17 @@ IMPORTANT:
       ...competencyItems.map((c: any) => `${c.id} (Competency): ${c.statement}`),
     ].join('\n');
 
-    // Build job tasks
-    const jobTasks = Array.isArray(step1.jobRoles)
-      ? step1.jobRoles.flatMap((r: any) => {
-          const tasks = Array.isArray(r.tasks) ? r.tasks.filter(Boolean) : [];
-          return tasks.map((t: string) => `${r.title}: ${t}`);
-        })
-      : [];
+    const framing = programmeFraming(step1);
+    const aims = aimIndex(step1.programAims);
+    const tasks = jobTaskIndex(step1.jobRoles);
 
     // === RETRIEVE KNOWLEDGE BASE CONTEXT ===
     const kbQueries = [
       `${step1.programTitle} learning outcomes PLO`,
-      `${step1.academicLevel} program outcomes Bloom taxonomy`,
+      `${framing.typeLabel} programme outcomes Bloom taxonomy`,
       `${step1.targetLearner?.industrySector || 'professional'} competency-based outcomes`,
-      `measurable learning outcomes vocational education`,
-      `accreditation learning outcome standards`,
+      `measurable programme learning outcomes ${framing.typeLabel}`,
+      `learning outcome standards and level descriptors`,
     ];
 
     const kbContexts = await retrieveKBContext(kbQueries, {
@@ -1269,67 +1251,67 @@ IMPORTANT:
         'Balanced combination of technical, professional, and strategic outcomes. Ensure representation across all three domains.',
     };
 
-    const systemPrompt = `You are a senior learning design specialist with expertise in:
-- Bloom's Revised Taxonomy and its application to vocational education
-- Constructive alignment (Biggs) between outcomes, activities, and assessment
-- UK/EU/US accreditation requirements for learning outcomes
-- Competency-based education design
-- Measurable and assessable outcome writing
+    // Rejin's audit (17 October 2026): a universal "at least one Remember/Understand/Apply
+    // outcome, no level over 50%" rule made a master's programme carry a lower-order exit
+    // outcome. Programme outcomes are exit capabilities, so the expected profile follows the
+    // level; foundations belong to modules and lessons.
+    const bloomProfile =
+      framing.level && framing.level >= 6
+        ? `At this level (EQF ${framing.level}) programme outcomes are exit capabilities and will usually sit at Analyse, Evaluate and Create. A lower-order outcome is not required; foundational knowledge is taught and assessed in modules.`
+        : 'At this level a mix is expected: some outcomes may sit at Understand or Apply where the job roles need sound application, and others at Analyse or above where they need judgement.';
 
-YOUR TASK: Generate precise, measurable Program Learning Outcomes (PLOs) that:
-1. Follow the structure: [Bloom's Verb] + [Specific Task] + [Real-World Context]
-2. Are limited to ≤25 words each
-3. Align with the specified Bloom's taxonomy levels
-4. Map directly to the KSC framework from Step 2
-5. Connect to real workplace tasks from Step 1
-6. Are genuinely measurable and assessable
+    // Rejin's audit (17 October 2026): the aims never reached this step, the outcomes only had
+    // to cover 70% of the essential competencies, coverage and validity were the model's own
+    // report, every example was about HR, and the programme was called an "accredited
+    // vocational education program". Outcomes now carry aim, competency and task ids that code
+    // checks (services/outcomeCoverage), and the model reports nothing about its own validity.
+    const systemPrompt = `You are a senior learning design specialist writing programme learning outcomes (PLOs): what a learner will be able to do on completing the whole programme.
 
-BLOOM'S TAXONOMY REFERENCE:
+YOUR TASK: Write precise, measurable PLOs that:
+1. Follow the structure: [verb] + [what the learner does] + [the context in which they do it]
+2. Aim for 25 words each, and never exceed 30
+3. Use the Bloom's levels the SME selected, in a profile suited to the programme's level
+4. Each serve at least one programme aim and carry the competencies from Step 2 by id
+5. Connect to the SME's job tasks by id
+6. Are broad enough to govern a whole programme: module outcomes, written later, will be narrower
 
-**COGNITIVE DOMAIN (Revised Bloom's):**
+These outcomes are the outcome side of constructive alignment. Teaching and assessment are designed in later steps, so do not design them here; say only what kind of evidence would show the outcome has been achieved.
 
-REMEMBER (Lower) - Retrieve knowledge
-Verbs: Define, identify, list, name, recall, recognise, state
-Example: "Identify the key components of strategic workforce planning frameworks"
+BLOOM'S LEVELS (cognitive domain):
+REMEMBER: define, identify, list, recall, recognise, state
+UNDERSTAND: describe, explain, interpret, summarise, classify, compare
+APPLY: apply, demonstrate, execute, implement, solve, use, calculate
+ANALYSE: analyse, differentiate, examine, investigate, distinguish
+EVALUATE: evaluate, critique, assess, justify, recommend, appraise
+CREATE: create, design, develop, formulate, construct, propose, synthesise
 
-UNDERSTAND (Lower) - Construct meaning
-Verbs: Describe, explain, interpret, summarise, classify, compare, exemplify
-Example: "Explain the relationship between employee engagement and organisational performance"
+PROFILE FOR THIS PROGRAMME: ${bloomProfile}
 
-APPLY (Lower-Mid) - Execute or implement
-Verbs: Apply, demonstrate, execute, implement, solve, use, calculate
-Example: "Apply statistical methods to analyse workforce turnover data"
+BEHAVIOURS: Bloom's taxonomy describes thinking, not conduct. An outcome built on a professional behaviour (a C item) may use a practice verb such as demonstrate, exercise, uphold, collaborate, communicate or lead; give it the outcomeDomain "professional behaviour" and the Bloom level that best describes the judgement involved.
 
-ANALYSE (Higher) - Break down, determine relationships
-Verbs: Analyse, differentiate, examine, compare, contrast, investigate, distinguish
-Example: "Analyse talent management data to identify retention risk factors"
+RULES:
+- Outcomes must be distinct, not rephrasings of one another
+- Outcomes must be measurable
+- Do not report whether your outcomes meet these rules: they are checked in code after you answer
 
-EVALUATE (Higher) - Make judgments based on criteria
-Verbs: Evaluate, critique, assess, justify, recommend, appraise, judge
-Example: "Evaluate HR intervention effectiveness using evidence-based criteria"
+Use UK English spelling in the statements. The bloomLevel field is a code: use exactly remember, understand, apply, analyze, evaluate or create.`;
 
-CREATE (Highest) - Produce original work
-Verbs: Create, design, develop, formulate, construct, propose, synthesise
-Example: "Design comprehensive workforce planning strategies for organisational change"
+    const userPrompt = `Write exactly ${input.targetCount} Programme Learning Outcomes (PLOs) for ${framing.phrase}.
 
-CRITICAL VALIDATION RULES:
-- MUST have ≥1 outcome at Lower levels (Remember, Understand, Apply)
-- MUST have ≥1 outcome at Higher levels (Analyse, Evaluate, Create)
-- NO single level can exceed 50% of total outcomes
-- ALL outcomes must be distinct (no rephrasing)
-- ALL outcomes must be measurable through assessment
-
-Use UK English spelling throughout.`;
-
-    const userPrompt = `Generate exactly ${input.targetCount} Program Learning Outcomes (PLOs) for this accredited vocational education program.
+${programmeContextBlock(framing)}
 
 ${kbContextSection}
 
-=== PROGRAM CONTEXT ===
+=== PROGRAMME CONTEXT ===
 
-PROGRAM TITLE: ${step1.programTitle}
-ACADEMIC LEVEL: ${step1.academicLevel}
+PROGRAMME TITLE: ${step1.programTitle}
 INDUSTRY SECTOR: ${step1.targetLearner?.industrySector || 'general'}
+
+PROGRAMME PURPOSE (SME Input):
+${step1.programPurpose || 'Not provided'}
+
+PROGRAMME AIMS (from Step 1; every aim must be served by at least one PLO):
+${aims.length ? aims.map((a) => `${a.id}: ${a.text}`).join('\n') : '- No aims recorded'}
 
 === PLO CONFIGURATION (SME SELECTIONS) ===
 
@@ -1343,55 +1325,32 @@ ${input.contextConstraints ? `\nCONTEXT CONSTRAINTS: ${input.contextConstraints}
 ${input.stakeholderPriorities ? `\nSTAKEHOLDER PRIORITIES: ${input.stakeholderPriorities}` : ''}
 ${input.exclusions?.length ? `\nEXCLUSIONS (do not include): ${input.exclusions.join(', ')}` : ''}
 
+If two of these settings conflict with each other, with an essential competency or with the level descriptor (for example an exclusion that removes an essential competency, or a verb both preferred and avoided), do not resolve it silently: follow the SME's setting and record the conflict in "conflicts".
+
 === COMPETENCY FRAMEWORK FROM STEP 2 ===
 
 ALL COMPETENCIES (KSC):
 ${allCompetencies}
 
-**ESSENTIAL COMPETENCIES** (${essentialItems.length} items - PLOs MUST cover ≥70% of these):
+ESSENTIAL COMPETENCIES (${essentialItems.length} items). Every one must either be carried by at least one PLO (in linkedKSCs), or be listed in "deferredToModules" with a reason, because programme outcomes are broad and some essential items are better taught and assessed at module level:
 ${essentialItems.join('\n')}
 
-=== WORKPLACE TASKS FROM STEP 1 ===
+=== JOB TASKS (supplied by the SME at programme setup; link by id) ===
 
-JOB TASKS (PLOs must connect to these real-world activities):
-${jobTasks.join('\n')}
+${tasks.length ? tasks.map((t) => `${t.id} (${t.role}): ${t.task}`).join('\n') : '- No job tasks supplied'}
 
-=== GENERATION REQUIREMENTS ===
+=== FOR EACH PLO ===
 
-Generate exactly ${input.targetCount} PLOs following these rules:
+1. statement: [verb] + [what the learner does] + [context], aiming for 25 words
+2. bloomLevel and verb
+3. aimIds: the programme aims it serves, e.g. ["A1"]
+4. linkedKSCs: the Step 2 ids it carries, e.g. ["K1", "S2", "C1"]
+5. jobTaskIds: the SME's tasks it prepares for, e.g. ["JT2"]
+6. outcomeDomain: "cognitive" | "practical" | "interpersonal" | "professional behaviour" | "research"
+7. evidenceRequired: the kind of evidence that would show it has been achieved (for example "a written analysis of a real or realistic case", "an observed performance", "a produced artefact"), not an assessment design
+8. examSuitable: false if a timed written examination alone could not validly evidence it
 
-**FOR EACH PLO:**
-
-1. **Structure**: [Bloom's Verb] + [Specific Task] + [Real-World Context]
-   - Start with an action verb from the appropriate Bloom's level
-   - Include a specific, measurable task or behaviour
-   - Add real-world context relevant to the industry
-
-2. **Length**: Maximum 25 words (strict limit)
-
-3. **Linkage**: 
-   - Link to at least 1 Essential KSC item from Step 2
-   - Map to relevant job tasks from Step 1
-
-4. **Assessability**: Describe how this outcome can be measured
-
-**VALIDATION CHECKLIST (MUST PASS ALL):**
-□ At least 1 outcome uses a Lower level verb (Remember, Understand, Apply)
-□ At least 1 outcome uses a Higher level verb (Analyse, Evaluate, Create)
-□ No single Bloom's level has more than 50% of outcomes
-□ All outcomes are unique and non-overlapping
-□ All outcomes are genuinely measurable
-□ ≥70% of Essential competencies are addressed
-
-**EXAMPLE PLOs BY LEVEL:**
-
-*Certificate Level (Level 4-5):*
-- APPLY: "Apply workforce planning techniques to forecast departmental staffing requirements for organisational growth scenarios"
-- EVALUATE: "Evaluate recruitment strategies using industry benchmarks to recommend cost-effective talent acquisition approaches"
-
-*Diploma Level (Level 5-6):*
-- ANALYSE: "Analyse organisational performance data to identify talent development priorities and resource allocation requirements"
-- CREATE: "Design integrated talent management systems that align human capital strategy with long-term business objectives"
+If ${input.targetCount} outcomes cannot carry the essential competencies without packing several unrelated capabilities into single outcomes, still write ${input.targetCount}, keep each one coherent, defer the rest to modules, and explain in "countConcern".
 
 === OUTPUT FORMAT ===
 
@@ -1402,50 +1361,34 @@ Return ONLY valid JSON:
       "id": "PLO1",
       "code": "PLO1",
       "outcomeNumber": 1,
-      "statement": "Clearly written PLO statement (≤25 words)",
-      "bloomLevel": "apply|analyze|evaluate|create|understand|remember",
-      "verb": "The Bloom's verb used (e.g., 'Analyse')",
-      "linkedKSCs": ["K1", "S2", "C1"],
-      "jobTaskMapping": ["Specific task from Step 1 this PLO addresses"],
-      "assessmentAlignment": "How this outcome will be measured (e.g., 'Written analysis with rubric', 'Practical demonstration', 'Portfolio evidence')",
-      "measurable": true,
-      "assessable": true
+      "statement": "...",
+      "bloomLevel": "analyze",
+      "verb": "Analyse",
+      "aimIds": ["A1"],
+      "linkedKSCs": ["K1", "S2"],
+      "jobTaskIds": ["JT1"],
+      "outcomeDomain": "cognitive",
+      "evidenceRequired": "...",
+      "examSuitable": true
     }
   ],
-  "coverageReport": {
-    "competenciesCovered": 12,
-    "totalEssentialCompetencies": ${essentialItems.length},
-    "coveragePercent": 85,
-    "bloomDistribution": {
-      "remember": 0,
-      "understand": 1,
-      "apply": 2,
-      "analyse": 2,
-      "evaluate": 1,
-      "create": 0
-    },
-    "jobTasksCovered": ["task1", "task2"],
-    "validation": {
-      "hasLowerLevel": true,
-      "hasHigherLevel": true,
-      "noSingleLevelOver50": true,
-      "allUnique": true,
-      "allMeasurable": true,
-      "minimumCoverageAchieved": true
-    }
-  }
+  "deferredToModules": [
+    { "id": "K7", "reason": "Foundational knowledge taught and assessed within modules" }
+  ],
+  "conflicts": ["..."],
+  "countConcern": ""
 }
 
 IMPORTANT:
-- Use knowledge base materials to inform outcome design
-- Ensure outcomes are specific to ${step1.programTitle}
-- Match the academic level ${step1.academicLevel} in complexity
-- All spelling must be UK English (e.g., "analyse", "organise", "behaviour")`;
+- Rely on the knowledge-base passages where they bear on an outcome
+- Make outcomes specific to ${step1.programTitle}
+- Pitch them to the level descriptor above`;
 
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 128000, // MAXIMUM
         timeout: 1200000, // 20 minutes
+        responseFormat: 'json_object',
       });
 
       return this.parseJSON(response, 'step3');
