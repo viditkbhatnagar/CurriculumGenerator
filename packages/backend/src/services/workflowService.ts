@@ -6404,7 +6404,7 @@ RULES:
     const bloomEmphasis = modSettings?.bloomEmphasis || ['apply', 'analyse'];
     const mlosCovered = modSettings?.mlosCovered || mod.mlos?.map((mlo: any) => mlo.id) || [];
 
-    const systemPrompt = `You are a senior assessment designer specialising in auto-gradable assessments for vocational education programmes. Your expertise includes:
+    const systemPrompt = `You are a senior assessment designer specialising in auto-gradable assessments for the programme "${programTitle}". Your expertise includes:
 - Multiple Choice Question (MCQ) design principles
 - Bloom's Taxonomy alignment in assessment
 - Distractor analysis and plausibility
@@ -6881,7 +6881,7 @@ Each question must include a comprehensive rationale that:
 
 Use UK English spelling throughout (e.g., "analyse", "organisation", "behaviour").`;
 
-    const userPrompt = `Generate comprehensive auto-gradable assessment question banks for this vocational education programme.
+    const userPrompt = `Generate comprehensive auto-gradable assessment question banks for this programme.
 
 ${kbContextSection}
 
@@ -8163,10 +8163,10 @@ Begin output now.`;
       globalContext,
     } = params;
 
-    const systemPrompt = `You are a terminology expert creating comprehensive glossary entries for vocational education programs. Follow these requirements:
+    const systemPrompt = `You are a terminology expert creating glossary entries for the programme "${programTitle}". Follow these requirements:
 
 DEFINITION QUALITY (per workflow v2.2):
-- Main Definition: 20-40 words, clear, Grade 10-12 reading level
+- Main Definition: 20-40 words, clear, in plain language suited to this programme's learners (not simplified below the level they study at)
 - Example Sentence: Optional, demonstrates authentic usage (~20 words)
 - Technical Note: Optional, additional detail for advanced learners
 - Cross-References: Related, broader, narrower terms, synonyms
