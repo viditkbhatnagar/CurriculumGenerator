@@ -18,6 +18,7 @@ import { KnowledgeBaseService } from './knowledgeBaseService';
 import { getWorkflowBookGrounding, buildBookGroundingBlock } from './bookGroundingService';
 import { formatKBContextForPrompt, retrieveKBContext } from './kbRetrieval';
 import { occupationPromptBlock } from './occupations/occupationStore';
+import { programmeContextBlock, programmeFraming } from './programmeFraming';
 import { CREDIT_MULTIPLIERS, creditsForHours, hoursPerCredit } from '../utils/credits';
 import {
   caseLengthValid,
@@ -282,6 +283,9 @@ class WorkflowService {
       programTitle: string;
       programDescription: string;
       academicLevel: 'certificate' | 'micro-credential' | 'diploma';
+      qualificationType?: string;
+      frameworkLevel?: string;
+      governingFramework?: string;
 
       // Credit Framework (v2.2)
       isCreditAwarding?: boolean;
@@ -382,6 +386,11 @@ class WorkflowService {
       },
       programPurpose: input.programPurpose || '',
       jobRoles: normalizedJobRoles,
+      // What the institution states about the qualification; each prompt prefers these to the
+      // title and the form's three-value level (services/programmeFraming).
+      ...(input.qualificationType ? { qualificationType: input.qualificationType } : {}),
+      ...(input.frameworkLevel ? { frameworkLevel: input.frameworkLevel } : {}),
+      ...(input.governingFramework ? { governingFramework: input.governingFramework } : {}),
       executiveSummary: generatedContent.executiveSummary,
       programAims: generatedContent.programAims,
       entryRequirements: generatedContent.entryRequirements,
@@ -588,12 +597,14 @@ class WorkflowService {
       })
       .join('\n');
 
+    const framing = programmeFraming(input);
+
     // === RETRIEVE KNOWLEDGE BASE CONTEXT ===
     const kbQueries = [
       `${input.programTitle} curriculum design standards`,
-      `${targetLearner.industrySector || 'professional'} vocational education requirements`,
-      `${input.academicLevel} program learning outcomes`,
-      `accreditation standards ${input.creditSystem || 'UK Credits'}`,
+      `${targetLearner.industrySector || 'professional'} ${framing.typeLabel} programme requirements`,
+      `${framing.typeLabel} programme learning outcomes`,
+      `qualification standards ${input.creditSystem || 'UK Credits'}`,
       ...jobRolesInfo.slice(0, 3).map((r: any) => `${r.title} competency framework`),
     ];
 
@@ -607,135 +618,105 @@ class WorkflowService {
 
     const kbContextSection = formatKBContextForPrompt(kbContexts);
 
-    const systemPrompt = `You are an expert curriculum designer with deep knowledge of vocational education, accreditation requirements, and industry competency frameworks. You are creating accreditation-ready programs that align with AGI Academic Standards.
+    // Rejin's audit (17 October 2026): the prompt invited the model to say what accreditation
+    // the programme carries and which industry partnerships it has, though neither was ever
+    // supplied, and to describe the curriculum's structure before Steps 2-4 had built it.
+    const systemPrompt = `You are an experienced curriculum designer drafting the foundation of ${framing.phrase} for the institution to review.
 
-YOUR EXPERTISE INCLUDES:
-- UK Qualification Frameworks (RQF, QCF, FHEQ)
-- European Qualifications Framework (EQF) and Bologna Process
-- US Higher Education accreditation standards
-- Industry competency frameworks (SHRM, PMI, CIPD, ASCM, SFIA)
-- Bloom's Taxonomy and learning outcome design
-- Constructive alignment principles
-- Workload calculation and credit mapping
+${programmeContextBlock(framing)}
 
-CRITICAL REQUIREMENTS:
-1. All content must use UK English spelling (e.g., "organisation", "programme", "behaviour")
-2. Program aims must be strategic and achievable
-3. Entry requirements must align with the academic level
-4. Career pathways must be realistic and evidence-based
-5. Reference and apply knowledge from the provided knowledge base materials
+WHAT YOU MAY RELY ON, IN THIS ORDER:
+1. What the institution and the subject-matter expert (SME) supplied below. It is authoritative.
+2. The knowledge-base passages, each labelled [SOURCE n]. They are authoritative within their own scope.
+3. Your own reasoning, only as a proposal, and never for facts about this institution, the programme's recognition, labour-market figures or regulation.
+When something is not known, leave it out or write "[To be set by the institution]". Do not invent it.
 
-QUALITY STANDARDS:
-- Executive summaries should be compelling and suitable for prospectus publication
-- Aims should follow SMART criteria where applicable
-- All content must be suitable for regulatory submission`;
+REQUIREMENTS:
+1. UK English spelling (e.g., "organisation", "programme", "behaviour").
+2. Aims are strategic, achievable at this programme's type and level, and follow from the purpose the SME stated.
+3. Write factually, not as marketing: no superlatives, and no claims about the programme's distinctiveness or market position, which nothing below supports.
+4. Do not mention accreditation, recognition, approval, endorsement, awarding or professional bodies, institutional or industry partnerships, placements or guaranteed outcomes. None have been supplied.
+5. Career pathways are proposals built from the target job roles. Do not state salaries, demand, employment rates or progression timescales as facts.`;
 
-    const userPrompt = `Generate comprehensive program foundation content for a ${input.academicLevel} vocational education program.
+    const userPrompt = `Draft the programme foundation for ${framing.phrase}: ${input.programTitle}.
 
 ${kbContextSection}
 
-=== PROGRAM SPECIFICATION ===
+=== PROGRAMME SPECIFICATION (supplied by the institution and SME) ===
 
-PROGRAM TITLE: ${input.programTitle}
-
-ACADEMIC LEVEL: ${input.academicLevel}
-- Ensure content complexity matches this level
-- Use appropriate academic language and expectations
+PROGRAMME TITLE: ${input.programTitle}
 
 CREDIT FRAMEWORK:
 - System: ${input.creditSystem || 'UK Credits'}
-- Total Program Hours: ${creditCalc.totalHours} hours
+- Total Programme Hours: ${creditCalc.totalHours} hours
 - Contact Hours: ${creditCalc.contactHours} hours (${creditCalc.contactPercent}%)
 - Independent Study Hours: ${creditCalc.independentHours} hours
 
-PROGRAM DESCRIPTION (SME Input):
+PROGRAMME DESCRIPTION (SME Input):
 ${input.programDescription || 'Not provided'}
 
 TARGET LEARNER PROFILE:
 ${targetLearnerInfo}
 
-PROGRAM PURPOSE (SME Input):
+PROGRAMME PURPOSE (SME Input):
 ${input.programPurpose || 'Not provided'}
 
-TARGET JOB ROLES AND WORKPLACE TASKS:
+TARGET JOB ROLES AND WORKPLACE TASKS (SME Input):
 ${jobRolesDetail || 'Not specified'}
 
-=== GENERATION REQUIREMENTS ===
-
-Based on the knowledge base materials and program specification, generate:
+=== WHAT TO WRITE ===
 
 1. **EXECUTIVE SUMMARY** (400-700 words)
-   Create a professional, compelling overview suitable for prospectus publication:
-   
-   a) PROGRAM OVERVIEW AND POSITIONING
-      - What is this program and who is it for?
-      - How does it fit within the broader educational landscape?
-      - What makes it distinctive?
-   
-   b) KEY LEARNING AREAS
-      - What major knowledge domains will be covered?
-      - What practical skills will be developed?
-      - How does learning progress through the program?
-   
-   c) CAREER OUTCOMES
-      - What specific job roles can graduates pursue?
-      - What industries/sectors benefit from this qualification?
-      - What progression opportunities exist?
-   
-   d) UNIQUE VALUE PROPOSITION
-      - Why choose this program over alternatives?
-      - What accreditation/recognition does it carry?
-      - What industry partnerships or practical elements are included?
+   A provisional summary for the institution's review. The competency framework, outcomes and
+   modules are written in later steps and do not exist yet, so describe intent, not structure:
 
-2. **PROGRAM AIMS** (3-5 strategic intentions)
-   Generate high-level, strategic aims that:
-   - State what the program seeks to achieve overall
-   - Are measurable at program completion
-   - Align with the academic level expectations
-   - Connect to industry and employment needs
-   - Follow pattern: "To [enable/develop/prepare] [learners] to [achievement] in [context]"
+   a) THE PROGRAMME AND ITS LEARNERS
+      - What the programme is and who it is for, from the description and learner profile above.
 
-3. **ENTRY REQUIREMENTS**
-   Specify requirements appropriate for ${input.academicLevel}:
-   
-   a) ACADEMIC PREREQUISITES
-      - Prior qualifications (e.g., GCSEs, A-Levels, degree)
-      - Minimum grades or classification
-      - Any subject-specific requirements
-   
-   b) PROFESSIONAL EXPERIENCE
-      - Minimum years of relevant experience (if any)
-      - Type of experience valued
-      - Portfolio requirements (if applicable)
-   
-   c) OTHER REQUIREMENTS
-      - Technical skills or software knowledge
-      - Professional membership or registration
+   b) INTENDED LEARNING AREAS
+      - The knowledge and skills the purpose and the target job roles call for.
+      - Do not describe modules, their number or their sequence.
 
-   This whole section is a PROPOSAL for the institution to approve, not institutional policy.
-   Institutional rules are NOT yours to set: for English-language thresholds, recognition of
-   prior learning (RPL/APEL), credit transfer limits, age requirements and any university or
-   regulatory policy, write "[To be set by the institution]" instead of inventing a value.
+   c) CAREER RELEVANCE
+      - The job roles the SME named, and the work in them the programme prepares learners for.
 
-4. **CAREER PATHWAYS** (4-6 realistic progressions)
-   Based on the target job roles and industry sector, specify:
-   - Immediate roles graduates can pursue
-   - Progression opportunities after 2-3 years
-   - Senior/leadership roles accessible with further development
-   - Related sectors where skills transfer
-   - Professional qualifications that complement this program
+2. **PROGRAMME AIMS** (3-5 strategic intentions)
+   High-level aims that:
+   - State what the programme seeks to achieve overall
+   - Follow from the programme purpose supplied above
+   - Fit the programme's type and level descriptor
+   - Connect to the target job roles
+   - Follow the pattern: "To [enable/develop/prepare] [learners] to [achievement] in [context]"
+
+3. **ENTRY REQUIREMENTS** (a proposal for the institution to approve, not institutional policy)
+
+   a) PRIOR LEARNING: the kind of prior qualification and subject knowledge the programme assumes.
+   b) PROFESSIONAL EXPERIENCE: the kind of experience that would help, if any.
+   c) OTHER: technical skills or software the programme assumes.
+
+   Admission thresholds are the institution's to set, not yours. For minimum grades or
+   classifications, minimum years of experience, English-language scores, recognition of prior
+   learning (RPL/APEL), credit transfer limits, age requirements and any other university or
+   regulatory policy, write "[To be set by the institution]" instead of a value.
+
+4. **CAREER PATHWAYS** (4-6 proposals)
+   Built from the target job roles and industry sector:
+   - Roles the target job roles lead to directly
+   - Roles they may lead to with further experience (no timescales)
+   - Related sectors where the skills transfer
+   - Professional qualifications a graduate might go on to pursue, without claiming any exemption or recognition
 
 === OUTPUT FORMAT ===
 
 Return ONLY valid JSON:
 {
-  "executiveSummary": "Full 400-700 word professional summary...",
+  "executiveSummary": "Full 400-700 word provisional summary...",
   "programAims": [
-    "To develop learners' strategic capability to...",
-    "To enable learners to critically analyse...",
+    "To develop learners' capability to...",
+    "To enable learners to...",
     "To prepare learners for professional practice in..."
   ],
-  "entryRequirements": "Structured entry requirements text covering all sections...",
+  "entryRequirements": "Structured entry requirements text covering all three parts...",
   "careerPathways": [
     "Pathway 1: [Role] progressing to [Senior Role]",
     "Pathway 2: ...",
@@ -743,16 +724,17 @@ Return ONLY valid JSON:
   ]
 }
 
-IMPORTANT: 
-- Use the knowledge base materials to inform your content
-- Ensure all content is specific to ${input.programTitle}, not generic
-- Match the academic level ${input.academicLevel} in language and expectations
+IMPORTANT:
+- Where a knowledge-base passage informs a statement, rely on it; where none does, keep the statement general
+- Make everything specific to ${input.programTitle}, not generic
+- Match the type, level and descriptor above in language and expectations
 - All spelling must be UK English`;
 
     try {
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 128000, // MAXIMUM
         timeout: 1200000, // 20 minutes
+        responseFormat: 'json_object',
       });
 
       return this.parseJSON(response, 'step1');
