@@ -9,6 +9,10 @@ jest.mock('../services/bookGroundingService', () => ({
   getWorkflowBookGrounding: jest.fn().mockResolvedValue([]),
   buildBookGroundingBlock: jest.fn(),
 }));
+// The programme draws on no textbook library here (knowledge/programmeLibrary).
+jest.mock('../knowledge/programmeLibrary', () => ({
+  libraryContextFor: jest.fn().mockResolvedValue([]),
+}));
 
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { retrieveKBContext } from '../services/kbRetrieval';

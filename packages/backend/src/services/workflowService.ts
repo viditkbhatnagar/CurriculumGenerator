@@ -75,6 +75,7 @@ import {
   withPacks,
 } from './step12Store';
 import { hydratePackEntries } from './step12Stubs';
+import { bodyOfKnowledgeBlockFor, moduleConceptsBlock } from '../knowledge/programmeLibrary';
 import {
   step5ValidationReport,
   step5Compliant,
@@ -930,6 +931,19 @@ IMPORTANT:
     const passageSources = kbContexts.slice(0, 10).map((c) => c.source);
     // The job roles' matched national occupations and their tasks (occupationStore).
     const occupationSection = workflowId ? await occupationPromptBlock(workflowId) : '';
+    // What the programme's textbooks teach (knowledge/). Rejin's design, section 7: a skill is
+    // textbook theory plus a professional standard plus a workplace task, not the model's idea.
+    const library = await bodyOfKnowledgeBlockFor(workflowId, {
+      importance: ['core', 'supporting'],
+      limit: 160,
+      definition: 90,
+      heading: 'BODY OF KNOWLEDGE (what the programme textbooks teach)',
+    });
+    const librarySection = library.concepts
+      ? `${library.block}
+Ground the KNOWLEDGE items in the body of knowledge above and name the concept codes each draws on in its description (e.g. "(K-MLE-0012, K-MLE-0014)"). Build each SKILL by joining a concept from it with a task of the matched occupations, so the skill has both an academic basis and occupational relevance.
+`
+      : '';
 
     const systemPrompt = `You are a competency framework specialist. You build a programme's knowledge, skills and behaviours from the evidence you are given: knowledge-base passages, national occupational standards matched to the job roles, and what the subject-matter expert (SME) supplied. You do not attribute anything to a professional body, standard or framework unless a supplied passage comes from it.
 
@@ -958,7 +972,7 @@ Use UK English spelling throughout (e.g., "analyse", "behaviour", "organisation"
 
 ${programmeContextBlock(framing)}
 
-${kbContextSection}${occupationSection}
+${kbContextSection}${occupationSection}${librarySection}
 
 === PROGRAMME CONTEXT ===
 
@@ -1510,6 +1524,14 @@ IMPORTANT:
         }
       )
     );
+    // What the programme's textbooks teach (knowledge/): modules are drawn as clusters of it,
+    // so each module boundary has an evidential reason (Rejin's design, section 9).
+    const library = await bodyOfKnowledgeBlockFor(String(workflow._id), {
+      importance: ['core', 'supporting', 'advanced'],
+      limit: 220,
+      definition: 90,
+      heading: 'BODY OF KNOWLEDGE THE MODULES MUST BE BUILT FROM',
+    });
 
     const systemPrompt = `You are a senior curriculum architect outlining the module structure of ${framing.phrase}.
 
@@ -1531,18 +1553,26 @@ ESSENTIAL COMPETENCIES the modules must between them teach (Step 2):
 ${essentialText || '- None recorded'}
 
 ${smeConstraintLines(workflow.step3)}
-${kbContextSection}${occupationSection}
-Draw module boundaries from coherent bodies of knowledge and practice in the competencies and outcomes, not from a generic template. ${progressionGuidance(framing.level)} Include a capstone, dissertation or project module only if the programme's type, level and purpose call for one; it is not required. Use UK English.`;
+${kbContextSection}${occupationSection}${library.block}
+Draw module boundaries from coherent bodies of knowledge and practice in the competencies and outcomes, not from a generic template.${
+      library.concepts
+        ? ' Each module must be a coherent cluster of the concepts in the body of knowledge above, and the modules together must cover its core concepts that the outcomes need. Order modules so a concept is taught after its prerequisites.'
+        : ''
+    } ${progressionGuidance(framing.level)} Include a capstone, dissertation or project module only if the programme's type, level and purpose call for one; it is not required. Use UK English.`;
 
     const userPrompt = `Propose exactly ${moduleTarget} modules (${countBasis}).${programmeCredits ? ` Their credits must total ${programmeCredits}; a module's credits may differ from the others' where its weight does (for example a larger project module).` : ''}
 
 Return JSON only:
-{ "modules": [ { "code": "M01", "title": "…", "credits": ${creditPerModule ?? 6}, "group": "Year 1" } ] }
+{ "modules": [ { "code": "M01", "title": "…", "credits": ${creditPerModule ?? 6}, "group": "Year 1"${library.concepts ? ', "concepts": ["K-…"]' : ''} } ] }
 
 - code: sequential, M01 upwards (a provisional code; the institution assigns formal codes)
 - title: the module name, no numbering
 - credits: this module's credits
-- group: the stage or year it belongs to, for progression
+- group: the stage or year it belongs to, for progression${
+      library.concepts
+        ? '\n- concepts: the codes of the body-of-knowledge concepts this module teaches (use only codes listed above)'
+        : ''
+    }
 Return all ${moduleTarget} modules.`;
 
     const response = await openaiService.generateContent(userPrompt, systemPrompt, {
@@ -1576,6 +1606,12 @@ Return all ${moduleTarget} modules.`;
         totalHours: moduleTotal,
         group: String(m.group || '').trim(),
         isElective: false,
+        // Concept codes the module teaches; checked against the library before saving.
+        knowledgeObjects: Array.isArray(m.concepts)
+          ? m.concepts
+              .map((c: any) => String(c).trim())
+              .filter((c: string) => /^K-[A-Z]{3}-\d{4}$/.test(c))
+          : [],
       };
     });
   }
@@ -1652,6 +1688,8 @@ Return all ${moduleTarget} modules.`;
           }
         )
       );
+      // The concepts the outline assigned to these modules, from the textbook library.
+      const library = await moduleConceptsBlock(batch);
       // What earlier batches already wrote, so this one neither repeats their topics nor leaves
       // gaps between them (Rejin's audit: batches could not see each other).
       const writtenSoFar = detailed.length
@@ -1679,7 +1717,7 @@ KNOWLEDGE, SKILLS AND COMPETENCIES available to link:
 ${kscText}
 
 ${smeConstraintLines(step3)}
-${kbContextSection}${occupationSection}
+${kbContextSection}${occupationSection}${library.block}
 ${progressionGuidance(framing.level)} Pitch each module to where it sits in the programme.
 
 Use UK English in all prose. The bloomLevel field is a fixed key, not prose: use exactly remember | understand | apply | analyze | evaluate | create.`;
@@ -1700,9 +1738,13 @@ For EACH module return:
     - linkedPLOs: array of PLO codes this supports
     - linkedKSCs: array of K/S/C ids from the list above
 - contactActivities: 3-5 in-class activity descriptions
-- independentActivities: 3-5 self-study activity descriptions (say "directed reading", not specific chapters: readings are chosen in Step 6; and "assessment preparation", not a specific assignment: assessment is designed in Step 7)
+- independentActivities: 3-5 self-study activity descriptions (say "directed reading", not specific chapters: readings are chosen in Step 6; and "assessment preparation", not a specific assignment: assessment is designed in Step 7)${
+        library.block
+          ? '\n- topicConcepts: for each topic, the codes of the listed concepts it teaches: [{ "topic": "...", "concepts": ["K-…"] }]'
+          : ''
+      }
 
-Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [...], "mlos": [...], "contactActivities": [...], "independentActivities": [...] } ] }`;
+Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [...], "mlos": [...], "contactActivities": [...], "independentActivities": [...]${library.block ? ', "topicConcepts": [...]' : ''} } ] }`;
 
       const response = await openaiService.generateContent(userPrompt, systemPrompt, {
         maxTokens: 32000,
@@ -1754,6 +1796,20 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
             competencyLinks: mlo.competencyLinks || mlo.linkedKSCs || [],
           })),
           linkedPLOs: [...new Set((content.mlos || []).flatMap((m: any) => m.linkedPLOs || []))],
+          // Library concepts the module teaches (knowledge/), and which topic covers which.
+          ...(library.known.get(module.code)?.length
+            ? {
+                knowledgeObjects: library.known.get(module.code),
+                topicConcepts: (Array.isArray(content.topicConcepts) ? content.topicConcepts : [])
+                  .map((t: any) => ({
+                    topic: String(t?.topic || ''),
+                    concepts: (Array.isArray(t?.concepts) ? t.concepts : []).filter((c: any) =>
+                      library.known.get(module.code)!.includes(String(c))
+                    ),
+                  }))
+                  .filter((t: any) => t.topic),
+              }
+            : {}),
         });
       }
 

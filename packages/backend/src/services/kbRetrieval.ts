@@ -12,6 +12,7 @@ import { loggingService } from './loggingService';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { getWorkflowBookGrounding } from './bookGroundingService';
 import { kbEvidencePath } from './kbEvidence';
+import { libraryContextFor } from '../knowledge/programmeLibrary';
 
 const ragEngine = new RAGEngine();
 
@@ -88,8 +89,20 @@ export async function retrieveKBContext(
     let books = 0;
     if (workflowId) {
       const bookCtx = await getWorkflowBookGrounding(workflowId, mloIds, Math.min(8, maxResults));
-      books = bookCtx.length;
-      if (bookCtx.length) results = [...bookCtx, ...uniqueResults];
+      // Concepts from the textbook library this programme draws on (knowledge/), each with its
+      // book, chapter and pages. Ahead of the standards passages: they are the subject itself.
+      // At most 6, so the standards passages (credit rules, levels) still reach the prompt,
+      // which keeps the first 10 items.
+      const libraryCtx = await libraryContextFor(
+        workflowId,
+        queries,
+        Math.min(6, maxResults)
+      ).catch((error) => {
+        loggingService.warn('Textbook library search failed', { workflowId, stage, error });
+        return [];
+      });
+      books = bookCtx.length + libraryCtx.length;
+      if (books) results = [...libraryCtx, ...bookCtx, ...uniqueResults];
     }
     await recordKbEvidence(workflowId, stage, moduleId, results.length, books);
     // An empty result used to pass unremarked, which is how every step ran without
