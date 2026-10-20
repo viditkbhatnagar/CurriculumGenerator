@@ -175,6 +175,13 @@ Steps 1-9 and 13 use a generic Bull queue (`packages/backend/src/queues/stepQueu
 
 - On job failure, the failed event handler writes `step11.lastError = { message, moduleIndex, timestamp }` to the workflow document — allows the frontend to detect failures beyond just queue state
 
+### Prompt Rules (from Rejin's Steps 1-7 audit, October 2026)
+
+- **Programme framing:** every prompt states the programme's type and level through `services/programmeFraming.ts` (`programmeContextBlock`). The order of preference is institution-stated fields, then the title, then the form; the form's `academicLevel` only offers certificate/micro-credential/diploma. Never hard-code "vocational", "accredited" or "approved by the awarding institution".
+- **Model output:** don't ask the model to grade its own work. Coverage, distributions, mark totals and validation flags are computed in code. The modules for this are `outcomeCoverage.ts`, `competencyFramework.ts`, `readingCuration.ts`, `assessmentMarks.ts` and `step4Validation.ts`.
+- **Prompt capture:** `POST /api/v3/workflow/:id/prompt-capture {step, moduleIndex?, variant?}` returns the exact prompts without calling the model or writing anything. When adding a step, call its generate* function there, never process*.
+- **Cost log:** `utils/modelPricing.ts` prices each call from its input/output split. Wrap a new background runner in `withUsageContext({ workflowId, step }, ...)` (`services/usageContext.ts`) so its calls are attributed to a step.
+
 ### Pre-existing TypeScript Errors
 
 These files have known TS errors — do not attempt to fix them unless explicitly asked:
