@@ -6161,23 +6161,21 @@ router.get('/:id/step12/status', validateJWT, loadUser, async (req: Request, res
         missingVariants: missingPackVariants(p),
       }));
 
-    // Check queue status
+    // Check queue status: the live job if there is one, else the most recent.
     let queueStatus = null;
+    let queue: any = null;
     try {
-      const { getAllStep12Jobs } = await import('../queues/step12Queue');
-      const jobs = await getAllStep12Jobs(id);
-      if (jobs.length > 0) {
-        const latestJob = jobs[jobs.length - 1];
-        const state = await latestJob.getState();
+      const { describeStep12Queue } = await import('../queues/step12Queue');
+      queue = await describeStep12Queue(id);
+      if (queue.available && queue.current) {
         queueStatus = {
-          jobId: String(latestJob.id),
-          state,
-          progress: latestJob.progress(),
-          moduleIndex: latestJob.data.moduleIndex,
+          jobId: queue.current.jobId,
+          state: queue.current.state,
+          moduleIndex: queue.current.moduleIndex,
         };
       }
-    } catch {
-      // Queue not available
+    } catch (error) {
+      queue = { error: error instanceof Error ? error.message : String(error) };
     }
 
     res.json({
@@ -6191,6 +6189,7 @@ router.get('/:id/step12/status', validateJWT, loadUser, async (req: Request, res
         totalAssignmentPacks: step12SummaryFromPacks(packs).totalAssignmentPacks,
         lastError: (workflow.step12 as any)?.lastError || null,
         queueStatus,
+        queue,
         step12Data: workflow.step12
           ? {
               summary: workflow.step12.summary,

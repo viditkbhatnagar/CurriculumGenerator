@@ -420,6 +420,51 @@ export async function getAllStep12Jobs(workflowId: string) {
   return jobs.filter((job) => job.data.workflowId === workflowId);
 }
 
+/**
+ * What the queue is doing for one programme: its jobs by state, newest first, plus the
+ * queue's own counts, whether it is paused and how many workers are connected. The status
+ * route used to report `getJobs(...)[length - 1]`, which lists waiting jobs first and old
+ * completed ones last, so a job stuck in "waiting" showed as a finished job from days before.
+ */
+export async function describeStep12Queue(workflowId: string) {
+  if (!step12Queue) return { available: false as const };
+  const [counts, paused, jobs] = await Promise.all([
+    step12Queue.getJobCounts(),
+    step12Queue.isPaused(),
+    step12Queue.getJobs(['active', 'waiting', 'delayed', 'failed', 'completed'], 0, 500),
+  ]);
+  let workers: number | null = null;
+  try {
+    workers = (await step12Queue.getWorkers()).length;
+  } catch {
+    // CLIENT LIST can be disabled on managed Redis; leave unknown rather than guess.
+  }
+  const mine = await Promise.all(
+    jobs
+      .filter((job) => job?.data?.workflowId === workflowId)
+      .map(async (job) => ({
+        jobId: String(job.id),
+        state: await job.getState(),
+        moduleIndex: job.data.moduleIndex,
+        attemptsMade: job.attemptsMade,
+        queuedAt: job.timestamp ? new Date(job.timestamp) : null,
+        startedAt: job.processedOn ? new Date(job.processedOn) : null,
+        finishedAt: job.finishedOn ? new Date(job.finishedOn) : null,
+        failedReason: job.failedReason || null,
+      }))
+  );
+  mine.sort((a, b) => (b.queuedAt?.getTime() || 0) - (a.queuedAt?.getTime() || 0));
+  const live = mine.find((j) => ['active', 'waiting', 'delayed'].includes(j.state));
+  return {
+    available: true as const,
+    paused,
+    workers,
+    counts,
+    current: live || mine[0] || null,
+    jobs: mine.slice(0, 10),
+  };
+}
+
 // Graceful shutdown
 export async function closeStep12Queue() {
   if (step12Queue) {
