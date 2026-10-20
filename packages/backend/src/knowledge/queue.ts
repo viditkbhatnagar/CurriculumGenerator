@@ -88,9 +88,16 @@ export async function enqueueIngest(bookId: string): Promise<'queued' | 'running
 /** Queue a consolidation pass behind any ingests already waiting. */
 export async function enqueueConsolidation(domainKeys?: string[]): Promise<'queued' | 'running'> {
   if (libraryQueue) {
+    // One pass at a time: a pass already waiting or running covers this request.
+    const existing = await libraryQueue.getJob('consolidate');
+    if (existing) {
+      const state = await existing.getState();
+      if (['waiting', 'active', 'delayed'].includes(state)) return 'queued';
+      await existing.remove();
+    }
     await libraryQueue.add(
       { consolidate: true, domainKeys },
-      { jobId: `consolidate-${Date.now()}` }
+      { jobId: 'consolidate', attempts: 1 }
     );
     return 'queued';
   }

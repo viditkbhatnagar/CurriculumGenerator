@@ -21,10 +21,48 @@ import { dot } from './clustering';
 import { bodyOfKnowledge, searchConcepts, citation } from './retrieval';
 import { enqueueIngest, enqueueConsolidation } from './queue';
 import { conceptsByCodes } from './programmeLibrary';
-import { sha256, workKeyOf, removeBook } from './ingestBook';
+import { sha256, workKeyOf, removeBook, recomputeDomainStats } from './ingestBook';
 
 const router = Router();
+
+/**
+ * Express 4 does not catch a rejected async handler: the request hangs. Every handler on this
+ * router is wrapped so an error answers 500 instead.
+ */
+const safe = (fn: any) => (req: Request, res: Response, next: (err?: unknown) => void) =>
+  Promise.resolve(fn(req, res, next)).catch((error: unknown) => {
+    loggingService.error('Library route failed', { path: req.path, error: String(error) });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: (error as Error)?.message || 'Library error' });
+    }
+  });
+for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
+  const original = (router as any)[method].bind(router);
+  (router as any)[method] = (path: string, ...handlers: any[]) =>
+    original(path, ...handlers.map((h) => safe(h)));
+}
+
 const MAX_BYTES = 250 * 1024 * 1024;
+
+/**
+ * One book is taken in at a time: a 250MB upload or fetch is held in memory, and several at
+ * once would exhaust the 2GB container.
+ */
+let addingBook = false;
+function oneBookAtATime(req: Request, res: Response, next: () => void) {
+  if (addingBook) {
+    return res
+      .status(429)
+      .json({ success: false, error: 'Another book is being added; try again in a minute' });
+  }
+  addingBook = true;
+  const release = () => {
+    addingBook = false;
+  };
+  res.on('finish', release);
+  res.on('close', release);
+  next();
+}
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_BYTES, files: 1 },
@@ -73,8 +111,23 @@ async function fetchPdf(link: string): Promise<Buffer> {
     const size = Number(res.headers.get('content-length') || 0);
     if (size > MAX_BYTES)
       throw new Error(`the file is ${Math.round(size / 1e6)}MB; the limit is 250MB`);
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.length > MAX_BYTES) throw new Error('the file is over 250MB');
+    // Read with a running count: the length header is often absent (chunked) or compressed,
+    // so a body is never trusted to stop at the cap by itself.
+    const chunks: Buffer[] = [];
+    let total = 0;
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('the link returned no body');
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > MAX_BYTES) {
+        await reader.cancel();
+        throw new Error('the file is over 250MB');
+      }
+      chunks.push(Buffer.from(value));
+    }
+    const buffer = Buffer.concat(chunks);
     if (buffer.subarray(0, 5).toString() !== '%PDF-')
       throw new Error('the link did not return a PDF');
     return buffer;
@@ -178,6 +231,7 @@ router.post(
   '/books',
   validateJWT,
   loadUser,
+  oneBookAtATime,
   upload.single('file'),
   async (req: Request, res: Response) => {
     try {
@@ -272,12 +326,28 @@ router.patch('/books/:id', validateJWT, loadUser, async (req: Request, res: Resp
   ]) {
     if (req.body?.[k] !== undefined && fields[k] !== undefined) set[k] = fields[k];
   }
+  const before: any = await KbBook.findById(req.params.id).select('accessTier domainKeys').lean();
+  if (!before) return res.status(404).json({ success: false, error: 'Book not found' });
   const book: any = await KbBook.findByIdAndUpdate(
     req.params.id,
     { $set: set },
     { new: true }
   ).lean();
-  if (!book) return res.status(404).json({ success: false, error: 'Book not found' });
+  // A change of access tier or domains has to reach what the book already contributed:
+  // its passages' restricted flag, and the statistics of the domains it is counted in.
+  if (book.accessTier !== before.accessTier) {
+    await KbPassage.updateMany(
+      { bookId: book._id, kind: { $ne: 'restricted' } },
+      { $set: { restricted: book.accessTier === 'restricted' } }
+    );
+  }
+  if (
+    book.accessTier !== before.accessTier ||
+    String(book.domainKeys) !== String(before.domainKeys)
+  ) {
+    await recomputeDomainStats(Array.from(new Set([...before.domainKeys, ...book.domainKeys])));
+    await KbMeta.updateOne({ _id: 'concepts' }, { $inc: { version: 1 } }, { upsert: true });
+  }
   res.json({ success: true, data: bookSummary(book) });
 });
 
@@ -287,6 +357,9 @@ router.post('/books/:id/ingest', validateJWT, loadUser, async (req: Request, res
     return res.status(404).json({ success: false, error: 'Book not found' });
   const book: any = await KbBook.findById(req.params.id);
   if (!book) return res.status(404).json({ success: false, error: 'Book not found' });
+  if (['reading', 'extracting'].includes(book.status)) {
+    return res.status(409).json({ success: false, error: 'The book is being read already' });
+  }
   if (req.body?.restart === true) {
     await KbPassage.deleteMany({ bookId: book._id });
     book.progress = { sectionsTotal: 0, sectionsDone: 0, doneKeys: [] };
@@ -325,7 +398,7 @@ router.get('/concepts', validateJWT, loadUser, async (req: Request, res: Respons
   try {
     const domainKeys = asList(req.query.domain);
     const areas = asList(req.query.area);
-    const limit = Math.min(Number(req.query.limit) || 50, 500);
+    const limit = Math.max(1, Math.min(Math.floor(Number(req.query.limit)) || 50, 500));
     // Specific concepts by code (merged codes resolve to the concept they were merged into).
     if (req.query.codes) {
       const rows = await conceptsByCodes(asList(req.query.codes).slice(0, 200));
@@ -350,7 +423,11 @@ router.get('/concepts', validateJWT, loadUser, async (req: Request, res: Respons
       })),
     });
     if (req.query.q) {
-      const hits = await searchConcepts([String(req.query.q)], { domainKeys, areas, k: limit });
+      const hits = await searchConcepts([String(req.query.q).slice(0, 500)], {
+        domainKeys,
+        areas,
+        k: limit,
+      });
       return res.json({
         success: true,
         data: hits.map((h) => ({ ...strip(h.concept), similarity: h.similarity })),
@@ -370,8 +447,23 @@ router.get('/concepts/:code', validateJWT, loadUser, async (req: Request, res: R
     .select('-embedding')
     .lean();
   if (!concept) return res.status(404).json({ success: false, error: 'Concept not found' });
+  // Excerpts only from openly licensed teaching books: an institution's licensed ebook is cited
+  // by chapter and page, never quoted to whoever asks.
+  const bookIds = Array.from(new Set((concept.evidence || []).map((e: any) => String(e.bookId))));
+  const books: any[] = await KbBook.find({ _id: { $in: bookIds } })
+    .select('licence accessTier')
+    .lean();
+  const quotable = new Set(
+    books
+      .filter((b) => String(b.licence).startsWith('cc-') && b.accessTier === 'teaching')
+      .map((b) => String(b._id))
+  );
   const evidence = [];
   for (const e of concept.evidence || []) {
+    if (!quotable.has(String(e.bookId))) {
+      evidence.push({ ...e, citation: citation(e), passages: [] });
+      continue;
+    }
     const passages: any[] = await KbPassage.find({
       bookId: e.bookId,
       sectionKey: e.sectionKey,
@@ -475,14 +567,14 @@ router.put(
         error: `domainKeys must include one of: ${DOMAINS.map((d) => d.key).join(', ')}`,
       });
     }
-    const bookIds = asList(req.body?.bookIds).filter((id) => mongoose.isValidObjectId(id));
-    const library = {
-      enabled,
-      domainKeys,
-      areas: asList(req.body?.areas),
-      bookIds,
-      enabledAt: new Date(),
-    };
+    const bookIds = asList(req.body?.bookIds)
+      .filter((id) => mongoose.isValidObjectId(id))
+      .slice(0, 50);
+    const knownAreas = new Set(DOMAINS.flatMap((d) => d.areas.map((a) => a.name)));
+    const areas = asList(req.body?.areas)
+      .filter((a) => knownAreas.has(a))
+      .slice(0, 40);
+    const library = { enabled, domainKeys, areas, bookIds, enabledAt: new Date() };
     const result = await CurriculumWorkflow.updateOne(
       { _id: req.params.workflowId },
       { $set: { knowledgeLibrary: library } }

@@ -91,8 +91,6 @@ export async function retrieveKBContext(
       const bookCtx = await getWorkflowBookGrounding(workflowId, mloIds, Math.min(8, maxResults));
       // Concepts from the textbook library this programme draws on (knowledge/), each with its
       // book, chapter and pages. Ahead of the standards passages: they are the subject itself.
-      // At most 6, so the standards passages (credit rules, levels) still reach the prompt,
-      // which keeps the first 10 items.
       const libraryCtx = await libraryContextFor(
         workflowId,
         queries,
@@ -102,7 +100,21 @@ export async function retrieveKBContext(
         return [];
       });
       books = bookCtx.length + libraryCtx.length;
-      if (books) results = [...libraryCtx, ...bookCtx, ...uniqueResults];
+      // The prompt keeps the first 10 items, so each kind gets places before the rest: up to
+      // 4 library concepts, 3 of this programme's own book nodes and 3 standards passages.
+      if (books) {
+        const first = [
+          ...libraryCtx.slice(0, 4),
+          ...bookCtx.slice(0, 3),
+          ...uniqueResults.slice(0, 3),
+        ];
+        results = [
+          ...first,
+          ...libraryCtx.slice(4),
+          ...bookCtx.slice(3),
+          ...uniqueResults.slice(3),
+        ];
+      }
     }
     await recordKbEvidence(workflowId, stage, moduleId, results.length, books);
     // An empty result used to pass unremarked, which is how every step ran without

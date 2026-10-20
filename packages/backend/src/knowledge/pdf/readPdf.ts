@@ -12,6 +12,9 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfjs = require('pdf-parse/lib/pdf.js/v2.0.550/build/pdf.js');
 
+/** The longest MAIB textbook is about 1,200 pages; this leaves room without inviting abuse. */
+const MAX_PAGES = 3000;
+
 export interface PdfParagraph {
   text: string;
   /** Font height of the paragraph's first line, for heading detection when there is no outline. */
@@ -162,12 +165,20 @@ async function outlineOf(doc: any): Promise<PdfOutlineItem[]> {
 }
 
 export async function readPdf(buffer: Buffer): Promise<PdfText> {
-  const task = pdfjs.getDocument({ data: new Uint8Array(buffer) });
+  // Untrusted input: no evaluated font code, no system fonts.
+  const task = pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    isEvalSupported: false,
+    disableFontFace: true,
+  });
   const doc = await (task.promise || task);
   try {
     const labels: string[] | null = await doc.getPageLabels().catch(() => null);
     const meta = await doc.getMetadata().catch(() => null);
     const rawPages: Line[][] = [];
+    if (doc.numPages > MAX_PAGES) {
+      throw new Error(`The PDF has ${doc.numPages} pages; the limit is ${MAX_PAGES}`);
+    }
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
       const content = await page.getTextContent();

@@ -160,10 +160,15 @@ async function mergeSection(
     };
     const hit = matchConcept({ key: conceptKey(c.name), keys, area: area.name, vector }, existing);
 
-    if (hit) {
+    // The matched concept may have been removed (with its only book) since this run began;
+    // then this one is created afresh rather than lost.
+    const doc: any = hit ? await KbConcept.findById(hit.id) : null;
+    if (hit && !doc) {
+      const gone = existing.findIndex((e) => e.id === hit.id);
+      if (gone !== -1) existing.splice(gone, 1);
+    }
+    if (doc) {
       counters.merged++;
-      const doc: any = await KbConcept.findById(hit.id);
-      if (!doc) continue;
       const ev: any[] = tidyEvidence(doc.evidence || [], evidence, section.key);
       doc.evidence = ev;
       doc.markModified('evidence');
@@ -196,7 +201,7 @@ async function mergeSection(
         ),
       ].slice(0, 8);
       await doc.save();
-      const mem = existing.find((e) => e.id === hit.id);
+      const mem = existing.find((e) => e.id === String(doc._id));
       if (mem) mem.keys = Array.from(new Set([...mem.keys, ...keys]));
     } else {
       counters.created++;
