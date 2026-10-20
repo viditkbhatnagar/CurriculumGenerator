@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import ModuleConceptsList from './ModuleConceptsList';
 import { useSubmitStep4, useApproveStep4 } from '@/hooks/useWorkflow';
 import { api } from '@/lib/api';
 import { useStepStatus } from '@/hooks/useStepStatus';
@@ -1063,6 +1064,11 @@ function ModuleCard({
                 })}
               </div>
             </div>
+          )}
+
+          {/* Textbook-library concepts the module was built from */}
+          {(module as any).knowledgeObjects?.length > 0 && (
+            <ModuleConceptsList codes={(module as any).knowledgeObjects} />
           )}
 
           {/* PLO Coverage */}

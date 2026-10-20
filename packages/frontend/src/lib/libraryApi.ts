@@ -200,3 +200,11 @@ export const setProgrammeLibrary = (workflowId: string, library: ProgrammeLibrar
     method: 'PUT',
     body: JSON.stringify(library),
   }).then(unwrap<ProgrammeLibrary>);
+
+/** Concepts by code, e.g. the ones a Step 4 module was built from. */
+export const getConceptsByCodes = (codes: string[]) =>
+  codes.length
+    ? fetchAPI(`${BASE}/concepts?codes=${encodeURIComponent(codes.join(','))}`).then(
+        unwrap<Concept[]>
+      )
+    : Promise.resolve([] as Concept[]);
