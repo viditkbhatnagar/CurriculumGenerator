@@ -49,3 +49,6 @@ Thumbs.db
 
 # Puppeteer Chromium download (see packages/backend/.puppeteerrc.cjs)
 .cache/
+
+# Institution-licensed textbooks (SSM, from its LMS): never committed
+ssm-books/
