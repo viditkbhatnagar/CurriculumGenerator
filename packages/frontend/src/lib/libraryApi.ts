@@ -184,3 +184,19 @@ export async function addBook(book: NewBook): Promise<LibraryBook> {
   if (!res.ok) throw new Error(body.error || 'Upload failed');
   return body.data;
 }
+
+export interface ProgrammeLibrary {
+  enabled: boolean;
+  domainKeys: string[];
+  areas?: string[];
+  bookIds?: string[];
+}
+
+export const getProgrammeLibrary = (workflowId: string) =>
+  fetchAPI(`${BASE}/programmes/${workflowId}`).then(unwrap<ProgrammeLibrary>);
+
+export const setProgrammeLibrary = (workflowId: string, library: ProgrammeLibrary) =>
+  fetchAPI(`${BASE}/programmes/${workflowId}`, {
+    method: 'PUT',
+    body: JSON.stringify(library),
+  }).then(unwrap<ProgrammeLibrary>);

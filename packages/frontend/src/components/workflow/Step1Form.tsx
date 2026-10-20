@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep1, useApproveStep1 } from '@/hooks/useWorkflow';
 import { api } from '@/lib/api';
 import CapabilityScopePanel from './CapabilityScopePanel';
+import ProgrammeLibraryPanel from './ProgrammeLibraryPanel';
 import { useStepStatus } from '@/hooks/useStepStatus';
 import {
   useGeneration,
@@ -439,6 +440,8 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
           />
         </div>
       )}
+
+      <ProgrammeLibraryPanel workflowId={workflow._id} />
 
       <form onSubmit={handleSubmit} className="space-y-8">
         <CapabilityScopePanel
