@@ -170,6 +170,7 @@ export async function libraryChapterSources(
   concepts = concepts.filter((c) => inChosenBooks(lib, c));
   const groups = groupByChapter(concepts, 3);
   if (!groups.length) return [];
+  const conceptByCode = new Map(concepts.map((c: any) => [c.code, c]));
   const { KbBook } = await import('./models');
   const books: any[] = await KbBook.find({
     _id: { $in: groups.map((g) => g.bookId) },
@@ -218,6 +219,15 @@ export async function libraryChapterSources(
         moduleId: module.id,
         linkedMLOs: [] as string[],
         relevantTopics: (module.topics || []).slice(0, 3),
+        // What the chapter teaches, from the library's concepts: matched to the module's
+        // outcomes like a paper's abstract, and given to the lesson writer (lessonSources).
+        abstract: g.concepts
+          .map((c) => {
+            const def = conceptByCode.get(c.code)?.definition;
+            return def ? `${c.name}: ${def}` : c.name;
+          })
+          .join(' ')
+          .slice(0, 1500),
         // The book's own location for the reading, read from the PDF, not written by a model.
         chapter: { number: g.chapterNumber, title: g.chapterTitle },
         pages,
