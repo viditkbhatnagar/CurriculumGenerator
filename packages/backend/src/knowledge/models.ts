@@ -191,6 +191,7 @@ export interface KbConceptDoc {
   key: string;
   aliases: string[];
   aliasKeys: string[];
+  aliasCodes?: string[];
   domainKey: string;
   area: string;
   subArea: string;
@@ -221,6 +222,8 @@ const KbConceptSchema = new Schema(
     key: { type: String, required: true, index: true },
     aliases: { type: [String], default: [] },
     aliasKeys: { type: [String], default: [], index: true },
+    // Codes of concepts merged into this one by consolidation, so citations of them still resolve.
+    aliasCodes: { type: [String], default: [], index: true },
     domainKey: { type: String, index: true },
     area: { type: String, index: true },
     subArea: { type: String, default: '' },
@@ -249,7 +252,10 @@ KbConceptSchema.index({ domainKey: 1, key: 1 });
 const KbCounterSchema = new Schema({ _id: String, seq: { type: Number, default: 0 } });
 
 /** One row: a version stamp the in-memory concept index compares against. */
-const KbMetaSchema = new Schema({ _id: String, version: { type: Number, default: 0 } });
+const KbMetaSchema = new Schema(
+  { _id: String, version: { type: Number, default: 0 } },
+  { strict: false }
+);
 
 export const KbBook = mongoose.model('KbBook', KbBookSchema, 'kbbooks');
 export const KbPassage = mongoose.model('KbPassage', KbPassageSchema, 'kbpassages');

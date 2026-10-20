@@ -70,14 +70,16 @@ export function dot(a: ArrayLike<number>, b: ArrayLike<number>): number {
 }
 
 /**
- * Cosine similarity at or above which two concepts in the same area are the same concept, on
- * 512-dimension text-embedding-3-large vectors of "name: definition". Below MERGE_BAND_LOW
- * they never merge; in between they merge only when their names share most words.
- * Provisional until calibrated (see knowledge/routes POST /calibrate).
+ * Closeness of meaning does not decide sameness. Calibrated on production on 20 Oct 2026 with
+ * 512-d text-embedding-3-large vectors of "name: definition": eight pairs that are one concept
+ * worded two ways scored 0.61-0.78 (NPV vs net present value 0.78, CNN vs convolutional neural
+ * network 0.61), and ten pairs of related but different concepts scored 0.50-0.83 (precision vs
+ * recall 0.78, demand curve vs supply curve 0.83). No threshold separates them, so ingestion
+ * merges on names only and the consolidation pass (knowledge/consolidate) has a model judge the
+ * pairs that embeddings shortlist.
  */
-export const MERGE_SIMILARITY = 0.9;
-export const MERGE_BAND_LOW = 0.84;
-export const MERGE_NAME_OVERLAP = 0.5;
+export const CANDIDATE_FLOOR = 0.6;
+export const CANDIDATES_PER_CONCEPT = 3;
 
 export interface Candidate {
   key: string;
@@ -103,24 +105,65 @@ export function matchConcept(
   c: Candidate,
   existing: Existing[]
 ): { id: string; why: string } | null {
-  const sameArea = existing.filter((e) => e.area === c.area);
-  const keyHit = sameArea.find((e) => e.keys.some((k) => c.keys.includes(k)));
-  if (keyHit) return { id: keyHit.id, why: 'name' };
-  let best: Existing | null = null;
-  let bestSim = -1;
-  for (const e of sameArea) {
-    const sim = dot(c.vector, e.vector);
-    if (sim > bestSim) {
-      bestSim = sim;
-      best = e;
+  const hit = existing.find((e) => e.area === c.area && e.keys.some((k) => c.keys.includes(k)));
+  return hit ? { id: hit.id, why: 'name' } : null;
+}
+
+/**
+ * Pairs worth asking about: each concept with its nearest few in the same area, above a floor.
+ * Each unordered pair appears once.
+ */
+export function candidatePairs(
+  concepts: { id: string; area: string; vector: ArrayLike<number> }[],
+  opts: { k?: number; floor?: number } = {}
+): { a: string; b: string; similarity: number }[] {
+  const k = opts.k ?? CANDIDATES_PER_CONCEPT;
+  const floor = opts.floor ?? CANDIDATE_FLOOR;
+  const byArea = new Map<string, typeof concepts>();
+  for (const c of concepts) {
+    if (!byArea.has(c.area)) byArea.set(c.area, []);
+    byArea.get(c.area)!.push(c);
+  }
+  const seen = new Map<string, { a: string; b: string; similarity: number }>();
+  for (const group of byArea.values()) {
+    for (const c of group) {
+      const near = group
+        .filter((o) => o.id !== c.id)
+        .map((o) => ({ o, s: dot(c.vector, o.vector) }))
+        .filter((x) => x.s >= floor)
+        .sort((x, y) => y.s - x.s)
+        .slice(0, k);
+      for (const { o, s } of near) {
+        const key = [c.id, o.id].sort().join('|');
+        if (!seen.has(key))
+          seen.set(key, { a: c.id, b: o.id, similarity: Math.round(s * 1000) / 1000 });
+      }
     }
   }
-  if (!best) return null;
-  if (bestSim >= MERGE_SIMILARITY) return { id: best.id, why: `similarity ${bestSim.toFixed(3)}` };
-  if (bestSim >= MERGE_BAND_LOW && jaccard(c.key, best.key) >= MERGE_NAME_OVERLAP) {
-    return { id: best.id, why: `similarity ${bestSim.toFixed(3)} and shared name` };
+  return Array.from(seen.values()).sort((x, y) => y.similarity - x.similarity);
+}
+
+/** Groups of concepts judged the same, joined through chains (a=b and b=c gives a, b, c). */
+export function sameConceptClusters(pairs: [string, string][]): string[][] {
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    if (!parent.has(x)) parent.set(x, x);
+    const p = parent.get(x)!;
+    if (p === x) return x;
+    const root = find(p);
+    parent.set(x, root);
+    return root;
+  };
+  for (const [a, b] of pairs) parent.set(find(a), find(b));
+  const groups = new Map<string, string[]>();
+  for (const x of parent.keys()) {
+    const r = find(x);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r)!.push(x);
   }
-  return null;
+  return Array.from(groups.values())
+    .filter((g) => g.length > 1)
+    .sort((a, b) => a.slice().sort()[0].localeCompare(b.slice().sort()[0]));
 }
 
 const TREATMENT_RANK: Record<Treatment, number> = { mention: 0, treatment: 1, extended: 2 };

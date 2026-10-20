@@ -5,6 +5,8 @@ import {
   keysFor,
   matchConcept,
   tidyEvidence,
+  candidatePairs,
+  sameConceptClusters,
 } from '../knowledge/clustering';
 
 const unit = (v: number[]) => {
@@ -52,14 +54,16 @@ describe('matchConcept', () => {
     expect(matchConcept(c, existing)?.id).toBe('c1');
   });
 
-  it('merges on very close meaning even with a different name', () => {
+  it('does not merge on closeness of meaning alone (that is for consolidation to judge)', () => {
+    // Calibration on production (20 Oct 2026): same-concept pairs scored 0.61-0.78 and
+    // different-concept pairs 0.50-0.83 (demand vs supply curve 0.825), so no threshold separates them.
     const c = {
       key: 'industry competition',
       keys: ['industry competition'],
       area: 'Strategy',
       vector: unit([1, 0.05, 0]),
     };
-    expect(matchConcept(c, existing)?.id).toBe('c1');
+    expect(matchConcept(c, existing)).toBeNull();
   });
 
   it('keeps a related but different concept separate', () => {
@@ -170,5 +174,32 @@ describe('tidyEvidence', () => {
     expect(mine).toHaveLength(4);
     expect(mine[0].treatment).toBe('extended');
     expect(ev.filter((x) => x.bookId === 'B')).toHaveLength(1);
+  });
+});
+
+describe('candidatePairs', () => {
+  const c = (id: string, area: string, v: number[]) => ({ id, area, vector: unit(v) });
+  it('pairs each concept with its nearest neighbours in the same area, once per pair', () => {
+    const pairs = candidatePairs(
+      [
+        c('a', 'S', [1, 0.1, 0]),
+        c('b', 'S', [1, 0, 0]),
+        c('c', 'S', [0, 1, 0]),
+        c('d', 'M', [1, 0, 0]),
+      ],
+      { k: 2, floor: 0.6 }
+    );
+    expect(pairs.map((p) => [p.a, p.b].sort().join('-'))).toEqual(['a-b']);
+  });
+});
+
+describe('sameConceptClusters', () => {
+  it('joins chains of same-concept judgements into one cluster', () => {
+    const clusters = sameConceptClusters([
+      ['a', 'b'],
+      ['b', 'c'],
+      ['x', 'y'],
+    ]);
+    expect(clusters.map((g) => g.sort().join(''))).toEqual(['abc', 'xy']);
   });
 });

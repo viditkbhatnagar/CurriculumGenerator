@@ -8,9 +8,13 @@ import config from '../config';
 import { loggingService } from '../services/loggingService';
 import { ingestBook } from './ingestBook';
 import { invalidateConceptIndex } from './retrieval';
+import { consolidateLibrary } from './consolidate';
 
 interface LibraryJob {
-  bookId: string;
+  bookId?: string;
+  /** A consolidation pass over the library (knowledge/consolidate) instead of an ingest. */
+  consolidate?: boolean;
+  domainKeys?: string[];
 }
 
 let libraryQueue: Queue<LibraryJob> | null = null;
@@ -34,7 +38,12 @@ if (redisUrl && redisUrl.length > 0) {
       },
     });
     libraryQueue.process(1, async (job: Job<LibraryJob>) => {
-      await ingestBook(job.data.bookId);
+      if (job.data.consolidate) {
+        const result = await consolidateLibrary(job.data.domainKeys);
+        invalidateConceptIndex();
+        return result;
+      }
+      await ingestBook(job.data.bookId!);
       invalidateConceptIndex();
       return { bookId: job.data.bookId };
     });
@@ -70,6 +79,25 @@ export async function enqueueIngest(bookId: string): Promise<'queued' | 'running
     .catch((error) =>
       loggingService.error('Library ingest failed', {
         bookId,
+        error: String(error?.message || error),
+      })
+    );
+  return 'running';
+}
+
+/** Queue a consolidation pass behind any ingests already waiting. */
+export async function enqueueConsolidation(domainKeys?: string[]): Promise<'queued' | 'running'> {
+  if (libraryQueue) {
+    await libraryQueue.add(
+      { consolidate: true, domainKeys },
+      { jobId: `consolidate-${Date.now()}` }
+    );
+    return 'queued';
+  }
+  consolidateLibrary(domainKeys)
+    .then(invalidateConceptIndex)
+    .catch((error) =>
+      loggingService.error('Library consolidation failed', {
         error: String(error?.message || error),
       })
     );

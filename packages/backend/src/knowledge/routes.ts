@@ -15,11 +15,11 @@ import * as sourceFileStore from '../services/sourceFileStore';
 import { openaiService } from '../services/openaiService';
 import { shorten } from '../services/occupations/occupationIndex';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
-import { KbBook, KbConcept, KbPassage, LICENCES } from './models';
+import { KbBook, KbConcept, KbMeta, KbPassage, LICENCES } from './models';
 import { DOMAINS } from './ontology';
 import { dot } from './clustering';
 import { bodyOfKnowledge, searchConcepts, citation } from './retrieval';
-import { enqueueIngest } from './queue';
+import { enqueueIngest, enqueueConsolidation } from './queue';
 import { sha256, workKeyOf, removeBook } from './ingestBook';
 
 const router = Router();
@@ -413,6 +413,19 @@ router.post('/calibrate', validateJWT, loadUser, async (req: Request, res: Respo
       similarity: Math.round(dot(vectors[2 * i], vectors[2 * i + 1]) * 1000) / 1000,
     })),
   });
+});
+
+/**
+ * Merge concepts that different books (or sections) hold under different names: embeddings
+ * shortlist pairs, a model judges them (knowledge/consolidate). Runs after queued ingests.
+ */
+router.post('/consolidate', validateJWT, loadUser, async (req: Request, res: Response) => {
+  const domainKeys = asList(req.body?.domainKeys).filter((k) => DOMAINS.some((d) => d.key === k));
+  res.status(202).json({ success: true, data: { mode: await enqueueConsolidation(domainKeys) } });
+});
+
+router.get('/consolidate', validateJWT, loadUser, async (_req: Request, res: Response) => {
+  res.json({ success: true, data: (await KbMeta.findById('consolidation').lean()) || null });
 });
 
 /** Which part of the library a programme draws on. */

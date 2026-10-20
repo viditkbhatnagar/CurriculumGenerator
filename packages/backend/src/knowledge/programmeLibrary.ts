@@ -93,11 +93,16 @@ export async function conceptsByCodes(codes: string[]): Promise<any[]> {
   const unique = Array.from(new Set(codes.filter(Boolean)));
   if (!unique.length) return [];
   const { KbConcept } = await import('./models');
-  const rows: any[] = await KbConcept.find({ code: { $in: unique } })
+  // A code merged into another concept by consolidation resolves to that concept.
+  const rows: any[] = await KbConcept.find({
+    $or: [{ code: { $in: unique } }, { aliasCodes: { $in: unique } }],
+  })
     .select('-embedding')
     .lean();
-  const byCode = new Map(rows.map((r) => [r.code, r]));
-  return unique.map((c) => byCode.get(c)).filter(Boolean);
+  const byCode = new Map<string, any>();
+  for (const r of rows) for (const c of [r.code, ...(r.aliasCodes || [])]) byCode.set(c, r);
+  const seen = new Set<string>();
+  return unique.map((c) => byCode.get(c)).filter((r) => r && !seen.has(r.code) && seen.add(r.code));
 }
 
 /**
