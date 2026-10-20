@@ -191,10 +191,22 @@ export function citation(e: any): string {
 }
 
 /** A concept's teaching sources in role order: primary, supplementary, critical. */
+const ROLE_RANK: Record<string, number> = {
+  primary: 0,
+  supplementary: 1,
+  critical: 2,
+  additional: 3,
+};
+
+/** A concept's evidence with the primary treatment first, then supplementary, then critical. */
+export function evidenceByRole(concept: any): any[] {
+  return [...(concept.evidence || [])].sort(
+    (a, b) => (ROLE_RANK[a.role] ?? 3) - (ROLE_RANK[b.role] ?? 3)
+  );
+}
+
 export function sourcesOf(concept: any, max = 3): string[] {
-  const rank: Record<string, number> = { primary: 0, supplementary: 1, critical: 2, additional: 3 };
-  return [...(concept.evidence || [])]
-    .sort((a, b) => (rank[a.role] ?? 3) - (rank[b.role] ?? 3))
+  return evidenceByRole(concept)
     .slice(0, max)
     .map((e) => `${citation(e)}${e.role && e.role !== 'additional' ? ` [${e.role}]` : ''}`);
 }

@@ -18,7 +18,7 @@ import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { KbBook, KbConcept, KbMeta, KbPassage, LICENCES } from './models';
 import { DOMAINS } from './ontology';
 import { dot } from './clustering';
-import { bodyOfKnowledge, searchConcepts, citation } from './retrieval';
+import { bodyOfKnowledge, searchConcepts, citation, evidenceByRole } from './retrieval';
 import { enqueueIngest, enqueueConsolidation } from './queue';
 import { conceptsByCodes } from './programmeLibrary';
 import { sha256, workKeyOf, removeBook, recomputeDomainStats } from './ingestBook';
@@ -405,29 +405,19 @@ router.get('/concepts', validateJWT, loadUser, async (req: Request, res: Respons
     const domainKeys = asList(req.query.domain);
     const areas = asList(req.query.area);
     const limit = Math.max(1, Math.min(Math.floor(Number(req.query.limit)) || 50, 500));
-    // Specific concepts by code (merged codes resolve to the concept they were merged into).
-    if (req.query.codes) {
-      const rows = await conceptsByCodes(asList(req.query.codes).slice(0, 200));
-      return res.json({
-        success: true,
-        data: rows.map((c: any) => ({
-          ...c,
-          sources: (c.evidence || []).map((e: any) => ({
-            role: e.role,
-            citation: citation(e),
-            treatment: e.treatment,
-          })),
-        })),
-      });
-    }
     const strip = (c: any) => ({
       ...c,
-      sources: (c.evidence || []).map((e: any) => ({
+      sources: evidenceByRole(c).map((e: any) => ({
         role: e.role,
         citation: citation(e),
         treatment: e.treatment,
       })),
     });
+    // Specific concepts by code (merged codes resolve to the concept they were merged into).
+    if (req.query.codes) {
+      const rows = await conceptsByCodes(asList(req.query.codes).slice(0, 200));
+      return res.json({ success: true, data: rows.map(strip) });
+    }
     if (req.query.q) {
       const hits = await searchConcepts([String(req.query.q).slice(0, 500)], {
         domainKeys,
