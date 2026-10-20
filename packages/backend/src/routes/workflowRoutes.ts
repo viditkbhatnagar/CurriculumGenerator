@@ -105,6 +105,13 @@ import { step6ReportOf } from '../services/step6Validation';
 import { step7ValidationOf } from '../services/step7Validation';
 import { step13Validation } from '../services/step13Validation';
 import { applyStep12Edit } from '../utils/step12Edit';
+import {
+  loadPackRows,
+  savePackRow,
+  withPacks,
+  restoreStep12Snapshot,
+} from '../services/step12Store';
+import { hydratePackEntries } from '../services/step12Stubs';
 import { BLOCKING_KINDS, publicationProblem } from '../services/publication';
 import { cleanAssessmentRules, missingAssessmentRules } from '../services/assessmentRules';
 import { criteriaRun, startUnitCriteria } from '../services/othm/unitCriteriaRunner';
@@ -966,6 +973,10 @@ router.post(
       if (stepNumber === 10) {
         snapshot = await restoreStep10Snapshot(id, snapshot);
       }
+      // Step 12's packs likewise live in their own collection; the document gets stubs.
+      if (stepNumber === 12) {
+        snapshot = await restoreStep12Snapshot(id, snapshot);
+      }
 
       await CurriculumWorkflow.updateOne(
         { _id: id },
@@ -1194,7 +1205,10 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
      * programme carries around 26MB of teaching content and the module list needs none of it.
      * They fetch a module's lessons from /step10/module/:moduleId when one is opened.
      */
-    const body: any = req.query.lessons === 'stubs' ? workflow : await withLessons(workflow);
+    const withContent: any = req.query.lessons === 'stubs' ? workflow : await withLessons(workflow);
+    // Step 12 packs are always included (about 1.7MB for 46 modules): the Step 12 screen and
+    // the LMS import both read them, and they live outside the document (step12Store).
+    const body: any = await withPacks(withContent);
     // Step 13: whether an exam is designed, added by the lead, or still a choice to offer. It is
     // added to the response, not the document: a field outside the schema is dropped when a
     // document is serialised, so set on the document it never reached the screen.
@@ -6935,7 +6949,11 @@ router.get('/:id/unresolved-issues', async (req: Request, res: Response) => {
     }
     const workflow = await CurriculumWorkflow.findById(req.params.id).lean();
     if (!workflow) return res.status(404).json({ success: false, error: 'Workflow not found' });
-    res.json({ success: true, data: unresolvedIssues(workflow, new Date().getFullYear()) });
+    // Step 12's checks read pack content, which lives outside the document.
+    res.json({
+      success: true,
+      data: unresolvedIssues(await withPacks(workflow), new Date().getFullYear()),
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to list unresolved issues' });
   }
@@ -7099,7 +7117,8 @@ router.get('/:id/othm/status', async (req: Request, res: Response) => {
     if (!isValidObjectId(req.params.id)) {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
-    const workflow: any = await CurriculumWorkflow.findById(req.params.id).lean();
+    // Unit assessments come from Step 12 packs, held outside the document (step12Store).
+    const workflow: any = await withPacks(await CurriculumWorkflow.findById(req.params.id).lean());
     if (!workflow) return res.status(404).json({ success: false, error: 'Workflow not found' });
     const units = othmUnits(workflow).map((u) => ({
       code: u.code,
@@ -7125,7 +7144,8 @@ router.get('/:id/export/othm/:kind', async (req: Request, res: Response) => {
     if (!isValidObjectId(req.params.id)) {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
-    const workflow: any = await CurriculumWorkflow.findById(req.params.id).lean();
+    // Unit assessments come from Step 12 packs, held outside the document (step12Store).
+    const workflow: any = await withPacks(await CurriculumWorkflow.findById(req.params.id).lean());
     if (!workflow) return res.status(404).json({ success: false, error: 'Workflow not found' });
     if (!workflow.step4?.modules?.length) {
       return res.status(400).json({ success: false, error: 'Step 4 (modules) is needed first' });
@@ -7209,8 +7229,8 @@ router.post('/:id/publish', validateJWT, loadUser, async (req: Request, res: Res
         .status(user?.role === 'administrator' ? 409 : 403)
         .json({ success: false, error: problem });
     }
-    const blocking = unresolvedIssues(workflow, new Date().getFullYear()).filter((i) =>
-      BLOCKING_KINDS.has(i.kind)
+    const blocking = unresolvedIssues(await withPacks(workflow), new Date().getFullYear()).filter(
+      (i) => BLOCKING_KINDS.has(i.kind)
     );
     if (blocking.length && req.body?.acknowledgeIssues !== true) {
       return res.status(409).json({
@@ -7325,7 +7345,8 @@ async function refuseModuleRequest(
 async function loadWorkflowForExport(id: string): Promise<any | null> {
   const workflow = await CurriculumWorkflow.findById(id);
   if (!workflow) return null;
-  return withLessons(workflow);
+  // Step 12 packs, like the lessons, live outside the document (step12Store).
+  return withPacks(await withLessons(workflow));
 }
 
 /**
@@ -9259,12 +9280,22 @@ router.post('/:id/apply-edit', validateJWT, loadUser, async (req: Request, res: 
 
         // Step 12 packs are found by module and keyed by delivery variant, which the generic
         // handling below cannot reach: see utils/step12Edit.
+        // The packs live in their own collection (services/step12Store): the edit is applied
+        // to the stored content, and the changed module's row and stub are rewritten.
         if (targetStep === 12 && update.path === 'moduleAssignmentPacks') {
-          const result = applyStep12Edit(targetStepData.moduleAssignmentPacks || [], update);
+          const entries: any[] = targetStepData.moduleAssignmentPacks || [];
+          const current = hydratePackEntries(entries, await loadPackRows(id));
+          const result = applyStep12Edit(current, update);
           if ('problem' in result) {
             noteRejected(update, result.problem);
           } else {
-            targetStepData.moduleAssignmentPacks = result.packs;
+            const next: any[] = [];
+            for (let i = 0; i < result.packs.length; i++) {
+              next.push(
+                result.packs[i] === current[i] ? entries[i] : await savePackRow(id, result.packs[i])
+              );
+            }
+            targetStepData.moduleAssignmentPacks = next;
             workflow.markModified(targetStepKey);
             noteApplied();
           }

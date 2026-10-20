@@ -68,6 +68,14 @@ import { saveModulePlan, loadModulePlan, withLessons, loadLessonIndex } from './
 import { reachStep, recordStepGenerated, refuseEmpty } from './stepGating';
 import { step12Index } from '../utils/step12Edit';
 import {
+  loadModulePack,
+  loadPackRows,
+  offloadLegacyPacks,
+  savePackRow,
+  withPacks,
+} from './step12Store';
+import { hydratePackEntries } from './step12Stubs';
+import {
   step5ValidationReport,
   step5Compliant,
   isFreeAccess,
@@ -5043,8 +5051,12 @@ CRITICAL:
       moduleAssignmentPacks.push(packs);
     }
 
+    // Packs are stored in their own collection; the document holds stubs (step12Store).
+    const stubs = [];
+    for (const pack of moduleAssignmentPacks) stubs.push(await savePackRow(workflowId, pack));
+
     workflow.step12 = {
-      moduleAssignmentPacks,
+      moduleAssignmentPacks: stubs as any,
       validation: step12ValidationFromPacks(moduleAssignmentPacks as any, modules as any),
       summary: step12SummaryFromPacks(moduleAssignmentPacks as any),
       generatedAt: new Date(),
@@ -5071,6 +5083,9 @@ CRITICAL:
     workflowId: string,
     preferredModuleIndex?: number
   ): Promise<ICurriculumWorkflow> {
+    // Packs live in their own collection (services/step12Store); a programme whose packs are
+    // still held in full in its document has them moved out before anything is added.
+    await offloadLegacyPacks(workflowId);
     const workflow = await CurriculumWorkflow.findById(workflowId);
     if (!workflow || !workflow.step11) {
       throw new Error('Workflow not found or Step 11 not complete');
@@ -5169,9 +5184,7 @@ CRITICAL:
     };
 
     // Keep the variants an earlier run generated; generate only what is missing.
-    const existingPack = (workflow.step12?.moduleAssignmentPacks || []).find(
-      (m: any) => m.moduleId === moduleToProcess.id
-    );
+    const existingPack = await loadModulePack(workflowId, moduleToProcess.id);
     const variantsToGenerate = missingPackVariants(existingPack as any);
 
     // Write initial generation progress so the frontend can show variant-by-variant status
@@ -5256,9 +5269,7 @@ CRITICAL:
       throw new Error('Workflow not found after generation');
     }
 
-    const storedPack: any = freshWorkflow.step12?.moduleAssignmentPacks?.find(
-      (m: any) => m.moduleId === moduleToProcess.id
-    );
+    const storedPack: any = await loadModulePack(workflowId, moduleToProcess.id);
     if (isModulePackComplete(storedPack)) {
       loggingService.warn('Module assignment packs completed by another process, skipping', {
         workflowId,
@@ -5301,12 +5312,15 @@ CRITICAL:
       };
     }
 
-    freshWorkflow.step12.moduleAssignmentPacks = [
-      ...freshWorkflow.step12.moduleAssignmentPacks.filter(
-        (m: any) => m.moduleId !== moduleToProcess.id
-      ),
-      merged,
-    ];
+    // The pack is stored first (this throws if it cannot be), then the document's stub.
+    const stub = await savePackRow(workflowId, merged);
+    const existingEntries: any[] = freshWorkflow.step12.moduleAssignmentPacks || [];
+    const at = existingEntries.findIndex((m: any) => m.moduleId === moduleToProcess.id);
+    freshWorkflow.step12.moduleAssignmentPacks = (
+      at === -1
+        ? [...existingEntries, stub]
+        : existingEntries.map((m: any, i: number) => (i === at ? stub : m))
+    ) as any;
 
     // Clear generation progress — this attempt is over
     freshWorkflow.step12.generationProgress = undefined;
@@ -5315,15 +5329,18 @@ CRITICAL:
     const newModulesCount = completePackModuleIds(
       freshWorkflow.step12.moduleAssignmentPacks as any
     ).size;
-    // Counted from the packs; this used to be three per module and 0 criteria per rubric.
-    freshWorkflow.step12.summary = step12SummaryFromPacks(
-      freshWorkflow.step12.moduleAssignmentPacks as any
+    // Summary and validation read pack content, so they are computed from the stored packs.
+    const allPacks = hydratePackEntries(
+      freshWorkflow.step12.moduleAssignmentPacks as any[],
+      await loadPackRows(workflowId)
     );
+    // Counted from the packs; this used to be three per module and 0 criteria per rubric.
+    freshWorkflow.step12.summary = step12SummaryFromPacks(allPacks as any);
 
     // Update validation
     // Outcome coverage and rubric completeness used to be constant `true` here.
     freshWorkflow.step12.validation = step12ValidationFromPacks(
-      freshWorkflow.step12.moduleAssignmentPacks as any,
+      allPacks as any,
       ((freshWorkflow.step4 as any)?.modules || []) as any
     );
 
@@ -8927,7 +8944,13 @@ Return ONLY valid JSON:
     }
     if ((workflow as any).step12) {
       fullWorkflowData.step12 = {
-        moduleAssignmentPacks: step12Index((workflow as any).step12.moduleAssignmentPacks || []),
+        // The index reads titles, types and rubric names: content held in step12Store.
+        moduleAssignmentPacks: step12Index(
+          hydratePackEntries(
+            (workflow as any).step12.moduleAssignmentPacks || [],
+            await loadPackRows(String(workflowId))
+          )
+        ),
         approved: !!(workflow as any).step12.approvedAt,
       };
     }

@@ -47,6 +47,21 @@ export async function snapshotStep(workflowId: string, stepNumber: number): Prom
       if (plans.length > 0) stepData = { ...stepData, moduleLessonPlans: plans };
     }
 
+    // Step 12's packs live in their own collection too (step12Store); the document's stubs
+    // alone would restore titles and no assignment content.
+    if (stepNumber === 12) {
+      const { loadPackRows } = await import('./step12Store');
+      const { hydratePackEntries } = await import('./step12Stubs');
+      const plain = typeof stepData.toObject === 'function' ? stepData.toObject() : stepData;
+      stepData = {
+        ...plain,
+        moduleAssignmentPacks: hydratePackEntries(
+          plain.moduleAssignmentPacks || [],
+          await loadPackRows(workflowId)
+        ),
+      };
+    }
+
     const buffer = Buffer.from(JSON.stringify(stepData), 'utf-8');
     const stored = await sourceFileStore.uploadBuffer(
       buffer,
