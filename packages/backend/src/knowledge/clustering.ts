@@ -46,9 +46,13 @@ export function keysFor(name: string, aliases: string[] = []): string[] {
     const k = conceptKey(n);
     if (!k) continue;
     keys.add(k);
-    // "porter five force" also answers to "five force".
-    const words = k.split(' ');
-    if (words.length >= 3) keys.add(words.slice(1).join(' '));
+    // "Porter's Five Forces" also answers to "five force". Only a possessive first word (an
+    // eponym) is dropped: dropping any first word made "human resource planning" answer to
+    // "resource planning" and merged different concepts by name.
+    if (/^\s*\S+['’]s\s/.test(String(n || ''))) {
+      const words = k.split(' ');
+      if (words.length >= 2) keys.add(words.slice(1).join(' '));
+    }
   }
   return Array.from(keys);
 }
@@ -143,8 +147,16 @@ export function candidatePairs(
   return Array.from(seen.values()).sort((x, y) => y.similarity - x.similarity);
 }
 
-/** Groups of concepts judged the same, joined through chains (a=b and b=c gives a, b, c). */
-export function sameConceptClusters(pairs: [string, string][]): string[][] {
+/**
+ * Groups of concepts judged the same, joined through chains (a=b and b=c gives a, b, c). A
+ * group larger than `maxSize` is left out: one wrong verdict can bridge two groups, and a
+ * dozen concepts merged by a chain is more likely an error than one concept with twelve names.
+ */
+export const MAX_CLUSTER_SIZE = 5;
+export function sameConceptClusters(
+  pairs: [string, string][],
+  maxSize = MAX_CLUSTER_SIZE
+): string[][] {
   const parent = new Map<string, string>();
   const find = (x: string): string => {
     if (!parent.has(x)) parent.set(x, x);
@@ -162,7 +174,7 @@ export function sameConceptClusters(pairs: [string, string][]): string[][] {
     groups.get(r)!.push(x);
   }
   return Array.from(groups.values())
-    .filter((g) => g.length > 1)
+    .filter((g) => g.length > 1 && g.length <= maxSize)
     .sort((a, b) => a.slice().sort()[0].localeCompare(b.slice().sort()[0]));
 }
 

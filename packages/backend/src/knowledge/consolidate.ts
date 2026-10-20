@@ -16,6 +16,7 @@ import { loggingService } from '../services/loggingService';
 import { withUsageContext } from '../services/usageContext';
 import { candidatePairs, sameConceptClusters, tidyEvidence } from './clustering';
 import { KbConcept, KbMeta } from './models';
+import { isAiUnavailable } from '../services/aiAvailability';
 import { EXTRACTION_MODEL, recomputeDomainStats } from './ingestBook';
 
 const PAIRS_PER_CALL = 40;
@@ -41,55 +42,88 @@ Return: {"answers":[{"n":1,"verdict":"same|different"}]}`;
 export interface ConsolidationResult {
   concepts: number;
   pairsJudged: number;
+  batchesFailed: number;
   judgedSame: number;
   clusters: number;
+  clustersTooLarge: number;
   conceptsMerged: number;
+}
+
+/** Judging batches run at once; each is one small call of up to 40 pairs. */
+const JUDGE_CONCURRENCY = 10;
+
+async function judgeBatch(batch: { n: number; a: any; b: any }[]): Promise<[string, string][]> {
+  const reply = await openaiService.generateContent(judgePrompt(batch), judgeSystem, {
+    model: EXTRACTION_MODEL,
+    reasoningEffort: 'low',
+    responseFormat: 'json_object',
+    maxTokens: 8000,
+    timeout: 300000,
+    maxRetries: 3,
+  });
+  const answers: any[] = JSON.parse(reply)?.answers || [];
+  const same: [string, string][] = [];
+  for (const ans of answers) {
+    const p = batch.find((b) => b.n === Number(ans?.n));
+    if (p && String(ans?.verdict).toLowerCase() === 'same') {
+      same.push([String(p.a._id), String(p.b._id)]);
+    }
+  }
+  return same;
 }
 
 export async function consolidateLibrary(domainKeys?: string[]): Promise<ConsolidationResult> {
   return withUsageContext({ step: 'knowledge-library' }, async () => {
     const filter: any = domainKeys?.length ? { domainKey: { $in: domainKeys } } : {};
     const rows: any[] = await KbConcept.find(filter)
-      .select('name aliases definition area domainKey embedding evidence')
+      .select('name aliases definition area domainKey embedding')
       .lean();
     const byId = new Map(rows.map((r) => [String(r._id), r]));
+    // Paired within domain and area: "Other" is an area in every domain, and a concept must
+    // never move from one domain to another by merging.
     const pairs = candidatePairs(
       rows
         .filter((r) => r.embedding?.length)
-        .map((r) => ({ id: String(r._id), area: r.area, vector: r.embedding }))
+        .map((r) => ({ id: String(r._id), area: `${r.domainKey}|${r.area}`, vector: r.embedding }))
     );
 
-    const same: [string, string][] = [];
+    const batches: { n: number; a: any; b: any }[][] = [];
     for (let i = 0; i < pairs.length; i += PAIRS_PER_CALL) {
-      const batch = pairs
-        .slice(i, i + PAIRS_PER_CALL)
-        .map((p, j) => ({ n: j + 1, ...p, a: byId.get(p.a), b: byId.get(p.b) }));
-      try {
-        const reply = await openaiService.generateContent(judgePrompt(batch), judgeSystem, {
-          model: EXTRACTION_MODEL,
-          reasoningEffort: 'low',
-          responseFormat: 'json_object',
-          maxTokens: 8000,
-          timeout: 300000,
-          maxRetries: 3,
-        });
-        const answers: any[] = JSON.parse(reply)?.answers || [];
-        for (const ans of answers) {
-          const p = batch.find((b) => b.n === Number(ans?.n));
-          if (p && String(ans?.verdict).toLowerCase() === 'same')
-            same.push([p.a._id.toString(), p.b._id.toString()]);
+      batches.push(
+        pairs
+          .slice(i, i + PAIRS_PER_CALL)
+          .map((p, j) => ({ n: j + 1, a: byId.get(p.a), b: byId.get(p.b) }))
+      );
+    }
+    const same: [string, string][] = [];
+    let batchesFailed = 0;
+    for (let i = 0; i < batches.length; i += JUDGE_CONCURRENCY) {
+      const results = await Promise.allSettled(
+        batches.slice(i, i + JUDGE_CONCURRENCY).map(judgeBatch)
+      );
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          same.push(...r.value);
+          continue;
         }
-      } catch (error) {
+        // A model that cannot be reached at all fails the pass; it must not report success.
+        if (isAiUnavailable(r.reason)) throw r.reason;
+        batchesFailed++;
         loggingService.warn(
           'Library consolidation: a batch could not be judged; its pairs stay separate',
           {
-            error: error instanceof Error ? error.message : String(error),
+            error: r.reason instanceof Error ? r.reason.message : String(r.reason),
           }
         );
       }
     }
+    if (batches.length && batchesFailed === batches.length) {
+      throw new Error(`Consolidation judged none of its ${batches.length} batches`);
+    }
 
     const clusters = sameConceptClusters(same);
+    const clustersTooLarge =
+      sameConceptClusters(same, Number.MAX_SAFE_INTEGER).length - clusters.length;
     let merged = 0;
     for (const ids of clusters) {
       const docs: any[] = await KbConcept.find({ _id: { $in: ids } });
@@ -109,6 +143,13 @@ export async function consolidateLibrary(domainKeys?: string[]): Promise<Consoli
         keep.aliasCodes = Array.from(
           new Set([...(keep.aliasCodes || []), d.code, ...(d.aliasCodes || [])])
         );
+        keep.formulae = [
+          ...(keep.formulae || []),
+          ...(d.formulae || []).filter(
+            (f: any) => !(keep.formulae || []).some((g: any) => g.expression === f.expression)
+          ),
+        ].slice(0, 8);
+        if (!keep.subArea && d.subArea) keep.subArea = d.subArea;
         for (const f of [
           'components',
           'applications',
@@ -134,8 +175,10 @@ export async function consolidateLibrary(domainKeys?: string[]): Promise<Consoli
     const result = {
       concepts: rows.length,
       pairsJudged: pairs.length,
+      batchesFailed,
       judgedSame: same.length,
       clusters: clusters.length,
+      clustersTooLarge,
       conceptsMerged: merged,
     };
     await KbMeta.updateOne(

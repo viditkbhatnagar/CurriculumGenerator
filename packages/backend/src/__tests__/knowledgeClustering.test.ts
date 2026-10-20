@@ -20,6 +20,11 @@ describe('conceptKey', () => {
     expect(conceptKey('The Five Forces')).toBe('five force');
     expect(keysFor("Porter's Five Forces Model")).toContain('five force');
   });
+  it('drops a leading eponym only, never an ordinary first word', () => {
+    // "human resource planning" must not answer to "resource planning" (review, 20 Oct 2026).
+    expect(keysFor('Human Resource Planning')).toEqual(['human resource planning']);
+    expect(keysFor('Supply Chain Risk')).toEqual(['supply chain risk']);
+  });
   it('drops bracketed abbreviations and keeps distinct names distinct', () => {
     expect(conceptKey('Net Present Value (NPV)')).toBe('net present value');
     expect(conceptKey('Internal Rate of Return')).not.toBe(conceptKey('Net Present Value'));
@@ -201,5 +206,13 @@ describe('sameConceptClusters', () => {
       ['x', 'y'],
     ]);
     expect(clusters.map((g) => g.sort().join(''))).toEqual(['abc', 'xy']);
+  });
+});
+
+describe('sameConceptClusters size', () => {
+  it('leaves out a cluster too large to trust, which one wrong verdict can create', () => {
+    const chain = Array.from({ length: 7 }, (_, i) => [`c${i}`, `c${i + 1}`] as [string, string]);
+    expect(sameConceptClusters(chain, 5)).toEqual([]);
+    expect(sameConceptClusters([['a', 'b']], 5)).toEqual([['a', 'b']]);
   });
 });
