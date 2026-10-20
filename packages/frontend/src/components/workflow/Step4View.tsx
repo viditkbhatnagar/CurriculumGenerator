@@ -748,6 +748,7 @@ function MLOCard({ mlo, onEdit }: { mlo: MLO; onEdit?: (mlo: MLO) => void }) {
 // Module Card Component
 function ModuleCard({
   module,
+  workflowId,
   totalProgramHours,
   contactPercent,
   onEdit,
@@ -762,6 +763,7 @@ function ModuleCard({
   onReorderActivity,
 }: {
   module: Module;
+  workflowId: string;
   totalProgramHours: number;
   contactPercent: number;
   onEdit?: (target: EditTarget) => void;
@@ -1068,7 +1070,7 @@ function ModuleCard({
 
           {/* Textbook-library concepts the module was built from */}
           {(module as any).knowledgeObjects?.length > 0 && (
-            <ModuleConceptsList codes={(module as any).knowledgeObjects} />
+            <ModuleConceptsList codes={(module as any).knowledgeObjects} workflowId={workflowId} />
           )}
 
           {/* PLO Coverage */}
@@ -2038,6 +2040,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                 <ModuleCard
                   key={module.id}
                   module={module}
+                  workflowId={workflow._id}
                   totalProgramHours={workflow.step4?.totalProgramHours || totalModuleHours}
                   contactPercent={contactPercent}
                   onEdit={onOpenCanvas}

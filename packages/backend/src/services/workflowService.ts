@@ -1704,7 +1704,7 @@ Return all ${moduleTarget} modules.`;
         )
       );
       // The concepts the outline assigned to these modules, from the textbook library.
-      const library = await moduleConceptsBlock(batch);
+      const library = await moduleConceptsBlock(batch, workflowId);
       // What earlier batches already wrote, so this one neither repeats their topics nor leaves
       // gaps between them (Rejin's audit: batches could not see each other).
       const writtenSoFar = detailed.length

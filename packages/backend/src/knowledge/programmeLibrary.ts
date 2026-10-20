@@ -12,26 +12,32 @@ import { bodyOfKnowledge, formatBodyOfKnowledge, formatConcept, searchConcepts }
 import type { Importance } from './models';
 import { pickAcrossAreas } from './selection';
 import { chapterApa, groupByChapter } from './chapterSources';
+import { BookScope, visibleConcept, visibleConcepts } from './bookAccess';
 
-export interface ProgrammeLibrary {
+export interface ProgrammeLibrary extends BookScope {
   enabled: boolean;
   domainKeys: string[];
   areas?: string[];
-  bookIds?: string[];
   enabledAt?: Date;
+}
+
+/** Books licensed to particular programmes, none of which is this one (knowledge/bookAccess). */
+export async function hiddenBooksFor(workflowId: string): Promise<string[]> {
+  const { KbBook } = await import('./models');
+  const rows: any[] = await KbBook.find({
+    'programmes.0': { $exists: true },
+    programmes: { $ne: workflowId },
+  })
+    .select('_id')
+    .lean();
+  return rows.map((r) => String(r._id));
 }
 
 export async function libraryFor(workflowId?: string): Promise<ProgrammeLibrary | null> {
   if (!workflowId || !mongoose.isValidObjectId(workflowId)) return null;
   const wf: any = await CurriculumWorkflow.findById(workflowId).select('knowledgeLibrary').lean();
   const lib = wf?.knowledgeLibrary;
-  return lib?.enabled ? lib : null;
-}
-
-/** Concepts limited to the programme's chosen books, if it chose any. */
-function inChosenBooks(lib: ProgrammeLibrary, concept: any): boolean {
-  if (!lib.bookIds?.length) return true;
-  return (concept.evidence || []).some((e: any) => lib.bookIds!.includes(String(e.bookId)));
+  return lib?.enabled ? { ...lib, hiddenBookIds: await hiddenBooksFor(workflowId) } : null;
 }
 
 /**
@@ -51,7 +57,8 @@ export async function libraryContextFor(
     k: k * 2,
   });
   return hits
-    .filter((h) => inChosenBooks(lib, h.concept))
+    .map((h) => ({ ...h, concept: visibleConcept(lib, h.concept) }))
+    .filter((h) => h.concept)
     .slice(0, k)
     .map((h) => ({
       content: formatConcept(h.concept, { definition: 500, sources: 3 }).replace(/^- /, ''),
@@ -76,16 +83,17 @@ export async function bodyOfKnowledgeBlockFor(
 ): Promise<{ block: string; concepts: number }> {
   const lib = await libraryFor(workflowId);
   if (!lib) return { block: '', concepts: 0 };
-  // Every concept that qualifies, narrowed to the chosen books, then a budget taken across areas.
+  // Every concept that qualifies, narrowed to the books it may use, then a budget across areas.
   const concepts = pickAcrossAreas(
-    (
+    visibleConcepts(
+      lib,
       await bodyOfKnowledge({
         domainKeys: lib.domainKeys,
         areas: lib.areas,
         importance: opts.importance,
         limit: 100000,
       })
-    ).filter((c) => inChosenBooks(lib, c)),
+    ),
     opts.limit ?? 150
   );
   return {
@@ -120,12 +128,16 @@ export async function conceptsByCodes(codes: string[]): Promise<any[]> {
  * and outcomes are written from what the textbooks teach (design sections 9 and 15).
  */
 export async function moduleConceptsBlock(
-  modules: { code: string; title: string; knowledgeObjects?: string[] }[]
+  modules: { code: string; title: string; knowledgeObjects?: string[] }[],
+  workflowId: string
 ): Promise<{ block: string; known: Map<string, string[]> }> {
   const known = new Map<string, string[]>();
   const parts: string[] = [];
+  const scope: BookScope = (await libraryFor(workflowId)) ?? {
+    hiddenBookIds: mongoose.isValidObjectId(workflowId) ? await hiddenBooksFor(workflowId) : [],
+  };
   for (const m of modules) {
-    const concepts = await conceptsByCodes(m.knowledgeObjects || []);
+    const concepts = visibleConcepts(scope, await conceptsByCodes(m.knowledgeObjects || []));
     known.set(
       m.code,
       concepts.map((c) => c.code)
@@ -173,7 +185,7 @@ export async function libraryChapterSources(
       })
     ).map((h) => h.concept);
   }
-  concepts = concepts.filter((c) => inChosenBooks(lib, c));
+  concepts = visibleConcepts(lib, concepts);
   const groups = groupByChapter(concepts, 3);
   if (!groups.length) return [];
   const conceptByCode = new Map(concepts.map((c: any) => [c.code, c]));

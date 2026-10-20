@@ -21,7 +21,8 @@ import { dot } from './clustering';
 import { bodyOfKnowledge, searchConcepts, citation, evidenceByRole } from './retrieval';
 import { restructureBook } from './bookStructure';
 import { enqueueIngest, enqueueConsolidation } from './queue';
-import { conceptsByCodes } from './programmeLibrary';
+import { conceptsByCodes, hiddenBooksFor, libraryFor } from './programmeLibrary';
+import { visibleConcepts } from './bookAccess';
 import { sha256, workKeyOf, removeBook, recomputeDomainStats } from './ingestBook';
 
 const router = Router();
@@ -439,8 +440,16 @@ router.get('/concepts', validateJWT, loadUser, async (req: Request, res: Respons
       })),
     });
     // Specific concepts by code (merged codes resolve to the concept they were merged into).
+    // With ?programme=, only what that programme may use (knowledge/bookAccess).
     if (req.query.codes) {
-      const rows = await conceptsByCodes(asList(req.query.codes).slice(0, 200));
+      let rows = await conceptsByCodes(asList(req.query.codes).slice(0, 200));
+      const programme = String(req.query.programme || '');
+      if (mongoose.isValidObjectId(programme)) {
+        const scope = (await libraryFor(programme)) ?? {
+          hiddenBookIds: await hiddenBooksFor(programme),
+        };
+        rows = visibleConcepts(scope, rows);
+      }
       return res.json({ success: true, data: rows.map(strip) });
     }
     if (req.query.q) {

@@ -15,14 +15,20 @@ const TONE: Record<string, string> = {
  * The textbook-library concepts a Step 4 module was built from, each with the book, chapter
  * and pages that teach it. Shown only for a programme built with the library.
  */
-export default function ModuleConceptsList({ codes }: { codes: string[] }) {
+export default function ModuleConceptsList({
+  codes,
+  workflowId,
+}: {
+  codes: string[];
+  workflowId?: string;
+}) {
   const [concepts, setConcepts] = useState<Concept[] | null>(null);
   const key = codes.join(',');
   useEffect(() => {
-    getConceptsByCodes(key.split(',').filter(Boolean))
+    getConceptsByCodes(key.split(',').filter(Boolean), workflowId)
       .then(setConcepts)
       .catch(() => setConcepts([]));
-  }, [key]);
+  }, [key, workflowId]);
   if (!codes.length) return null;
 
   return (

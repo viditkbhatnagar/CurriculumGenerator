@@ -201,10 +201,15 @@ export const setProgrammeLibrary = (workflowId: string, library: ProgrammeLibrar
     body: JSON.stringify(library),
   }).then(unwrap<ProgrammeLibrary>);
 
-/** Concepts by code, e.g. the ones a Step 4 module was built from. */
-export const getConceptsByCodes = (codes: string[]) =>
+/**
+ * Concepts by code, e.g. the ones a Step 4 module was built from. With a programme, only what
+ * that programme may use: another institution's licensed books are left out.
+ */
+export const getConceptsByCodes = (codes: string[], programme?: string) =>
   codes.length
-    ? fetchAPI(`${BASE}/concepts?codes=${encodeURIComponent(codes.join(','))}`).then(
-        unwrap<Concept[]>
-      )
+    ? fetchAPI(
+        `${BASE}/concepts?codes=${encodeURIComponent(codes.join(','))}${
+          programme ? `&programme=${encodeURIComponent(programme)}` : ''
+        }`
+      ).then(unwrap<Concept[]>)
     : Promise.resolve([] as Concept[]);
