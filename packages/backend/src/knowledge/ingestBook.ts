@@ -40,8 +40,8 @@ import { KbBook, KbConcept, KbCounter, KbMeta, KbPassage } from './models';
 
 /** Extraction is reading, not reasoning: a small model at low effort keeps a book near $1. */
 export const EXTRACTION_MODEL = process.env.KB_EXTRACTION_MODEL || 'gpt-5-mini';
-/** Sections read at once. gpt-5-mini takes about a minute a section, so 4 took 20 minutes a book. */
-const EXTRACTION_CONCURRENCY = Math.max(1, Number(process.env.KB_EXTRACTION_CONCURRENCY) || 8);
+/** Sections read at once. gpt-5-mini takes about a minute a section: 8 at once read 4 a minute, so 18 books took most of a day. */
+const EXTRACTION_CONCURRENCY = Math.max(1, Number(process.env.KB_EXTRACTION_CONCURRENCY) || 20);
 const EXTRACTABLE = new Set(['body', 'summary']);
 
 async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
@@ -246,8 +246,13 @@ export async function recomputeDomainStats(domainKeys: string[]): Promise<void> 
     const cursor = KbConcept.find({ domainKey }).select('evidence level').cursor();
     const ops: any[] = [];
     for await (const doc of cursor as any) {
-      const evidence = (doc.evidence || []).filter((e: any) => live.has(String(e.bookId)));
-      const ranked = assignRoles(evidence.map((e: any) => ({ ...e, bookId: String(e.bookId) })));
+      // All evidence is kept. Only books that are ready, teaching and current count towards
+      // the statistics; evidence from a book still being read waits for its own turn. (This
+      // once wrote back only the counted evidence, deleting every unfinished book's.)
+      const all: any[] = doc.evidence || [];
+      const counted = all.filter((e: any) => live.has(String(e.bookId)));
+      const ranked = assignRoles(counted.map((e: any) => ({ ...e, bookId: String(e.bookId) })));
+      const roleOf = new Map(counted.map((e: any, i: number) => [e, ranked[i].role]));
       const treating = new Set(
         ranked.filter((e) => e.treatment !== 'mention').map((e) => e.bookId)
       );
@@ -269,7 +274,7 @@ export async function recomputeDomainStats(domainKeys: string[]): Promise<void> 
           filter: { _id: doc._id },
           update: {
             $set: {
-              evidence: ranked.map((e: any, i: number) => ({ ...evidence[i], role: e.role })),
+              evidence: all.map((e: any) => ({ ...e, role: roleOf.get(e) || 'additional' })),
               bookCount: new Set(ranked.map((e) => e.bookId)).size,
               prevalence,
               importance,
@@ -461,6 +466,8 @@ export async function removeBook(
       kept++;
     }
   }
+  // Concepts left with no evidence at all (a removed book was their only source).
+  removed += (await KbConcept.deleteMany({ evidence: { $size: 0 } })).deletedCount || 0;
   await KbBook.deleteOne({ _id: book._id });
   await recomputeDomainStats(book.domainKeys);
   await bumpLibraryVersion();
