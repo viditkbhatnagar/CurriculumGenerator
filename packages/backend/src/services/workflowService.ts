@@ -75,6 +75,7 @@ import {
   withPacks,
 } from './step12Store';
 import { hydratePackEntries } from './step12Stubs';
+import { hasContent, matchBatchContent, returnedModules } from './step4Batch';
 import { bodyOfKnowledgeBlockFor, moduleConceptsBlock } from '../knowledge/programmeLibrary';
 import {
   step5ValidationReport,
@@ -1669,13 +1670,6 @@ Return all ${moduleTarget} modules.`;
       const batch = blueprint.slice(start, start + BATCH_SIZE);
       const batchNumber = Math.floor(start / BATCH_SIZE) + 1;
 
-      const batchText = batch
-        .map(
-          (m: any) =>
-            `${m.code} | ${m.title} | ${m.credits ?? '?'} credits | ${m.contactHours ?? '?'} contact h | ${m.independentHours ?? '?'} independent h | ${m.group}${m.isElective ? ' | ELECTIVE' : ''}`
-        )
-        .join('\n');
-
       const kbContextSection = formatKBContextForPrompt(
         await retrieveKBContext(
           batch.map((m: any) => `${m.title} ${step1.programTitle} module content`),
@@ -1722,9 +1716,16 @@ ${progressionGuidance(framing.level)} Pitch each module to where it sits in the 
 
 Use UK English in all prose. The bloomLevel field is a fixed key, not prose: use exactly remember | understand | apply | analyze | evaluate | create.`;
 
-      const userPrompt = `Write the specification for these ${batch.length} modules (batch ${batchNumber} of ${Math.ceil(blueprint.length / BATCH_SIZE)}):
+      const promptFor = (
+        mods: any[]
+      ) => `Write the specification for these ${mods.length} modules (batch ${batchNumber} of ${Math.ceil(blueprint.length / BATCH_SIZE)}):
 
-${batchText}
+${mods
+  .map(
+    (m: any) =>
+      `${m.code} | ${m.title} | ${m.credits ?? '?'} credits | ${m.contactHours ?? '?'} contact h | ${m.independentHours ?? '?'} independent h | ${m.group}${m.isElective ? ' | ELECTIVE' : ''}`
+  )
+  .join('\n')}
 ${writtenSoFar ? `\nMODULES ALREADY SPECIFIED (do not repeat their topics; build on them where these modules come later):\n${writtenSoFar}\n` : ''}
 For EACH module return:
 - code: exactly as given above
@@ -1746,15 +1747,37 @@ For EACH module return:
 
 Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [...], "mlos": [...], "contactActivities": [...], "independentActivities": [...]${library.block ? ', "topicConcepts": [...]' : ''} } ] }`;
 
-      const response = await openaiService.generateContent(userPrompt, systemPrompt, {
-        maxTokens: 32000,
-        timeout: 1200000, // 20 minutes
-        responseFormat: 'json_object',
-      });
-      const parsed = this.parseJSON(response, `step4-blueprint-batch-${batchNumber}`);
-      const byCode = new Map<string, any>(
-        (parsed.modules || []).map((m: any) => [String(m.code || '').trim(), m])
-      );
+      const ask = async (mods: any[], reasoningEffort?: 'medium') => {
+        const response = await openaiService.generateContent(promptFor(mods), systemPrompt, {
+          maxTokens: 32000,
+          timeout: 1200000, // 20 minutes
+          responseFormat: 'json_object',
+          ...(reasoningEffort ? { reasoningEffort } : {}),
+        });
+        const parsed = this.parseJSON(response, `step4-blueprint-batch-${batchNumber}`);
+        return matchBatchContent(mods, returnedModules(parsed));
+      };
+      const byCode = await ask(batch);
+      // A module the reply left empty is asked for once more on its own, with less reasoning,
+      // before it is kept as a shell (in the MAIB trial a whole batch of six came back empty).
+      const empty = batch.filter((m: any) => !hasContent(byCode.get(m.code)));
+      if (empty.length) {
+        loggingService.warn('Step 4: modules came back without content; asking again', {
+          workflowId,
+          batch: batchNumber,
+          modules: empty.map((m: any) => m.code),
+        });
+        try {
+          const retry = await ask(empty, 'medium');
+          for (const m of empty)
+            if (hasContent(retry.get(m.code))) byCode.set(m.code, retry.get(m.code));
+        } catch (error) {
+          loggingService.warn('Step 4: the second request failed; the modules stay incomplete', {
+            workflowId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
 
       for (const module of batch) {
         // Fall back to an empty shell rather than dropping the module — the
