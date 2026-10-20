@@ -15,6 +15,12 @@
  * Pure, so it can be tested; reading the PDF is in pdf/readPdf.
  */
 import type { PdfOutlineItem, PdfText } from './pdf/readPdf';
+import {
+  bodySize,
+  headingsFromNumbers,
+  headingsFromRunningHeads,
+  titledOutline,
+} from './pageHeadings';
 
 export type SectionKind = 'body' | 'exercise' | 'summary' | 'matter' | 'restricted';
 
@@ -49,7 +55,7 @@ export interface Passage {
 const RESTRICTED =
   /\b(answer key|answers to|answers? for|solutions? (manual|to)|selected (answers|solutions)|test bank|instructor'?s? (manual|guide|resources?|notes?))\b|^(answers?|solutions?)\b/i;
 const MATTER =
-  /^(?:(?:contents|table of contents|brief contents|detailed contents|preface|foreword|about (?:the|this) (?:authors?|book)|copyright|dedication|index|subject index|author index|bibliography|references|works cited|further reading|glossary|key terms index|list of (?:figures|tables|abbreviations)|notation|errata|title page|cover)\b|acknowledg)/i;
+  /^(?:(?:contents|table of contents|brief contents|detailed contents|preface|foreword|about (?:the|this) (?:authors?|book)|copyright|dedication|index|subject index|author index|bibliography|references|works cited|further reading|glossary|endnotes|key terms index|list of (?:figures|tables|abbreviations)|notation|errata|title page|cover)\b|acknowledg)/i;
 const EXERCISE =
   /\b(exercises?|problems|review questions|discussion questions|check your understanding|practice questions|self[- ]assessment|end[- ]of[- ]chapter questions|critical thinking questions|assessment questions)\b/i;
 const SUMMARY = /^(summary|chapter summary|key terms|key concepts|conclusion|chapter review)\b/i;
@@ -60,6 +66,10 @@ export function classifySection(sectionTitle: string, chapterTitle = ''): Sectio
   const c = stripNumber(chapterTitle);
   if (RESTRICTED.test(s) || RESTRICTED.test(c)) return 'restricted';
   if (MATTER.test(c) || MATTER.test(s)) return 'matter';
+  // An index's letter headings ("X", "Y", "Z" in Sloman's bookmarks).
+  if (/^[A-Z]$/.test(c.trim())) return 'matter';
+  // An index's letter headings ("X", "Y", "Z" in Sloman's bookmarks).
+  if (/^[A-Z]$/.test(c.trim())) return 'matter';
   if (EXERCISE.test(s)) return 'exercise';
   if (SUMMARY.test(s)) return 'summary';
   return 'body';
@@ -112,16 +122,8 @@ export function chapterDepth(outline: PdfOutlineItem[]): number {
  * next a section.
  */
 export function headingsFromSizes(pdf: PdfText): PdfOutlineItem[] {
-  const weighted: number[] = [];
-  for (const page of pdf.pages) {
-    for (const p of page.paragraphs) {
-      const n = Math.min(20, Math.ceil(p.text.length / 80));
-      for (let i = 0; i < n; i++) weighted.push(Math.round(p.size * 10) / 10);
-    }
-  }
-  if (!weighted.length) return [];
-  weighted.sort((a, b) => a - b);
-  const body = weighted[Math.floor(weighted.length / 2)];
+  const body = bodySize(pdf);
+  if (!body) return [];
   const candidates: { title: string; page: number; size: number }[] = [];
   for (const page of pdf.pages) {
     for (const p of page.paragraphs) {
@@ -140,9 +142,23 @@ export function headingsFromSizes(pdf: PdfText): PdfOutlineItem[] {
     .map((c) => ({ title: c.title, page: c.page, depth: c.size === chapterSize ? 0 : 1 }));
 }
 
+/**
+ * Chapters and sections for a PDF without bookmarks: numbered sections if the book has them,
+ * else chapter running heads, else type size (knowledge/pageHeadings).
+ */
+export function headingsWithoutBookmarks(pdf: PdfText): PdfOutlineItem[] {
+  for (const read of [headingsFromNumbers, headingsFromRunningHeads, headingsFromSizes]) {
+    const items = read(pdf);
+    if (items.length) return items;
+  }
+  return [];
+}
+
 interface Node {
   chapterIndex: number;
   chapterNumber: string;
+  /** The number was counted, not printed in the title: such a chapter may be front matter. */
+  chapterCounted: boolean;
   chapterTitle: string;
   sectionIndex: number;
   sectionNumber: string;
@@ -190,6 +206,7 @@ function nodesFrom(outline: PdfOutlineItem[]): Node[] {
       nodes.push({
         chapterIndex: chapter.index,
         chapterNumber: chapter.number,
+        chapterCounted: !number,
         chapterTitle: chapter.title,
         sectionIndex: 0,
         sectionNumber: chapter.number ? `${chapter.number}.0` : '',
@@ -201,6 +218,7 @@ function nodesFrom(outline: PdfOutlineItem[]): Node[] {
       nodes.push({
         chapterIndex: chapter.index,
         chapterNumber: chapter.number,
+        chapterCounted: nodes[nodes.length - 1]?.chapterCounted ?? false,
         chapterTitle: chapter.title,
         sectionIndex,
         sectionNumber: number || (chapter.number ? `${chapter.number}.${sectionIndex}` : ''),
@@ -225,7 +243,7 @@ function headingAt(blocks: Block[], from: number, title: string): number {
 
 export function structureBook(pdf: PdfText): { sections: BookSection[]; usedOutline: boolean } {
   const usedOutline = pdf.outline.filter((o) => o.page !== null).length >= 3;
-  const outline = usedOutline ? pdf.outline : headingsFromSizes(pdf);
+  const outline = usedOutline ? titledOutline(pdf, pdf.outline) : headingsWithoutBookmarks(pdf);
   const nodes = nodesFrom(outline).sort((a, b) => a.page - b.page);
   const sections: BookSection[] = nodes.map((n) => {
     const kind = classifySection(n.sectionTitle, n.chapterTitle);
@@ -274,7 +292,10 @@ export function structureBook(pdf: PdfText): { sections: BookSection[]; usedOutl
     if (current >= 0) sections[current].blocks.push(...blocks.slice(cursor));
   }
 
-  renumberFromText(sections);
+  renumberFromText(
+    sections,
+    new Set(nodes.filter((n) => n.chapterCounted).map((n) => n.chapterIndex))
+  );
 
   for (const s of sections) {
     const pages = s.blocks.map((b) => b.page);
@@ -309,7 +330,7 @@ export function chapterHeading(line: string): string | null {
  * the bookmarks carry none. Chapters before the first numbered one are front matter (a
  * preface such as "Why This Book?").
  */
-function renumberFromText(sections: BookSection[]): void {
+function renumberFromText(sections: BookSection[], counted: Set<number>): void {
   const fromHeading = new Map<number, string>();
   const fromSections = new Map<number, string>();
   const printedNumber = new Set<string>();
@@ -342,7 +363,13 @@ function renumberFromText(sections: BookSection[]): void {
       s.chapter.number = n;
       if (s.section.index === 0) s.section.number = `${n}.0`;
       else if (!printedNumber.has(s.key)) s.section.number = `${n}.${s.section.index}`;
-    } else if (s.chapter.index < firstNumbered && s.kind === 'body') {
+    } else if (
+      s.chapter.index < firstNumbered &&
+      s.kind === 'body' &&
+      // Only a chapter we numbered ourselves: Mullins prints its numbers in running heads, and
+      // its first eight chapters were filed as front matter and never read.
+      counted.has(s.chapter.index)
+    ) {
       s.kind = 'matter';
       s.chapter.number = '';
       s.section.number = '';
