@@ -51,7 +51,13 @@ import {
   lessonsHeld,
   validationFromStubs,
 } from '../services/step10Completion';
-import { step11ValidationFromDecks } from '../services/deliverableValidation';
+import {
+  step11ValidationFromDecks,
+  step12SummaryFromPacks,
+  completePackModuleIds,
+  isModulePackComplete,
+  missingPackVariants,
+} from '../services/deliverableValidation';
 import { step8ApprovalBlocker } from '../services/step8Approval';
 import { topicTitle } from '../utils/topicShape';
 import {
@@ -6087,11 +6093,15 @@ router.post(
     try {
       const { id } = req.params;
       const userId = (req as any).user?.id || (req as any).user?.userId;
+      // Optional: the module the page's button belongs to (0-based Step 4 position).
+      const rawIndex = req.body?.moduleIndex;
+      const moduleIndex =
+        Number.isInteger(rawIndex) && rawIndex >= 0 && rawIndex < 1000 ? rawIndex : undefined;
 
       // Try background queue first
       try {
         const { queueAllRemainingStep12Modules } = await import('../queues/step12Queue');
-        const jobs = await queueAllRemainingStep12Modules(id, userId);
+        const jobs = await queueAllRemainingStep12Modules(id, userId, moduleIndex);
 
         if (jobs.length > 0) {
           return res.status(202).json({
@@ -6108,7 +6118,7 @@ router.post(
       }
 
       // Sync fallback
-      const updatedWorkflow = await workflowService.processStep12NextModule(id);
+      const updatedWorkflow = await workflowService.processStep12NextModule(id, moduleIndex);
       res.json({
         success: true,
         data: updatedWorkflow.step12,
@@ -6140,9 +6150,16 @@ router.get('/:id/step12/status', validateJWT, loadUser, async (req: Request, res
     }
 
     const totalModules = new Set((workflow.step4?.modules || []).map((m: any) => m.id)).size;
-    const completedModules = new Set(
-      (workflow.step12?.moduleAssignmentPacks || []).map((m: any) => m.moduleId)
-    ).size;
+    const packs = (workflow.step12?.moduleAssignmentPacks || []) as any[];
+    // Complete = all three variants generated; a stored placeholder is a failure, not a pack.
+    const completedModules = completePackModuleIds(packs).size;
+    const incompleteModules = packs
+      .filter((p) => !isModulePackComplete(p))
+      .map((p) => ({
+        moduleId: p.moduleId,
+        moduleCode: p.moduleCode,
+        missingVariants: missingPackVariants(p),
+      }));
 
     // Check queue status
     let queueStatus = null;
@@ -6168,8 +6185,11 @@ router.get('/:id/step12/status', validateJWT, loadUser, async (req: Request, res
       data: {
         totalModules,
         completedModules,
+        modulesGenerated: completedModules,
+        incompleteModules,
         allComplete: completedModules >= totalModules,
-        totalAssignmentPacks: completedModules * 3,
+        totalAssignmentPacks: step12SummaryFromPacks(packs).totalAssignmentPacks,
+        lastError: (workflow.step12 as any)?.lastError || null,
         queueStatus,
         step12Data: workflow.step12
           ? {
@@ -6210,14 +6230,14 @@ router.post('/:id/step12/approve', validateJWT, loadUser, async (req: Request, r
     }
 
     const totalModules = new Set((workflow.step4?.modules || []).map((m: any) => m.id)).size;
-    const completedModules = new Set(
-      workflow.step12.moduleAssignmentPacks.map((m: any) => m.moduleId)
+    const completedModules = completePackModuleIds(
+      workflow.step12.moduleAssignmentPacks as any
     ).size;
 
     if (completedModules < totalModules) {
       return res.status(400).json({
         success: false,
-        error: `All module assignment packs must be generated before approval. ${completedModules}/${totalModules} modules complete.`,
+        error: `All module assignment packs must be generated before approval. ${completedModules}/${totalModules} modules have all three delivery variants.`,
       });
     }
 

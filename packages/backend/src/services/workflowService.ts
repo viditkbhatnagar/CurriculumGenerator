@@ -80,6 +80,10 @@ import {
   step11ValidationFromDecks,
   step12SummaryFromPacks,
   step12ValidationFromPacks,
+  completePackModuleIds,
+  isModulePackComplete,
+  isPlaceholderVariant,
+  missingPackVariants,
 } from './deliverableValidation';
 import { circularDefinitions, usSpellings } from './glossaryValidation';
 import { casesWithAssessmentQuestions } from './caseStudyValidation';
@@ -5063,7 +5067,10 @@ CRITICAL:
    * Process Step 12: Generate Assignment Packs for the NEXT module only
    * Module-by-module to prevent timeouts (3 variants per module)
    */
-  async processStep12NextModule(workflowId: string): Promise<ICurriculumWorkflow> {
+  async processStep12NextModule(
+    workflowId: string,
+    preferredModuleIndex?: number
+  ): Promise<ICurriculumWorkflow> {
     const workflow = await CurriculumWorkflow.findById(workflowId);
     if (!workflow || !workflow.step11) {
       throw new Error('Workflow not found or Step 11 not complete');
@@ -5076,12 +5083,22 @@ CRITICAL:
       throw new Error('No modules found in Step 4. Complete Step 4 first.');
     }
 
-    // Use unique moduleId set to find the first ungenerated module
-    const completedModuleIds = new Set(
-      (workflow.step12?.moduleAssignmentPacks || []).map((m: any) => m.moduleId)
+    // The first module whose three variants are not all generated. A stored pack is not
+    // enough: placeholders for failed variants used to count, so they were never retried.
+    const completedModuleIds = completePackModuleIds(
+      (workflow.step12?.moduleAssignmentPacks || []) as any
     );
     const existingModules = completedModuleIds.size;
-    const expectedModuleIndex = modules.findIndex((m: any) => !completedModuleIds.has(m.id));
+    // The module a job or a page button asked for, if it still needs work; otherwise the
+    // first incomplete module.
+    const preferred =
+      typeof preferredModuleIndex === 'number' &&
+      modules[preferredModuleIndex] &&
+      !completedModuleIds.has(modules[preferredModuleIndex].id)
+        ? preferredModuleIndex
+        : -1;
+    const expectedModuleIndex =
+      preferred !== -1 ? preferred : modules.findIndex((m: any) => !completedModuleIds.has(m.id));
 
     loggingService.info('Processing Step 12: Next Module', {
       workflowId,
@@ -5151,8 +5168,19 @@ CRITICAL:
         : undefined,
     };
 
+    // Keep the variants an earlier run generated; generate only what is missing.
+    const existingPack = (workflow.step12?.moduleAssignmentPacks || []).find(
+      (m: any) => m.moduleId === moduleToProcess.id
+    );
+    const variantsToGenerate = missingPackVariants(existingPack as any);
+
     // Write initial generation progress so the frontend can show variant-by-variant status
-    const variantNames = ['In-Person', 'Self-Study', 'Hybrid'];
+    const variantLabel: Record<string, string> = {
+      in_person: 'In-Person',
+      self_study: 'Self-Study',
+      hybrid: 'Hybrid',
+    };
+    const variantNames = variantsToGenerate.map((v) => variantLabel[v]);
     try {
       const progressWf = await CurriculumWorkflow.findById(workflowId);
       if (progressWf) {
@@ -5174,10 +5202,12 @@ CRITICAL:
           moduleCode: resolvedModuleCode,
           moduleTitle: moduleToProcess.title,
           completedVariants: 0,
-          totalVariants: 3,
+          totalVariants: variantsToGenerate.length,
           currentVariant: variantNames[0],
           startedAt: new Date(),
         };
+        // A new attempt supersedes the last failure; the page shows lastError as current.
+        (progressWf.step12 as any).lastError = undefined;
         progressWf.markModified('step12');
         await progressWf.save();
       }
@@ -5199,7 +5229,7 @@ CRITICAL:
               moduleCode: resolvedModuleCode,
               moduleTitle: moduleToProcess.title,
               completedVariants,
-              totalVariants: 3,
+              totalVariants: variantsToGenerate.length,
               currentVariant,
               startedAt: pw.step12.generationProgress?.startedAt || new Date(),
             };
@@ -5209,7 +5239,8 @@ CRITICAL:
         } catch (_e) {
           // Non-critical
         }
-      }
+      },
+      { variants: variantsToGenerate as any }
     );
     const duration = Date.now() - startTime;
 
@@ -5225,15 +5256,30 @@ CRITICAL:
       throw new Error('Workflow not found after generation');
     }
 
-    const alreadyExists = freshWorkflow.step12?.moduleAssignmentPacks?.find(
+    const storedPack: any = freshWorkflow.step12?.moduleAssignmentPacks?.find(
       (m: any) => m.moduleId === moduleToProcess.id
     );
-    if (alreadyExists) {
-      loggingService.warn('Module assignment packs added by another process, skipping', {
+    if (isModulePackComplete(storedPack)) {
+      loggingService.warn('Module assignment packs completed by another process, skipping', {
         workflowId,
         moduleId: moduleToProcess.id,
       });
       return freshWorkflow;
+    }
+
+    // Merge: what is stored now (it may have gained variants meanwhile), overlaid with every
+    // variant this run generated. A placeholder never replaces a generated variant.
+    const merged: any = {
+      moduleId: packs.moduleId,
+      moduleCode: packs.moduleCode,
+      moduleTitle: packs.moduleTitle,
+      variants: { ...(storedPack?.variants || {}) },
+    };
+    for (const [name, variant] of Object.entries(packs.variants || {})) {
+      if (!variant) continue;
+      const kept = merged.variants[name];
+      if (isPlaceholderVariant(variant as any) && kept && !isPlaceholderVariant(kept)) continue;
+      merged.variants[name] = variant;
     }
 
     // Initialize step12 if needed
@@ -5255,14 +5301,19 @@ CRITICAL:
       };
     }
 
-    freshWorkflow.step12.moduleAssignmentPacks.push(packs);
+    freshWorkflow.step12.moduleAssignmentPacks = [
+      ...freshWorkflow.step12.moduleAssignmentPacks.filter(
+        (m: any) => m.moduleId !== moduleToProcess.id
+      ),
+      merged,
+    ];
 
-    // Clear generation progress — module is done
+    // Clear generation progress — this attempt is over
     freshWorkflow.step12.generationProgress = undefined;
 
-    // Update summary — use unique moduleId count
-    const newModulesCount = new Set(
-      freshWorkflow.step12.moduleAssignmentPacks.map((m: any) => m.moduleId)
+    // Modules whose three variants are all generated
+    const newModulesCount = completePackModuleIds(
+      freshWorkflow.step12.moduleAssignmentPacks as any
     ).size;
     // Counted from the packs; this used to be three per module and 0 criteria per rubric.
     freshWorkflow.step12.summary = step12SummaryFromPacks(
@@ -5289,6 +5340,18 @@ CRITICAL:
       modulesGenerated: newModulesCount,
       totalModules,
     });
+
+    // The variants that did generate are saved above. A variant that failed both attempts
+    // fails the job, so the queue retries this module (generating only what is missing) and,
+    // once retries run out, records lastError for the page instead of showing "complete".
+    const stillMissing = missingPackVariants(merged);
+    if (stillMissing.length > 0) {
+      throw new Error(
+        `${resolvedModuleCode}: the ${stillMissing.join(', ')} variant${
+          stillMissing.length > 1 ? 's' : ''
+        } did not generate (the model returned no usable pack). The other variants were saved.`
+      );
+    }
 
     return freshWorkflow;
   }

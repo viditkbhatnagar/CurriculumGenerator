@@ -15,6 +15,7 @@
  * Pure, so it can be tested.
  */
 import { currentCriteria } from './unitCriteria';
+import { isPlaceholderVariant } from '../deliverableValidation';
 
 export const TO_BE_ASSIGNED = 'To be assigned';
 export const NOT_STATED = 'Not yet stated by the institution.';
@@ -103,7 +104,10 @@ function packFor(workflow: any, module: any): any | undefined {
     (p: any) => p?.moduleId === module.id || (p?.moduleCode && p.moduleCode === module.code)
   );
   const variants = pack?.variants || {};
-  return variants.in_person || variants.hybrid || variants.self_study;
+  // A failed variant is stored as a placeholder; it must not stand in for a generated one.
+  return [variants.in_person, variants.hybrid, variants.self_study].find(
+    (v: any) => v && !isPlaceholderVariant(v)
+  );
 }
 
 function summativeFor(workflow: any, module: any): any | undefined {

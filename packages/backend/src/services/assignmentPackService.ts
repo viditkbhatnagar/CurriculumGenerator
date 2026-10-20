@@ -15,7 +15,7 @@
 
 import { openaiService } from './openaiService';
 import { loggingService } from './loggingService';
-import { resolveOutcomeLabel } from './deliverableValidation';
+import { resolveOutcomeLabel, isUsableGeneratedPack } from './deliverableValidation';
 import { scenarioProfileFor, scenarioDirective } from './scenarioContext';
 import {
   ICurriculumWorkflow,
@@ -75,16 +75,31 @@ interface WorkflowContext {
 }
 
 export class AssignmentPackService {
-  private readonly VARIANT_TIMEOUT = 180000; // 3 minutes per variant
-  private readonly MAX_TOKENS = 8000;
+  /**
+   * Per-variant budget. GPT-5 counts its reasoning against max_completion_tokens, and at the
+   * production reasoning effort ("high") 8,000 tokens were spent before any JSON was written:
+   * on 16 Oct 2026 110 of the BBA's 138 variants came back empty and were stored as
+   * placeholders. A pack is about 4,000 output tokens, so the budget leaves room for both.
+   */
+  private readonly VARIANT_TIMEOUT = 600000; // 10 minutes per attempt
+  private readonly MAX_TOKENS = 32000;
+  /** The retry asks for less reasoning, so a reply that ran out of budget once gets through. */
+  private readonly RETRY_REASONING_EFFORT = 'medium' as const;
 
   /**
-   * Generate assignment packs for a single module (all 3 delivery variants)
+   * Generate assignment packs for a single module.
+   *
+   * `options.variants` limits generation to the variants still missing, so a module whose
+   * earlier run produced two of three keeps them and only the third is generated again. The
+   * variants run in parallel; each gets one retry. A variant that fails both attempts is
+   * returned as a placeholder (`-placeholder` id) and the caller decides what that means
+   * (see `missingPackVariants`): it is never counted as generated.
    */
   async generateModuleAssignmentPacks(
     module: ModuleContext,
     context: WorkflowContext,
-    onProgress?: (completedVariants: number, currentVariant: string | null) => Promise<void>
+    onProgress?: (completedVariants: number, currentVariant: string | null) => Promise<void>,
+    options: { variants?: AssignmentDeliveryVariant[] } = {}
   ): Promise<ModuleAssignmentPacks> {
     // Guard: a missing moduleCode used to silently produce assignmentId="undefined-<variant>"
     // and propagate to downstream consumers (e.g. India Learns LMS import).
@@ -98,38 +113,80 @@ export class AssignmentPackService {
       );
     }
 
+    const variants: AssignmentDeliveryVariant[] = options.variants?.length
+      ? options.variants
+      : ['in_person', 'self_study', 'hybrid'];
+
     loggingService.info('Generating assignment packs for module', {
       moduleId: module.moduleId,
       moduleCode: module.moduleCode,
+      variants,
     });
 
-    const variants: AssignmentDeliveryVariant[] = ['in_person', 'self_study', 'hybrid'];
-    const result: Record<string, AssignmentPack> = {};
+    const variantLabels: Record<string, string> = {
+      in_person: 'In-Person',
+      self_study: 'Self-Study',
+      hybrid: 'Hybrid',
+    };
+    let finished = 0;
+    const result: Partial<Record<AssignmentDeliveryVariant, AssignmentPack>> = {};
 
-    for (const variant of variants) {
-      loggingService.info(`Generating ${variant} variant`, {
-        moduleCode: module.moduleCode,
-        variant,
-      });
+    await Promise.all(
+      variants.map(async (variant) => {
+        result[variant] =
+          (await this.generateVariant(module, context, variant)) ||
+          this.createPlaceholderPack(module, variant);
+        finished += 1;
+        if (onProgress) {
+          const pending = variants.find((v) => !result[v]);
+          try {
+            await onProgress(finished, pending ? variantLabels[pending] : null);
+          } catch (_e) {
+            // Non-critical
+          }
+        }
+      })
+    );
 
+    return {
+      moduleId: module.moduleId,
+      moduleCode: module.moduleCode,
+      moduleTitle: module.moduleTitle,
+      variants: result as ModuleAssignmentPacks['variants'],
+    };
+  }
+
+  /** One variant, with one retry. Returns null when neither attempt gave a usable pack. */
+  private async generateVariant(
+    module: ModuleContext,
+    context: WorkflowContext,
+    variant: AssignmentDeliveryVariant
+  ): Promise<AssignmentPack | null> {
+    const prompt = this.buildAssignmentPrompt(module, context, variant);
+    const systemPrompt = this.buildSystemPrompt();
+
+    for (const attempt of [1, 2]) {
       const startTime = Date.now();
-
       try {
-        const prompt = this.buildAssignmentPrompt(module, context, variant);
-        const systemPrompt = this.buildSystemPrompt();
-
         const response = await openaiService.generateContent(prompt, systemPrompt, {
           responseFormat: 'json_object',
           maxTokens: this.MAX_TOKENS,
           timeout: this.VARIANT_TIMEOUT,
+          // This method retries once itself; letting the client also retry a 10-minute
+          // timeout five times would outlast the queue's job timeout.
+          maxRetries: 2,
+          ...(attempt === 2 ? { reasoningEffort: this.RETRY_REASONING_EFFORT } : {}),
         });
 
         const parsed = JSON.parse(response);
+        if (!isUsableGeneratedPack(parsed)) {
+          throw new Error('reply had no rubric or no instructions');
+        }
         // A positional "MLO 2" is still resolved to the stored id, for a model that numbers
         // the outcomes anyway.
         const outcomeIds = module.mlos.map((mlo) => mlo.id);
         const toId = (label: string) => resolveOutcomeLabel(label, outcomeIds);
-        result[variant] = {
+        const pack: AssignmentPack = {
           assignmentId: `${module.moduleCode}-${variant}`,
           deliveryVariant: variant,
           overview: parsed.overview || {},
@@ -147,58 +204,25 @@ export class AssignmentPackService {
           accessibilityOptions: parsed.accessibilityOptions || '',
         };
 
-        const duration = Date.now() - startTime;
         loggingService.info(`${variant} variant generated`, {
           moduleCode: module.moduleCode,
           variant,
-          durationMs: duration,
-          rubricCriteria: result[variant].rubric.length,
+          attempt,
+          durationMs: Date.now() - startTime,
+          rubricCriteria: pack.rubric.length,
         });
+        return pack;
       } catch (err) {
         loggingService.error(`Failed to generate ${variant} variant`, {
           moduleCode: module.moduleCode,
           variant,
+          attempt,
+          durationMs: Date.now() - startTime,
           error: err instanceof Error ? err.message : String(err),
         });
-        // Create a minimal placeholder so we don't block other variants
-        result[variant] = this.createPlaceholderPack(module, variant);
-      }
-
-      // Report progress after each variant
-      if (onProgress) {
-        const variantIndex = variants.indexOf(variant);
-        const nextVariant = variants[variantIndex + 1];
-        const variantLabels: Record<string, string> = {
-          in_person: 'In-Person',
-          self_study: 'Self-Study',
-          hybrid: 'Hybrid',
-        };
-        try {
-          await onProgress(
-            variantIndex + 1,
-            nextVariant ? variantLabels[nextVariant] || nextVariant : null
-          );
-        } catch (_e) {
-          // Non-critical
-        }
-      }
-
-      // Brief delay between variants to avoid rate limits
-      if (variant !== 'hybrid') {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
-
-    return {
-      moduleId: module.moduleId,
-      moduleCode: module.moduleCode,
-      moduleTitle: module.moduleTitle,
-      variants: {
-        in_person: result.in_person,
-        self_study: result.self_study,
-        hybrid: result.hybrid,
-      },
-    };
+    return null;
   }
 
   private buildSystemPrompt(): string {

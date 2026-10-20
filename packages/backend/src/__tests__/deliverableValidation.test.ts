@@ -3,6 +3,11 @@ import {
   step12ValidationFromPacks,
   step12SummaryFromPacks,
   resolveOutcomeLabel,
+  missingPackVariants,
+  isModulePackComplete,
+  completePackModuleIds,
+  isUsableGeneratedPack,
+  nextIncompleteModuleIndex,
 } from '../services/deliverableValidation';
 
 describe('step11ValidationFromDecks', () => {
@@ -187,5 +192,86 @@ describe('step12SummaryFromPacks', () => {
       totalAssignmentPacks: 0,
       averageCriteriaPerRubric: 0,
     });
+  });
+});
+
+describe('Step 12 module completeness', () => {
+  const real = (id: string) => ({ assignmentId: id, rubric: [{ linkedMLOs: ['M1-LO1'] }] });
+  const failed = (id: string) => ({ assignmentId: `${id}-placeholder`, rubric: [] });
+  const pack = (moduleId: string, variants: any) => ({ moduleId, variants });
+
+  it('lists placeholder and absent variants as missing', () => {
+    const p = pack('m1', { in_person: real('M1-in_person'), self_study: failed('M1-self_study') });
+    expect(missingPackVariants(p)).toEqual(['self_study', 'hybrid']);
+  });
+
+  it('counts a module complete only when all three variants were generated', () => {
+    const done = pack('m1', {
+      in_person: real('a'),
+      self_study: real('b'),
+      hybrid: real('c'),
+    });
+    const partial = pack('m2', {
+      in_person: real('a'),
+      self_study: real('b'),
+      hybrid: failed('c'),
+    });
+    expect(isModulePackComplete(done)).toBe(true);
+    expect(isModulePackComplete(partial)).toBe(false);
+    expect(isModulePackComplete(undefined)).toBe(false);
+  });
+
+  it('does not treat a stored placeholder pack as a completed module', () => {
+    // On the BBA, 45 of 46 modules held a pack, so every chaining and approval check that
+    // asked "is there a pack for this module" answered yes for work that had failed.
+    const ids = completePackModuleIds([
+      pack('m1', { in_person: real('a'), self_study: real('b'), hybrid: real('c') }),
+      pack('m2', { in_person: failed('a'), self_study: failed('b'), hybrid: failed('c') }),
+    ]);
+    expect(Array.from(ids)).toEqual(['m1']);
+  });
+});
+
+describe('isUsableGeneratedPack', () => {
+  const usable = {
+    overview: { title: 'Pack' },
+    brief: { stepByStepInstructions: ['Do this'], deliverables: ['Report'] },
+    rubric: [{ criterionName: 'Analysis' }],
+  };
+
+  it('accepts a pack with a brief, instructions and a rubric', () => {
+    expect(isUsableGeneratedPack(usable)).toBe(true);
+  });
+
+  it('rejects an empty object, which is what a cut-off reply parses to', () => {
+    expect(isUsableGeneratedPack({})).toBe(false);
+    expect(isUsableGeneratedPack(null)).toBe(false);
+  });
+
+  it('rejects a pack with no rubric or no instructions', () => {
+    expect(isUsableGeneratedPack({ ...usable, rubric: [] })).toBe(false);
+    expect(isUsableGeneratedPack({ ...usable, brief: { stepByStepInstructions: [] } })).toBe(false);
+  });
+});
+
+describe('nextIncompleteModuleIndex', () => {
+  const modules = ['a', 'b', 'c', 'd'].map((id) => ({ id }));
+
+  it('moves past a module that keeps failing instead of stopping the run', () => {
+    // b failed every attempt; c and d must still be generated.
+    expect(nextIncompleteModuleIndex(modules, new Set(['a']), 1, false)).toBe(2);
+  });
+
+  it('after a success, comes back round to a module skipped earlier', () => {
+    expect(nextIncompleteModuleIndex(modules, new Set(['a', 'c', 'd']), 3, true)).toBe(1);
+  });
+
+  it('does not wrap after a failure, so a failing module is not retried in a loop', () => {
+    expect(nextIncompleteModuleIndex(modules, new Set(['a', 'c', 'd']), 1, false)).toBe(-1);
+  });
+
+  it('starts from the first module when there is no current one', () => {
+    expect(nextIncompleteModuleIndex(modules, new Set(['a']), -1, false)).toBe(1);
+    expect(nextIncompleteModuleIndex(modules, new Set(['a', 'b', 'c', 'd']), -1, true)).toBe(-1);
   });
 });

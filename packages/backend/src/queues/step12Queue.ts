@@ -15,6 +15,10 @@ import { loggingService } from '../services/loggingService';
 import { workflowService } from '../services/workflowService';
 import { withUsageContext } from '../services/usageContext';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
+import {
+  completePackModuleIds,
+  nextIncompleteModuleIndex,
+} from '../services/deliverableValidation';
 import config from '../config';
 
 // Job data interface
@@ -44,7 +48,9 @@ if (redisUrl && redisUrl.length > 0) {
     step12Queue = new Bull('step12-assignment-packs', redisUrl, {
       defaultJobOptions: {
         attempts: 3,
-        timeout: 1200000, // 20 min per module — GPT-5.2 thinking takes longer
+        // A module's variants run in parallel; each makes up to two attempts of up to two
+        // 10-minute calls, so 40 minutes is the worst case and the job must outlast it.
+        timeout: 3600000,
         backoff: {
           type: 'exponential',
           delay: 60000,
@@ -100,14 +106,17 @@ if (step12Queue) {
         throw new Error('No modules found in Step 4. Complete Step 4 first.');
       }
 
-      // Use unique moduleId set for counting
-      const completedModuleIds = new Set(
-        (workflow.step12?.moduleAssignmentPacks || []).map((m: any) => m.moduleId)
+      // Modules whose three variants are all generated (placeholders do not count)
+      const completedModuleIds = completePackModuleIds(
+        (workflow.step12?.moduleAssignmentPacks || []) as any
       );
       const existingModules = completedModuleIds.size;
 
-      // Find the actual next ungenerated module
-      const nextModuleIndex = modules.findIndex((m: any) => !completedModuleIds.has(m.id));
+      // The module this job was queued for, if it still needs work; else the first incomplete
+      const nextModuleIndex =
+        modules[moduleIndex] && !completedModuleIds.has(modules[moduleIndex].id)
+          ? moduleIndex
+          : modules.findIndex((m: any) => !completedModuleIds.has(m.id));
 
       // Check if all modules are already generated
       if (nextModuleIndex === -1) {
@@ -137,13 +146,13 @@ if (step12Queue) {
       });
 
       const updatedWorkflow = await withUsageContext({ workflowId, step: 12 }, () =>
-        workflowService.processStep12NextModule(workflowId)
+        workflowService.processStep12NextModule(workflowId, nextModuleIndex)
       );
 
       await job.progress(90);
 
-      const newCompletedIds = new Set(
-        (updatedWorkflow.step12?.moduleAssignmentPacks || []).map((m: any) => m.moduleId)
+      const newCompletedIds = completePackModuleIds(
+        (updatedWorkflow.step12?.moduleAssignmentPacks || []) as any
       );
       const newModulesCount = newCompletedIds.size;
       const allComplete = newModulesCount >= totalModules;
@@ -163,7 +172,12 @@ if (step12Queue) {
       // Wrapped in try/catch so a chaining failure doesn't fail the current (already-saved) job
       if (!allComplete) {
         try {
-          const nextUngenIndex = modules.findIndex((m: any) => !newCompletedIds.has(m.id));
+          const nextUngenIndex = nextIncompleteModuleIndex(
+            modules,
+            newCompletedIds,
+            nextModuleIndex,
+            true
+          );
           if (nextUngenIndex !== -1) {
             await addStep12Job(workflowId, nextUngenIndex, job.data.userId);
             loggingService.info('Queued next module for assignment packs', {
@@ -242,6 +256,17 @@ if (step12Queue) {
         s12.generationProgress = undefined;
         workflow.markModified('step12');
         await workflow.save();
+
+        // Move on to the modules after this one. Stopping here left every later module
+        // ungenerated behind one that kept failing; this one stays marked failed for a retry.
+        const modules = workflow.step4?.modules || [];
+        const next = nextIncompleteModuleIndex(
+          modules,
+          completePackModuleIds((s12.moduleAssignmentPacks || []) as any),
+          job.data.moduleIndex,
+          false
+        );
+        if (next !== -1) await addStep12Job(job.data.workflowId, next, job.data.userId);
       }
     } catch (persistError) {
       loggingService.error('Failed to persist Step 12 lastError', {
@@ -316,7 +341,8 @@ export async function addStep12Job(
 // Helper function to queue all remaining modules
 export async function queueAllRemainingStep12Modules(
   workflowId: string,
-  userId?: string
+  userId?: string,
+  preferredModuleIndex?: number
 ): Promise<Job<Step12JobData>[]> {
   if (!step12Queue) {
     loggingService.warn('Step 12 queue not available, cannot queue modules', {
@@ -332,10 +358,16 @@ export async function queueAllRemainingStep12Modules(
 
   // Find the first ungenerated module by scanning step4 modules
   const modules = workflow.step4?.modules || [];
-  const completedModuleIds = new Set(
-    (workflow.step12?.moduleAssignmentPacks || []).map((m: any) => m.moduleId)
+  const completedModuleIds = completePackModuleIds(
+    (workflow.step12?.moduleAssignmentPacks || []) as any
   );
-  const nextModuleIndex = modules.findIndex((m: any) => !completedModuleIds.has(m.id));
+  // The module a page button asked for, if it still needs work; else the first incomplete.
+  const nextModuleIndex =
+    typeof preferredModuleIndex === 'number' &&
+    modules[preferredModuleIndex] &&
+    !completedModuleIds.has(modules[preferredModuleIndex].id)
+      ? preferredModuleIndex
+      : modules.findIndex((m: any) => !completedModuleIds.has(m.id));
 
   const jobs: Job<Step12JobData>[] = [];
 

@@ -108,6 +108,66 @@ export function isPlaceholderVariant(variant: PackVariantLike | undefined): bool
 const generated = (variant: PackVariantLike | undefined): variant is PackVariantLike =>
   !!variant && !isPlaceholderVariant(variant);
 
+export const PACK_VARIANTS = ['in_person', 'self_study', 'hybrid'] as const;
+export type PackVariantName = (typeof PACK_VARIANTS)[number];
+
+/** Delivery variants a module's pack still needs: absent, or stored as a failed placeholder. */
+export function missingPackVariants(pack: PackLike | undefined): PackVariantName[] {
+  return PACK_VARIANTS.filter((name) => !generated(pack?.variants?.[name]));
+}
+
+/**
+ * A module's Step 12 work is done only when all three variants were generated. Chaining,
+ * the status count, approval and the page each used to ask only whether a pack existed, so a
+ * module whose three variants had all failed counted as finished and was never retried: on
+ * the BBA (16 Oct 2026) 110 of 138 variants were placeholders behind "3 variants generated".
+ */
+export function isModulePackComplete(pack: PackLike | undefined): boolean {
+  return !!pack && missingPackVariants(pack).length === 0;
+}
+
+export function completePackModuleIds(packs: PackLike[] | undefined): Set<string> {
+  return new Set(
+    (packs || [])
+      .filter(isModulePackComplete)
+      .map((p) => p.moduleId)
+      .filter((id): id is string => !!id)
+  );
+}
+
+/**
+ * The next module to generate after the module at `afterIndex`. A module that fails every
+ * attempt used to halt the run, because each job took the first incomplete module and only a
+ * success chained onward. After a failure the run moves forward without wrapping, so the same
+ * module is not retried in a loop; after a success it wraps to modules skipped earlier.
+ */
+export function nextIncompleteModuleIndex(
+  modules: { id?: string }[],
+  completeIds: Set<string>,
+  afterIndex: number,
+  wrap: boolean
+): number {
+  const incomplete = (i: number) => !!modules[i]?.id && !completeIds.has(modules[i].id as string);
+  for (let i = afterIndex + 1; i < modules.length; i++) if (incomplete(i)) return i;
+  if (wrap)
+    for (let i = 0; i <= Math.min(afterIndex, modules.length - 1); i++) if (incomplete(i)) return i;
+  return -1;
+}
+
+/**
+ * Whether a parsed model reply is a pack a student could use. A reply cut off at the token
+ * limit, or one that answers with an outline, parses to an object without a rubric or
+ * instructions; storing it as generated is the failure this replaces.
+ */
+export function isUsableGeneratedPack(parsed: any): boolean {
+  if (!parsed || typeof parsed !== 'object') return false;
+  const rubric = Array.isArray(parsed.rubric) ? parsed.rubric : [];
+  const steps = Array.isArray(parsed.brief?.stepByStepInstructions)
+    ? parsed.brief.stepByStepInstructions
+    : [];
+  return rubric.length > 0 && steps.length > 0;
+}
+
 /**
  * The stored outcome id a pack's label refers to.
  *
