@@ -394,27 +394,8 @@ export async function ingestBook(bookId: string): Promise<void> {
 
       const pending = todo.filter((s) => !done.has(s.key));
       const failed: string[] = [];
-      for (let i = 0; i < pending.length; i += EXTRACTION_CONCURRENCY) {
-        const batch = pending.slice(i, i + EXTRACTION_CONCURRENCY);
-        const results = await Promise.allSettled(
-          batch.map((s) => extractSection(book, s, areaNames))
-        );
-        for (let j = 0; j < batch.length; j++) {
-          const r = results[j];
-          if (r.status === 'rejected') {
-            if (isAiUnavailable(r.reason)) throw r.reason;
-            failed.push(batch[j].key);
-            loggingService.warn('Library: a section could not be read', {
-              bookId,
-              section: batch[j].key,
-              error: r.reason instanceof Error ? r.reason.message : String(r.reason),
-            });
-            continue;
-          }
-          await mergeSection(book, batch[j], r.value, existing, counters);
-          done.add(batch[j].key);
-        }
-        await KbBook.updateOne(
+      const saveProgress = () =>
+        KbBook.updateOne(
           { _id: book._id },
           {
             $set: {
@@ -427,7 +408,47 @@ export async function ingestBook(bookId: string): Promise<void> {
             },
           }
         );
-      }
+      // A pool, not batches: a batch waits for its slowest section, which held reading to 16
+      // sections a minute at 40 at once. Reads overlap freely; merges run one at a time in the
+      // order reads finish, because each can create a concept the next must match.
+      let unavailable: unknown = null;
+      let merging: Promise<void> = Promise.resolve();
+      let next = 0;
+      let sinceSave = 0;
+      const worker = async () => {
+        while (next < pending.length && !unavailable) {
+          const section = pending[next++];
+          try {
+            const concepts = await extractSection(book, section, areaNames);
+            merging = merging.then(async () => {
+              await mergeSection(book, section, concepts, existing, counters);
+              done.add(section.key);
+              if (++sinceSave >= 10) {
+                sinceSave = 0;
+                await saveProgress();
+              }
+            });
+            await merging;
+          } catch (error) {
+            if (isAiUnavailable(error)) {
+              unavailable = error;
+              return;
+            }
+            failed.push(section.key);
+            loggingService.warn('Library: a section could not be read', {
+              bookId,
+              section: section.key,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(EXTRACTION_CONCURRENCY, pending.length) }, worker)
+      );
+      await merging.catch(() => undefined);
+      await saveProgress();
+      if (unavailable) throw unavailable;
 
       if (failed.length) {
         throw new Error(
