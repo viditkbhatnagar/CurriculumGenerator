@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   Sparkles,
   GraduationCap,
+  Library,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +22,8 @@ const navigation = [
   // The AGU module engine: catalogue courses developed into four-week course packages.
   { name: 'AGU Courses', href: '/modules', icon: GraduationCap },
   { name: 'Programs', href: '/admin/programs', icon: FolderOpen },
+  // Textbooks read into concepts with their chapters and pages (knowledge/ on the backend).
+  { name: 'Textbook Library', href: '/library', icon: Library },
   { name: 'Knowledge Base', href: '/admin/knowledge-base', icon: BookOpen },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
 ];
