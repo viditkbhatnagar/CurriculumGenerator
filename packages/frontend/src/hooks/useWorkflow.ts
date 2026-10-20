@@ -632,20 +632,28 @@ export function useSubmitStep12() {
   });
 }
 
+/**
+ * Generate the next module's packs. Pass `{ id, moduleIndex }` to ask for a particular module
+ * (its 0-based Step 4 position), e.g. the row whose "Regenerate Failed" was pressed.
+ */
 export function useSubmitStep12NextModule() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (arg: string | { id: string; moduleIndex?: number }) => {
+      const { id, moduleIndex } =
+        typeof arg === 'string' ? { id: arg, moduleIndex: undefined } : arg;
       const response: WorkflowResponse = await fetchAPI(
         `${WORKFLOW_BASE}/${id}/step12/next-module`,
         {
           method: 'POST',
+          ...(moduleIndex !== undefined ? { body: JSON.stringify({ moduleIndex }) } : {}),
         }
       );
       return response;
     },
-    onSuccess: (_, id) => {
+    onSuccess: (_, arg) => {
+      const id = typeof arg === 'string' ? arg : arg.id;
       queryClient.invalidateQueries({ queryKey: ['workflow', id] });
       queryClient.invalidateQueries({ queryKey: ['workflow', id, 'step12-status'] });
     },

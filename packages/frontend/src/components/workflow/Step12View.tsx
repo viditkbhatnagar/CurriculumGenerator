@@ -17,6 +17,7 @@ import { useGeneration } from '@/contexts/GenerationContext';
 import StepDownloadButton from './StepDownloadButton';
 import { isStepDone } from '@/lib/stepGating';
 import { orderByStep4 } from '@/lib/moduleOrder';
+import { isModulePackComplete, isPlaceholderVariant, missingPackVariants } from '@/lib/step12Packs';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -45,14 +46,30 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
   const [activeVariant, setActiveVariant] = useState<AssignmentDeliveryVariant>('in_person');
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  // The pack detail renders below the 46-module list, so choosing a module changed nothing
+  // the reviewer could see. "View Packs" now brings the detail into view.
+  const detailRef = useRef<HTMLDivElement | null>(null);
+  const [scrollRequest, setScrollRequest] = useState(0);
+  const openPacks = (moduleId: string) => {
+    setSelectedModule(moduleId);
+    setActiveVariant('in_person');
+    setExpandedSections({ brief: true });
+    setScrollRequest((n) => n + 1);
+  };
+  useEffect(() => {
+    if (scrollRequest === 0) return;
+    detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [scrollRequest]);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
 
-  // Compute completed count for polling decision (before hook call)
-  const _completedModuleIdSet = new Set(
-    (workflow.step12?.moduleAssignmentPacks || []).map((m) => m.moduleId)
+  // Compute completed count for polling decision (before hook call). A module is complete
+  // only when all three variants generated; a stored placeholder is a failure.
+  const _completePacks = (workflow.step12?.moduleAssignmentPacks || []).filter(
+    isModulePackComplete
   );
+  const _completedModuleIdSet = new Set(_completePacks.map((m) => m.moduleId));
   const _completedByCode12 = new Map<string, ModuleAssignmentPacks>();
-  (workflow.step12?.moduleAssignmentPacks || []).forEach((m) => {
+  _completePacks.forEach((m) => {
     if (m.moduleCode) _completedByCode12.set(m.moduleCode, m);
   });
   const _modules = workflow.step4?.modules || [];
@@ -73,10 +90,14 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
   // Grace period for stale error handling after clicking Generate/Retry
   const generationStartedAtRef = useRef(0);
 
-  // Derive currently generating module (first incomplete module)
+  // The module being generated: the backend's progress record names it; before that is
+  // written, the first incomplete module.
+  const progressIndex = (workflow.step12 as any)?.generationProgress?.moduleIndex;
   const currentlyGeneratingModuleId = isCurrentlyGenerating
-    ? (_modules.find((m) => !_completedModuleIdSet.has(m.id) && !_completedByCode12.has(m.code))
-        ?.id ?? null)
+    ? typeof progressIndex === 'number' && _modules[progressIndex]
+      ? _modules[progressIndex].id
+      : (_modules.find((m) => !_completedModuleIdSet.has(m.id) && !_completedByCode12.has(m.code))
+          ?.id ?? null)
     : null;
 
   // Re-expose these for JSX usage below
@@ -102,11 +123,12 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
   useEffect(() => {
     const modules = workflow.step4?.modules || [];
     const totalModules = modules.length;
-    const completedIds = new Set(
-      (workflow.step12?.moduleAssignmentPacks || []).map((m) => m.moduleId)
+    const completePacks = (workflow.step12?.moduleAssignmentPacks || []).filter(
+      isModulePackComplete
     );
+    const completedIds = new Set(completePacks.map((m) => m.moduleId));
     const completedCodes = new Map<string, boolean>();
-    (workflow.step12?.moduleAssignmentPacks || []).forEach((m) => {
+    completePacks.forEach((m) => {
       if (m.moduleCode) completedCodes.set(m.moduleCode, true);
     });
     const completedFromWf = modules.filter(
@@ -188,7 +210,7 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
     }
   }, [statusData]); // eslint-disable-line
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (moduleIndex?: number) => {
     if (isAutoGenerating || submitNextModule.isPending || submitStep12.isPending) return;
     setError(null);
     setIsAutoGenerating(true);
@@ -197,10 +219,12 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
     startGeneration(workflow._id, 12, remaining * 600);
 
     try {
-      if (_completedMods === 0) {
+      // The full-run route snapshots Step 12 first; it is only for a step with no packs at
+      // all. Retrying failed variants keeps what generated, so it needs no snapshot.
+      if (!(workflow.step12?.moduleAssignmentPacks || []).length) {
         await submitStep12.mutateAsync(workflow._id);
       } else {
-        await submitNextModule.mutateAsync(workflow._id);
+        await submitNextModule.mutateAsync({ id: workflow._id, moduleIndex });
       }
     } catch (err) {
       const errorMessage =
@@ -227,11 +251,14 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
     setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const hasStep12Data = workflow.step12 && workflow.step12.moduleAssignmentPacks?.length > 0;
+  const hasStep12Data = !!workflow.step12 && workflow.step12.moduleAssignmentPacks?.length > 0;
   const isApproved = !!workflow.step12?.approvedAt;
   const totalModules = workflow.step4?.modules?.length || 0;
   // Use the higher of workflow state vs polling status to avoid stale-state locking
   const completedModules = Math.max(_completedMods, (statusData as any)?.modulesGenerated ?? 0);
+  const lastError = (workflow.step12 as any)?.lastError as
+    | { message?: string; timestamp?: string }
+    | undefined;
   const isAllModulesComplete = hasStep12Data && completedModules >= totalModules;
 
   // Step 11 done — drift-tolerant gate. See packages/frontend/src/lib/stepGating.ts.
@@ -352,7 +379,7 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
           )}
 
           <button
-            onClick={handleGenerate}
+            onClick={() => handleGenerate()}
             disabled={isCurrentlyGenerating || !isStep11Approved}
             className="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -381,10 +408,16 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
               Takes 10-20 minutes per module.
             </p>
 
+            {lastError?.message && !isCurrentlyGenerating && !isAllModulesComplete && (
+              <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-sm text-red-600">
+                The last generation attempt failed: {lastError.message}
+              </div>
+            )}
+
             {/* Generate All Button */}
             {!isAllModulesComplete && !isCurrentlyGenerating && (
               <button
-                onClick={handleGenerate}
+                onClick={() => handleGenerate()}
                 disabled={submitNextModule.isPending}
                 className="w-full mb-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
@@ -396,7 +429,8 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                     d="M13 10V3L4 14h7v7l9-11h-7z"
                   />
                 </svg>
-                Generate All Remaining Packs ({totalModules - completedModules} modules)
+                Generate All Remaining Packs ({totalModules - completedModules} module
+                {totalModules - completedModules === 1 ? '' : 's'})
               </button>
             )}
             {isCurrentlyGenerating && (
@@ -412,11 +446,14 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                 const modulePacks =
                   workflow.step12?.moduleAssignmentPacks?.find((m) => m.moduleId === module.id) ||
                   completedByCode12.get(module.code);
-                // Module is complete if we have its data OR polling says it's done
-                const isComplete = !!modulePacks || index < completedModules;
+                const isComplete =
+                  completedModuleIdSet.has(module.id) || completedByCode12.has(module.code);
+                // Some variants generated, some failed: viewable, and offered for regeneration.
+                const failedVariants = modulePacks ? missingPackVariants(modulePacks) : [];
+                const isPartial = !isComplete && !!modulePacks && failedVariants.length < 3;
+                const isFailed = !isComplete && !!modulePacks && failedVariants.length === 3;
                 const isGeneratingThis = currentlyGeneratingModuleId === module.id;
-                const canGenerate =
-                  !isComplete && !isCurrentlyGenerating && index <= completedModules;
+                const canGenerate = !isComplete && !isCurrentlyGenerating;
 
                 return (
                   <div
@@ -490,16 +527,22 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                                 <span>In-Person / Self-Study / Hybrid</span>
                               </div>
                             )}
+                            {(isPartial || isFailed) && !isGeneratingThis && (
+                              <div className="text-xs text-amber-600">
+                                {isFailed
+                                  ? 'Generation failed for all three variants'
+                                  : `${3 - failedVariants.length} of 3 variants generated; failed: ${failedVariants
+                                      .map((v) => VARIANT_LABELS[v])
+                                      .join(', ')}`}
+                              </div>
+                            )}
                           </div>
 
                           <div className="flex-shrink-0">
                             {isComplete ? (
                               <button
-                                onClick={() => {
-                                  setSelectedModule(module.id);
-                                  setActiveVariant('in_person');
-                                }}
-                                className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg transition-colors text-sm font-medium"
+                                onClick={() => openPacks(modulePacks?.moduleId || module.id)}
+                                className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-600 rounded-lg transition-colors text-sm font-medium"
                               >
                                 View Packs
                               </button>
@@ -508,12 +551,22 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                                 Generating...
                               </div>
                             ) : canGenerate ? (
-                              <button
-                                onClick={handleGenerate}
-                                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white rounded-lg transition-all text-sm font-medium"
-                              >
-                                Generate Now
-                              </button>
+                              <div className="flex gap-2">
+                                {isPartial && (
+                                  <button
+                                    onClick={() => openPacks(modulePacks?.moduleId || module.id)}
+                                    className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-600 rounded-lg transition-colors text-sm font-medium"
+                                  >
+                                    View Packs
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleGenerate(index)}
+                                  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white rounded-lg transition-all text-sm font-medium"
+                                >
+                                  {modulePacks ? 'Regenerate Failed' : 'Generate Now'}
+                                </button>
+                              </div>
                             ) : (
                               <div className="px-4 py-2 bg-teal-100/50 text-teal-500 rounded-lg text-sm font-medium">
                                 Locked
@@ -699,10 +752,7 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                   (module, index) => (
                     <button
                       key={`select-${index}-${module.moduleId}`}
-                      onClick={() => {
-                        setSelectedModule(module.moduleId);
-                        setActiveVariant('in_person');
-                      }}
+                      onClick={() => openPacks(module.moduleId)}
                       className={`p-4 rounded-lg border text-left transition-all ${
                         selectedModule === module.moduleId
                           ? 'bg-blue-500/20 border-blue-500 text-blue-500'
@@ -731,7 +781,7 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
 
           {/* Assignment Pack Detail View */}
           {currentModulePacks && (
-            <div className="space-y-4">
+            <div ref={detailRef} className="space-y-4 scroll-mt-4">
               <div className="bg-teal-50/50 rounded-lg p-5 border border-teal-200">
                 <h3 className="text-xl font-bold text-teal-800 mb-2">
                   {currentModulePacks.moduleCode}: {currentModulePacks.moduleTitle}
@@ -751,14 +801,26 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                         }`}
                       >
                         {VARIANT_LABELS[variant]}
+                        {isPlaceholderVariant(currentModulePacks.variants?.[variant]) && (
+                          <span className="ml-1 text-xs opacity-80">(failed)</span>
+                        )}
                       </button>
                     )
                   )}
                 </div>
               </div>
 
+              {currentPack && isPlaceholderVariant(currentPack) && (
+                <div className="bg-amber-50 border border-amber-300 rounded-xl p-5 text-sm text-amber-800">
+                  The {VARIANT_LABELS[activeVariant]} pack for {currentModulePacks.moduleCode} did
+                  not generate, so there is nothing to review here yet. Use &ldquo;Regenerate
+                  Failed&rdquo; on the module to generate it again; the variants that did generate
+                  are kept.
+                </div>
+              )}
+
               {/* Active Variant Content */}
-              {currentPack && (
+              {currentPack && !isPlaceholderVariant(currentPack) && (
                 <div className="bg-white rounded-xl border border-teal-200/50 overflow-hidden">
                   {/* Overview */}
                   <div className="p-5 border-b border-teal-100">
@@ -1070,7 +1132,7 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
-              onClick={handleGenerate}
+              onClick={() => handleGenerate()}
               disabled={submitNextModule.isPending || isAllModulesComplete}
               className="px-4 py-2 text-teal-600 hover:text-teal-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
