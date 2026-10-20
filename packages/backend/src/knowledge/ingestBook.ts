@@ -13,12 +13,11 @@
 import crypto from 'crypto';
 import { openaiService } from '../services/openaiService';
 import { loggingService } from '../services/loggingService';
-import * as sourceFileStore from '../services/sourceFileStore';
 import { isAiUnavailable } from '../services/aiAvailability';
 import { withUsageContext } from '../services/usageContext';
 import { shorten } from '../services/occupations/occupationIndex';
-import { readPdf } from './pdf/readPdf';
-import { structureBook, passagesOf, sectionWindows, pageLabelsIn, BookSection } from './structure';
+import { sectionWindows, pageLabelsIn, BookSection } from './structure';
+import { parseBookFile, writeStructure } from './bookStructure';
 import {
   extractionSystemPrompt,
   extractionUserPrompt,
@@ -43,12 +42,6 @@ export const EXTRACTION_MODEL = process.env.KB_EXTRACTION_MODEL || 'gpt-5-mini';
 /** Sections read at once. gpt-5-mini takes about a minute a section, so throughput is set by this: 20 read about 12 a minute, leaving the MAIB library four hours from done. */
 const EXTRACTION_CONCURRENCY = Math.max(1, Number(process.env.KB_EXTRACTION_CONCURRENCY) || 40);
 const EXTRACTABLE = new Set(['body', 'summary']);
-
-async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
-  return Buffer.concat(chunks);
-}
 
 export function sha256(buffer: Buffer): string {
   return crypto.createHash('sha256').update(buffer).digest('hex');
@@ -305,61 +298,12 @@ export async function ingestBook(bookId: string): Promise<void> {
       book.error = undefined;
       await book.save();
 
-      const buffer = await streamToBuffer(await sourceFileStore.getDownloadStream(book.fileId));
-      const pdf = await readPdf(buffer);
-      const { sections, usedOutline } = structureBook(pdf);
-      if (!sections.length) throw new Error('No readable text: the PDF may be scanned images');
+      const parsed = await parseBookFile(book.fileId);
+      const { sections } = parsed;
 
       const restrictedBook = book.accessTier === 'restricted';
       const haveRows = await KbPassage.countDocuments({ bookId: book._id });
-      if (!haveRows || !(book.progress?.doneKeys || []).length) {
-        await KbPassage.deleteMany({ bookId: book._id });
-        const rows = sections.flatMap((s) =>
-          passagesOf(s).map((p) => ({
-            ...p,
-            bookId: book._id,
-            chapter: { number: s.chapter.number, title: s.chapter.title },
-            section: { number: s.section.number, title: s.section.title },
-            kind: s.kind,
-            restricted: restrictedBook || s.kind === 'restricted',
-          }))
-        );
-        for (let i = 0; i < rows.length; i += 500)
-          await KbPassage.insertMany(rows.slice(i, i + 500));
-        const chapters = new Map<number, any>();
-        for (const s of sections) {
-          if (!chapters.has(s.chapter.index)) {
-            chapters.set(s.chapter.index, {
-              chapter: s.chapter.number,
-              title: s.chapter.title,
-              pages: '',
-              sections: [],
-            });
-          }
-          chapters.get(s.chapter.index).sections.push({
-            number: s.section.number,
-            title: s.section.title,
-            pages: `${s.pageLabelStart}-${s.pageLabelEnd}`,
-            kind: s.kind,
-          });
-        }
-        for (const c of chapters.values()) {
-          const first = c.sections[0]?.pages.split('-')[0];
-          const last = c.sections[c.sections.length - 1]?.pages.split('-')[1];
-          c.pages = `${first}-${last}`;
-        }
-        book.toc = Array.from(chapters.values());
-        book.pageCount = pdf.pages.length;
-        book.usedOutline = usedOutline;
-        book.stats = {
-          ...(book.stats || {}),
-          sections: sections.length,
-          passages: rows.length,
-          restrictedPassages: rows.filter((r) => r.restricted).length,
-        };
-        book.markModified('toc');
-        book.markModified('stats');
-      }
+      if (!haveRows || !(book.progress?.doneKeys || []).length) await writeStructure(book, parsed);
 
       const todo = restrictedBook ? [] : sections.filter((s) => EXTRACTABLE.has(s.kind));
       const done = new Set<string>(book.progress?.doneKeys || []);

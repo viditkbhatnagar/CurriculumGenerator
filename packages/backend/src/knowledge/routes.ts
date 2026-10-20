@@ -19,6 +19,7 @@ import { KbBook, KbConcept, KbMeta, KbPassage, LICENCES } from './models';
 import { DOMAINS } from './ontology';
 import { dot } from './clustering';
 import { bodyOfKnowledge, searchConcepts, citation, evidenceByRole } from './retrieval';
+import { restructureBook } from './bookStructure';
 import { enqueueIngest, enqueueConsolidation } from './queue';
 import { conceptsByCodes } from './programmeLibrary';
 import { sha256, workKeyOf, removeBook, recomputeDomainStats } from './ingestBook';
@@ -379,6 +380,30 @@ router.post('/books/:id/ingest', validateJWT, loadUser, async (req: Request, res
     data: { bookId: String(book._id), mode: await enqueueIngest(String(book._id), orphaned) },
   });
 });
+
+/**
+ * Re-read a ready book's chapters and sections, after a parser fix, and relabel the citations
+ * already drawn from it by page (knowledge/bookStructure). No model is called; no concept,
+ * code or module changes.
+ */
+router.post(
+  '/books/:id/restructure',
+  validateJWT,
+  loadUser,
+  oneBookAtATime,
+  async (req: Request, res: Response) => {
+    if (!mongoose.isValidObjectId(req.params.id))
+      return res.status(404).json({ success: false, error: 'Book not found' });
+    const book: any = await KbBook.findById(req.params.id).select('status').lean();
+    if (!book) return res.status(404).json({ success: false, error: 'Book not found' });
+    if (book.status !== 'ready') {
+      return res
+        .status(409)
+        .json({ success: false, error: `The book is ${book.status}; restructure it once ready` });
+    }
+    res.json({ success: true, data: await restructureBook(req.params.id) });
+  }
+);
 
 /** Take a book out of the library (its passages, its evidence, concepts only it taught). */
 router.delete('/books/:id', validateJWT, loadUser, async (req: Request, res: Response) => {
