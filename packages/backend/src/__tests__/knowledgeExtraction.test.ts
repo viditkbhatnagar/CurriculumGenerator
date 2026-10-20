@@ -1,4 +1,8 @@
-import { parseExtraction, MAX_CONCEPTS_PER_WINDOW } from '../knowledge/extraction';
+import {
+  parseExtraction,
+  MAX_CONCEPTS_PER_WINDOW,
+  normaliseSubArea,
+} from '../knowledge/extraction';
 
 const areas = ['Strategy', 'Finance'];
 const labels = ['112', '113', '114'];
@@ -85,5 +89,32 @@ describe('parseExtraction', () => {
       concepts: Array.from({ length: 40 }, (_, i) => ({ name: `Concept ${i}`, area: 'Finance' })),
     };
     expect(parseExtraction(many, labels, areas)).toHaveLength(MAX_CONCEPTS_PER_WINDOW);
+  });
+
+  it('accepts pages given as numbers, with a "p." prefix, or as a range', () => {
+    const out = parseExtraction(
+      {
+        concepts: [
+          { name: 'A', area: 'Finance', pageStart: 112, pageEnd: 113 },
+          { name: 'B', area: 'Finance', pageStart: 'p. 113', pageEnd: 'pp. 114' },
+          { name: 'C', area: 'Finance', pageStart: '112-114' },
+        ],
+      },
+      labels,
+      areas
+    );
+    expect(out.map((c) => [c.pageStart, c.pageEnd, c.pagesVerified])).toEqual([
+      ['112', '113', true],
+      ['113', '114', true],
+      ['112', '114', true],
+    ]);
+  });
+});
+
+describe('normaliseSubArea', () => {
+  it('folds case so one sub-area is not filed under three spellings', () => {
+    expect(normaliseSubArea('Array-Based Lists')).toBe('Array-based lists');
+    expect(normaliseSubArea('array-based lists')).toBe('Array-based lists');
+    expect(normaliseSubArea('SQL and NoSQL')).toBe('SQL and nosql');
   });
 });

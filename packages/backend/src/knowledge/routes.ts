@@ -20,7 +20,7 @@ import { DOMAINS } from './ontology';
 import { dot } from './clustering';
 import { bodyOfKnowledge, searchConcepts, citation } from './retrieval';
 import { enqueueIngest } from './queue';
-import { sha256, workKeyOf } from './ingestBook';
+import { sha256, workKeyOf, removeBook } from './ingestBook';
 
 const router = Router();
 const MAX_BYTES = 250 * 1024 * 1024;
@@ -298,6 +298,25 @@ router.post('/books/:id/ingest', validateJWT, loadUser, async (req: Request, res
     success: true,
     data: { bookId: String(book._id), mode: await enqueueIngest(String(book._id)) },
   });
+});
+
+/** Take a book out of the library (its passages, its evidence, concepts only it taught). */
+router.delete('/books/:id', validateJWT, loadUser, async (req: Request, res: Response) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(404).json({ success: false, error: 'Book not found' });
+  }
+  const book: any = await KbBook.findById(req.params.id).select('status').lean();
+  if (!book) return res.status(404).json({ success: false, error: 'Book not found' });
+  if (['reading', 'extracting'].includes(book.status)) {
+    return res
+      .status(409)
+      .json({ success: false, error: 'The book is being read; remove it once that stops' });
+  }
+  try {
+    res.json({ success: true, data: await removeBook(req.params.id) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
 });
 
 /** Concepts: `q` searches by meaning; otherwise the body of knowledge, filtered. */

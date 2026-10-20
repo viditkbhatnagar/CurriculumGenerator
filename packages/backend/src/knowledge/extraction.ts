@@ -31,7 +31,12 @@ export const CONCEPT_TYPES: ConceptType[] = [
 ];
 export const LEVELS = ['introductory', 'intermediate', 'advanced'] as const;
 const TREATMENTS: Treatment[] = ['mention', 'treatment', 'extended'];
-export const MAX_CONCEPTS_PER_WINDOW = 25;
+/**
+ * The first production book (Open Data Structures) gave 25 a section, down to "add(i, x) with
+ * element shifting" and "backing array": implementation detail, not curriculum. 15 with the
+ * granularity rule below keeps concepts at the level a syllabus names.
+ */
+export const MAX_CONCEPTS_PER_WINDOW = 15;
 
 export interface ExtractedConcept {
   name: string;
@@ -66,6 +71,19 @@ export interface ExtractionContext {
   section: string;
   sectionKind: string;
   areas: string[];
+  /** Sub-areas offered per area name. */
+  subAreas?: Record<string, string[]>;
+}
+
+/** "Array-Based Lists" and "array-based lists" are one sub-area: sentence case, acronyms kept. */
+export function normaliseSubArea(text: string): string {
+  const words = text.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const acronym = (w: string) => /^[A-Z0-9]{2,}s?$/.test(w);
+  return words
+    .map((w, i) =>
+      acronym(w) ? w : i === 0 ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase()
+    )
+    .join(' ');
 }
 
 export function extractionSystemPrompt(): string {
@@ -75,6 +93,12 @@ models, methods, techniques, algorithms, procedures, formulae, principles, key d
 tools and regulations. Return JSON only.
 
 Rules:
+- GRANULARITY: list concepts at the level a course syllabus or a textbook index would name them:
+  a theory, framework, model, method, algorithm, principle or key term a learner is expected to
+  know or use (e.g. "Amortised analysis", "Dynamic array", "Porter's Five Forces", "Net present
+  value"). Do NOT list code-level operations, variable or function names, single steps of a
+  procedure, details of a worked example, or properties too narrow to teach on their own: put
+  those in the parent concept's "components". Usually 3-12 per section.
 - Only concepts this text actually explains. Skip things merely named in passing unless the text
   defines them; mark those "mention".
 - Use the concept's standard academic name (e.g. "Porter's Five Forces", "Net present value",
@@ -87,7 +111,8 @@ Rules:
 - "treatment": "extended" if the text develops the concept at length (several paragraphs, with
   examples or derivations), "treatment" if it explains it properly, "mention" if only named.
 - "critique": true if the text mainly criticises, qualifies or gives limitations of the concept.
-- "area": exactly one of the areas listed. "subArea": a short topic name within that area.
+- "area": exactly one of the areas listed. "subArea": one of that area's listed sub-areas where one
+  fits; otherwise a short topic name in sentence case.
 - "level": "introductory", "intermediate" or "advanced", judged by how the text treats it.
 - At most ${MAX_CONCEPTS_PER_WINDOW} concepts; prefer the important ones.`;
 }
@@ -97,8 +122,8 @@ export function extractionUserPrompt(ctx: ExtractionContext, window: string): st
 CHAPTER: ${ctx.chapter}
 SECTION: ${ctx.section}${ctx.sectionKind !== 'body' ? ` (${ctx.sectionKind} section: list only concepts it teaches, not questions)` : ''}
 
-AREAS (choose one per concept):
-${ctx.areas.map((a) => `- ${a}`).join('\n')}
+AREAS (choose one per concept; sub-areas in brackets):
+${ctx.areas.map((a) => `- ${a}${ctx.subAreas?.[a]?.length ? ` [${ctx.subAreas[a].join('; ')}]` : ''}`).join('\n')}
 
 Return:
 {"concepts":[{"name":"","aliases":[],"conceptType":"${CONCEPT_TYPES.join('|')}","area":"","subArea":"","level":"introductory|intermediate|advanced","definition":"","components":[],"formulae":[{"expression":"","meaning":""}],"applications":[],"misconceptions":[],"prerequisites":[],"related":[],"skillsEnabled":["verb phrase, e.g. Calculate NPV for a project"],"assessmentPossibilities":[],"treatment":"mention|treatment|extended","pageStart":"","pageEnd":"","workedExamplePages":[],"critique":false}]}
@@ -109,6 +134,17 @@ ${window}`;
 
 const str = (v: unknown, max = 600) =>
   typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '';
+
+/**
+ * A page as the model gave it: a number, "p. 112", "pp. 112-118". The first live production
+ * book had every page rejected because the model answered with numbers.
+ */
+function pageOf(v: unknown): { start: string; end: string } {
+  const text = typeof v === 'number' ? String(v) : typeof v === 'string' ? v : '';
+  const bare = text.replace(/^\s*p{1,2}\.?\s*/i, '').trim();
+  const [start, end] = bare.split(/\s*[-–—]\s*/);
+  return { start: (start || '').slice(0, 20), end: (end || '').slice(0, 20) };
+}
 
 const list = (v: unknown, maxItems = 8, maxLen = 200) =>
   Array.isArray(v)
@@ -147,8 +183,10 @@ export function parseExtraction(
     if (seen.has(dedupe)) continue;
     seen.add(dedupe);
 
-    let pageStart = str(item?.pageStart, 20);
-    let pageEnd = str(item?.pageEnd, 20) || pageStart;
+    const from = pageOf(item?.pageStart);
+    const to = pageOf(item?.pageEnd);
+    let pageStart = from.start;
+    let pageEnd = to.start || from.end || pageStart;
     const pagesVerified = known.has(pageStart) && known.has(pageEnd);
     if (!pagesVerified) {
       pageStart = first;
@@ -165,7 +203,7 @@ export function parseExtraction(
       aliases: list(item?.aliases, 6, 80).filter((a) => a.toLowerCase() !== dedupe),
       conceptType: CONCEPT_TYPES.includes(type) ? type : 'definition',
       area: areaByName.get(str(item?.area, 80).toLowerCase()) || 'Other',
-      subArea: str(item?.subArea, 80),
+      subArea: normaliseSubArea(str(item?.subArea, 80)),
       level: (LEVELS as readonly string[]).includes(level) ? level : 'intermediate',
       definition: str(item?.definition, 700),
       components: list(item?.components, 10),
@@ -183,7 +221,10 @@ export function parseExtraction(
       pageStart,
       pageEnd,
       pagesVerified,
-      workedExamplePages: list(item?.workedExamplePages, 10, 20).filter((p) => known.has(p)),
+      workedExamplePages: (Array.isArray(item?.workedExamplePages) ? item.workedExamplePages : [])
+        .map((p: unknown) => pageOf(p).start)
+        .filter((p: string) => known.has(p))
+        .slice(0, 10),
       critique: item?.critique === true,
     });
     if (out.length >= MAX_CONCEPTS_PER_WINDOW) break;

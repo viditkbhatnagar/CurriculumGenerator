@@ -40,7 +40,8 @@ import { KbBook, KbConcept, KbCounter, KbMeta, KbPassage } from './models';
 
 /** Extraction is reading, not reasoning: a small model at low effort keeps a book near $1. */
 export const EXTRACTION_MODEL = process.env.KB_EXTRACTION_MODEL || 'gpt-5-mini';
-const EXTRACTION_CONCURRENCY = 4;
+/** Sections read at once. gpt-5-mini takes about a minute a section, so 4 took 20 minutes a book. */
+const EXTRACTION_CONCURRENCY = Math.max(1, Number(process.env.KB_EXTRACTION_CONCURRENCY) || 8);
 const EXTRACTABLE = new Set(['body', 'summary']);
 
 async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
@@ -98,6 +99,9 @@ async function extractSection(book: any, section: BookSection, areaNames: string
           section: `${section.section.number ? section.section.number + ' ' : ''}${section.section.title}`,
           sectionKind: section.kind,
           areas: areaNames,
+          subAreas: Object.fromEntries(
+            areasFor(book.domainKeys).map(({ area }) => [area.name, area.subAreas])
+          ),
         },
         window
       ),
@@ -432,4 +436,33 @@ export async function ingestBook(bookId: string): Promise<void> {
       throw error;
     }
   });
+}
+
+/**
+ * Take a book out of the library: its passages, its evidence on every concept, and any concept
+ * no other book teaches. Statistics for its domains are recomputed. The stored PDF is kept.
+ */
+export async function removeBook(
+  bookId: string
+): Promise<{ conceptsRemoved: number; conceptsKept: number }> {
+  const book: any = await KbBook.findById(bookId);
+  if (!book) throw new Error(`Library book ${bookId} not found`);
+  await KbPassage.deleteMany({ bookId: book._id });
+  let removed = 0;
+  let kept = 0;
+  const cursor = KbConcept.find({ 'evidence.bookId': book._id }).cursor();
+  for await (const doc of cursor as any) {
+    const rest = (doc.evidence || []).filter((e: any) => String(e.bookId) !== String(book._id));
+    if (!rest.length) {
+      await KbConcept.deleteOne({ _id: doc._id });
+      removed++;
+    } else {
+      await KbConcept.updateOne({ _id: doc._id }, { $set: { evidence: rest } });
+      kept++;
+    }
+  }
+  await KbBook.deleteOne({ _id: book._id });
+  await recomputeDomainStats(book.domainKeys);
+  await bumpLibraryVersion();
+  return { conceptsRemoved: removed, conceptsKept: kept };
 }
