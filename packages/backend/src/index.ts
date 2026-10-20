@@ -44,6 +44,7 @@ import aguRoutes from './routes/aguRoutes';
 import step7StreamRoutes from './routes/step7StreamRoutes';
 import pptRoutes from './routes/pptRoutes';
 import occupationRoutes from './routes/occupationRoutes';
+import knowledgeLibraryRoutes from './knowledge/routes';
 import standaloneRoutes from './routes/standaloneRoutes';
 import { EXPORT_PATHS, exportRequestSlot } from './middleware/exportLimit';
 import { requireLoginWhenEnabled } from './middleware/auth';
@@ -259,6 +260,8 @@ app.use('/api/v3/workflow', step7StreamRoutes);
 // PPT Generation routes (Phase 2) - PowerPoint generation for modules
 app.use('/api/v3/ppt', pptRoutes);
 app.use('/api/v3/occupations', occupationRoutes);
+// The textbook knowledge library (knowledge/): books, concepts, programme selection.
+app.use('/api/v3/knowledge', knowledgeLibraryRoutes);
 
 // Standalone Step Execution routes - Execute individual steps without workflow
 app.use('/api/v3/standalone', standaloneRoutes);
@@ -452,6 +455,14 @@ async function startServer() {
       loggingService.info('Step 11 PPT generation queue initialized');
     } catch (error) {
       loggingService.warn('Failed to initialize Step 11 queue', { error: String(error) });
+    }
+
+    // Textbook knowledge library ingestion queue
+    try {
+      await import('./knowledge/queue');
+      loggingService.info('Knowledge library queue initialised');
+    } catch (error) {
+      loggingService.warn('Failed to initialise knowledge library queue', { error: String(error) });
     }
 
     // Initialize Step 12 background job queue (Assignment packs)

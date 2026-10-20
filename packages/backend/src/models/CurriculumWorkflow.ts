@@ -1361,6 +1361,8 @@ export interface ICurriculumWorkflow extends Document {
   contentAudit?: import('../services/contentAuditIssues').ContentAudit;
   /** The job roles' matched national occupation codes (services/occupations). */
   occupationEvidence?: import('../services/occupations/occupationIndex').OccupationEvidence;
+  /** The textbook library this programme draws on (knowledge/programmeLibrary). */
+  knowledgeLibrary?: import('../knowledge/programmeLibrary').ProgrammeLibrary;
 
   // Approval before publication (services/publication).
   publication?: {
@@ -1611,6 +1613,8 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
     contentAudit: { type: Schema.Types.Mixed },
     // The job roles' matched national occupation codes (services/occupations/occupationStore).
     occupationEvidence: { type: Schema.Types.Mixed },
+    // Which part of the textbook knowledge library this programme draws on (knowledge/).
+    knowledgeLibrary: { type: Schema.Types.Mixed },
   },
   {
     timestamps: true,
