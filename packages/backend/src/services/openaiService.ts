@@ -21,8 +21,17 @@ export interface OpenAIGenerateOptions {
   timeout?: number;
   responseFormat?: 'text' | 'json_object';
   reasoningEffort?: 'low' | 'medium' | 'high';
+  /**
+   * Tries in total for transient failures (429, 5xx, timeouts). Defaults to the service-wide
+   * 5. A caller with its own retry and a long timeout lowers it: five 10-minute timeouts
+   * outlast any job that waits on the call.
+   */
+  maxRetries?: number;
   // Note: temperature is not supported by GPT-5 (only default value 1 is allowed)
 }
+
+/** gpt-4o and gpt-4o-mini return at most this many output tokens per call. */
+const GPT4O_MAX_OUTPUT_TOKENS = 16384;
 
 export interface StreamChunk {
   content: string;
@@ -218,81 +227,89 @@ export class OpenAIService {
 
     const startTime = Date.now();
 
-    return this.retryWithExponentialBackoff(async () => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+    return this.retryWithExponentialBackoff(
+      async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-      try {
-        const requestBody: any = {
-          model: this.resolveModel(model),
-          messages: [
-            ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
-            { role: 'user' as const, content: prompt },
-          ],
-        };
+        try {
+          const requestBody: any = {
+            model: this.resolveModel(model),
+            messages: [
+              ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
+              { role: 'user' as const, content: prompt },
+            ],
+          };
 
-        // GPT-5 models use max_completion_tokens, older models use max_tokens
-        if (model.startsWith('gpt-5')) {
-          requestBody.max_completion_tokens = maxTokens;
-        } else {
-          requestBody.max_tokens = maxTokens;
-        }
+          // GPT-5 models use max_completion_tokens, older models use max_tokens
+          if (model.startsWith('gpt-5')) {
+            requestBody.max_completion_tokens = maxTokens;
+          } else {
+            // GPT-5 budgets include reasoning and run to 32k; gpt-4o refuses more than 16,384,
+            // so a budget sized for GPT-5 would fail every call on a gpt-4o deployment.
+            requestBody.max_tokens = model.startsWith('gpt-4o')
+              ? Math.min(maxTokens, GPT4O_MAX_OUTPUT_TOKENS)
+              : maxTokens;
+          }
 
-        // GPT-5.x reasoning/thinking support (Chat Completions API)
-        if (reasoningEffort && model.includes('gpt-5')) {
-          requestBody.reasoning_effort = reasoningEffort;
-          console.log(`[OpenAI] Using reasoning_effort: ${reasoningEffort} for model: ${model}`);
-        }
+          // GPT-5.x reasoning/thinking support (Chat Completions API)
+          if (reasoningEffort && model.includes('gpt-5')) {
+            requestBody.reasoning_effort = reasoningEffort;
+            console.log(`[OpenAI] Using reasoning_effort: ${reasoningEffort} for model: ${model}`);
+          }
 
-        // Add response_format if JSON is requested
-        if (responseFormat === 'json_object') {
-          requestBody.response_format = { type: 'json_object' };
-        }
+          // Add response_format if JSON is requested
+          if (responseFormat === 'json_object') {
+            requestBody.response_format = { type: 'json_object' };
+          }
 
-        const response = await this.client.chat.completions.create(requestBody, {
-          signal: controller.signal as any,
-          timeout: timeout, // Pass timeout to each request
-        });
-
-        clearTimeout(timeoutId);
-
-        // Debug: log response for troubleshooting
-        console.log(
-          `[OpenAI] Response - choices: ${response.choices?.length}, finish_reason: ${response.choices?.[0]?.finish_reason}, content_length: ${response.choices?.[0]?.message?.content?.length || 0}`
-        );
-
-        const content = response.choices[0]?.message?.content;
-        if (!content) {
-          loggingService.error('OpenAI returned empty content', {
-            model,
-            finishReason: response.choices?.[0]?.finish_reason,
-            messageRole: response.choices?.[0]?.message?.role,
-            usage: response.usage,
+          const response = await this.client.chat.completions.create(requestBody, {
+            signal: controller.signal as any,
+            timeout: timeout, // Pass timeout to each request
           });
-          throw new Error('No content generated from OpenAI');
+
+          clearTimeout(timeoutId);
+
+          // Debug: log response for troubleshooting
+          console.log(
+            `[OpenAI] Response - choices: ${response.choices?.length}, finish_reason: ${response.choices?.[0]?.finish_reason}, content_length: ${response.choices?.[0]?.message?.content?.length || 0}`
+          );
+
+          const content = response.choices[0]?.message?.content;
+          if (!content) {
+            loggingService.error('OpenAI returned empty content', {
+              model,
+              finishReason: response.choices?.[0]?.finish_reason,
+              messageRole: response.choices?.[0]?.message?.role,
+              usage: response.usage,
+            });
+            throw new Error('No content generated from OpenAI');
+          }
+
+          this.recordUsage(model, response.usage, Date.now() - startTime);
+
+          // The model sometimes emits control characters (U+0014 where a dash was meant). Stored,
+          // they make every Word or PowerPoint export of that content invalid. See xmlSafe.
+          return cleanModelOutput(content, responseFormat === 'json_object');
+        } catch (error) {
+          clearTimeout(timeoutId);
+
+          errorTrackingService.captureLLMError(
+            error as Error,
+            'openai',
+            model,
+            prompt.substring(0, 100)
+          );
+
+          if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error(`OpenAI request timed out after ${timeout}ms`);
+          }
+          throw error;
         }
-
-        this.recordUsage(model, response.usage, Date.now() - startTime);
-
-        // The model sometimes emits control characters (U+0014 where a dash was meant). Stored,
-        // they make every Word or PowerPoint export of that content invalid. See xmlSafe.
-        return cleanModelOutput(content, responseFormat === 'json_object');
-      } catch (error) {
-        clearTimeout(timeoutId);
-
-        errorTrackingService.captureLLMError(
-          error as Error,
-          'openai',
-          model,
-          prompt.substring(0, 100)
-        );
-
-        if (error instanceof Error && error.name === 'AbortError') {
-          throw new Error(`OpenAI request timed out after ${timeout}ms`);
-        }
-        throw error;
-      }
-    });
+      },
+      1,
+      options.maxRetries ?? this.maxRetries
+    );
   }
 
   /**
@@ -525,13 +542,14 @@ export class OpenAIService {
    */
   private async retryWithExponentialBackoff<T>(
     fn: () => Promise<T>,
-    attempt: number = 1
+    attempt: number = 1,
+    maxRetries: number = this.maxRetries
   ): Promise<T> {
     try {
       return await fn();
     } catch (error) {
       // Check if we should retry
-      if (attempt >= this.maxRetries || !this.isRetryableError(error)) {
+      if (attempt >= maxRetries || !this.isRetryableError(error)) {
         throw error;
       }
 
@@ -539,13 +557,12 @@ export class OpenAIService {
       const delay = this.baseDelay * Math.pow(2, attempt - 1);
 
       console.warn(
-        `OpenAI request failed (attempt ${attempt}/${this.maxRetries}), ` +
-          `retrying in ${delay}ms...`,
+        `OpenAI request failed (attempt ${attempt}/${maxRetries}), ` + `retrying in ${delay}ms...`,
         error instanceof Error ? error.message : 'Unknown error'
       );
 
       await this.sleep(delay);
-      return this.retryWithExponentialBackoff(fn, attempt + 1);
+      return this.retryWithExponentialBackoff(fn, attempt + 1, maxRetries);
     }
   }
 
