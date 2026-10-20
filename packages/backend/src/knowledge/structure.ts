@@ -150,13 +150,32 @@ interface Node {
   page: number;
 }
 
+/**
+ * A bookmark that groups chapters rather than being one: "Part II", or a roman numeral and a
+ * title ("III Deep Neural Networks", as in Murphy's Probabilistic Machine Learning).
+ */
+export function isPartTitle(title: string): boolean {
+  const t = title.replace(/\s+/g, ' ').trim();
+  return (
+    /^part\s+([ivxlc]+|\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/i.test(t) ||
+    /^[IVXLC]+[.:]?\s+[A-Z]/.test(t)
+  );
+}
+
 function nodesFrom(outline: PdfOutlineItem[]): Node[] {
-  const depth = chapterDepth(outline);
+  const globalDepth = chapterDepth(outline);
   const nodes: Node[] = [];
   let chapter: { index: number; number: string; title: string } | null = null;
   let sectionIndex = 0;
   let chapterCount = 0;
+  // Chapters sit one level below a part and at the top level elsewhere, so a book that opens
+  // with a plain chapter and then groups the rest into parts reads correctly.
+  let depth = globalDepth;
   for (const item of outline) {
+    if (item.depth === 0 && globalDepth === 0) {
+      depth = isPartTitle(item.title) ? 1 : 0;
+      if (depth === 1) continue;
+    }
     if (item.page === null || item.depth < depth || item.depth > depth + 1) continue;
     const { number, title } = splitNumber(item.title);
     if (item.depth === depth) {

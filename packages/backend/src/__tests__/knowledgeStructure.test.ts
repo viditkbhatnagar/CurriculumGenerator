@@ -138,3 +138,44 @@ describe('passages and windows', () => {
     expect(pageLabelsIn(sectionWindows(forces)[0])).toEqual(['1', '2']);
   });
 });
+
+describe('books grouped into parts', () => {
+  it('reads "I Foundations" as a part, its children as chapters, beside a plain first chapter', () => {
+    const pdf: PdfText = {
+      info: {},
+      outline: [
+        { title: 'Introduction', page: 1, depth: 0 },
+        { title: '1.1 What is machine learning?', page: 1, depth: 1 },
+        { title: 'I Foundations', page: 2, depth: 0 },
+        { title: '2 Probability', page: 2, depth: 1 },
+        { title: '2.1 Introduction to probability', page: 2, depth: 2 },
+        { title: 'II Deep Neural Networks', page: 3, depth: 0 },
+        { title: '13 Neural Networks for Tabular Data', page: 3, depth: 1 },
+        { title: '13.1 Multilayer perceptrons', page: 3, depth: 2 },
+      ],
+      pages: [
+        page(1, '1', [
+          ['Introduction', 17],
+          ['1.1 What is machine learning?', 12],
+          'Learning from data.',
+        ]),
+        page(2, '31', [
+          ['2 Probability', 17],
+          ['2.1 Introduction to probability', 12],
+          'Probability measures uncertainty.',
+        ]),
+        page(3, '423', [
+          ['13 Neural Networks for Tabular Data', 17],
+          ['13.1 Multilayer perceptrons', 12],
+          'An MLP stacks layers.',
+        ]),
+      ],
+    };
+    const { sections } = structureBook(pdf);
+    const mlp = sections.find((s) => s.section.title === 'Multilayer perceptrons')!;
+    expect(mlp.chapter).toMatchObject({ number: '13', title: 'Neural Networks for Tabular Data' });
+    expect(mlp.section.number).toBe('13.1');
+    const ml = sections.find((s) => s.section.title === 'What is machine learning?')!;
+    expect(ml.chapter.title).toBe('Introduction');
+  });
+});
