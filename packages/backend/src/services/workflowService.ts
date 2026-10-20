@@ -76,7 +76,11 @@ import {
 } from './step12Store';
 import { hydratePackEntries } from './step12Stubs';
 import { hasContent, matchBatchContent, returnedModules } from './step4Batch';
-import { bodyOfKnowledgeBlockFor, moduleConceptsBlock } from '../knowledge/programmeLibrary';
+import {
+  bodyOfKnowledgeBlockFor,
+  libraryChapterSources,
+  moduleConceptsBlock,
+} from '../knowledge/programmeLibrary';
 import {
   step5ValidationReport,
   step5Compliant,
@@ -5755,6 +5759,16 @@ CRITICAL:
       const applied = forModule.filter((s: any) => APPLIED_CATEGORIES.has(s.category));
       const mloIds = (module.mlos || []).map((m: any) => m.id).filter(Boolean);
 
+      // Textbook chapters from the programme's library (knowledge/), with pages read from the
+      // books: the core reading, and independent of the journal lookup below.
+      const chapters = await libraryChapterSources(String(workflow._id), module).catch((error) => {
+        loggingService.warn('Library chapters could not be listed for module', {
+          moduleId: module.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return [] as any[];
+      });
+
       let verified: any[] = [];
       try {
         if (lookupUnavailable) throw new SourceLookupUnavailable(lookupUnavailable);
@@ -5823,7 +5837,7 @@ CRITICAL:
           estimatedReadingHours: 1.5,
         }));
         // Was hard-set to true. Measured against the same rules the programme-level checks use.
-        verified = verified.map((v: any) => ({
+        verified = [...chapters, ...verified].map((v: any) => ({
           ...v,
           agiCompliant: sourceCompliant(v, new Date().getFullYear()),
         }));
@@ -5843,6 +5857,20 @@ CRITICAL:
             error: error instanceof Error ? error.message : String(error),
           });
         }
+      }
+
+      // The journal lookup failed but the library has chapters for this module: keep those.
+      if (verified.length === 0 && chapters.length) {
+        verified = chapters.map((v: any) => ({
+          ...v,
+          agiCompliant: sourceCompliant(v, new Date().getFullYear()),
+        }));
+        await this.linkSourcesToMLOs(
+          verified,
+          module.mlos || [],
+          semantics.get(module.id),
+          applied
+        ).catch(() => undefined);
       }
 
       if (verified.length === 0) {
