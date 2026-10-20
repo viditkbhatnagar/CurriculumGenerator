@@ -7,8 +7,11 @@
  * cannot fill the context and crowd out everything else. Each result carries its citations:
  * book, edition, chapter, section and printed pages, read from the book itself.
  *
- * The index is the concepts' 512-dimension vectors held in memory (a few thousand concepts
- * are a few MB), reloaded when an ingest bumps the library version.
+ * The index is the concepts' 512-dimension vectors held in memory (16,000 concepts are about
+ * 33 MB as Float32Array), reloaded when an ingest bumps the library version. Reading them is
+ * the expensive part: one read briefly costs about 80 MB, and on 20 October 2026 several
+ * callers that found the index stale each started their own, four of them took 1 GB, and the
+ * 2 GB container was killed mid Step 5. So one read runs at a time, streamed from a cursor.
  */
 import { openaiService } from '../services/openaiService';
 import { shorten } from '../services/occupations/occupationIndex';
@@ -25,38 +28,53 @@ interface Indexed {
 }
 
 let cache: { version: number; checkedAt: number; items: Indexed[] } | null = null;
+let loading: Promise<Indexed[]> | null = null;
+/** Bumped by invalidateConceptIndex, so a read already under way cannot reinstate old data. */
+let generation = 0;
 const RECHECK_MS = 60_000;
+const READ_BATCH = 500;
 
 async function libraryVersion(): Promise<number> {
   const meta: any = await KbMeta.findById('concepts').lean();
   return meta?.version || 0;
 }
 
-async function index(): Promise<Indexed[]> {
-  const now = Date.now();
-  if (cache && now - cache.checkedAt < RECHECK_MS) return cache.items;
+async function refresh(): Promise<Indexed[]> {
+  const started = generation;
   const version = await libraryVersion();
   if (cache && cache.version === version) {
-    cache.checkedAt = now;
+    cache.checkedAt = Date.now();
     return cache.items;
   }
-  const rows: any[] = await KbConcept.find({ 'embedding.0': { $exists: true } })
+  const items: Indexed[] = [];
+  const cursor = KbConcept.find({ 'embedding.0': { $exists: true } })
     .select('domainKey area importance embedding')
-    .lean();
-  const items = rows.map((r) => ({
-    id: String(r._id),
-    domainKey: r.domainKey,
-    area: r.area,
-    importance: r.importance,
-    vector: Float32Array.from(r.embedding),
-  }));
-  cache = { version, checkedAt: now, items };
+    .lean()
+    .cursor({ batchSize: READ_BATCH });
+  for await (const r of cursor as AsyncIterable<any>) {
+    items.push({
+      id: String(r._id),
+      domainKey: r.domainKey,
+      area: r.area,
+      importance: r.importance,
+      vector: Float32Array.from(r.embedding),
+    });
+  }
+  if (started === generation) cache = { version, checkedAt: Date.now(), items };
   return items;
+}
+
+async function index(): Promise<Indexed[]> {
+  if (cache && Date.now() - cache.checkedAt < RECHECK_MS) return cache.items;
+  // Everyone who finds the index stale waits on the same read.
+  if (!loading) loading = refresh().finally(() => (loading = null));
+  return loading;
 }
 
 /** Forget the index (after an ingest in this process). */
 export function invalidateConceptIndex(): void {
   cache = null;
+  generation += 1;
 }
 
 /**
