@@ -10,6 +10,7 @@ import mongoose from 'mongoose';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { bodyOfKnowledge, formatBodyOfKnowledge, formatConcept, searchConcepts } from './retrieval';
 import type { Importance } from './models';
+import { pickAcrossAreas } from './selection';
 
 export interface ProgrammeLibrary {
   enabled: boolean;
@@ -68,16 +69,18 @@ export async function bodyOfKnowledgeBlockFor(
 ): Promise<{ block: string; concepts: number }> {
   const lib = await libraryFor(workflowId);
   if (!lib) return { block: '', concepts: 0 };
-  const concepts = (
-    await bodyOfKnowledge({
-      domainKeys: lib.domainKeys,
-      areas: lib.areas,
-      importance: opts.importance,
-      limit: (opts.limit ?? 150) * 2,
-    })
-  )
-    .filter((c) => inChosenBooks(lib, c))
-    .slice(0, opts.limit ?? 150);
+  // Every concept that qualifies, narrowed to the chosen books, then a budget taken across areas.
+  const concepts = pickAcrossAreas(
+    (
+      await bodyOfKnowledge({
+        domainKeys: lib.domainKeys,
+        areas: lib.areas,
+        importance: opts.importance,
+        limit: 100000,
+      })
+    ).filter((c) => inChosenBooks(lib, c)),
+    opts.limit ?? 150
+  );
   return {
     block: formatBodyOfKnowledge(concepts, {
       heading: opts.heading,

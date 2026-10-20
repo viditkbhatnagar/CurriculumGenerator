@@ -13,6 +13,7 @@
 import { openaiService } from '../services/openaiService';
 import { shorten } from '../services/occupations/occupationIndex';
 import { dot } from './clustering';
+import { pickAcrossAreas } from './selection';
 import { KbConcept, KbMeta, Importance } from './models';
 
 interface Indexed {
@@ -140,17 +141,8 @@ export async function bodyOfKnowledge(opts: {
   if (opts.domainKeys?.length) filter.domainKey = { $in: opts.domainKeys };
   if (opts.areas?.length) filter.area = { $in: opts.areas };
   if (opts.importance?.length) filter.importance = { $in: opts.importance };
-  const order: Record<string, number> = { core: 0, supporting: 1, advanced: 2, optional: 3 };
   const rows: any[] = await KbConcept.find(filter).select('-embedding').lean();
-  return rows
-    .sort(
-      (a, b) =>
-        a.area.localeCompare(b.area) ||
-        order[a.importance] - order[b.importance] ||
-        b.bookCount - a.bookCount ||
-        a.name.localeCompare(b.name)
-    )
-    .slice(0, opts.limit ?? 400);
+  return pickAcrossAreas(rows, opts.limit ?? 400);
 }
 
 const surnames = (authors: string[]) => {
