@@ -8,6 +8,7 @@ import config from '../config';
 import { loggingService } from '../services/loggingService';
 import { ingestBook } from './ingestBook';
 import { invalidateConceptIndex } from './retrieval';
+import { KbBook } from './models';
 import { consolidateLibrary } from './consolidate';
 
 interface LibraryJob {
@@ -34,7 +35,10 @@ if (redisUrl && redisUrl.length > 0) {
         lockDuration: 600000,
         stalledInterval: 600000,
         lockRenewTime: 300000,
-        maxStalledCount: 2,
+        // Every deploy restarts the process and stalls the running ingest. Ingestion resumes
+        // from its last saved section, so a stall costs nothing; at 2 a book read across a
+        // day of deploys was moved to failed and never resumed.
+        maxStalledCount: 10,
       },
     });
     libraryQueue.process(1, async (job: Job<LibraryJob>) => {
@@ -47,12 +51,23 @@ if (redisUrl && redisUrl.length > 0) {
       invalidateConceptIndex();
       return { bookId: job.data.bookId };
     });
-    libraryQueue.on('failed', (job, error) => {
+    libraryQueue.on('failed', async (job, error) => {
       loggingService.error('Library ingest job failed', {
         bookId: job.data.bookId,
         attempt: job.attemptsMade,
         error: error.message,
       });
+      // A job the queue gave up on (stalled too often, or out of attempts) never reaches
+      // ingestBook's own error handling, which left the book reading "extracting" for good.
+      const final = job.attemptsMade >= (job.opts.attempts || 1) || /stall/i.test(error.message);
+      if (final && job.data.bookId) {
+        await KbBook.updateOne(
+          { _id: job.data.bookId, status: { $in: ['queued', 'reading', 'extracting'] } },
+          {
+            $set: { status: 'failed', error: `Interrupted (${error.message}); resume to continue` },
+          }
+        ).catch(() => undefined);
+      }
     });
     loggingService.info('Knowledge library queue initialised');
   } catch (error) {
@@ -63,10 +78,13 @@ if (redisUrl && redisUrl.length > 0) {
   }
 }
 
-/** Queue a book's ingest, or run it in this process when there is no Redis. */
-export async function enqueueIngest(bookId: string): Promise<'queued' | 'running'> {
+/**
+ * Queue a book's ingest, or run it in this process when there is no Redis. `fresh` uses a new
+ * job id, for a book whose earlier job was orphaned by a restart and still holds the old one.
+ */
+export async function enqueueIngest(bookId: string, fresh = false): Promise<'queued' | 'running'> {
   if (libraryQueue) {
-    const jobId = `library-${bookId}`;
+    const jobId = fresh ? `library-${bookId}-${Date.now()}` : `library-${bookId}`;
     const existing = await libraryQueue.getJob(jobId);
     if (existing && ['completed', 'failed'].includes(await existing.getState())) {
       await existing.remove();

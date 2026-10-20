@@ -357,7 +357,13 @@ router.post('/books/:id/ingest', validateJWT, loadUser, async (req: Request, res
     return res.status(404).json({ success: false, error: 'Book not found' });
   const book: any = await KbBook.findById(req.params.id);
   if (!book) return res.status(404).json({ success: false, error: 'Book not found' });
-  if (['reading', 'extracting'].includes(book.status)) {
+  // A book still being read saves progress every few seconds; one that has saved nothing for
+  // 15 minutes was orphaned by a restart and may be resumed with a fresh job.
+  const STALE_MS = 15 * 60 * 1000;
+  const orphaned =
+    ['reading', 'extracting'].includes(book.status) &&
+    Date.now() - new Date(book.updatedAt).getTime() > STALE_MS;
+  if (['reading', 'extracting'].includes(book.status) && !orphaned) {
     return res.status(409).json({ success: false, error: 'The book is being read already' });
   }
   if (req.body?.restart === true) {
@@ -370,7 +376,7 @@ router.post('/books/:id/ingest', validateJWT, loadUser, async (req: Request, res
   await book.save();
   res.status(202).json({
     success: true,
-    data: { bookId: String(book._id), mode: await enqueueIngest(String(book._id)) },
+    data: { bookId: String(book._id), mode: await enqueueIngest(String(book._id), orphaned) },
   });
 });
 
