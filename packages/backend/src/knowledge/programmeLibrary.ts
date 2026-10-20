@@ -66,7 +66,13 @@ export async function libraryContextFor(
  */
 export async function bodyOfKnowledgeBlockFor(
   workflowId: string | undefined,
-  opts: { importance?: Importance[]; limit?: number; heading?: string; definition?: number } = {}
+  opts: {
+    importance?: Importance[];
+    limit?: number;
+    heading?: string;
+    definition?: number;
+    sources?: number;
+  } = {}
 ): Promise<{ block: string; concepts: number }> {
   const lib = await libraryFor(workflowId);
   if (!lib) return { block: '', concepts: 0 };
@@ -86,7 +92,7 @@ export async function bodyOfKnowledgeBlockFor(
     block: formatBodyOfKnowledge(concepts, {
       heading: opts.heading,
       definition: opts.definition ?? 140,
-      sources: 1,
+      sources: opts.sources ?? 1,
     }),
     concepts: concepts.length,
   };

@@ -1533,8 +1533,11 @@ IMPORTANT:
     // so each module boundary has an evidential reason (Rejin's design, section 9).
     const library = await bodyOfKnowledgeBlockFor(String(workflow._id), {
       importance: ['core', 'supporting', 'advanced'],
-      limit: 220,
-      definition: 90,
+      limit: 240,
+      // Names and codes only: definitions and sources go to the detail batches. With them the
+      // prompt was large enough that GPT-5 at high effort spent its budget before answering.
+      definition: 0,
+      sources: 0,
       heading: 'BODY OF KNOWLEDGE THE MODULES MUST BE BUILT FROM',
     });
 
@@ -1580,15 +1583,29 @@ Return JSON only:
     }
 Return all ${moduleTarget} modules.`;
 
-    const response = await openaiService.generateContent(userPrompt, systemPrompt, {
-      maxTokens: 16000,
-      timeout: 900000, // 15 minutes
-      responseFormat: 'json_object',
-      // This call decides what the modules are, which everything after it inherits. It was
-      // 'low' to save waiting; Rejin's audit asked why the most consequential decision got the
-      // least reasoning, and it is one call per programme.
-      reasoningEffort: 'high',
-    });
+    // This call decides what the modules are, which everything after it inherits. It was 'low'
+    // to save waiting; Rejin's audit asked why the most consequential decision got the least
+    // reasoning, and it is one call per programme. GPT-5 counts its reasoning against the token
+    // budget: at 16k, with a programme's body of knowledge in the prompt, it answered nothing
+    // three times (MAIB trial, 20 Oct 2026). 32k, and a second attempt at medium effort.
+    const ask = (reasoningEffort: 'high' | 'medium') =>
+      openaiService.generateContent(userPrompt, systemPrompt, {
+        maxTokens: 32000,
+        timeout: 900000, // 15 minutes
+        responseFormat: 'json_object',
+        reasoningEffort,
+        maxRetries: 2,
+      });
+    let response: string;
+    try {
+      response = await ask('high');
+    } catch (error) {
+      loggingService.warn('Step 4 outline: no answer at high effort; asking again at medium', {
+        workflowId: String(workflow._id),
+        error: error instanceof Error ? error.message : String(error),
+      });
+      response = await ask('medium');
+    }
     const parsed = this.parseJSON(response, 'step4-outline');
     const proposed: any[] = Array.isArray(parsed?.modules) ? parsed.modules : [];
 
@@ -1761,7 +1778,16 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
         const parsed = this.parseJSON(response, `step4-blueprint-batch-${batchNumber}`);
         return matchBatchContent(mods, returnedModules(parsed));
       };
-      const byCode = await ask(batch);
+      // A batch that gets no answer at all (the budget spent on reasoning) is asked once more
+      // at medium effort before the step fails.
+      const byCode = await ask(batch).catch((error) => {
+        loggingService.warn('Step 4: batch got no answer; asking again at medium effort', {
+          workflowId,
+          batch: batchNumber,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return ask(batch, 'medium');
+      });
       // A module the reply left empty is asked for once more on its own, with less reasoning,
       // before it is kept as a shell (in the MAIB trial a whole batch of six came back empty).
       const empty = batch.filter((m: any) => !hasContent(byCode.get(m.code)));

@@ -186,7 +186,11 @@ export function formatConcept(
   opts: { definition?: number; sources?: number } = {}
 ): string {
   const head = `${c.code} ${c.name} (${c.conceptType}; ${c.importance}; ${c.bookCount} book${c.bookCount === 1 ? '' : 's'}${c.level ? `; ${c.level}` : ''})`;
-  const def = c.definition ? ` — ${String(c.definition).slice(0, opts.definition ?? 220)}` : '';
+  // definition: 0 lists the concept by name only (the Step 4 outline needs names, not prose).
+  const def =
+    c.definition && opts.definition !== 0
+      ? ` — ${String(c.definition).slice(0, opts.definition ?? 220)}`
+      : '';
   const src = sourcesOf(c, opts.sources ?? 2);
   return `- ${head}${def}${src.length ? `\n    Taught in: ${src.join('; ')}` : ''}`;
 }
