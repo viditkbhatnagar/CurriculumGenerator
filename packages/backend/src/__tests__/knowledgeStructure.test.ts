@@ -1,4 +1,5 @@
 import {
+  chapterHeading,
   classifySection,
   passagesOf,
   sectionWindows,
@@ -140,6 +141,45 @@ describe('passages and windows', () => {
 });
 
 describe('books grouped into parts', () => {
+  it('reads a chapter heading, not prose that begins with "Chapter N"', () => {
+    expect(chapterHeading('Chapter 3')).toBe('3');
+    expect(chapterHeading('Chapter 3: Shallow neural networks')).toBe('3');
+    expect(chapterHeading('Unit IV Marketing Strategy')).toBe('IV');
+    expect(chapterHeading('Chapter 2 introduced supervised learning, in which we')).toBeNull();
+    expect(chapterHeading('Chapter 2 discussed regression.')).toBeNull();
+    expect(chapterHeading('Chapters 2 and 3')).toBeNull();
+  });
+
+  it('numbers a chapter by its printed sections when its first line cites another chapter', () => {
+    const pdf: PdfText = {
+      info: {},
+      outline: [
+        { title: 'Supervised learning', page: 1, depth: 0 },
+        { title: 'Linear regression example', page: 1, depth: 1 },
+        { title: 'Shallow neural networks', page: 2, depth: 0 },
+        { title: 'Neural network example', page: 2, depth: 1 },
+      ],
+      pages: [
+        page(1, '17', [
+          ['Supervised learning', 17],
+          'A model maps inputs to outputs.',
+          ['2.1 Linear regression example', 12],
+          'A line through the data.',
+        ]),
+        page(2, '25', [
+          ['Shallow neural networks', 17],
+          'Chapter 2 introduced supervised learning using 1D linear regression.',
+          ['3.1 Neural network example', 12],
+          'Shallow networks are functions with parameters.',
+        ]),
+      ],
+    };
+    const { sections } = structureBook(pdf);
+    const shallow = sections.filter((s) => s.chapter.title === 'Shallow neural networks');
+    expect(shallow.map((s) => s.chapter.number)).toEqual(shallow.map(() => '3'));
+    expect(shallow.map((s) => s.section.number)).toEqual(['3.0', '3.1']);
+  });
+
   it('reads "I Foundations" as a part, its children as chapters, beside a plain first chapter', () => {
     const pdf: PdfText = {
       info: {},

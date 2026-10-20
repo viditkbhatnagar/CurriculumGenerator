@@ -290,18 +290,34 @@ export function structureBook(pdf: PdfText): { sections: BookSection[]; usedOutl
 }
 
 /**
+ * The number in a chapter heading ("Chapter 3", "Chapter 3: Shallow Networks", "Unit IV
+ * Marketing"), or null for prose that merely begins with one: Prince's Understanding Deep
+ * Learning opens chapter 3 with "Chapter 2 introduced supervised learning...", and the whole
+ * chapter was filed as a second chapter 2.
+ */
+export function chapterHeading(line: string): string | null {
+  const m = /^(?:chapter|unit)\s+([0-9]+|[ivxlc]+)\b(.*)$/i.exec(line.trim());
+  if (!m) return null;
+  const rest = m[2].trim();
+  if (!rest || /^[:.\-–—]/.test(rest)) return m[1];
+  // A title on the same line: short, and not a sentence.
+  return rest.length <= 60 && !/[.,;]$|[,;]/.test(rest) && /^[A-Z]/.test(rest) ? m[1] : null;
+}
+
+/**
  * Chapter and section numbers printed in the text ("Chapter 1", "1.1 The Need for...") when
  * the bookmarks carry none. Chapters before the first numbered one are front matter (a
  * preface such as "Why This Book?").
  */
 function renumberFromText(sections: BookSection[]): void {
-  const explicit = new Map<number, string>();
+  const fromHeading = new Map<number, string>();
+  const fromSections = new Map<number, string>();
   const printedNumber = new Set<string>();
   for (const s of sections) {
     const head = s.blocks.slice(0, 3).map((b) => b.text.trim());
     if (s.section.index === 0) {
-      const m = head.map((t) => /^(?:chapter|unit)\s+([0-9]+|[ivxlc]+)\b/i.exec(t)).find(Boolean);
-      if (m) explicit.set(s.chapter.index, m[1]);
+      const m = head.map(chapterHeading).find(Boolean);
+      if (m) fromHeading.set(s.chapter.index, m);
     } else {
       // Only a number followed by this section's own title: a numbered equation or list
       // item can open a section too.
@@ -312,10 +328,12 @@ function renumberFromText(sections: BookSection[]): void {
       if (/^[0-9]+(\.[0-9]+)+$/.test(n)) {
         s.section.number = n;
         printedNumber.add(s.key);
-        if (!explicit.has(s.chapter.index)) explicit.set(s.chapter.index, n.split('.')[0]);
+        if (!fromSections.has(s.chapter.index)) fromSections.set(s.chapter.index, n.split('.')[0]);
       }
     }
   }
+  // The sections' own printed numbers outrank a "Chapter N" line, which can be prose.
+  const explicit = new Map([...fromHeading, ...fromSections]);
   if (!explicit.size) return;
   const firstNumbered = Math.min(...Array.from(explicit.keys()));
   for (const s of sections) {
