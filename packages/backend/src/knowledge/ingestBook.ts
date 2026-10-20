@@ -40,8 +40,8 @@ import { KbBook, KbConcept, KbCounter, KbMeta, KbPassage } from './models';
 
 /** Extraction is reading, not reasoning: a small model at low effort keeps a book near $1. */
 export const EXTRACTION_MODEL = process.env.KB_EXTRACTION_MODEL || 'gpt-5-mini';
-/** Sections read at once. gpt-5-mini takes about a minute a section: 8 at once read 4 a minute, so 18 books took most of a day. */
-const EXTRACTION_CONCURRENCY = Math.max(1, Number(process.env.KB_EXTRACTION_CONCURRENCY) || 20);
+/** Sections read at once. gpt-5-mini takes about a minute a section, so throughput is set by this: 20 read about 12 a minute, leaving the MAIB library four hours from done. */
+const EXTRACTION_CONCURRENCY = Math.max(1, Number(process.env.KB_EXTRACTION_CONCURRENCY) || 40);
 const EXTRACTABLE = new Set(['body', 'summary']);
 
 async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
