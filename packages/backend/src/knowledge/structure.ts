@@ -113,7 +113,11 @@ export function chapterDepth(outline: PdfOutlineItem[]): number {
   const top = outline.filter((o) => o.depth === 0);
   const parts = top.filter((o) => /^part\b/i.test(o.title)).length;
   const second = outline.filter((o) => o.depth === 1).length;
-  return parts >= 2 || (top.length > 0 && top.length < 4 && second >= 8) ? 1 : 0;
+  // Parts hold the chapters only when there is a level below them: Harzing's International
+  // HRM lists "Part I" and "Chapter 1" side by side, and was read as having no chapters at all.
+  return (parts >= 2 && second >= parts) || (top.length > 0 && top.length < 4 && second >= 8)
+    ? 1
+    : 0;
 }
 
 /**

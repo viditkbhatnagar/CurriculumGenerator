@@ -218,4 +218,26 @@ describe('books grouped into parts', () => {
     const ml = sections.find((s) => s.section.title === 'What is machine learning?')!;
     expect(ml.chapter.title).toBe('Introduction');
   });
+
+  it('reads chapters listed beside their parts at the same bookmark level', () => {
+    const pdf: PdfText = {
+      info: {},
+      outline: [
+        { title: 'Part I: Context and Strategy', page: 1, depth: 0 },
+        { title: 'Chapter 1 - Internationalization', page: 1, depth: 0 },
+        { title: 'Chapter 2 - Strategy and Structure', page: 2, depth: 0 },
+        { title: 'Part II: Comparative HRM', page: 3, depth: 0 },
+        { title: 'Chapter 3 - HRM in Europe', page: 3, depth: 0 },
+      ],
+      pages: [
+        page(1, '1', [['Chapter 1 - Internationalization', 17], 'Firms go abroad in stages.']),
+        page(2, '25', [['Chapter 2 - Strategy and Structure', 17], 'Structure follows strategy.']),
+        page(3, '49', [['Chapter 3 - HRM in Europe', 17], 'European HRM differs by country.']),
+      ],
+    };
+    const { sections } = structureBook(pdf);
+    expect(
+      Array.from(new Set(sections.map((s) => `${s.chapter.number} ${s.chapter.title}`)))
+    ).toEqual(['1 Internationalization', '2 Strategy and Structure', '3 HRM in Europe']);
+  });
 });
