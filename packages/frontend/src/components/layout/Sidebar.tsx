@@ -13,6 +13,7 @@ import {
   Sparkles,
   GraduationCap,
   Library,
+  MessageSquareText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,6 +25,8 @@ const navigation = [
   { name: 'Programs', href: '/admin/programs', icon: FolderOpen },
   // Textbooks read into concepts with their chapters and pages (knowledge/ on the backend).
   { name: 'Textbook Library', href: '/library', icon: Library },
+  // Reviewers' step-by-step feedback on programmes (backend routes/stepFeedbackRoutes).
+  { name: 'Step Feedback', href: '/feedback', icon: MessageSquareText },
   { name: 'Knowledge Base', href: '/admin/knowledge-base', icon: BookOpen },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
 ];

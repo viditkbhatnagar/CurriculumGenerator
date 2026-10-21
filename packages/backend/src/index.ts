@@ -45,6 +45,7 @@ import step7StreamRoutes from './routes/step7StreamRoutes';
 import pptRoutes from './routes/pptRoutes';
 import occupationRoutes from './routes/occupationRoutes';
 import knowledgeLibraryRoutes from './knowledge/routes';
+import stepFeedbackRoutes from './routes/stepFeedbackRoutes';
 import standaloneRoutes from './routes/standaloneRoutes';
 import { EXPORT_PATHS, exportRequestSlot } from './middleware/exportLimit';
 import { requireLoginWhenEnabled } from './middleware/auth';
@@ -262,6 +263,8 @@ app.use('/api/v3/ppt', pptRoutes);
 app.use('/api/v3/occupations', occupationRoutes);
 // The textbook knowledge library (knowledge/): books, concepts, programme selection.
 app.use('/api/v3/knowledge', knowledgeLibraryRoutes);
+// Reviewers' feedback on each step of a programme (models/StepFeedback).
+app.use('/api/v3/feedback', stepFeedbackRoutes);
 
 // Standalone Step Execution routes - Execute individual steps without workflow
 app.use('/api/v3/standalone', standaloneRoutes);

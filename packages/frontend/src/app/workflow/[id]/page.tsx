@@ -21,6 +21,7 @@ import Step4View from '@/components/workflow/Step4View';
 import Step5View from '@/components/workflow/Step5View';
 import Step6View from '@/components/workflow/Step6View';
 import Step7Form from '@/components/workflow/Step7Form';
+import StepFeedbackPanel from '@/components/workflow/StepFeedbackPanel';
 import Step8View from '@/components/workflow/Step8View';
 import Step9View from '@/components/workflow/Step9View';
 import Step10View from '@/components/workflow/Step10View';
@@ -659,6 +660,9 @@ export default function WorkflowDetailPage() {
           <div className="bg-white rounded-xl border border-teal-200/50 shadow-sm">
             {renderStepContent()}
           </div>
+
+          {/* Reviewer feedback on this step (Rejin, 21 October 2026) */}
+          <StepFeedbackPanel workflowId={workflow._id} step={currentStep} />
         </main>
       </div>
 
