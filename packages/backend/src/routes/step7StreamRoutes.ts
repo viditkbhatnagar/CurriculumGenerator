@@ -6,6 +6,7 @@ import { Router, Request, Response } from 'express';
 import { validateJWT, loadUser } from '../middleware/auth';
 import { loggingService } from '../services/loggingService';
 import { workflowService } from '../services/workflowService';
+import { withUsageContext } from '../services/usageContext';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { AssessmentUserPreferences } from '../types/assessmentGenerator';
 
@@ -93,12 +94,11 @@ router.post('/:id/step7/stream', validateJWT, loadUser, async (req: Request, res
       res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
-    // Process Step 7 with callbacks - returns workflow with all saves completed
-    const workflow = await workflowService.processStep7Streaming(
-      id,
-      userPreferences,
-      progressCallback,
-      dataCallback
+    // Process Step 7 with callbacks - returns workflow with all saves completed. The usage
+    // context tags its AI calls with the programme and step, as the queued steps' are; without
+    // it the cost log could not say what Step 7 costs.
+    const workflow = await withUsageContext({ workflowId: id, step: 7 }, () =>
+      workflowService.processStep7Streaming(id, userPreferences, progressCallback, dataCallback)
     );
 
     // Send completion message with the returned workflow (already saved to DB)
