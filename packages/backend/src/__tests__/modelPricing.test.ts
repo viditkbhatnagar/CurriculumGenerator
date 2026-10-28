@@ -61,7 +61,12 @@ describe('priceKeyFor', () => {
   });
 
   it('never prices a different version as a shorter name it happens to start with', () => {
-    expect(priceKeyFor('gpt-5.4')).toBeUndefined();
+    expect(priceKeyFor('gpt-5.3')).toBeUndefined();
     expect(priceKeyFor('gpt-5-pro')).toBeUndefined();
+  });
+
+  it("prices the Azure deployment's gpt-5.4 and its dated snapshot", () => {
+    expect(priceKeyFor('gpt-5.4')).toBe('gpt-5.4');
+    expect(priceKeyFor('gpt-5.4-2026-03-05')).toBe('gpt-5.4');
   });
 });

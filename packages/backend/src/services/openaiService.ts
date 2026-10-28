@@ -7,6 +7,7 @@ import { analyticsStorageService } from './analyticsStorageService';
 import { cleanModelOutput, stripXmlInvalid } from '../utils/xmlSafe';
 import { costOf, usageFrom } from '../utils/modelPricing';
 import { currentUsageContext } from './usageContext';
+import { deploymentFor } from './modelRouting';
 import { captureAndStop, inPromptCapture } from './promptCapture';
 
 /**
@@ -65,9 +66,11 @@ export class OpenAIService {
 
     this.client = new OpenAI({
       apiKey: apiKey || 'missing-key',
-      // Optional OpenAI-compatible gateway (e.g. OpenRouter). Undefined keeps
+      // Optional OpenAI-compatible gateway (e.g. OpenRouter, Azure). Undefined keeps
       // the SDK's default OpenAI endpoint.
       ...(config.openai.baseURL ? { baseURL: config.openai.baseURL } : {}),
+      // Azure authenticates a key through its own header.
+      ...(config.openai.azure ? { defaultHeaders: { 'api-key': apiKey } } : {}),
       timeout: 3600000, // 60 minutes for GPT-5 with 128k token output
       maxRetries: 0, // We handle retries manually for better control
     });
@@ -203,11 +206,14 @@ export class OpenAIService {
     options: OpenAIGenerateOptions = {}
   ): Promise<string> {
     const {
-      model = config.openai.chatModel, // Default: gpt-4o
+      model: requestedModel = config.openai.chatModel, // Default: gpt-4o
       maxTokens = 16000, // gpt-4o supports up to 128k context, 16k output
       timeout = this.defaultTimeout, // 60 minutes
       responseFormat = 'text', // Default to text, can be 'json_object'
     } = options;
+    // On Azure, the deployment that serves this model (services/modelRouting); the request's
+    // parameters are chosen for that deployment, not for the name asked for.
+    const model = deploymentFor(requestedModel, config.openai.azure);
 
     // Resolve reasoning effort: explicit option > config > undefined
     const reasoningEffort =
@@ -323,10 +329,13 @@ export class OpenAIService {
     options: OpenAIGenerateOptions = {}
   ): Promise<T> {
     const {
-      model = config.openai.chatModel, // Default: gpt-5
+      model: requestedModel = config.openai.chatModel, // Default: gpt-5
       maxTokens = 16000, // GPT-5 needs more tokens for reasoning + output
       timeout = this.defaultTimeout,
     } = options;
+    // On Azure, the deployment that serves this model (services/modelRouting); the request's
+    // parameters are chosen for that deployment, not for the name asked for.
+    const model = deploymentFor(requestedModel, config.openai.azure);
 
     // Resolve reasoning effort: explicit option > config > undefined
     const reasoningEffort =
@@ -412,10 +421,13 @@ export class OpenAIService {
     options: OpenAIGenerateOptions = {}
   ): Promise<void> {
     const {
-      model = config.openai.chatModel, // Default: gpt-5
+      model: requestedModel = config.openai.chatModel, // Default: gpt-5
       maxTokens = 128000, // GPT-5 supports large token outputs
       timeout = this.defaultTimeout, // 60 minutes
     } = options;
+    // On Azure, the deployment that serves this model (services/modelRouting); the request's
+    // parameters are chosen for that deployment, not for the name asked for.
+    const model = deploymentFor(requestedModel, config.openai.azure);
 
     // Resolve reasoning effort: explicit option > config > undefined
     const reasoningEffort =

@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { AzureDeployments, azureBaseURL } from '../services/modelRouting';
 
 dotenv.config();
 
@@ -22,6 +23,8 @@ interface Config {
     step8ModuleConcurrency: number;
     /** OpenAI-compatible gateway base URL (e.g. OpenRouter); undefined = OpenAI direct. */
     baseURL?: string;
+    /** Set when AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY are: requests go to Azure. */
+    azure: AzureDeployments | null;
   };
   auth0: {
     domain: string;
@@ -68,6 +71,26 @@ const s3AccessKeyId = process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY
 const s3SecretAccessKey =
   process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '';
 
+/**
+ * Azure OpenAI, when its endpoint and key are set: it then replaces OPENAI_API_KEY, the chat
+ * model is its deployment, and requests for other models are sent to the deployments it has
+ * (services/modelRouting). AZURE_OPENAI_DEPLOYMENTS lists any extra deployments, e.g. a mini.
+ */
+const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT || '';
+const azureKey = process.env.AZURE_OPENAI_API_KEY || '';
+const azure: AzureDeployments | null =
+  azureEndpoint && azureKey
+    ? (() => {
+        const chat = process.env.AZURE_OPENAI_DEPLOYMENT_NAME || 'gpt-5.4';
+        const embedding = process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT || 'text-embedding-3-large';
+        const extra = (process.env.AZURE_OPENAI_DEPLOYMENTS || '')
+          .split(',')
+          .map((d) => d.trim())
+          .filter(Boolean);
+        return { chat, embedding, available: Array.from(new Set([chat, embedding, ...extra])) };
+      })()
+    : null;
+
 const config: Config = {
   port: parseInt(process.env.PORT || '4000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -83,9 +106,12 @@ const config: Config = {
     retryDelay: parseInt(process.env.REDIS_RETRY_DELAY || '1000', 10),
   },
   openai: {
-    apiKey: process.env.OPENAI_API_KEY || '',
-    embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large',
-    chatModel: process.env.OPENAI_CHAT_MODEL || 'gpt-4o',
+    apiKey: azure ? azureKey : process.env.OPENAI_API_KEY || '',
+    embeddingModel: azure
+      ? azure.embedding
+      : process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large',
+    chatModel: azure ? azure.chat : process.env.OPENAI_CHAT_MODEL || 'gpt-4o',
+    azure,
     reasoningEffort:
       (process.env.OPENAI_REASONING_EFFORT as 'low' | 'medium' | 'high') || undefined,
     /**
@@ -101,11 +127,12 @@ const config: Config = {
     // OpenAI models through OpenRouter; leave unset for OpenAI direct.
     // Model ids are prefixed with "openai/" automatically when routing via
     // OpenRouter, so OPENAI_CHAT_MODEL/OPENAI_EMBEDDING_MODEL stay unchanged.
-    baseURL:
-      process.env.OPENAI_BASE_URL ||
-      ((process.env.OPENAI_API_KEY || '').startsWith('sk-or-')
-        ? 'https://openrouter.ai/api/v1'
-        : undefined),
+    baseURL: azure
+      ? azureBaseURL(azureEndpoint)
+      : process.env.OPENAI_BASE_URL ||
+        ((process.env.OPENAI_API_KEY || '').startsWith('sk-or-')
+          ? 'https://openrouter.ai/api/v1'
+          : undefined),
   },
   auth0: {
     domain: process.env.AUTH0_DOMAIN || '',
@@ -156,8 +183,10 @@ function validateConfig(): void {
       errors.push('MONGODB_URI is required in production');
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      errors.push('OPENAI_API_KEY is required in production');
+    if (!config.openai.apiKey) {
+      errors.push(
+        'OPENAI_API_KEY (or AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY) is required in production'
+      );
     }
 
     if (!process.env.AUTH0_DOMAIN || !process.env.AUTH0_AUDIENCE) {
