@@ -78,3 +78,36 @@ describe('login switches', () => {
     );
   });
 });
+
+describe('requireSignedIn', () => {
+  const { requireSignedIn } = jest.requireActual('../middleware/auth');
+  // The request as validateJWT and loadUser leave it: who is asking, real or stand-in.
+  const run = (auth: any, user?: any) =>
+    call(
+      (req: any, res: any, next: any) => requireSignedIn({ ...req, auth, user }, res, next),
+      'GET',
+      '/api/users'
+    );
+
+  it('refuses the anonymous stand-in used while REQUIRE_AUTH is off', async () => {
+    expect(
+      (await run({ sub: 'anonymous-user' }, { authProviderId: 'anonymous-user' })).status
+    ).toBe(401);
+  });
+
+  it("refuses the LMS's read-only service token", async () => {
+    expect((await run({ sub: 'service:lms' }, { authProviderId: 'service:lms' })).status).toBe(401);
+  });
+
+  it('refuses a request with no auth at all', async () => {
+    expect((await run(undefined)).status).toBe(401);
+  });
+
+  it('lets a signed-in user through', async () => {
+    const result = await run(
+      { sub: 'local:admin@x.test' },
+      { authProviderId: 'local:admin@x.test' }
+    );
+    expect(result.passed).toBe(true);
+  });
+});

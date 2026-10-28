@@ -265,6 +265,29 @@ export const loadUser = async (req: Request, res: Response, next: NextFunction):
 };
 
 /**
+ * Refuse a request that carries no real login: the anonymous stand-in administrator used while
+ * REQUIRE_AUTH is off, or the LMS's read-only service token. For routes that list accounts or
+ * hand out and change passwords, which must stay closed even while the rest of the API is open.
+ * On 28 October 2026 the user list and pending temporary passwords answered without any login.
+ */
+export const requireSignedIn = (req: Request, res: Response, next: NextFunction): void => {
+  const sub = req.auth?.sub;
+  const userSub = (req as any).user?.authProviderId;
+  const standIns = ['anonymous-user', LMS_SERVICE_SUB];
+  if (!sub || standIns.includes(sub) || standIns.includes(userSub)) {
+    res.status(401).json({
+      error: {
+        code: 'LOGIN_REQUIRED',
+        message: 'Sign in as an administrator to manage accounts',
+        timestamp: new Date().toISOString(),
+      },
+    });
+    return;
+  }
+  next();
+};
+
+/**
  * Middleware to check if user has required role(s)
  */
 export const requireRole = (...roles: UserRole[]) => {
