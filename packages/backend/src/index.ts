@@ -46,6 +46,7 @@ import pptRoutes from './routes/pptRoutes';
 import occupationRoutes from './routes/occupationRoutes';
 import knowledgeLibraryRoutes from './knowledge/routes';
 import stepFeedbackRoutes from './routes/stepFeedbackRoutes';
+import aiStatusRoutes from './routes/aiStatusRoutes';
 import standaloneRoutes from './routes/standaloneRoutes';
 import { EXPORT_PATHS, exportRequestSlot } from './middleware/exportLimit';
 import { requireLoginWhenEnabled } from './middleware/auth';
@@ -265,6 +266,8 @@ app.use('/api/v3/occupations', occupationRoutes);
 app.use('/api/v3/knowledge', knowledgeLibraryRoutes);
 // Reviewers' feedback on each step of a programme (models/StepFeedback).
 app.use('/api/v3/feedback', stepFeedbackRoutes);
+// Is the AI key working, and which provider and models does it reach (routes/aiStatusRoutes).
+app.use('/api/v3/ai-status', aiStatusRoutes);
 
 // Standalone Step Execution routes - Execute individual steps without workflow
 app.use('/api/v3/standalone', standaloneRoutes);
