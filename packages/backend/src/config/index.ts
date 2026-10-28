@@ -83,20 +83,27 @@ const listOf = (v: string) =>
     .split(',')
     .map((x) => x.trim())
     .filter(Boolean);
-const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT || '';
-const azureKey = process.env.AZURE_OPENAI_API_KEY || '';
+// A value pasted from a .env file can keep its quotes or a trailing space or newline; Azure then
+// refuses the key as invalid (it did on 28 October 2026). Settings are read without them.
+const setting = (name: string) =>
+  (process.env[name] || '')
+    .trim()
+    .replace(/^(['"])(.*)\1$/, '$2')
+    .trim();
+const azureEndpoint = setting('AZURE_OPENAI_ENDPOINT');
+const azureKey = setting('AZURE_OPENAI_API_KEY');
 const azure: AzureDeployments | null =
   azureEndpoint && azureKey
     ? (() => {
-        const chat = process.env.AZURE_OPENAI_DEPLOYMENT_NAME || 'gpt-5.4';
-        const embedding = process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT || 'text-embedding-3-large';
-        const extra = (process.env.AZURE_OPENAI_DEPLOYMENTS || '')
+        const chat = setting('AZURE_OPENAI_DEPLOYMENT_NAME') || 'gpt-5.4';
+        const embedding = setting('AZURE_OPENAI_EMBEDDING_DEPLOYMENT') || 'text-embedding-3-large';
+        const extra = (setting('AZURE_OPENAI_DEPLOYMENTS') || '')
           .split(',')
           .map((d) => d.trim())
           .filter(Boolean);
         const tiers = [
-          process.env.AZURE_OPENAI_PREMIUM_DEPLOYMENT,
-          process.env.AZURE_OPENAI_FAST_DEPLOYMENT,
+          setting('AZURE_OPENAI_PREMIUM_DEPLOYMENT'),
+          setting('AZURE_OPENAI_FAST_DEPLOYMENT'),
         ].filter((d): d is string => !!d);
         return {
           chat,
@@ -136,14 +143,14 @@ const config: Config = {
     stepTiers: [
       {
         model:
-          process.env.AZURE_OPENAI_PREMIUM_DEPLOYMENT ||
+          setting('AZURE_OPENAI_PREMIUM_DEPLOYMENT') ||
           process.env.OPENAI_PREMIUM_MODEL ||
           undefined,
         steps: listOf(process.env.PREMIUM_STEPS || '1,2,3,4,13'),
       },
       {
         model:
-          process.env.AZURE_OPENAI_FAST_DEPLOYMENT || process.env.OPENAI_FAST_MODEL || undefined,
+          setting('AZURE_OPENAI_FAST_DEPLOYMENT') || process.env.OPENAI_FAST_MODEL || undefined,
         steps: listOf(process.env.FAST_STEPS || '6,9,11,knowledge-library'),
       },
     ],

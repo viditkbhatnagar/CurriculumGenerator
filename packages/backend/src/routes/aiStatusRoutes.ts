@@ -45,7 +45,11 @@ router.get('/', async (_req: Request, res: Response) => {
     success: chat.ok && embedding.ok,
     data: {
       provider,
+      // Enough to spot a wrong endpoint or a mangled key, without showing the key.
+      endpointHost: config.openai.baseURL ? new URL(config.openai.baseURL).host : 'api.openai.com',
+      keyLength: config.openai.apiKey.length,
       chatModel: config.openai.chatModel,
+      fastModel: config.openai.stepTiers.find((t) => t.steps.includes('11'))?.model || null,
       embeddingModel: config.openai.embeddingModel,
       chat,
       embedding,
