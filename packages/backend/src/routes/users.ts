@@ -1,8 +1,10 @@
 import { Router, Request, Response } from 'express';
+import mongoose from 'mongoose';
 import {
   validateJWT,
   loadUser,
   requireRole,
+  requireSignedIn,
   auditAction,
   handleAuthError,
 } from '../middleware/auth';
@@ -14,13 +16,15 @@ import {
   deleteUser,
   inviteFaculty,
   getPendingPlaintextPassword,
+  resetUserPassword,
 } from '../services/userService';
 import { getAuditLogsByUser } from '../services/auditService';
 
 const router = Router();
 
 // All user routes require authentication
-router.use(validateJWT, loadUser);
+// Accounts and passwords need a real login even while REQUIRE_AUTH is off (middleware/auth).
+router.use(validateJWT, loadUser, requireSignedIn);
 
 /**
  * List all users (admin only)
@@ -206,6 +210,50 @@ router.get(
         error: {
           code: 'INTERNAL_ERROR',
           message: 'Failed to read pending password',
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+  }
+);
+
+/**
+ * Issue a new temporary password for an existing account (admin only). The plaintext is
+ * returned once, for the administrator to pass on, and can be re-shown through
+ * /:id/pending-password until the user's first sign-in.
+ */
+router.post(
+  '/:id/reset-password',
+  requireRole(UserRole.ADMINISTRATOR),
+  auditAction('RESET_PASSWORD', 'users'),
+  async (req: Request, res: Response) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(404).json({
+          error: {
+            code: 'USER_NOT_FOUND',
+            message: 'User not found',
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }
+      const password = await resetUserPassword(req.params.id);
+      if (!password) {
+        return res.status(404).json({
+          error: {
+            code: 'USER_NOT_FOUND',
+            message: 'User not found',
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }
+      res.json({ password });
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      res.status(500).json({
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to reset the password',
           timestamp: new Date().toISOString(),
         },
       });

@@ -36,8 +36,12 @@ export default function FacultyAdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const resp = await api.get('/api/users?role=faculty&limit=200');
-      setFaculty(resp.data?.users || []);
+      // Administrators are listed too, so their passwords can be reset here (Logan's could not).
+      const [faculty, admins] = await Promise.all([
+        api.get('/api/users?role=faculty&limit=200'),
+        api.get('/api/users?role=administrator&limit=200'),
+      ]);
+      setFaculty([...(admins.data?.users || []), ...(faculty.data?.users || [])]);
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || err.message || 'Failed to load faculty');
     } finally {
@@ -117,6 +121,28 @@ export default function FacultyAdminPage() {
       await refresh();
     } catch (err: any) {
       toast.error('Revoke failed', err?.response?.data?.error?.message || err.message);
+    }
+  };
+
+  /**
+   * Issue a new temporary password for an account whose password is lost or was rotated.
+   * Shown once in the same dialog as an invite's; until the person signs in it can be
+   * re-shown with "Reveal password".
+   */
+  const handleResetPassword = async (u: FacultyUser) => {
+    if (!confirm(`Reset the password for ${u.email}? Their current password will stop working.`))
+      return;
+    try {
+      const resp = await api.post(`/api/users/${u.id}/reset-password`);
+      const password = resp.data?.password;
+      if (!password) throw new Error('No password came back');
+      setNewCredential({ email: u.email, password });
+      await refresh();
+    } catch (err: any) {
+      toast.error(
+        'Reset failed',
+        err?.response?.data?.error?.message || err?.message || 'Could not reset the password'
+      );
     }
   };
 
@@ -283,7 +309,7 @@ export default function FacultyAdminPage() {
         <section className="space-y-4">
           <div className="flex items-baseline justify-between">
             <h2 className="text-sm font-semibold tracking-tight text-stone-900 uppercase tracking-[0.08em] text-[12px]">
-              Faculty{' '}
+              Faculty and administrators{' '}
               <span className="text-stone-400 font-normal normal-case">({faculty.length})</span>
             </h2>
             <button
@@ -314,7 +340,7 @@ export default function FacultyAdminPage() {
                     <th className="px-5 py-3 text-[11px] uppercase tracking-[0.08em] font-medium text-stone-500 border-b border-stone-100 w-32">
                       Role
                     </th>
-                    <th className="px-5 py-3 text-[11px] uppercase tracking-[0.08em] font-medium text-stone-500 border-b border-stone-100 w-28 text-right">
+                    <th className="px-5 py-3 text-[11px] uppercase tracking-[0.08em] font-medium text-stone-500 border-b border-stone-100 w-48 text-right">
                       Action
                     </th>
                   </tr>
@@ -356,11 +382,19 @@ export default function FacultyAdminPage() {
                             </button>
                           )}
                           <button
-                            onClick={() => handleRevoke(u.id, u.email)}
-                            className="text-[12px] font-medium text-stone-400 hover:text-rose-700 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                            onClick={() => handleResetPassword(u)}
+                            className="text-[12px] font-medium text-stone-500 hover:text-teal-800 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                           >
-                            Revoke
+                            Reset password
                           </button>
+                          {u.role !== 'administrator' && (
+                            <button
+                              onClick={() => handleRevoke(u.id, u.email)}
+                              className="text-[12px] font-medium text-stone-400 hover:text-rose-700 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                            >
+                              Revoke
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -398,8 +432,8 @@ export default function FacultyAdminPage() {
                   Share these credentials
                 </h3>
                 <p className="text-sm text-stone-600 leading-relaxed">
-                  This password is shown only once. Copy it now and pass it to the faculty member
-                  through your usual channel.
+                  This password is shown only once. Copy it now and pass it on through your usual
+                  channel.
                 </p>
               </div>
 

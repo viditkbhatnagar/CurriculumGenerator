@@ -153,6 +153,27 @@ export async function getPendingPlaintextPassword(userId: string): Promise<strin
 }
 
 /**
+ * Give an existing account a new temporary password, for an administrator to pass on.
+ *
+ * There was no way to do this short of deleting the account and re-inviting it. Logan's
+ * password was rotated on 6 October 2026 after the old one was found in the repository,
+ * and as an administrator (not faculty) the account could not even be re-invited. The
+ * plaintext is kept as the pending password, like an invite's, so it can be re-shown until
+ * the user's first sign-in clears it. Returns null for an unknown user.
+ */
+export async function resetUserPassword(userId: string): Promise<string | null> {
+  const { generateRandomPassword, hashPassword } = await import('./passwordAuthService');
+  const user = await User.findById(userId).select('+passwordHash +pendingPlaintextPassword');
+  if (!user) return null;
+  const plain = generateRandomPassword();
+  user.passwordHash = await hashPassword(plain);
+  user.passwordSetAt = new Date();
+  user.pendingPlaintextPassword = plain;
+  await user.save();
+  return plain;
+}
+
+/**
  * Invite a faculty member.
  *
  * Creates a User with role=faculty + a freshly-generated password and returns
