@@ -214,7 +214,7 @@ export class OpenAIService {
     // On Azure, the deployment that serves this model (services/modelRouting); the request's
     // parameters are chosen for that deployment, not for the name asked for.
     const model = deploymentFor(
-      modelForStep(requestedModel, currentUsageContext()?.step, config.openai.fast),
+      modelForStep(requestedModel, currentUsageContext()?.step, config.openai.stepTiers),
       config.openai.azure
     );
 
@@ -339,7 +339,7 @@ export class OpenAIService {
     // On Azure, the deployment that serves this model (services/modelRouting); the request's
     // parameters are chosen for that deployment, not for the name asked for.
     const model = deploymentFor(
-      modelForStep(requestedModel, currentUsageContext()?.step, config.openai.fast),
+      modelForStep(requestedModel, currentUsageContext()?.step, config.openai.stepTiers),
       config.openai.azure
     );
 
@@ -434,7 +434,7 @@ export class OpenAIService {
     // On Azure, the deployment that serves this model (services/modelRouting); the request's
     // parameters are chosen for that deployment, not for the name asked for.
     const model = deploymentFor(
-      modelForStep(requestedModel, currentUsageContext()?.step, config.openai.fast),
+      modelForStep(requestedModel, currentUsageContext()?.step, config.openai.stepTiers),
       config.openai.azure
     );
 

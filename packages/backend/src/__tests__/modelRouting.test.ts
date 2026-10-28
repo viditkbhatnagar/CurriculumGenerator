@@ -71,20 +71,28 @@ describe('isReasoningModel', () => {
 });
 
 describe('modelForStep', () => {
-  const fast = { model: 'gpt-6-luna', steps: ['6', '9', '11', 'knowledge-library'] };
+  const tiers = [
+    { model: 'gpt-6-astra', steps: ['1', '2', '3', '4', '13'] },
+    { model: 'gpt-5.6-luna', steps: ['6', '9', '11', 'knowledge-library'] },
+  ];
 
-  it('sends a fast step to the fast model', () => {
-    expect(modelForStep('gpt-5', 11, fast)).toBe('gpt-6-luna');
-    expect(modelForStep('gpt-5-mini', 'knowledge-library', fast)).toBe('gpt-6-luna');
+  it('sends the design steps to the premium model', () => {
+    expect(modelForStep('gpt-5.4', 2, tiers)).toBe('gpt-6-astra');
+    expect(modelForStep('gpt-5.4', 13, tiers)).toBe('gpt-6-astra');
   });
 
-  it('keeps design steps and lesson plans on the model asked for', () => {
-    expect(modelForStep('gpt-6.1-sol', 4, fast)).toBe('gpt-6.1-sol');
-    expect(modelForStep('gpt-6.1-sol', 10, fast)).toBe('gpt-6.1-sol');
+  it('sends bulk steps to the fast model', () => {
+    expect(modelForStep('gpt-5', 11, tiers)).toBe('gpt-5.6-luna');
+    expect(modelForStep('gpt-5-mini', 'knowledge-library', tiers)).toBe('gpt-5.6-luna');
   });
 
-  it('changes nothing when no fast model is set or the call is outside a step', () => {
-    expect(modelForStep('gpt-5', 11, { steps: fast.steps })).toBe('gpt-5');
-    expect(modelForStep('gpt-5', undefined, fast)).toBe('gpt-5');
+  it('keeps the other steps, lesson plans included, on the model asked for', () => {
+    expect(modelForStep('gpt-5.4', 10, tiers)).toBe('gpt-5.4');
+    expect(modelForStep('gpt-5.4', 7, tiers)).toBe('gpt-5.4');
+  });
+
+  it('changes nothing for a tier without a model, or outside a step', () => {
+    expect(modelForStep('gpt-5', 11, [{ steps: ['11'] }])).toBe('gpt-5');
+    expect(modelForStep('gpt-5', undefined, tiers)).toBe('gpt-5');
   });
 });

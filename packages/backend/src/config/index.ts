@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { AzureDeployments, azureBaseURL } from '../services/modelRouting';
+import { AzureDeployments, StepTier, azureBaseURL } from '../services/modelRouting';
 
 dotenv.config();
 
@@ -25,8 +25,8 @@ interface Config {
     baseURL?: string;
     /** Set when AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY are: requests go to Azure. */
     azure: AzureDeployments | null;
-    /** A small model for the bulk steps (services/modelRouting modelForStep). */
-    fast: { model?: string; steps: string[] };
+    /** Premium and fast models and their steps, first match wins (services/modelRouting). */
+    stepTiers: StepTier[];
   };
   auth0: {
     domain: string;
@@ -78,6 +78,11 @@ const s3SecretAccessKey =
  * model is its deployment, and requests for other models are sent to the deployments it has
  * (services/modelRouting). AZURE_OPENAI_DEPLOYMENTS lists any extra deployments, e.g. a mini.
  */
+const listOf = (v: string) =>
+  v
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
 const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT || '';
 const azureKey = process.env.AZURE_OPENAI_API_KEY || '';
 const azure: AzureDeployments | null =
@@ -89,13 +94,14 @@ const azure: AzureDeployments | null =
           .split(',')
           .map((d) => d.trim())
           .filter(Boolean);
-        const fast = process.env.AZURE_OPENAI_FAST_DEPLOYMENT
-          ? [process.env.AZURE_OPENAI_FAST_DEPLOYMENT]
-          : [];
+        const tiers = [
+          process.env.AZURE_OPENAI_PREMIUM_DEPLOYMENT,
+          process.env.AZURE_OPENAI_FAST_DEPLOYMENT,
+        ].filter((d): d is string => !!d);
         return {
           chat,
           embedding,
-          available: Array.from(new Set([chat, embedding, ...fast, ...extra])),
+          available: Array.from(new Set([chat, embedding, ...tiers, ...extra])),
         };
       })()
     : null;
@@ -122,17 +128,25 @@ const config: Config = {
     chatModel: azure ? azure.chat : process.env.OPENAI_CHAT_MODEL || 'gpt-4o',
     azure,
     /**
-     * The small, fast model (e.g. gpt-6-luna) and the steps that use it. FAST_STEPS names steps
-     * by number, plus "knowledge-library" for reading textbooks; the default keeps lesson plans
-     * and every design step on the main model.
+     * Models by step. The premium model (e.g. gpt-6-astra) takes PREMIUM_STEPS, the programme's
+     * design (default 1,2,3,4,13); the fast model (e.g. gpt-5.6-luna) takes FAST_STEPS, bulk and
+     * reformatting work (default 6,9,11 and "knowledge-library", reading textbooks). Other steps
+     * use the main model. A tier without a model changes nothing.
      */
-    fast: {
-      model: process.env.AZURE_OPENAI_FAST_DEPLOYMENT || process.env.OPENAI_FAST_MODEL || undefined,
-      steps: (process.env.FAST_STEPS || '6,9,11,knowledge-library')
-        .split(',')
-        .map((x) => x.trim())
-        .filter(Boolean),
-    },
+    stepTiers: [
+      {
+        model:
+          process.env.AZURE_OPENAI_PREMIUM_DEPLOYMENT ||
+          process.env.OPENAI_PREMIUM_MODEL ||
+          undefined,
+        steps: listOf(process.env.PREMIUM_STEPS || '1,2,3,4,13'),
+      },
+      {
+        model:
+          process.env.AZURE_OPENAI_FAST_DEPLOYMENT || process.env.OPENAI_FAST_MODEL || undefined,
+        steps: listOf(process.env.FAST_STEPS || '6,9,11,knowledge-library'),
+      },
+    ],
     reasoningEffort:
       (process.env.OPENAI_REASONING_EFFORT as 'low' | 'medium' | 'high') || undefined,
     /**

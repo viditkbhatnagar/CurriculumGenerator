@@ -50,17 +50,24 @@ export function isReasoningModel(name: string): boolean {
   return /^(gpt-([5-9]|\d{2})|o\d)/i.test(name);
 }
 
+/** A model and the steps that use it (config.openai.stepTiers). */
+export interface StepTier {
+  model?: string;
+  steps: string[];
+}
+
 /**
- * The model for a call made inside a step: the fast model when the step is one of the fast
- * ones and a fast model is configured, else the model the call asked for. Steps whose output
- * is reformatting or bulk (slide decks, glossary, readings, reading textbooks) can run on a
- * small model at a twentieth of the price; design steps stay on the main one.
+ * The model for a call made inside a step: the first tier listing the step, if that tier has a
+ * model; otherwise the model the call asked for. The premium tier takes the few calls that design
+ * the programme; the fast tier takes reformatting and bulk work (slide decks, glossary, readings,
+ * reading textbooks) at a fraction of the price; everything else stays on the main model.
  */
 export function modelForStep(
   requested: string,
   step: number | string | undefined,
-  fast: { model?: string; steps: string[] }
+  tiers: StepTier[]
 ): string {
-  if (!fast.model || step === undefined) return requested;
-  return fast.steps.includes(String(step)) ? fast.model : requested;
+  if (step === undefined) return requested;
+  const tier = tiers.find((t) => t.model && t.steps.includes(String(step)));
+  return tier?.model || requested;
 }
