@@ -40,3 +40,27 @@ export function azureBaseURL(endpoint: string): string {
   const trimmed = endpoint.trim().replace(/\/+$/, '');
   return /\/openai\/v1$/.test(trimmed) ? trimmed : `${trimmed}/openai/v1`;
 }
+
+/**
+ * Whether a model reasons before answering (GPT-5 and later, the o-series): such models take
+ * max_completion_tokens and reasoning_effort, and refuse max_tokens. The check named only
+ * "gpt-5", so a gpt-6-sol or gpt-6-luna request would have been sent max_tokens.
+ */
+export function isReasoningModel(name: string): boolean {
+  return /^(gpt-([5-9]|\d{2})|o\d)/i.test(name);
+}
+
+/**
+ * The model for a call made inside a step: the fast model when the step is one of the fast
+ * ones and a fast model is configured, else the model the call asked for. Steps whose output
+ * is reformatting or bulk (slide decks, glossary, readings, reading textbooks) can run on a
+ * small model at a twentieth of the price; design steps stay on the main one.
+ */
+export function modelForStep(
+  requested: string,
+  step: number | string | undefined,
+  fast: { model?: string; steps: string[] }
+): string {
+  if (!fast.model || step === undefined) return requested;
+  return fast.steps.includes(String(step)) ? fast.model : requested;
+}

@@ -25,6 +25,8 @@ interface Config {
     baseURL?: string;
     /** Set when AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY are: requests go to Azure. */
     azure: AzureDeployments | null;
+    /** A small model for the bulk steps (services/modelRouting modelForStep). */
+    fast: { model?: string; steps: string[] };
   };
   auth0: {
     domain: string;
@@ -87,7 +89,14 @@ const azure: AzureDeployments | null =
           .split(',')
           .map((d) => d.trim())
           .filter(Boolean);
-        return { chat, embedding, available: Array.from(new Set([chat, embedding, ...extra])) };
+        const fast = process.env.AZURE_OPENAI_FAST_DEPLOYMENT
+          ? [process.env.AZURE_OPENAI_FAST_DEPLOYMENT]
+          : [];
+        return {
+          chat,
+          embedding,
+          available: Array.from(new Set([chat, embedding, ...fast, ...extra])),
+        };
       })()
     : null;
 
@@ -112,6 +121,18 @@ const config: Config = {
       : process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large',
     chatModel: azure ? azure.chat : process.env.OPENAI_CHAT_MODEL || 'gpt-4o',
     azure,
+    /**
+     * The small, fast model (e.g. gpt-6-luna) and the steps that use it. FAST_STEPS names steps
+     * by number, plus "knowledge-library" for reading textbooks; the default keeps lesson plans
+     * and every design step on the main model.
+     */
+    fast: {
+      model: process.env.AZURE_OPENAI_FAST_DEPLOYMENT || process.env.OPENAI_FAST_MODEL || undefined,
+      steps: (process.env.FAST_STEPS || '6,9,11,knowledge-library')
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean),
+    },
     reasoningEffort:
       (process.env.OPENAI_REASONING_EFFORT as 'low' | 'medium' | 'high') || undefined,
     /**

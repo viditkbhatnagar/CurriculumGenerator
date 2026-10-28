@@ -7,7 +7,7 @@ import { analyticsStorageService } from './analyticsStorageService';
 import { cleanModelOutput, stripXmlInvalid } from '../utils/xmlSafe';
 import { costOf, usageFrom } from '../utils/modelPricing';
 import { currentUsageContext } from './usageContext';
-import { deploymentFor } from './modelRouting';
+import { deploymentFor, isReasoningModel, modelForStep } from './modelRouting';
 import { captureAndStop, inPromptCapture } from './promptCapture';
 
 /**
@@ -213,12 +213,15 @@ export class OpenAIService {
     } = options;
     // On Azure, the deployment that serves this model (services/modelRouting); the request's
     // parameters are chosen for that deployment, not for the name asked for.
-    const model = deploymentFor(requestedModel, config.openai.azure);
+    const model = deploymentFor(
+      modelForStep(requestedModel, currentUsageContext()?.step, config.openai.fast),
+      config.openai.azure
+    );
 
     // Resolve reasoning effort: explicit option > config > undefined
     const reasoningEffort =
       options.reasoningEffort ||
-      (model.includes('gpt-5') ? config.openai.reasoningEffort : undefined);
+      (isReasoningModel(model) ? config.openai.reasoningEffort : undefined);
 
     // Prompt capture (services/promptCapture): record what would be sent, and send nothing.
     if (inPromptCapture()) {
@@ -248,7 +251,7 @@ export class OpenAIService {
           };
 
           // GPT-5 models use max_completion_tokens, older models use max_tokens
-          if (model.startsWith('gpt-5')) {
+          if (isReasoningModel(model)) {
             requestBody.max_completion_tokens = maxTokens;
           } else {
             // GPT-5 budgets include reasoning and run to 32k; gpt-4o refuses more than 16,384,
@@ -259,7 +262,7 @@ export class OpenAIService {
           }
 
           // GPT-5.x reasoning/thinking support (Chat Completions API)
-          if (reasoningEffort && model.includes('gpt-5')) {
+          if (reasoningEffort && isReasoningModel(model)) {
             requestBody.reasoning_effort = reasoningEffort;
             console.log(`[OpenAI] Using reasoning_effort: ${reasoningEffort} for model: ${model}`);
           }
@@ -335,12 +338,15 @@ export class OpenAIService {
     } = options;
     // On Azure, the deployment that serves this model (services/modelRouting); the request's
     // parameters are chosen for that deployment, not for the name asked for.
-    const model = deploymentFor(requestedModel, config.openai.azure);
+    const model = deploymentFor(
+      modelForStep(requestedModel, currentUsageContext()?.step, config.openai.fast),
+      config.openai.azure
+    );
 
     // Resolve reasoning effort: explicit option > config > undefined
     const reasoningEffort =
       options.reasoningEffort ||
-      (model.includes('gpt-5') ? config.openai.reasoningEffort : undefined);
+      (isReasoningModel(model) ? config.openai.reasoningEffort : undefined);
 
     if (inPromptCapture()) {
       captureAndStop({
@@ -370,7 +376,7 @@ export class OpenAIService {
         };
 
         // GPT-5.x reasoning/thinking support
-        if (reasoningEffort && model.includes('gpt-5')) {
+        if (reasoningEffort && isReasoningModel(model)) {
           requestBody.reasoning_effort = reasoningEffort;
         }
 
@@ -427,12 +433,15 @@ export class OpenAIService {
     } = options;
     // On Azure, the deployment that serves this model (services/modelRouting); the request's
     // parameters are chosen for that deployment, not for the name asked for.
-    const model = deploymentFor(requestedModel, config.openai.azure);
+    const model = deploymentFor(
+      modelForStep(requestedModel, currentUsageContext()?.step, config.openai.fast),
+      config.openai.azure
+    );
 
     // Resolve reasoning effort: explicit option > config > undefined
     const reasoningEffort =
       options.reasoningEffort ||
-      (model.includes('gpt-5') ? config.openai.reasoningEffort : undefined);
+      (isReasoningModel(model) ? config.openai.reasoningEffort : undefined);
 
     return this.retryWithExponentialBackoff(async () => {
       const controller = new AbortController();
@@ -449,14 +458,14 @@ export class OpenAIService {
         };
 
         // GPT-5 models use max_completion_tokens, older models use max_tokens
-        if (model.startsWith('gpt-5')) {
+        if (isReasoningModel(model)) {
           requestBody.max_completion_tokens = maxTokens;
         } else {
           requestBody.max_tokens = maxTokens;
         }
 
         // GPT-5.x reasoning/thinking support
-        if (reasoningEffort && model.includes('gpt-5')) {
+        if (reasoningEffort && isReasoningModel(model)) {
           requestBody.reasoning_effort = reasoningEffort;
         }
 

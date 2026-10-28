@@ -10,8 +10,9 @@
  *
  * Prices are USD per million tokens at the standard (not batch or priority) tier. gpt-5 and
  * gpt-5.5 were checked against https://developers.openai.com/api/docs/pricing on 2026-10-18,
- * gpt-5.4 and gpt-5.4-mini on 2026-10-28 (short-context rate, under 272K tokens; the
- * generator's Azure deployment); the others are the prices published when each model launched.
+ * gpt-5.4, gpt-5.4-mini, gpt-6-sol, gpt-6.1-sol and gpt-6-luna on 2026-10-28 (short-context
+ * rate, up to 272K input tokens; the models offered on the generator's Azure resource); the
+ * others are the prices published when each model launched.
  */
 
 export interface ModelPrice {
@@ -27,6 +28,9 @@ export const MODEL_PRICES: Record<string, ModelPrice> = {
   'gpt-5.2': { input: 1.75, cachedInput: 0.175, output: 14 },
   'gpt-5.4': { input: 2.5, cachedInput: 0.25, output: 15 },
   'gpt-5.4-mini': { input: 0.75, cachedInput: 0.075, output: 4.5 },
+  'gpt-6-sol': { input: 2, cachedInput: 0.2, output: 10 },
+  'gpt-6.1-sol': { input: 2, cachedInput: 0.1, output: 10 },
+  'gpt-6-luna': { input: 0.1, cachedInput: 0.01, output: 0.5 },
   'gpt-5.5': { input: 5, cachedInput: 0.5, output: 30 },
   'gpt-4o': { input: 2.5, cachedInput: 1.25, output: 10 },
   'gpt-4o-mini': { input: 0.15, cachedInput: 0.075, output: 0.6 },

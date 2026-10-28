@@ -1,4 +1,9 @@
-import { azureBaseURL, deploymentFor } from '../services/modelRouting';
+import {
+  azureBaseURL,
+  deploymentFor,
+  isReasoningModel,
+  modelForStep,
+} from '../services/modelRouting';
 
 const azure = {
   chat: 'gpt-5.4',
@@ -41,5 +46,45 @@ describe('azureBaseURL', () => {
     expect(azureBaseURL('https://x.openai.azure.com/')).toBe(
       'https://x.openai.azure.com/openai/v1'
     );
+  });
+});
+
+describe('isReasoningModel', () => {
+  it('knows GPT-5 and later, Sol and Luna included, and the o-series', () => {
+    for (const m of [
+      'gpt-5',
+      'gpt-5.4',
+      'gpt-5-mini',
+      'gpt-6-sol',
+      'gpt-6.1-sol',
+      'gpt-6-luna',
+      'o3',
+    ]) {
+      expect(isReasoningModel(m)).toBe(true);
+    }
+  });
+
+  it('leaves gpt-4o and gpt-4 to max_tokens', () => {
+    expect(isReasoningModel('gpt-4o')).toBe(false);
+    expect(isReasoningModel('gpt-4-turbo')).toBe(false);
+  });
+});
+
+describe('modelForStep', () => {
+  const fast = { model: 'gpt-6-luna', steps: ['6', '9', '11', 'knowledge-library'] };
+
+  it('sends a fast step to the fast model', () => {
+    expect(modelForStep('gpt-5', 11, fast)).toBe('gpt-6-luna');
+    expect(modelForStep('gpt-5-mini', 'knowledge-library', fast)).toBe('gpt-6-luna');
+  });
+
+  it('keeps design steps and lesson plans on the model asked for', () => {
+    expect(modelForStep('gpt-6.1-sol', 4, fast)).toBe('gpt-6.1-sol');
+    expect(modelForStep('gpt-6.1-sol', 10, fast)).toBe('gpt-6.1-sol');
+  });
+
+  it('changes nothing when no fast model is set or the call is outside a step', () => {
+    expect(modelForStep('gpt-5', 11, { steps: fast.steps })).toBe('gpt-5');
+    expect(modelForStep('gpt-5', undefined, fast)).toBe('gpt-5');
   });
 });
