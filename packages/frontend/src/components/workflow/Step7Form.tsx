@@ -503,6 +503,9 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
   const approveStep7 = useApproveStep7();
   const clearStep7 = useClearStep7();
   const [error, setError] = useState<string | null>(null);
+  // Asking a running generation to stop: it ends after the model call in progress.
+  const [stopping, setStopping] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'advanced'>('basic');
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
@@ -613,8 +616,22 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
     }
   }, [formData.assessmentStructure]);
 
+  const handleStop = async () => {
+    setStopping(true);
+    setStopError(null);
+    try {
+      await api.post(`/api/v3/workflow/${workflow._id}/step7/stop`);
+    } catch (err) {
+      const reason = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setStopError(reason || 'Could not stop Step 7. Try again in a moment.');
+      setStopping(false);
+    }
+  };
+
   const handleGenerate = async () => {
     setError(null);
+    setStopping(false);
+    setStopError(null);
 
     // Clear previous streaming data
     setStreamingFormatives([]);
@@ -899,17 +916,32 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
       {/* Show generating state */}
       {isCurrentlyGenerating && !hasStep7Data && (
         <div className="mb-6 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/30 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex flex-wrap items-center gap-3 mb-4">
             <div className="w-8 h-8 border-3 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-            <div>
+            <div className="flex-1 min-w-[16rem]">
               <h3 className="text-lg font-semibold text-teal-800">
-                Generating Comprehensive Assessments...
+                {stopping ? 'Stopping…' : 'Generating Comprehensive Assessments...'}
               </h3>
               <p className="text-sm text-teal-600">
-                This may take 30-40 minutes. Streaming results appear below in real-time.
+                {stopping
+                  ? 'The run ends when the model call in progress returns, usually within a few minutes. Nothing from it will be saved.'
+                  : 'Modules are written several at a time; the bar shows how far it has got. A run that takes twice as long as expected stops itself and says so.'}
               </p>
             </div>
+            <button
+              type="button"
+              onClick={handleStop}
+              disabled={stopping}
+              className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:border-red-500 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {stopping ? 'Stopping…' : 'Stop generation'}
+            </button>
           </div>
+          {stopError && (
+            <p role="alert" className="mb-3 text-sm text-red-700">
+              {stopError}
+            </p>
+          )}
           <GenerationProgressBar workflowId={workflow._id} step={7} />
 
           {/* Real-time streaming data display */}

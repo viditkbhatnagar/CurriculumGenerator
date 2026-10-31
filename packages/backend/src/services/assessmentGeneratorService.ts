@@ -19,6 +19,7 @@
 import { programmeContextBlock, programmeFraming } from './programmeFraming';
 import config from '../config';
 import { markConsistency } from './assessmentMarks';
+import { isStepStopped } from './stepStop';
 import { ICurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { openaiService } from './openaiService';
 import { loggingService } from './loggingService';
@@ -307,7 +308,8 @@ export class AssessmentGeneratorService {
   async generateAssessments(
     workflow: ICurriculumWorkflow,
     userPreferences: AssessmentUserPreferences,
-    progressCallback?: (progress: AssessmentGenerationProgress) => void
+    progressCallback?: (progress: AssessmentGenerationProgress) => void,
+    checkpoint?: () => Promise<void>
   ): Promise<AssessmentGenerationResponse> {
     loggingService.info('Starting Assessment Generation', {
       workflowId: workflow._id,
@@ -315,7 +317,7 @@ export class AssessmentGeneratorService {
     });
 
     this.failedModules = [];
-    const request = this.buildRequest(workflow, userPreferences);
+    const request = { ...this.buildRequest(workflow, userPreferences), checkpoint };
 
     const response: AssessmentGenerationResponse = {
       formativeAssessments: [],
@@ -342,6 +344,7 @@ export class AssessmentGeneratorService {
         );
       }
 
+      await request.checkpoint?.();
       // Stage 2: Generate Summative Assessments (if requested)
       if (
         userPreferences.assessmentStructure === 'summative_only' ||
@@ -353,11 +356,13 @@ export class AssessmentGeneratorService {
         );
       }
 
+      await request.checkpoint?.();
       // Stage 3: Generate Sample Questions (if requested)
       if (userPreferences.generateSampleQuestions) {
         response.sampleQuestions = await this.generateSampleQuestions(request, progressCallback);
       }
 
+      await request.checkpoint?.();
       // Stage 4: Generate LMS Packages (logical structures)
       response.lmsPackages = await this.generateLMSPackages(request, response, progressCallback);
 
@@ -450,6 +455,8 @@ export class AssessmentGeneratorService {
           count: perModule[i].length,
         });
       } catch (firstError) {
+        // A stop is not a failure to retry: it ends the run (services/stepStop).
+        if (isStepStopped(firstError)) throw firstError;
         // Retry once. Most failures here are transient — a truncated JSON response or a
         // rate limit — and a single retry recovers them.
         loggingService.warn(`Retrying formatives for module ${module.id}`, {
@@ -464,6 +471,7 @@ export class AssessmentGeneratorService {
             formativeTypes
           );
         } catch (retryError) {
+          if (isStepStopped(retryError)) throw retryError;
           // Continuing silently is what lost eleven modules from a completed run: the step
           // reported success, and the author found out by reading the exported document and
           // listing the modules that were not in it.
@@ -533,6 +541,8 @@ export class AssessmentGeneratorService {
     const produced: FormativeAssessment[] = [];
     const failures: string[] = [];
     for (let slot = 0; slot < plan.formats.length; slot += 1) {
+      // Outside the try: a stop must end the run, not be recorded as this slot's failure.
+      await request.checkpoint?.();
       try {
         const one = await this.generateOneFormative(module, moduleIndex, request, plan, slot);
         produced.push(...one);

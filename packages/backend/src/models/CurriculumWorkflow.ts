@@ -1332,6 +1332,8 @@ export interface ICurriculumWorkflow extends Document {
     failedAt?: Date;
     runStartedAt?: Date;
     runEndedAt?: Date;
+    stopRequestedAt?: Date;
+    stopRequestedBy?: string;
     approvedAt?: Date;
     approvedBy?: mongoose.Types.ObjectId;
     reviewTimeMinutes?: number;
@@ -1587,6 +1589,9 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
         // also marks a step in_progress, so status alone cannot say a run is under way.
         runStartedAt: Date,
         runEndedAt: Date,
+        // The author asked the running generation to stop (services/stepStop).
+        stopRequestedAt: Date,
+        stopRequestedBy: String,
         approvedAt: Date,
         approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
         reviewTimeMinutes: Number,

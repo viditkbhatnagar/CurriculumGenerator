@@ -4252,6 +4252,44 @@ router.post('/:id/step7', validateJWT, loadUser, async (req: Request, res: Respo
  * DELETE /api/v3/workflow/:id/step7
  * Clear Step 7 data to allow regeneration
  */
+/**
+ * POST /api/v3/workflow/:id/step7/stop
+ * Ask a running Step 7 generation to stop. The run checks between model calls, so it ends
+ * when the call in progress returns; nothing from it is saved (services/stepStop).
+ */
+router.post('/:id/step7/stop', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (stepQueue) {
+      const job = await getStepJobStatus(7, id);
+      if (!job || !['waiting', 'active', 'delayed'].includes(job.state)) {
+        return res.status(409).json({ success: false, error: 'Step 7 is not running.' });
+      }
+    }
+    const user = (req as any).user;
+    const result = await CurriculumWorkflow.updateOne(
+      { _id: id, 'stepProgress.step': 7 },
+      {
+        $set: {
+          'stepProgress.$.stopRequestedAt': new Date(),
+          'stepProgress.$.stopRequestedBy': String(user?.email || user?.id || user?.userId || ''),
+        },
+      }
+    );
+    if (!result.matchedCount) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    res.status(202).json({
+      success: true,
+      message:
+        'Stopping Step 7. It ends when the model call in progress returns, usually within a few minutes. Nothing from this run will be saved.',
+    });
+  } catch (error) {
+    loggingService.error('Error stopping Step 7', { error, workflowId: req.params.id });
+    res.status(500).json({ success: false, error: 'Could not stop Step 7' });
+  }
+});
+
 router.delete('/:id/step7', validateJWT, loadUser, async (req: Request, res: Response) => {
   try {
     const workflow = await CurriculumWorkflow.findById(req.params.id);

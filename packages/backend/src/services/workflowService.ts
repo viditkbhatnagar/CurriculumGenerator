@@ -11,6 +11,7 @@
  */
 
 import { step7Percent } from './step7Progress';
+import { StepStopped, step7TimeLimitMinutes, stopReason } from './stepStop';
 import mongoose from 'mongoose';
 import { CurriculumWorkflow, ICurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { openaiService } from './openaiService';
@@ -3523,6 +3524,39 @@ CRITICAL:
     // Import and use the assessment generator service
     const { assessmentGeneratorService } = await import('./assessmentGeneratorService');
 
+    // Checked between model calls: the author can stop the run, and it stops itself when it
+    // has taken twice as long as a programme of this size should (services/stepStop).
+    const processingStartedAt = Date.now();
+    const limitMinutes = step7TimeLimitMinutes(
+      ((workflow.step4 as any)?.modules || []).length,
+      Number(userPreferences.formativePerModule) || 1,
+      config.openai.step7ModuleConcurrency
+    );
+    const checkpoint = async () => {
+      // A failed read must not fail the module it sits in front of; the time limit still holds.
+      let progress: any;
+      try {
+        const current: any = await CurriculumWorkflow.findById(workflowId, {
+          stepProgress: { $elemMatch: { step: 7 } },
+        }).lean();
+        progress = current?.stepProgress?.[0];
+      } catch (error) {
+        loggingService.warn('Step 7: could not read a stop request; carrying on', {
+          workflowId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      const reason = stopReason({
+        step: 7,
+        now: Date.now(),
+        processingStartedAt,
+        limitMinutes,
+        runQueuedAt: progress?.runStartedAt,
+        stopRequestedAt: progress?.stopRequestedAt,
+      });
+      if (reason) throw new StepStopped(reason);
+    };
+
     // Generate assessments using chunked strategy
     const assessmentResponse = await assessmentGeneratorService.generateAssessments(
       workflow,
@@ -3538,7 +3572,8 @@ CRITICAL:
         // The job's percentage, which the page shows: it sat at 0 until the step finished.
         const pct = step7Percent(progress);
         if (pct !== null) onProgress?.(pct);
-      }
+      },
+      checkpoint
     );
 
     refuseEmpty(assessmentResponse.formativeAssessments.length, 7, 'assessments');
