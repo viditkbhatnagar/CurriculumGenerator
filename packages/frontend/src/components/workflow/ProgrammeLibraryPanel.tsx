@@ -51,9 +51,21 @@ export default function ProgrammeLibraryPanel({ workflowId }: { workflowId: stri
   };
 
   if (!library) return null;
+  // Books this programme can draw on: another institution's licensed books are not counted
+  // (backend knowledge/bookAccess restrictedFrom).
+  const usable = (b: (typeof books)[number]) =>
+    !(
+      b.licence === 'institution-licensed' &&
+      (b.programmes || []).length > 0 &&
+      !(b.programmes || []).includes(workflowId)
+    );
   const readyIn = (key: string) =>
     books.filter(
-      (b) => b.status === 'ready' && b.accessTier === 'teaching' && b.domainKeys.includes(key)
+      (b) =>
+        b.status === 'ready' &&
+        b.accessTier === 'teaching' &&
+        b.domainKeys.includes(key) &&
+        usable(b)
     ).length;
 
   return (

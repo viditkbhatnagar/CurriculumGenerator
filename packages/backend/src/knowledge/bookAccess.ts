@@ -38,3 +38,22 @@ export function visibleConcepts<T extends { evidence?: any[] }>(
 ): T[] {
   return concepts.map((c) => visibleConcept(scope, c)).filter((c): c is T => c !== null);
 }
+
+/**
+ * Whether a book is kept from a programme. Only an institution's licensed book can be: its
+ * `programmes` lists the programmes it belongs to. An open-licence book serves every programme
+ * whatever that field says. On 21 October 2026 the field was first enforced for every book, and
+ * the 20 open textbooks, labelled "MAIB" when they were loaded, vanished from every programme
+ * until 31 October: Logan's test run on 28 October drew on no textbook at all.
+ */
+export function restrictedFrom(
+  book: { licence?: string; programmes?: string[] },
+  workflowId: string
+): boolean {
+  const programmes = book.programmes || [];
+  return (
+    book.licence === 'institution-licensed' &&
+    programmes.length > 0 &&
+    !programmes.includes(workflowId)
+  );
+}

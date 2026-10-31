@@ -12,7 +12,7 @@ import { bodyOfKnowledge, formatBodyOfKnowledge, formatConcept, searchConcepts }
 import type { Importance } from './models';
 import { pickAcrossAreas } from './selection';
 import { chapterApa, groupByChapter } from './chapterSources';
-import { BookScope, visibleConcept, visibleConcepts } from './bookAccess';
+import { BookScope, restrictedFrom, visibleConcept, visibleConcepts } from './bookAccess';
 
 export interface ProgrammeLibrary extends BookScope {
   enabled: boolean;
@@ -21,16 +21,16 @@ export interface ProgrammeLibrary extends BookScope {
   enabledAt?: Date;
 }
 
-/** Books licensed to particular programmes, none of which is this one (knowledge/bookAccess). */
+/** Licensed books that belong to other programmes (knowledge/bookAccess restrictedFrom). */
 export async function hiddenBooksFor(workflowId: string): Promise<string[]> {
   const { KbBook } = await import('./models');
   const rows: any[] = await KbBook.find({
+    licence: 'institution-licensed',
     'programmes.0': { $exists: true },
-    programmes: { $ne: workflowId },
   })
-    .select('_id')
+    .select('licence programmes')
     .lean();
-  return rows.map((r) => String(r._id));
+  return rows.filter((b) => restrictedFrom(b, workflowId)).map((b) => String(b._id));
 }
 
 export async function libraryFor(workflowId?: string): Promise<ProgrammeLibrary | null> {

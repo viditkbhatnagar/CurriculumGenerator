@@ -1,4 +1,4 @@
-import { visibleConcept, visibleConcepts } from '../knowledge/bookAccess';
+import { restrictedFrom, visibleConcept, visibleConcepts } from '../knowledge/bookAccess';
 
 const OPEN = 'open-book';
 const SSM = 'ssm-book';
@@ -39,5 +39,25 @@ describe('visibleConcept', () => {
       'K-1',
       'K-3',
     ]);
+  });
+});
+
+describe('restrictedFrom', () => {
+  const BBA = '6a619d817a037be307a8fa7c';
+  const OTHER = '6ae24a8146277a0c7e20dcc2';
+
+  it("keeps an institution's licensed book from other programmes", () => {
+    const ssm = { licence: 'institution-licensed', programmes: [BBA] };
+    expect(restrictedFrom(ssm, OTHER)).toBe(true);
+    expect(restrictedFrom(ssm, BBA)).toBe(false);
+  });
+
+  it('never restricts an open-licence book, whatever its programmes field says', () => {
+    expect(restrictedFrom({ licence: 'cc-by-nc-sa', programmes: ['MAIB'] }, OTHER)).toBe(false);
+    expect(restrictedFrom({ licence: 'cc-by', programmes: [BBA] }, OTHER)).toBe(false);
+  });
+
+  it('leaves a licensed book with no programmes listed open to all', () => {
+    expect(restrictedFrom({ licence: 'institution-licensed', programmes: [] }, OTHER)).toBe(false);
   });
 });
