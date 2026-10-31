@@ -1,5 +1,6 @@
 'use client';
 
+import { TOTAL_STEPS } from '@/types/workflow';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkflows, useCreateWorkflow, useDeleteWorkflow } from '@/hooks/useWorkflow';
@@ -48,7 +49,7 @@ function formatStatus(status: WorkflowStatus): string {
 }
 
 function getProgressPercent(workflow: CurriculumWorkflow): number {
-  const totalSteps = 11;
+  const totalSteps = TOTAL_STEPS;
   const completedSteps = workflow.stepProgress.filter(
     (p) => p.status === 'completed' || p.status === 'approved'
   ).length;
@@ -399,7 +400,7 @@ export default function WorkflowListPage() {
                 Curriculum Workflows
               </h1>
               <p className="text-[11px] sm:text-xs text-foreground-muted mt-0.5 truncate">
-                13-Step AI-Integrated Generation
+                {TOTAL_STEPS}-Step AI-Integrated Generation
               </p>
             </div>
           </div>
@@ -773,7 +774,7 @@ export default function WorkflowListPage() {
 
               <h2 className="text-lg font-semibold text-foreground mb-1">Create New Curriculum</h2>
               <p className="text-sm text-foreground-muted mb-5">
-                Start a new 11-step curriculum generation workflow
+                Start a new {TOTAL_STEPS}-step curriculum generation workflow
               </p>
 
               <div className="mb-5">

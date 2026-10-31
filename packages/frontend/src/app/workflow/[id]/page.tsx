@@ -1,5 +1,6 @@
 'use client';
 
+import { TOTAL_STEPS } from '@/types/workflow';
 import { useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -281,9 +282,9 @@ export default function WorkflowDetailPage() {
   // The first step not yet done. The stored position can lag behind the steps (re-running an
   // earlier step used to move it back), so it is read from the steps themselves: Applied
   // Fashion Design showed "Step 9 of 14" and opened on the Glossary with Steps 1-12 done.
-  const nextStep = (Array.from({ length: 14 }, (_, i) => i + 1).find(
+  const nextStep = (Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).find(
     (step) => !isStepDone(workflow, step)
-  ) ?? 14) as WorkflowStep;
+  ) ?? TOTAL_STEPS) as WorkflowStep;
   // The programme's title from Step 1, which the documents use; the stored name can be older.
   const programmeName = workflow.step1?.programTitle?.trim() || workflow.projectName;
 
@@ -456,8 +457,9 @@ export default function WorkflowDetailPage() {
                   className="text-teal-600 text-sm"
                   title="How long the remaining steps typically take a person to complete. Nothing is running — this is not a wait time or a countdown."
                 >
-                  Step {nextStep} of 14 • {progress?.estimatedTimeRemaining || '~2.5 hours'} of your
-                  time to finish the remaining steps
+                  Step {nextStep} of {TOTAL_STEPS} •{' '}
+                  {progress?.estimatedTimeRemaining || '~2.5 hours'} of your time to finish the
+                  remaining steps
                 </p>
               </div>
             </div>

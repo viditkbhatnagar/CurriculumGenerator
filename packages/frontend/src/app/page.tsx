@@ -1,5 +1,6 @@
 'use client';
 
+import { TOTAL_STEPS } from '@/types/workflow';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -97,6 +98,27 @@ const WORKFLOW_STEPS = [
     time: '10-15 min',
     icon: Presentation,
     color: 'from-sky-500 to-indigo-500',
+  },
+  {
+    step: 12,
+    name: 'Assignment Packs',
+    time: '15-20 min',
+    icon: Layers,
+    color: 'from-fuchsia-500 to-pink-500',
+  },
+  {
+    step: 13,
+    name: 'Summative Exam',
+    time: '5-10 min',
+    icon: Shield,
+    color: 'from-red-500 to-rose-500',
+  },
+  {
+    step: 14,
+    name: 'Course Syllabus',
+    time: '~30 sec',
+    icon: BookOpen,
+    color: 'from-lime-500 to-green-500',
   },
 ];
 
@@ -197,8 +219,8 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
-            11-step AI workflow with SME checkpoints, auto-gradable assessments, and full credit
-            system support. AGI-compliant from start to finish.
+            {TOTAL_STEPS}-step AI workflow with SME checkpoints, auto-gradable assessments, and full
+            credit system support. AGI-compliant from start to finish.
           </motion.p>
 
           <motion.div
@@ -264,7 +286,7 @@ export default function Home() {
             transition={{ duration: 0.5 }}
           >
             <h2 className="text-3xl font-bold text-foreground mb-3 tracking-tight">
-              11-Step Workflow
+              {TOTAL_STEPS}-Step Workflow
             </h2>
             <p className="text-foreground-muted max-w-lg mx-auto">
               Each step builds on the last, with AI generation and human review at every checkpoint.

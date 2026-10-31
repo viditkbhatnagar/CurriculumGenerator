@@ -1,5 +1,6 @@
 'use client';
 
+import { TOTAL_STEPS } from '@/types/workflow';
 import { useState } from 'react';
 import { CurriculumWorkflow } from '@/types/workflow';
 import PublicationPanel from './PublicationPanel';
@@ -140,8 +141,8 @@ export default function FinalReviewView({ workflow, onChanged }: Props) {
         <h1 className="text-3xl font-bold text-teal-800 mb-3">🎉 Curriculum Complete!</h1>
         <p className="text-lg text-teal-700 mb-2">{workflow.projectName}</p>
         <p className="text-teal-600">
-          Your complete curriculum is ready for download. All 13 steps have been generated with
-          lesson plans, PowerPoint decks, assignment packs, and summative exam.
+          Your complete curriculum is ready for download. All {TOTAL_STEPS} steps have been
+          generated with lesson plans, PowerPoint decks, assignment packs, and summative exam.
         </p>
       </div>
 
@@ -217,8 +218,8 @@ export default function FinalReviewView({ workflow, onChanged }: Props) {
           Download Complete Curriculum
         </h2>
         <p className="text-teal-600 text-sm mb-6">
-          Download your complete curriculum package with all 13 steps, lesson plans, PPT files,
-          assignment packs, and summative exam.
+          Download your complete curriculum package (Steps 1-13), with lesson plans, PPT files,
+          assignment packs and summative exam. Course syllabi download from Step 14.
         </p>
 
         {/* Download Buttons */}
@@ -248,7 +249,7 @@ export default function FinalReviewView({ workflow, onChanged }: Props) {
                 {downloadingWord ? 'Generating Word Document...' : 'Download Word Document'}
               </div>
               <div className="text-sm opacity-90">
-                {downloadingWord ? 'Please wait, this may take a moment' : 'All 13 Steps (.docx)'}
+                {downloadingWord ? 'Please wait, this may take a moment' : 'Steps 1-13 (.docx)'}
               </div>
             </div>
             <svg
@@ -286,7 +287,7 @@ export default function FinalReviewView({ workflow, onChanged }: Props) {
                 {downloadingPDF ? 'Generating PDF...' : 'Download PDF'}
               </div>
               <div className="text-sm opacity-90">
-                {downloadingPDF ? 'Please wait, this may take a moment' : 'All 13 Steps (.pdf)'}
+                {downloadingPDF ? 'Please wait, this may take a moment' : 'Steps 1-13 (.pdf)'}
               </div>
             </div>
             <svg
@@ -398,9 +399,9 @@ export default function FinalReviewView({ workflow, onChanged }: Props) {
             <div>
               <p className="font-medium text-teal-800">Word Document (.docx)</p>
               <p className="text-teal-600">
-                Complete curriculum with all 13 steps: Program Foundation, Competencies, PLOs,
-                Modules, Sources, Readings, Assessments, Case Studies, Glossary, Lesson Plans,
-                PowerPoints, Assignment Packs, and Summative Exam
+                Complete curriculum, Steps 1-13: Program Foundation, Competencies, PLOs, Modules,
+                Sources, Readings, Assessments, Case Studies, Glossary, Lesson Plans, PowerPoints,
+                Assignment Packs, and Summative Exam
               </p>
             </div>
           </div>

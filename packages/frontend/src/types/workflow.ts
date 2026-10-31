@@ -1,5 +1,5 @@
 /**
- * 11-Step Curriculum Workflow Types
+ * Curriculum Workflow Types (14 steps; see STEP_NAMES)
  * AI-Integrated Curriculum Generator v2.3
  */
 
@@ -2084,6 +2084,9 @@ export const STEP_NAMES: Record<WorkflowStep, string> = {
   13: 'Summative Exam',
   14: 'Course Syllabus',
 };
+
+/** How many steps a programme has: every screen that states a count reads it from here. */
+export const TOTAL_STEPS = Object.keys(STEP_NAMES).length;
 
 export const STEP_DESCRIPTIONS: Record<WorkflowStep, string> = {
   1: 'Define program basics: title, level, credits, and target audience',

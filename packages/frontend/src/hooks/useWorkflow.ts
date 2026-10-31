@@ -1,5 +1,5 @@
 /**
- * 9-Step Curriculum Workflow Hooks
+ * Curriculum Workflow Hooks (all steps)
  * React Query hooks for workflow API interactions
  */
 

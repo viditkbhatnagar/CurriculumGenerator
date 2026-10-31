@@ -1,5 +1,6 @@
 'use client';
 
+import { TOTAL_STEPS } from '@/types/workflow';
 import { motion, useInView } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { useRef } from 'react';
@@ -122,7 +123,7 @@ const PrismaHero = ({
   navItems = defaultNavItems,
   word = 'Curricula',
   showAsterisk = true,
-  description = 'AGCQ is the curriculum atelier for serious institutions — a 13-step AI workflow with SME checkpoints, AGI-compliant source validation, and complete programme specifications drafted in hours, not months.',
+  description = `AGCQ is the curriculum atelier for serious institutions — a ${TOTAL_STEPS}-step AI workflow with SME checkpoints, AGI-compliant source validation, and complete programme specifications drafted in hours, not months.`,
   ctaLabel = 'Sign in',
   onCtaClick,
   onNavClick,

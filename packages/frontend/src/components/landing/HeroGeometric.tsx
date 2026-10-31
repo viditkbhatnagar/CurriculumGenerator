@@ -1,5 +1,6 @@
 'use client';
 
+import { TOTAL_STEPS } from '@/types/workflow';
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -91,7 +92,7 @@ function HeroGeometric({
   badge = 'AI-Powered Curriculum',
   title1 = 'AI-Integrated Curriculum',
   title2 = 'Generator',
-  description = 'Generate complete, AGI-compliant curricula in ~2 hours. 10-step workflow with SME checkpoints, auto-gradable MCQ assessments, and full credit system support.',
+  description = `Generate complete, AGI-compliant curricula in ~2 hours. ${TOTAL_STEPS}-step workflow with SME checkpoints, auto-gradable MCQ assessments, and full credit system support.`,
   children,
 }: HeroGeometricProps) {
   const [isMounted, setIsMounted] = useState(false);
