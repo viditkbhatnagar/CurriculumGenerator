@@ -1330,6 +1330,8 @@ export interface ICurriculumWorkflow extends Document {
     completedAt?: Date;
     error?: string;
     failedAt?: Date;
+    runStartedAt?: Date;
+    runEndedAt?: Date;
     approvedAt?: Date;
     approvedBy?: mongoose.Types.ObjectId;
     reviewTimeMinutes?: number;
@@ -1581,6 +1583,10 @@ const CurriculumWorkflowSchema = new Schema<ICurriculumWorkflow>(
         // Set when the step's generation failed for good (stepGating.recordStepFailed).
         error: String,
         failedAt: Date,
+        // When a queued run of the step began and ended (services/stepRunStatus). Approval
+        // also marks a step in_progress, so status alone cannot say a run is under way.
+        runStartedAt: Date,
+        runEndedAt: Date,
         approvedAt: Date,
         approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
         reviewTimeMinutes: Number,

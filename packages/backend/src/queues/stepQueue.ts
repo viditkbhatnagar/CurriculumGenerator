@@ -134,6 +134,7 @@ if (stepQueue) {
       );
 
       await job.progress(100);
+      await markRun(workflowId, stepNumber, 'runEndedAt');
 
       // Clear any failure recorded by an earlier attempt, so a stale error is
       // not left sitting above content that has since generated successfully.
@@ -258,6 +259,31 @@ if (stepQueue) {
   });
 }
 
+/**
+ * Stamps the start or end of a queued run on the step's progress (services/stepRunStatus).
+ * Written in place, so a workflow document being saved elsewhere does not overwrite it. A
+ * missing stamp only means the status endpoint cannot call the run stalled.
+ */
+async function markRun(
+  workflowId: string,
+  stepNumber: number,
+  field: 'runStartedAt' | 'runEndedAt'
+): Promise<void> {
+  try {
+    await CurriculumWorkflow.updateOne(
+      { _id: workflowId, 'stepProgress.step': stepNumber },
+      { $set: { [`stepProgress.$.${field}`]: new Date() } }
+    );
+  } catch (error) {
+    loggingService.warn('Could not record the step run on its progress', {
+      workflowId,
+      stepNumber,
+      field,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 // Helper function to add a step job
 export async function addStepJob(
   stepNumber: number,
@@ -290,6 +316,8 @@ export async function addStepJob(
       : {}),
   };
 
+  // Recorded before the job exists, so the run's end can never be stamped ahead of its start.
+  await markRun(workflowId, stepNumber, 'runStartedAt');
   const job = await stepQueue.add({ stepNumber, workflowId, userId, input }, jobOptions);
 
   loggingService.info('Step job queued', {

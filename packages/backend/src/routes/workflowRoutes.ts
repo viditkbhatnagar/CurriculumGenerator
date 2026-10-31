@@ -94,6 +94,7 @@ import {
 import { createAuditLog } from '../services/auditService';
 import { sanitizeActivityArray } from '../services/activitySanitizer';
 import { isStepDone, recordStepApproved } from '../services/stepGating';
+import { stepRunStatus } from '../services/stepRunStatus';
 import { sanitizeReadingPayload } from '../services/readingValidator';
 import { sanitizeSourcePayload } from '../services/sourceValidator';
 import crypto from 'crypto';
@@ -9963,22 +9964,10 @@ router.get(
       const stepData = (workflow as any)[stepKey];
       const hasData = !!stepData && Object.keys(stepData).length > 0;
 
-      // Determine overall status
-      let overallStatus: 'pending' | 'queued' | 'processing' | 'completed' | 'failed' = 'pending';
-      if (jobStatus) {
-        if (jobStatus.state === 'completed') overallStatus = 'completed';
-        else if (jobStatus.state === 'active') overallStatus = 'processing';
-        else if (jobStatus.state === 'waiting' || jobStatus.state === 'delayed')
-          overallStatus = 'queued';
-        else if (jobStatus.state === 'failed') overallStatus = 'failed';
-      } else if (hasData) {
-        overallStatus = 'completed';
-      }
-
       // A step that is still writing must not be reported as finished — but a step whose run
       // has died must not be reported as still running either.
       //
-      // Bull job records expire, and once one is gone the check above falls back to "there is
+      // Bull job records expire, and once one is gone the job's state falls back to "there is
       // data, therefore it is done". Steps 7, 8 and 9 build up their output module by module
       // over the better part of an hour, so partial data is the normal state for most of a
       // run — and reporting it complete told an author her assessments were ready when 21 of
@@ -9987,23 +9976,16 @@ router.get(
       // The first version of this fix then let `in_progress` override everything, which
       // created the opposite failure: when a run died — a deploy, a restart, a crash — the
       // step was pinned to "processing" with no job and no data, and the screen showed
-      // "Generating..." indefinitely. The author sat watching that for a day and hard-
-      // refreshed, which cannot help, because the staleness is in this response.
-      //
-      // Bull evicts only FINISHED jobs (removeOnComplete/removeOnFail); an active job always
-      // has a record. So with the queue enabled, no job means the step is genuinely not
-      // running, and no time heuristic is needed to say so. Without the queue, steps run
-      // in-process with no job to find, so the benefit of the doubt goes to "processing".
+      // "Generating..." indefinitely. The second version reported `in_progress` with no job as
+      // stalled, but approval marks the next step `in_progress` too, so a step that had only
+      // been opened read as failed. Runs are now recorded on their own (stepRunStatus).
       const progress = (workflow.stepProgress || []).find((p: any) => p.step === step);
-      let stalled = false;
-      if (progress?.status === 'in_progress' && !progress?.completedAt) {
-        if (jobStatus || !stepQueue) {
-          overallStatus = 'processing';
-        } else {
-          overallStatus = 'failed';
-          stalled = true;
-        }
-      }
+      const { status: overallStatus, stalled } = stepRunStatus({
+        jobState: jobStatus?.state,
+        hasData,
+        progress,
+        queueEnabled: !!stepQueue,
+      });
 
       res.json({
         success: true,
