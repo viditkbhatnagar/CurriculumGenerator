@@ -1,5 +1,7 @@
 'use client';
 
+import Step1GeneratedPanel from './Step1GeneratedPanel';
+import { step1InputProblems } from '@/lib/step1Rules';
 import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep1, useApproveStep1 } from '@/hooks/useWorkflow';
 import { api } from '@/lib/api';
@@ -42,6 +44,18 @@ const EMPTY_JOB_ROLE: JobRole = {
   tasks: [''],
 };
 
+/** The form's inputs in a comparable form: empty tasks and roles dropped, derived hours left out. */
+function comparableInputs(form: any): string {
+  const roles = (form.jobRoles || [])
+    .filter((r: any) => (r.title || '').trim())
+    .map((r: any) => ({
+      title: (r.title || '').trim(),
+      description: (r.description || '').trim(),
+      tasks: (r.tasks || []).map((t: string) => t.trim()).filter(Boolean),
+    }));
+  return JSON.stringify({ ...form, totalHours: undefined, jobRoles: roles });
+}
+
 export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
   const submitStep1 = useSubmitStep1();
   const approveStep1 = useApproveStep1();
@@ -72,6 +86,9 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
 
   // Track if form has been initialized to prevent resets
   const isInitialized = useRef(false);
+  // The inputs Step 1 was last generated from, to notice edits made since (they were lost:
+  // Approve saved nothing, so Logan's added tasks never reached the programme).
+  const generatedSnapshot = useRef<string | null>(null);
   const lastWorkflowId = useRef<string | null>(null);
 
   // Form state
@@ -163,7 +180,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
       const delivery = step1.delivery;
       const creditFramework = step1.creditFramework;
 
-      setFormData({
+      const initial = {
         programTitle: step1.programTitle || '',
         programDescription: step1.programDescription || '',
         academicLevel: step1.academicLevel || 'certificate',
@@ -204,7 +221,9 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                     }
               )
             : [{ ...EMPTY_JOB_ROLE }, { ...EMPTY_JOB_ROLE }],
-      });
+      };
+      setFormData(initial);
+      generatedSnapshot.current = comparableInputs(initial);
 
       if (creditFramework?.customContactPercent) {
         setShowCustomContactHours(true);
@@ -257,6 +276,11 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
     formData.customContactPercent,
   ]);
 
+  const editedSinceGeneration =
+    !!workflow.step1 &&
+    generatedSnapshot.current !== null &&
+    comparableInputs(formData) !== generatedSnapshot.current;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -270,6 +294,18 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
         tasks: role.tasks.filter((task) => task.trim()),
       }));
 
+    // The minimums the form states, before anything is sent (lib/step1Rules; the backend
+    // refuses the same).
+    const shortfalls = step1InputProblems({
+      programDescription: formData.programDescription,
+      programPurpose: formData.programPurpose,
+      jobRoles: cleanedJobRoles,
+    });
+    if (shortfalls.length) {
+      setValidationErrors(shortfalls);
+      return;
+    }
+
     try {
       startGeneration(workflow._id, 1);
       const response = await submitStep1.mutateAsync({
@@ -280,6 +316,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
           totalHours: calculations.totalHours,
         },
       });
+      generatedSnapshot.current = comparableInputs(formData);
       if ((response as any)?.data?.jobId) {
         startPolling();
       } else {
@@ -288,8 +325,9 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
       }
     } catch (err: any) {
       console.error('Failed to submit Step 1:', err);
-      failGeneration(workflow._id, 1, err.message || 'Failed to save draft');
-      setError(err.message || 'Failed to save draft');
+      failGeneration(workflow._id, 1, err.message || 'Failed to generate Step 1');
+      setError(err.message || 'Failed to generate Step 1');
+      if (Array.isArray(err?.details) && err.details.length) setValidationErrors(err.details);
     }
   };
 
@@ -1037,6 +1075,18 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
         </section>
 
         {/* ============================================================ */}
+        {workflow.step1 && <Step1GeneratedPanel step1={workflow.step1} />}
+
+        {editedSinceGeneration && (
+          <div
+            role="status"
+            className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+          >
+            You have changed the form since Step 1 was generated. Generate Step 1 again to use your
+            changes; approving now would leave them out.
+          </div>
+        )}
+
         {/* ERROR DISPLAY */}
         {/* ============================================================ */}
         {(error || validationErrors.length > 0) && (
@@ -1082,17 +1132,24 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
               {submitStep1.isPending ? (
                 <>
                   <div className="w-4 h-4 border-2 border-teal-800 border-t-transparent rounded-full animate-spin" />
-                  Saving...
+                  Generating...
                 </>
+              ) : (workflow.step1 as any)?.executiveSummary ? (
+                'Regenerate Step 1'
               ) : (
-                'Save Draft'
+                'Generate Step 1'
               )}
             </button>
             {isComplete && !isApproved && (
               <button
                 type="button"
                 onClick={handleApprove}
-                disabled={approveStep1.isPending}
+                disabled={approveStep1.isPending || editedSinceGeneration}
+                title={
+                  editedSinceGeneration
+                    ? 'Generate Step 1 again to use your changes first'
+                    : undefined
+                }
                 className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
               >
                 {approveStep1.isPending ? 'Approving...' : 'Approve & Continue →'}

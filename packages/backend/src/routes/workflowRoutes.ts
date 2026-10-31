@@ -18,6 +18,7 @@
 
 import { MIN_MODULES } from '../services/moduleFramework';
 import { approvalDecision, failedChecks } from '../services/approvalChecks';
+import { step1InputProblems } from '../services/step1Rules';
 import { step3CoverageReport } from '../services/outcomeCoverage';
 import { Router, Request, Response, NextFunction } from 'express';
 import JSZip from 'jszip';
@@ -1330,6 +1331,20 @@ router.post('/:id/step1', validateJWT, loadUser, async (req: Request, res: Respo
       }
       return role && role.title && role.title.trim();
     });
+
+    // The minimums the form states, checked before anything is generated (services/step1Rules).
+    const shortfalls = step1InputProblems({
+      programDescription,
+      programPurpose,
+      jobRoles: filteredJobRoles,
+    });
+    if (shortfalls.length) {
+      return res.status(400).json({
+        success: false,
+        error: 'Step 1 needs more detail before it can be generated',
+        details: shortfalls,
+      });
+    }
 
     const inputData = {
       programTitle,
