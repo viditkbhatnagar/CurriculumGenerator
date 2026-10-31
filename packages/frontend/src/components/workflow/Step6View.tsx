@@ -1,5 +1,6 @@
 'use client';
 
+import ApprovalOverridePanel from './ApprovalOverridePanel';
 import { useState, useEffect } from 'react';
 import { useSubmitStep6, useApproveStep6 } from '@/hooks/useWorkflow';
 import { api } from '@/lib/api';
@@ -1185,6 +1186,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
   const submitStep6 = useSubmitStep6();
   const approveStep6 = useApproveStep6();
   const [error, setError] = useState<string | null>(null);
+  const [overrideIssues, setOverrideIssues] = useState<string[] | null>(null);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
 
@@ -1265,12 +1267,18 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
     }
   };
 
-  const handleApprove = async () => {
+  const handleApprove = async (overrideReason?: string) => {
     setError(null);
     try {
-      await approveStep6.mutateAsync(workflow._id);
+      await approveStep6.mutateAsync({ id: workflow._id, overrideReason });
+      setOverrideIssues(null);
       onComplete();
     } catch (err) {
+      // The step failed its own checks: show them, with a way to approve with a reason.
+      if ((err as { code?: string })?.code === 'OVERRIDE_REQUIRED') {
+        setOverrideIssues((err as { details?: string[] }).details || []);
+        return;
+      }
       const errorMessage = err instanceof Error ? err.message : 'Failed to approve Step 6';
       console.error('Failed to approve Step 6:', err);
       setError(errorMessage);
@@ -1692,6 +1700,16 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
             </div>
           )}
 
+          {overrideIssues && (
+            <ApprovalOverridePanel
+              stepNumber={6}
+              issues={overrideIssues}
+              busy={approveStep6.isPending}
+              onApprove={(reason) => handleApprove(reason)}
+              onCancel={() => setOverrideIssues(null)}
+            />
+          )}
+
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
@@ -1711,7 +1729,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
             <div className="flex gap-3">
               {!isApproved && (
                 <button
-                  onClick={handleApprove}
+                  onClick={() => handleApprove()}
                   disabled={approveStep6.isPending}
                   className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
                 >

@@ -17,6 +17,7 @@
  */
 
 import { MIN_MODULES } from '../services/moduleFramework';
+import { approvalDecision, failedChecks } from '../services/approvalChecks';
 import { step3CoverageReport } from '../services/outcomeCoverage';
 import { Router, Request, Response, NextFunction } from 'express';
 import JSZip from 'jszip';
@@ -3451,12 +3452,26 @@ router.post('/:id/step5/approve', validateJWT, loadUser, async (req: Request, re
       return res.status(404).json({ success: false, error: 'Workflow or Step 5 not found' });
     }
 
-    // Validation is informational only - no longer blocks approval
-    // Issues will be logged but approval proceeds
-    if (!workflow.step5.agiCompliant) {
-      loggingService.warn('Step 5 approved with AGI compliance warnings', {
+    // Failed checks block approval unless a reason is given (services/approvalChecks).
+    const decision = approvalDecision(failedChecks(5, workflow.step5), req.body?.overrideReason);
+    if (!decision.allowed) {
+      return res.status(409).json({
+        success: false,
+        code: 'OVERRIDE_REQUIRED',
+        error: 'Step 5 did not pass its checks. Fix them and regenerate, or approve with a reason.',
+        details: decision.issues,
+      });
+    }
+    if (decision.override) {
+      (workflow.step5 as any).approvalOverride = {
+        ...decision.override,
+        by: userId,
+        at: new Date(),
+      };
+      workflow.markModified('step5');
+      loggingService.warn('Step 5 approved over failed checks', {
         workflowId: req.params.id,
-        agiCompliant: workflow.step5.agiCompliant,
+        issues: decision.override.issues.length,
       });
     }
 
@@ -4037,6 +4052,29 @@ router.post('/:id/step6/approve', validateJWT, loadUser, async (req: Request, re
 
     if (!workflow || !workflow.step6) {
       return res.status(404).json({ success: false, error: 'Workflow or Step 6 not found' });
+    }
+
+    // Failed checks block approval unless a reason is given (services/approvalChecks).
+    const decision = approvalDecision(failedChecks(6, workflow.step6), req.body?.overrideReason);
+    if (!decision.allowed) {
+      return res.status(409).json({
+        success: false,
+        code: 'OVERRIDE_REQUIRED',
+        error: 'Step 6 did not pass its checks. Fix them and regenerate, or approve with a reason.',
+        details: decision.issues,
+      });
+    }
+    if (decision.override) {
+      (workflow.step6 as any).approvalOverride = {
+        ...decision.override,
+        by: userId,
+        at: new Date(),
+      };
+      workflow.markModified('step6');
+      loggingService.warn('Step 6 approved over failed checks', {
+        workflowId: req.params.id,
+        issues: decision.override.issues.length,
+      });
     }
 
     workflow.step6.approvedAt = new Date();

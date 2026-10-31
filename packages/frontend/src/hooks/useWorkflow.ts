@@ -347,14 +347,20 @@ export function useApproveStep5() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    // A reason is needed only when the step failed its checks (backend services/approvalChecks).
+    mutationFn: async (args: string | { id: string; overrideReason?: string }) => {
+      const { id, overrideReason } =
+        typeof args === 'string' ? { id: args, overrideReason: undefined } : args;
       const response = await fetchAPI(`${WORKFLOW_BASE}/${id}/step5/approve`, {
         method: 'POST',
+        ...(overrideReason ? { body: JSON.stringify({ overrideReason }) } : {}),
       });
       return response;
     },
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    onSuccess: (_, args) => {
+      queryClient.invalidateQueries({
+        queryKey: ['workflow', typeof args === 'string' ? args : args.id],
+      });
     },
   });
 }
@@ -383,14 +389,20 @@ export function useApproveStep6() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    // A reason is needed only when the step failed its checks (backend services/approvalChecks).
+    mutationFn: async (args: string | { id: string; overrideReason?: string }) => {
+      const { id, overrideReason } =
+        typeof args === 'string' ? { id: args, overrideReason: undefined } : args;
       const response = await fetchAPI(`${WORKFLOW_BASE}/${id}/step6/approve`, {
         method: 'POST',
+        ...(overrideReason ? { body: JSON.stringify({ overrideReason }) } : {}),
       });
       return response;
     },
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    onSuccess: (_, args) => {
+      queryClient.invalidateQueries({
+        queryKey: ['workflow', typeof args === 'string' ? args : args.id],
+      });
     },
   });
 }
