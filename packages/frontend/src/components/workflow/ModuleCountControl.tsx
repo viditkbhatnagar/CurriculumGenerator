@@ -19,13 +19,31 @@ import { api } from '@/lib/api';
 interface Props {
   workflowId: string;
   currentCount: number;
-  creditFramework?: { credits?: number };
+  creditFramework?: { credits?: number; system?: string; creditSystem?: string };
   hasBlueprint: boolean;
   onSaved: () => void;
   disabled?: boolean;
 }
 
-const MODULE_CREDIT_SIZE = 6;
+/**
+ * A typical module's credits in each credit system, as the backend uses them to propose a
+ * count (services/moduleFramework typicalModuleCredits). The screen used 6 (ECTS) for every
+ * system, so a 60 UK-credit programme read "10 suits 60 credits at 6 each" while Step 4
+ * proposed 4 modules of 15 (Logan's test run, 28 October 2026).
+ */
+function typicalModuleCredits(system: unknown): number | null {
+  switch (String(system || '')) {
+    case 'ects':
+      return 6;
+    case 'uk':
+    case 'uk_credits':
+      return 15;
+    case 'us_semester':
+      return 3;
+    default:
+      return null;
+  }
+}
 const MIN_MODULES = 4;
 const MAX_MODULES = 40;
 
@@ -38,9 +56,11 @@ export default function ModuleCountControl({
   disabled,
 }: Props) {
   const credits = creditFramework?.credits || 0;
-  const derived = credits
-    ? Math.min(MAX_MODULES, Math.max(MIN_MODULES, Math.round(credits / MODULE_CREDIT_SIZE)))
-    : null;
+  const moduleSize = typicalModuleCredits(creditFramework?.system || creditFramework?.creditSystem);
+  const derived =
+    credits && moduleSize
+      ? Math.min(MAX_MODULES, Math.max(MIN_MODULES, Math.round(credits / moduleSize)))
+      : null;
 
   const [value, setValue] = useState<string>(String(currentCount || derived || 8));
   const [busy, setBusy] = useState(false);
@@ -101,8 +121,8 @@ export default function ModuleCountControl({
         )}
         {derived !== null && (
           <span className="text-xs text-teal-500">
-            (currently generating {currentCount || derived}; {derived} suits {credits} credits at{' '}
-            {MODULE_CREDIT_SIZE} each)
+            (currently {currentCount || derived}; {derived} modules of {moduleSize} credits make{' '}
+            {credits} credits)
           </span>
         )}
       </label>

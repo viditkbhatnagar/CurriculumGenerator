@@ -32,7 +32,8 @@ export function typicalModuleCredits(system: unknown): number | null {
   }
 }
 
-const MIN_MODULES = 4;
+/** The fewest modules a programme can have, for generation and approval alike. */
+export const MIN_MODULES = 4;
 const MAX_MODULES = 40;
 /** Hours per module when a programme records no credits. */
 const HOURS_PER_MODULE = 120;

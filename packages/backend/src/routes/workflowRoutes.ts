@@ -16,6 +16,7 @@
  * 9. Glossary - Auto-Generated (5 min)
  */
 
+import { MIN_MODULES } from '../services/moduleFramework';
 import { step3CoverageReport } from '../services/outcomeCoverage';
 import { Router, Request, Response, NextFunction } from 'express';
 import JSZip from 'jszip';
@@ -2915,10 +2916,13 @@ router.post('/:id/step4/approve', validateJWT, loadUser, async (req: Request, re
       });
     }
 
-    if (!workflow.step4.modules || workflow.step4.modules.length < 6) {
+    // The same minimum generation uses (services/moduleFramework). Approval demanded 6 after
+    // generation was allowed 4, so a 60-credit certificate built as 4 x 15-credit modules was
+    // proposed and then refused.
+    if (!workflow.step4.modules || workflow.step4.modules.length < MIN_MODULES) {
       return res.status(400).json({
         success: false,
-        error: 'At least 6 modules are required',
+        error: `At least ${MIN_MODULES} modules are required`,
       });
     }
 

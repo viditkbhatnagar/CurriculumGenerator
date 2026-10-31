@@ -2058,13 +2058,6 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
             </div>
           </div>
 
-          {/* Error Display */}
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-              <p className="text-red-400">{error}</p>
-            </div>
-          )}
-
           {/* The structure panel and module-count control belong here too, not
               only on the empty-state form. Once a framework exists the form is
               never shown again, so an author who wanted to upload their approved
@@ -2088,6 +2081,18 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
               disabled={isCurrentlyGenerating}
             />
           </div>
+
+          {/* Errors sit beside the buttons that cause them: above the module list, a refused
+              approval ("At least 6 modules are required") was off-screen and seen only in the
+              browser console (Logan's test run, 28 October 2026). */}
+          {error && (
+            <div
+              role="alert"
+              className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mt-6"
+            >
+              <p className="text-red-600">{error}</p>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-6 border-t border-teal-200">

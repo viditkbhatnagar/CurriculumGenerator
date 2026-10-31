@@ -88,11 +88,20 @@ if (freshRefErrors.length > 0) {
   process.exit(1);
 }
 
+/**
+ * A signature without the type text that ends many messages ("... does not exist on type
+ * '{ system: "ects" | "uk_credits" ... }'"). TypeScript prints a union's members in the order
+ * it first met them, which an unrelated import changes: on 31 October 2026 adding one import to
+ * workflowRoutes.ts reordered a union and reported two old errors as new. The property, code and
+ * file still identify the error; the type's spelling does not.
+ */
+const comparable = (sig) => sig.replace(/( (?:on|in|to|of|from) type )'[\s\S]*$/, '$1…');
+
 // Multiset difference: an error signature appearing more often than at baseline is new.
-const remaining = baseSigs.slice();
+const remaining = baseSigs.map(comparable);
 const added = [];
 for (const s of sigs) {
-  const at = remaining.indexOf(s);
+  const at = remaining.indexOf(comparable(s));
   if (at === -1) added.push(s);
   else remaining.splice(at, 1);
 }
