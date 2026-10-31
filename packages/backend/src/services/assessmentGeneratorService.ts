@@ -17,6 +17,7 @@
  */
 
 import { programmeContextBlock, programmeFraming } from './programmeFraming';
+import config from '../config';
 import { markConsistency } from './assessmentMarks';
 import { ICurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { openaiService } from './openaiService';
@@ -419,52 +420,35 @@ export class AssessmentGeneratorService {
       formativeTypes,
     });
 
-    for (let i = 0; i < modules.length; i++) {
+    // Modules are generated several at a time; each module's assessments still go one call at a
+    // time. In sequence, Logan's 6-module test run took 71 minutes at 2.6 minutes a call, showing
+    // 0% throughout, and was taken for a stall after 50.
+    const perModule: FormativeAssessment[][] = new Array(modules.length).fill(null).map(() => []);
+    const concurrency = Math.max(1, Math.min(config.openai.step7ModuleConcurrency, modules.length));
+    let next = 0;
+    let completed = 0;
+    progressCallback?.({
+      stage: 'formative',
+      currentModule: modules[0]?.title,
+      totalSteps: modules.length,
+      completedSteps: 0,
+      estimatedTimeRemaining: Math.ceil(modules.length / concurrency) * 3 * 60,
+    });
+
+    const runModule = async (i: number) => {
       const module = modules[i];
-
-      if (progressCallback) {
-        progressCallback({
-          stage: 'formative',
-          currentModule: module.title,
-          totalSteps: modules.length,
-          completedSteps: i,
-          estimatedTimeRemaining: (modules.length - i) * 3 * 60, // 3 min per module
-        });
-      }
-
       try {
-        const moduleFormatives = await this.generateModuleFormativeAssessments(
+        perModule[i] = await this.generateModuleFormativeAssessments(
           module,
           i,
           request,
           formativePerModule,
           formativeTypes
         );
-
-        allFormatives.push(...moduleFormatives);
-
         loggingService.info(`Module ${i + 1}/${modules.length} formatives complete`, {
           moduleId: module.id,
-          count: moduleFormatives.length,
+          count: perModule[i].length,
         });
-
-        // Send data callback for streaming (after each module completes)
-        if (progressCallback) {
-          progressCallback({
-            stage: 'formative',
-            currentModule: module.title,
-            totalSteps: modules.length,
-            completedSteps: i + 1,
-            data: {
-              formatives: moduleFormatives,
-            },
-          });
-        }
-
-        // Delay between modules to avoid rate limits
-        if (i < modules.length - 1) {
-          await this.delay(this.INTER_CALL_DELAY);
-        }
       } catch (firstError) {
         // Retry once. Most failures here are transient — a truncated JSON response or a
         // rate limit — and a single retry recovers them.
@@ -472,14 +456,13 @@ export class AssessmentGeneratorService {
           error: firstError instanceof Error ? firstError.message : String(firstError),
         });
         try {
-          const retried = await this.generateModuleFormativeAssessments(
+          perModule[i] = await this.generateModuleFormativeAssessments(
             module,
             i,
             request,
             formativePerModule,
             formativeTypes
           );
-          allFormatives.push(...retried);
         } catch (retryError) {
           // Continuing silently is what lost eleven modules from a completed run: the step
           // reported success, and the author found out by reading the exported document and
@@ -489,7 +472,25 @@ export class AssessmentGeneratorService {
           loggingService.error(`Gave up on formatives for module ${module.id}`, { message });
         }
       }
-    }
+      completed += 1;
+      // Streamed to the page after each module, in the order modules finish.
+      progressCallback?.({
+        stage: 'formative',
+        currentModule: module.title,
+        totalSteps: modules.length,
+        completedSteps: completed,
+        data: { formatives: perModule[i] },
+      });
+    };
+
+    const worker = async () => {
+      while (next < modules.length) {
+        const i = next++;
+        await runModule(i);
+      }
+    };
+    await Promise.all(Array.from({ length: concurrency }, worker));
+    allFormatives.push(...perModule.flat());
 
     return allFormatives;
   }

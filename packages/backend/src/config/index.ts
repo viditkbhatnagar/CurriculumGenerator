@@ -21,6 +21,8 @@ interface Config {
     chatModel: string;
     reasoningEffort?: 'low' | 'medium' | 'high';
     step8ModuleConcurrency: number;
+    /** How many modules Step 7 writes assessments for at once. */
+    step7ModuleConcurrency: number;
     /** OpenAI-compatible gateway base URL (e.g. OpenRouter); undefined = OpenAI direct. */
     baseURL?: string;
     /** Set when AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY are: requests go to Azure. */
@@ -164,6 +166,9 @@ const config: Config = {
      * retried after 429s, which makes the step slower, not faster.
      */
     step8ModuleConcurrency: Number(process.env.STEP8_MODULE_CONCURRENCY) || 10,
+    // One call per assessment, about 2.6 minutes each on gpt-5.4: six modules at once brings a
+    // 6-module programme from 71 minutes to about 12, and a 46-module one from 8 hours to 80.
+    step7ModuleConcurrency: Number(process.env.STEP7_MODULE_CONCURRENCY) || 6,
     // Optional OpenAI-compatible gateway. Set OPENAI_BASE_URL to
     // https://openrouter.ai/api/v1 (with an sk-or-… key) to route the same
     // OpenAI models through OpenRouter; leave unset for OpenAI direct.

@@ -10,6 +10,7 @@
  * - RAG-enhanced generation from ingested knowledge base documents
  */
 
+import { step7Percent } from './step7Progress';
 import mongoose from 'mongoose';
 import { CurriculumWorkflow, ICurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { openaiService } from './openaiService';
@@ -3505,7 +3506,8 @@ CRITICAL:
       alignToWorkplacePerformance: boolean;
       integratedRealWorldSummative: boolean;
       generateSampleQuestions: boolean;
-    }
+    },
+    onProgress?: (pct: number) => void
   ): Promise<ICurriculumWorkflow> {
     const workflow = await CurriculumWorkflow.findById(workflowId);
     if (!workflow || !workflow.step6) {
@@ -3533,6 +3535,9 @@ CRITICAL:
           completedSteps: progress.completedSteps,
           totalSteps: progress.totalSteps,
         });
+        // The job's percentage, which the page shows: it sat at 0 until the step finished.
+        const pct = step7Percent(progress);
+        if (pct !== null) onProgress?.(pct);
       }
     );
 

@@ -100,7 +100,7 @@ async function processStepJob(
     case 6:
       return workflowService.processStep6(workflowId);
     case 7:
-      return workflowService.processStep7(workflowId, input as any);
+      return workflowService.processStep7(workflowId, input as any, onProgress);
     case 8:
       return workflowService.processStep8(workflowId, onProgress);
     case 9:
