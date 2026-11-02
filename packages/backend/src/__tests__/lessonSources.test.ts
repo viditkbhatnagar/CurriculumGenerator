@@ -46,7 +46,7 @@ describe('lesson sources', () => {
     ]);
     expect(block).toContain('[S1] Mankiw, N. G. (2024). Principles of Economics.');
     expect(block).toContain('What to read: Chapter 4');
-    expect(block).toContain('[B1] From Open Textbook, ch. 4');
+    expect(block).toContain('[B1] Textbook passage, Open Textbook, ch. 4');
     expect(block).toMatch(/Do not cite any other source/);
     expect(block).toMatch(/Beyond the readings:/);
   });

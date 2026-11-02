@@ -1160,7 +1160,18 @@ topic above is actually about that; those belong to the modules that own them.
         context.moduleReadingLists || [],
         context.topicSources || []
       );
-      const passages = await this.bookPassagesFor(context.workflowId, mloIds);
+      const { passages, note: passageNote } = await this.bookPassagesFor(
+        context.workflowId,
+        mloIds,
+        {
+          citedSourceIds: sources.map((s) => String(s.sourceId || '')),
+          topicSources: context.topicSources || [],
+          moduleId: module.id,
+          focus: [...block.assignedMLOs.map((m) => m.statement), ...(module.topics || [])]
+            .filter(Boolean)
+            .join(' '),
+        }
+      );
       const sourcesBlock = lessonSourcesBlock(sources, passages);
 
       const prompt = `You are an expert curriculum designer creating a detailed lesson plan.
@@ -1313,6 +1324,7 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
         groundedIn: {
           sourceIds: sources.map((s) => s.sourceId || s.citation),
           bookPassages: passages.length,
+          ...(passages.length ? {} : { passageNote: passageNote || 'No textbook passages found.' }),
           at: new Date(),
         },
       };
@@ -1364,23 +1376,52 @@ Ensure activities are appropriate for ${context.deliveryMode} delivery mode and 
   }
 
   /**
-   * Passages from textbooks ingested for the programme (Step 5.5) that serve these outcomes.
-   * Never throws: a lesson is still written without them.
+   * Textbook passages for the lesson: first from the programme's knowledge library (the chapters
+   * Step 5 chose, read by book and section), then, failing that, from textbooks ingested for the
+   * workflow under Step 5.5. Never throws: a lesson is still written without them, and says why.
    */
   private async bookPassagesFor(
     workflowId: string | undefined,
-    mloIds: string[]
-  ): Promise<BookPassage[]> {
-    if (!workflowId) return [];
+    mloIds: string[],
+    lesson: { citedSourceIds: string[]; topicSources: any[]; moduleId?: string; focus: string }
+  ): Promise<{ passages: BookPassage[]; note?: string }> {
+    if (!workflowId) {
+      return { passages: [], note: 'The lesson has no programme to read textbooks for.' };
+    }
+    let note: string | undefined;
+    try {
+      const { libraryFor } = await import('../knowledge/programmeLibrary');
+      const { libraryPassagesFor, librarySourcesForLesson } = await import(
+        '../knowledge/lessonPassages'
+      );
+      const found = await libraryPassagesFor(
+        await libraryFor(workflowId),
+        librarySourcesForLesson(
+          lesson.topicSources,
+          lesson.citedSourceIds,
+          mloIds,
+          lesson.moduleId
+        ),
+        lesson.focus
+      );
+      if (found.passages.length) return { passages: found.passages };
+      note = found.note;
+    } catch (error) {
+      note = `The textbook library could not be read: ${error instanceof Error ? error.message : String(error)}`;
+      loggingService.warn('Library passages could not be read for a lesson', { workflowId, note });
+    }
     try {
       const { getWorkflowBookGrounding } = await import('./bookGroundingService');
       const nodes = await getWorkflowBookGrounding(workflowId, mloIds, 3);
-      return nodes.map((n: any) => ({
-        source: String(n.source || 'textbook'),
-        content: String(n.content || ''),
-      }));
+      return {
+        passages: nodes.map((n: any) => ({
+          source: String(n.source || 'textbook'),
+          content: String(n.content || ''),
+        })),
+        note,
+      };
     } catch {
-      return [];
+      return { passages: [], note };
     }
   }
 

@@ -123,7 +123,13 @@ export interface LessonPlan {
    * Step 6 readings by source id, and passages from the programme's ingested textbooks.
    * Absent on lessons written before 16 October 2026 and on template fallbacks.
    */
-  groundedIn?: { sourceIds: string[]; bookPassages: number; at: Date | string };
+  groundedIn?: {
+    sourceIds: string[];
+    bookPassages: number;
+    /** Why no textbook passage was given, when bookPassages is 0. */
+    passageNote?: string;
+    at: Date | string;
+  };
   // Metadata
   lessonId: string;
   lessonNumber: number;

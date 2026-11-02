@@ -95,12 +95,16 @@ Write from established knowledge of the subject, and begin pedagogicalGuidance w
     if (s.abstract) lines.push(`    Abstract: ${s.abstract}`);
   });
   passages.forEach((p, i) => {
-    lines.push(`[B${i + 1}] From ${p.source}:\n    ${p.content.slice(0, PASSAGE_CHARS)}`);
+    lines.push(
+      `[B${i + 1}] Textbook passage, ${p.source}:\n    ${p.content.slice(0, PASSAGE_CHARS)}`
+    );
   });
   lines.push(
     `RULES FOR SOURCES:
 - Draw the lesson's definitions, frameworks, models and examples from these sources, and name the
   source in the activity descriptions as [S1], [S2] or [B1].
+- Where [B] passages are given, teach the lesson's definitions, models and worked examples from
+  them, in your own words, and cite each one as [B1], [B2] in the activities that use it.
 - Do not cite any other source.
 - Where the lesson's topic goes beyond these sources, end pedagogicalGuidance with
   "Beyond the readings:" and what was added, so the subject expert can check it.`
