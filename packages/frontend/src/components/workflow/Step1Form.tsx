@@ -331,62 +331,15 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
     }
   };
 
+  // Approves the Step 1 that was generated and reviewed, as stored. This used to submit the
+  // form first, which queued a fresh generation, so the approved Step 1 was replaced by one
+  // nobody had read (Logan's re-test, 2 November 2026). Edits since generation disable this
+  // button, and the server checks the stored version.
   const handleApprove = async () => {
     setError(null);
     setValidationErrors([]);
 
-    // Client-side validation
-    const errors: string[] = [];
-    const filledJobRoles = formData.jobRoles.filter((r) => r.title.trim());
-
-    if (!formData.programTitle || formData.programTitle.length < 5) {
-      errors.push('Program title must be at least 5 characters');
-    }
-    if (!formData.programDescription || formData.programDescription.length < 50) {
-      errors.push('Program description must be at least 50 characters');
-    }
-    if (
-      !formData.targetLearnerEducationalBackground ||
-      formData.targetLearnerEducationalBackground.length < 10
-    ) {
-      errors.push('Educational background must be at least 10 characters');
-    }
-    if (!formData.targetLearnerIndustrySector || formData.targetLearnerIndustrySector.length < 5) {
-      errors.push('Industry sector must be at least 5 characters');
-    }
-    if (!formData.deliveryDescription || formData.deliveryDescription.length < 10) {
-      errors.push('Delivery structure description must be at least 10 characters');
-    }
-    if (!formData.programPurpose || formData.programPurpose.length < 50) {
-      errors.push('Program purpose must be at least 50 characters');
-    }
-    if (filledJobRoles.length < 2) {
-      errors.push('At least 2 job roles are required');
-    }
-
-    if (errors.length > 0) {
-      setValidationErrors(errors);
-      setError('Cannot approve Step 1. Please fix the following:');
-      return;
-    }
-
     try {
-      const cleanedJobRoles = formData.jobRoles
-        .filter((role) => role.title.trim())
-        .map((role) => ({
-          ...role,
-          tasks: role.tasks.filter((task) => task.trim()),
-        }));
-
-      await submitStep1.mutateAsync({
-        id: workflow._id,
-        data: {
-          ...formData,
-          jobRoles: cleanedJobRoles,
-          totalHours: calculations.totalHours,
-        },
-      });
-
       await approveStep1.mutateAsync(workflow._id);
       onComplete();
     } catch (err: any) {
