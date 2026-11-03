@@ -29,6 +29,8 @@ export interface Step5SourceLike {
   userAdded?: boolean;
   /** The module's weekly topics this source covers, by meaning (sourceRelevanceService). */
   linkedTopics?: string[];
+  /** Topics linked only by rank, below the relevance floor (a subset of linkedTopics). */
+  weakTopicLinks?: string[];
   topicScores?: Record<string, number>;
   complianceBadges?: { peerReviewed?: boolean; freeAccess?: boolean; fullTextAvailable?: boolean };
 }
@@ -175,6 +177,29 @@ export function topicsBelowSourceFloor(
   modules: Step5ModuleLike[]
 ): { moduleId: string; topic: string; count: number }[] {
   return sourcesPerTopic(sources, modules).filter((t) => t.count < MIN_SOURCES_PER_TOPIC);
+}
+
+/**
+ * Topics that reach the minimum only through rank-based links below the relevance floor
+ * (sourceRelevanceService.assignTopicsWithFallback). They are covered, but weakly: a reviewer
+ * should look at them, which is different from a topic with no source at all.
+ */
+export function topicsCoveredWeakly(
+  sources: Step5SourceLike[],
+  modules: Step5ModuleLike[]
+): { moduleId: string; topic: string; count: number; strongCount: number }[] {
+  const list = sources || [];
+  return sourcesPerTopic(list, modules)
+    .map((t) => ({
+      ...t,
+      strongCount: list.filter(
+        (s) =>
+          s.moduleId === t.moduleId &&
+          (s.linkedTopics || []).includes(t.topic) &&
+          !(s.weakTopicLinks || []).includes(t.topic)
+      ).length,
+    }))
+    .filter((t) => t.count >= MIN_SOURCES_PER_TOPIC && t.strongCount < MIN_SOURCES_PER_TOPIC);
 }
 
 export function step5ValidationReport(

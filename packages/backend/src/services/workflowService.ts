@@ -91,6 +91,7 @@ import {
   isFreeAccess,
   MIN_SOURCES_PER_TOPIC,
   topicsBelowSourceFloor,
+  topicsCoveredWeakly,
   sourcesPerTopic,
   sourceCompliant,
 } from './step5Validation';
@@ -2847,8 +2848,11 @@ CRITICAL:
       complianceIssues.push('Some sources serve no outcome, or some outcomes have no source');
 
     const agiCompliant = step5Compliant(validationReport);
+    // Topics that meet the minimum only through links below the relevance floor.
+    const weakTopicCoverage = topicsCoveredWeakly(sources, modules);
 
     return {
+      weakTopicCoverage,
       sources,
       sourcesByModule,
       moduleSummaries,

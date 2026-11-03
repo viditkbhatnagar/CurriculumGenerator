@@ -410,6 +410,73 @@ export function assignTopics(
   }
 }
 
+/**
+ * Each topic needs this many sources (Dr. Sherin Thomas, 2 October 2026); the same number as
+ * step5Validation.MIN_SOURCES_PER_TOPIC, kept here so this file does not import the validator.
+ */
+const TOPIC_MINIMUM = 2;
+
+/**
+ * Topic links for one module's sources, with a rank-based fallback under the floor.
+ *
+ * In Logan Pacey's re-test of 2 November 2026 (44 sources, 24 topics) five topics had fewer than
+ * two sources, three of them none, and 4 of 44 sources linked to no topic. The floor of 0.40 is
+ * calibrated on the BBA's broad topics; a narrow technical topic ("KPI selection, definitions and
+ * calculation rules") had no source above 0.32 although the module had 11 sources. A topic that
+ * is short of its minimum now takes its best-scoring unlinked sources until it has it, and a
+ * source linked to nothing takes its best topic. Those links are recorded in `weakTopicLinks`
+ * (the topics a source covers only by rank, below the floor), so "covered weakly" can be told
+ * from "covered", and from "no source at all", which only remains where the module has fewer
+ * sources than the minimum. Needs only the stored `topicScores`: no new embedding calls.
+ */
+export function assignTopicsWithFallback(
+  sources: {
+    topicScores?: Record<string, number>;
+    linkedTopics?: string[];
+    weakTopicLinks?: string[];
+  }[],
+  topics: string[],
+  floor = TOPIC_SUPPORT_FLOOR
+): void {
+  assignTopics(sources, floor);
+  for (const s of sources) s.weakTopicLinks = [];
+  const scored = (s: { topicScores?: Record<string, number> }, topic: string) =>
+    s.topicScores && typeof s.topicScores[topic] === 'number' ? s.topicScores[topic] : null;
+  const countOf = (topic: string) =>
+    sources.filter((s) => (s.linkedTopics || []).includes(topic)).length;
+  const weaken = (s: (typeof sources)[number], topic: string) => {
+    s.linkedTopics = [...(s.linkedTopics || []), topic];
+    s.weakTopicLinks = [...(s.weakTopicLinks || []), topic];
+  };
+
+  // The neediest topics choose first.
+  const needy = topics
+    .map((topic) => ({ topic, count: countOf(topic) }))
+    .filter((t) => t.count < TOPIC_MINIMUM)
+    .sort((a, b) => a.count - b.count);
+  for (const { topic } of needy) {
+    const candidates = sources
+      .filter((s) => !(s.linkedTopics || []).includes(topic) && scored(s, topic) !== null)
+      .sort(
+        (a, b) =>
+          (scored(b, topic) as number) - (scored(a, topic) as number) ||
+          (a.linkedTopics || []).length - (b.linkedTopics || []).length
+      );
+    for (const s of candidates.slice(0, Math.max(0, TOPIC_MINIMUM - countOf(topic)))) {
+      weaken(s, topic);
+    }
+  }
+
+  // Every source serves some topic: its best one.
+  for (const s of sources) {
+    if ((s.linkedTopics || []).length > 0) continue;
+    const best = topics
+      .filter((t) => scored(s, t) !== null)
+      .sort((a, b) => (scored(s, b) as number) - (scored(s, a) as number))[0];
+    if (best) weaken(s, best);
+  }
+}
+
 const titleOfTopic = (t: unknown): string =>
   typeof t === 'string'
     ? t.trim()
@@ -430,6 +497,7 @@ export async function linkSourcesToTopics(
     abstract?: string;
     topicScores?: Record<string, number>;
     linkedTopics?: string[];
+    weakTopicLinks?: string[];
     relevantTopics?: string[];
   }[],
   modules: { id?: string; title?: string; topics?: unknown[] }[],
@@ -447,7 +515,7 @@ export async function linkSourcesToTopics(
       own.forEach((s) => {
         s.topicScores = scores.get(s) || {};
       });
-      assignTopics(own, floor);
+      assignTopicsWithFallback(own, topics, floor);
       own.forEach((s) => {
         s.relevantTopics = s.linkedTopics;
       });
