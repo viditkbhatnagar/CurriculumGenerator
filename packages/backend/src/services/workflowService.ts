@@ -82,6 +82,7 @@ import {
   bodyOfKnowledgeBlockFor,
   libraryChapterSources,
   moduleConceptsBlock,
+  libraryConceptCodesFor,
 } from '../knowledge/programmeLibrary';
 import {
   step5ValidationReport,
@@ -2210,6 +2211,21 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       workflowId
     );
 
+    // The textbook concepts each module teaches, so Step 5's chapters and Step 10's passages
+    // follow from them. The single-call path never assigned any.
+    const conceptCodes: string[][] = [];
+    for (const m of frameworkContent.modules || []) {
+      conceptCodes.push(
+        await libraryConceptCodesFor(String(workflow._id), m).catch((error) => {
+          loggingService.warn('Step 4: library concepts could not be assigned to a module', {
+            module: m.moduleCode,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return [] as string[];
+        })
+      );
+    }
+
     // Process modules to add phase and validate
     const modules = (frameworkContent.modules || []).map((m: any, index: number) => {
       const seq = m.sequenceOrder || index + 1;
@@ -2256,6 +2272,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
         phase,
         contactActivities: m.contactActivities,
         independentActivities: m.independentActivities,
+        ...(conceptCodes[index]?.length ? { knowledgeObjects: conceptCodes[index] } : {}),
       };
     });
 

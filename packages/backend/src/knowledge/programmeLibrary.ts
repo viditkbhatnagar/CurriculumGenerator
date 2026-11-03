@@ -123,6 +123,51 @@ export async function conceptsByCodes(codes: string[]): Promise<any[]> {
   return unique.map((c) => byCode.get(c)).filter((r) => r && !seen.has(r.code) && seen.add(r.code));
 }
 
+/** What to search the library for to find the concepts a module teaches. */
+export function moduleSearchQueries(module: any): string[] {
+  const text = (v: any) => String(v?.title || v?.statement || v || '').trim();
+  const topics = (module.topics || []).map(text).filter(Boolean);
+  const mlos = (module.mlos || []).map(text).filter(Boolean);
+  return [module.title, ...topics.slice(0, 6), ...mlos.slice(0, 4)]
+    .map((q) => String(q || '').trim())
+    .filter(Boolean);
+}
+
+/** Codes of the concepts a module is assigned: visible to the programme, best first, at most k. */
+export function conceptCodesFromHits(scope: BookScope, hits: { concept: any }[], k = 12): string[] {
+  return visibleConcepts(
+    scope,
+    hits.map((h) => h.concept)
+  )
+    .map((c) => c.code)
+    .slice(0, k);
+}
+
+/**
+ * The library concepts a module teaches, found from its title, topics and outcomes. Step 4 used
+ * to assign concepts only in the outline-then-batch path, and only when the outline named them:
+ * a programme of eight modules or fewer is written in one call that never saw concept codes, and
+ * an uploaded module list has none. Those modules had no knowledgeObjects, so Step 5 searched
+ * afresh and Step 10 could not link a lesson to a chapter (Logan's 2 Nov re-test: 4 modules, all
+ * empty). Empty when the programme has no library.
+ */
+export async function libraryConceptCodesFor(
+  workflowId: string | undefined,
+  module: any,
+  k = 12
+): Promise<string[]> {
+  const lib = await libraryFor(workflowId);
+  if (!lib) return [];
+  const queries = moduleSearchQueries(module);
+  if (!queries.length) return [];
+  const hits = await searchConcepts(queries, {
+    domainKeys: lib.domainKeys,
+    areas: lib.areas,
+    k: k * 2,
+  });
+  return conceptCodesFromHits(lib, hits, k);
+}
+
 /**
  * For Step 4's detail batches: each module's assigned concepts with their sources, so its topics
  * and outcomes are written from what the textbooks teach (design sections 9 and 15).
@@ -133,11 +178,18 @@ export async function moduleConceptsBlock(
 ): Promise<{ block: string; known: Map<string, string[]> }> {
   const known = new Map<string, string[]>();
   const parts: string[] = [];
-  const scope: BookScope = (await libraryFor(workflowId)) ?? {
+  const lib = await libraryFor(workflowId);
+  const scope: BookScope = lib ?? {
     hiddenBookIds: mongoose.isValidObjectId(workflowId) ? await hiddenBooksFor(workflowId) : [],
   };
   for (const m of modules) {
-    const concepts = visibleConcepts(scope, await conceptsByCodes(m.knowledgeObjects || []));
+    // An uploaded module list names no concepts; find them from the module's title.
+    const codes = m.knowledgeObjects?.length
+      ? m.knowledgeObjects
+      : lib
+        ? await libraryConceptCodesFor(workflowId, m)
+        : [];
+    const concepts = visibleConcepts(scope, await conceptsByCodes(codes));
     known.set(
       m.code,
       concepts.map((c) => c.code)
