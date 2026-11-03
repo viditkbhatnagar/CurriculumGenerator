@@ -50,12 +50,16 @@ function namesOf(t: GlossaryTermLike): string[] {
 }
 
 /**
- * The definition with its genus-differentia opening taken off: "An outlier is a value that..."
- * becomes "a value that...". What remains is the explanation, and it is the explanation that must
- * not lean on the term. A definition that does not open with the term is returned whole.
+ * The definition with the term taken off as its subject: "An outlier is a value that..." becomes
+ * "is a value that...". What remains is the explanation, and it is the explanation that must not
+ * lean on the term. Any verb may follow the subject: a list of verbs ("is", "means", "shows")
+ * missed "A trend view displays how a measure changes", which was flagged although it is an
+ * ordinary definition. "X means X" is still caught, since "means X" names the term. A definition
+ * that does not open with the term is returned whole, and so is one where the noun phrase simply
+ * carries on ("The liquidity risk a firm carries when..."): there the term is the head of its own
+ * definition, which is circular.
  */
-const COPULA =
-  '(?:is|are|was|refers to|means|describes|denotes|represents|measures|shows|indicates|involves|covers|consists of|comprises|occurs|can be)';
+const NOUN_PHRASE_CONTINUES = /^(?:a|an|the|that|which|who|whose|this|these|those)\b/i;
 function explanationOf(definition: string, names: string[]): string {
   if (!names.length) return definition;
   const alt = names
@@ -64,10 +68,15 @@ function explanationOf(definition: string, names: string[]): string {
     .map(escapeRegExp)
     .join('|');
   const opening = new RegExp(
-    `^\\s*(?:(?:a|an|the)\\s+)?(?:${alt})\\s*(?:\\([^)]*\\)\\s*)?(?:${COPULA}\\b|[:\\u2014-])\\s*`,
+    `^\\s*(?:(?:a|an|the)\\s+)?(?:${alt})\\b\\s*(?:\\([^)]*\\)\\s*)?([:\\u2014-]\\s*)?`,
     'i'
   );
-  return definition.replace(opening, '');
+  const match = opening.exec(definition);
+  if (!match) return definition;
+  const rest = definition.slice(match[0].length);
+  // After "Regression:" or "KPI —" the definition proper begins, and may open with "a".
+  const separated = !!match[1];
+  return !separated && NOUN_PHRASE_CONTINUES.test(rest) ? definition : rest;
 }
 
 /** True when the first `words` words of the explanation mention the name. */

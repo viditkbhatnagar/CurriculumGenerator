@@ -164,3 +164,18 @@ describe('textbook sources', () => {
     expect(onError).toHaveBeenCalled();
   });
 });
+
+describe('circularDefinitions: any verb may follow the term', () => {
+  it('passes "A trend view displays..." (flagged on the 2 November re-test) but still catches "X means X"', () => {
+    expect(
+      circularDefinitions([
+        {
+          term: 'Trend View',
+          definition:
+            'A trend view displays how a measure changes across time, helping users identify direction.',
+        },
+        { term: 'Dashboard', definition: 'A dashboard means a dashboard of indicators.' },
+      ])
+    ).toEqual(['Dashboard']);
+  });
+});
