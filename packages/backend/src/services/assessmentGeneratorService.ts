@@ -20,6 +20,7 @@ import { programmeContextBlock, programmeFraming } from './programmeFraming';
 import config from '../config';
 import { markConsistency } from './assessmentMarks';
 import { isStepStopped } from './stepStop';
+import { moduleContextBlock } from './moduleContext';
 import { ICurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { openaiService } from './openaiService';
 import { loggingService } from './loggingService';
@@ -238,6 +239,11 @@ export class AssessmentGeneratorService {
       readingLists: workflow.step6?.moduleReadingLists || [],
       userPreferences,
       assessmentRules: (workflow as any).assessmentRules,
+      // Each module's level and what earlier modules taught (services/moduleContext), so its
+      // assessments are pitched at its level and build on what came before.
+      moduleContexts: Object.fromEntries(
+        (workflow.step4?.modules || []).map((m: any) => [m.id, moduleContextBlock(workflow, m)])
+      ),
     } as AssessmentGenerationRequest;
   }
 
@@ -692,6 +698,7 @@ ${programmeContextBlock(programmeFraming(request.programFoundation))}
 Module Code: ${module.moduleCode || `MOD${moduleIndex + 1}`}
 Total Hours: ${module.totalHours || 40}
 Module Aim: ${module.aim || module.description || 'Develop core competencies in this subject area'}
+${request.moduleContexts?.[module.id] || ''}
 
 **THE OUTCOMES THIS ASSESSMENT MUST EVIDENCE** (assign every question to one of these)
 ${slotMlos

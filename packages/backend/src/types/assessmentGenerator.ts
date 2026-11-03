@@ -328,6 +328,8 @@ export interface AssessmentGenerationRequest {
   userPreferences: AssessmentUserPreferences;
   /** The institution's stated assessment rules (services/assessmentRules). */
   assessmentRules?: AssessmentRules;
+  /** Each module's level block, by module id (services/moduleContext). */
+  moduleContexts?: Record<string, string>;
   /** Called between model calls; throws StepStopped when the run must stop (services/stepStop). */
   checkpoint?: () => Promise<void>;
 }
