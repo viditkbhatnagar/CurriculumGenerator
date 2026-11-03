@@ -81,6 +81,7 @@ import { hasContent, matchBatchContent, returnedModules } from './step4Batch';
 import {
   bodyOfKnowledgeBlockFor,
   libraryChapterSources,
+  libraryFor,
   moduleConceptsBlock,
   libraryConceptCodesFor,
 } from '../knowledge/programmeLibrary';
@@ -102,7 +103,15 @@ import {
   isPlaceholderVariant,
   missingPackVariants,
 } from './deliverableValidation';
-import { circularDefinitions, usSpellings } from './glossaryValidation';
+import {
+  circularDefinitions,
+  filterCrossReferences,
+  mergeAcronymEntries,
+  usSpellings,
+} from './glossaryValidation';
+import { attachTextbookSources } from './glossaryTextbookSources';
+import { searchConcepts } from '../knowledge/retrieval';
+import { visibleConcept } from '../knowledge/bookAccess';
 import { casesWithAssessmentQuestions } from './caseStudyValidation';
 import {
   scenarioProfileFor,
@@ -4350,7 +4359,7 @@ CRITICAL:
     if (!validationReport.hasTerms) validationIssues.push('No glossary terms were generated');
     if (circular.length > 0)
       validationIssues.push(
-        `${circular.length} definition(s) use the term they define: ${circular.slice(0, 5).join(', ')}${circular.length > 5 ? '…' : ''}`
+        `${circular.length} definition(s) are circular (they rest on their own term, or two entries define each other):${circular.slice(0, 5).join(', ')}${circular.length > 5 ? '…' : ''}`
       );
     if (usSpelt.length > 0)
       validationIssues.push(
@@ -4381,6 +4390,9 @@ CRITICAL:
         t.sources?.includes('competency_framework')
       ).length,
       averageDefinitionLength: avgDefLength,
+      crossReferencesDropped: glossaryContent.crossReferencesDropped || 0,
+      textbookLibraryOn: !!glossaryContent.textbookLibraryOn,
+      termsWithTextbookSource: glossaryContent.termsWithTextbookSource || 0,
       validationReport,
       isValid,
       validationIssues,
@@ -8357,14 +8369,53 @@ Begin output now.`;
 
     // Combine and deduplicate terms
     const allTerms: any[] = results.flat();
-    const uniqueTerms = this.deduplicateGlossaryTerms(allTerms);
+    const merged = this.deduplicateGlossaryTerms(allTerms);
+
+    // Cross-references may name only entries that exist, which can be checked only now that the
+    // modules' terms are together.
+    const { terms: linked, dropped: crossReferencesDropped } = filterCrossReferences(merged);
+
+    // Textbook sources when the programme's library is on. A lookup embeds the term, so this
+    // costs one embedding call per term.
+    const lib = await libraryFor(String((workflow as any)._id));
+    let uniqueTerms = linked;
+    let termsWithTextbookSource = 0;
+    if (lib) {
+      const attached = await attachTextbookSources(
+        linked,
+        async (t: any) => {
+          const hits = await searchConcepts([t.term], {
+            domainKeys: lib.domainKeys,
+            areas: lib.areas,
+            k: 5,
+          });
+          return hits
+            .map((h) => ({ ...h, concept: visibleConcept(lib, h.concept) }))
+            .filter((h) => h.concept);
+        },
+        (t: any, error) =>
+          loggingService.warn('Step 9: textbook lookup failed for a term', {
+            term: t.term,
+            error: error instanceof Error ? error.message : String(error),
+          })
+      );
+      uniqueTerms = attached.terms;
+      termsWithTextbookSource = attached.withTextbookSource;
+    }
 
     loggingService.info('Step 9: PARALLEL generation complete', {
       totalTerms: allTerms.length,
       uniqueTerms: uniqueTerms.length,
+      crossReferencesDropped,
+      termsWithTextbookSource,
     });
 
-    return { terms: uniqueTerms };
+    return {
+      terms: uniqueTerms,
+      crossReferencesDropped,
+      termsWithTextbookSource,
+      textbookLibraryOn: !!lib,
+    };
   }
 
   /**
@@ -8701,9 +8752,9 @@ FOR EACH TERM INCLUDE:
 3. **definition**: 20-40 word definition (clear, Grade 10-12 level)
 4. **exampleSentence**: optional authentic usage example (~20 words)
 5. **technicalNote**: optional detail for advanced learners
-6. **relatedTerms**: array of related term names
-7. **broaderTerms**: array of more general concepts
-8. **narrowerTerms**: array of more specific concepts
+6. **relatedTerms**: array of related term names (ONLY terms from this glossary; leave empty rather than name a term you are not defining)
+7. **broaderTerms**: array of more general terms (ONLY terms from this glossary; otherwise empty)
+8. **narrowerTerms**: array of more specific terms (ONLY terms from this glossary; otherwise empty)
 9. **synonyms**: array of alternative names
 10. **isAcronym**: boolean
 11. **acronymExpansion**: if isAcronym, the full form
@@ -8780,8 +8831,10 @@ Return ONLY valid JSON:
       }
     }
 
+    // An acronym and its expansion are one entry (see glossaryValidation.mergeAcronymEntries).
+    const uniqueTerms = mergeAcronymEntries(Array.from(termMap.values()));
+
     // Renumber IDs
-    const uniqueTerms = Array.from(termMap.values());
     uniqueTerms.forEach((term, idx) => {
       term.id = `term-${String(idx + 1).padStart(3, '0')}`;
     });

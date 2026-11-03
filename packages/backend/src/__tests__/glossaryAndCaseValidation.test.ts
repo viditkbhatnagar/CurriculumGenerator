@@ -15,9 +15,15 @@ describe('circularDefinitions', () => {
     expect(circularDefinitions(terms)).toEqual([]);
   });
 
-  it('treats an acronym used in its own definition as circular', () => {
+  it('treats an acronym that leans on its own expansion as circular', () => {
     expect(
-      circularDefinitions([{ term: 'KPI', definition: 'A KPI measures performance.' }])
+      circularDefinitions([
+        {
+          term: 'KPI',
+          acronymExpansion: 'Key performance indicator',
+          definition: 'A KPI is a key performance indicator used by managers.',
+        },
+      ])
     ).toEqual(['KPI']);
   });
 });
