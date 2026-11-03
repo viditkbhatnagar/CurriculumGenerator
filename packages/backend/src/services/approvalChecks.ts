@@ -1,7 +1,7 @@
 /**
  * What a step's own checks found wrong, and whether it may be approved anyway.
  *
- * Steps 5 and 6 ran their checks and approved regardless: in Logan's test run (28 October
+ * Steps 5, 6 and 7 ran their checks and approved regardless: in Logan's test run (28 October
  * 2026) Step 5 was marked non-compliant, "admin override required", and Step 6 failed its own
  * reading-count rules, and both went through with one click. A step whose checks failed is now
  * approved only with a reason, which is kept on the step with the issues it overrode.
@@ -24,7 +24,34 @@ export function failedChecks(stepNumber: number, data: any): string[] {
     const issues = (data.validationIssues || []).map(asText).filter(Boolean);
     return issues.length ? issues : ['Step 6 did not pass its reading-list checks'];
   }
+  if (stepNumber === 7) return step7FailedChecks(data);
   return [];
+}
+
+/**
+ * Step 7 is the auto-gradable step. Its approval is held when the stored checks say the
+ * questions are not mostly machine-markable or that no multiple-choice sample exists (Logan
+ * Pacey, 2 November 2026: 0 of 50 formative questions were MCQ and the step was all green).
+ * Only checks that ran and failed count; a report that predates them (undefined) does not.
+ */
+function step7FailedChecks(data: any): string[] {
+  const v = data.validation;
+  if (!v) return [];
+  const issues: string[] = [];
+  if (v.autoGradableMet === false) {
+    const pct = typeof v.autoGradableShare === 'number' ? Math.round(v.autoGradableShare * 100) : 0;
+    issues.push(
+      `Only ${pct}% of formative questions are auto-gradable multiple choice (at least 75% required)`
+    );
+  }
+  if (v.sufficientSampleQuestions === false) {
+    issues.push('The sample question bank is short or has no multiple-choice samples');
+  }
+  const failures = Array.isArray(data.sampleFailures) ? data.sampleFailures : [];
+  for (const f of failures) {
+    issues.push(`Sample questions of type "${f?.type}" failed to generate: ${f?.message}`);
+  }
+  return issues;
 }
 
 export interface ApprovalDecision {

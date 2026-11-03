@@ -11,9 +11,11 @@
  */
 import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
 import { markConsistency } from './assessmentMarks';
+import { normaliseQuestionType } from './bloomTaxonomy';
 
 interface AssessmentLike {
   moduleId?: string;
+  questions?: unknown[];
   graded?: boolean;
   purpose?: string;
   alignedMLOs?: unknown[];
@@ -40,9 +42,65 @@ export interface Step7Validation {
    * no graded assessments.
    */
   marksConsistent: boolean | null;
+  /**
+   * The share (0 to 1) of the formative activities' questions that are well-formed multiple
+   * choice, and whether it reaches MIN_AUTO_GRADABLE_SHARE. Step 7 is sold as auto-gradable;
+   * on 2 November 2026 Logan Pacey's 60-credit Business Analytics run held 50 formative
+   * questions and none was multiple choice, and every flag above was green. Null when there
+   * are no formative questions to count.
+   */
+  autoGradableShare: number | null;
+  autoGradableMet: boolean | null;
 }
 
 export const MIN_SAMPLE_QUESTIONS = 20;
+/** Step 7 is the auto-gradable step: at least this share of formative questions must be MCQ. */
+export const MIN_AUTO_GRADABLE_SHARE = 0.75;
+/** A usable multiple-choice item offers at least this many distinct options. */
+const MIN_MCQ_OPTIONS = 3;
+
+const normText = (v: unknown) =>
+  String(v ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+
+/**
+ * Whether a question can be marked by a machine: it is a multiple-choice question, it has at
+ * least three distinct non-empty options, and its correctAnswer is the text of exactly one of
+ * them. A question that says "mcq" but carries no options, or whose key matches nothing (or
+ * two identical options), cannot be auto-graded and does not count.
+ */
+export function isWellFormedMcq(question: any): boolean {
+  if (!question || normaliseQuestionType(question.questionType) !== 'mcq') return false;
+  if (!Array.isArray(question.options)) return false;
+  const options = question.options.map(normText).filter(Boolean);
+  if (new Set(options).size < MIN_MCQ_OPTIONS) return false;
+  const key = typeof question.correctAnswer === 'string' ? normText(question.correctAnswer) : '';
+  if (!key) return false;
+  return options.filter((o: string) => o === key).length === 1;
+}
+
+/**
+ * The share of formative questions that are well-formed MCQ, with the counts. Module
+ * summatives (graded, and carrying the artefact deliverables) are left out: the target is for
+ * the formative activities. Null share when there are no questions.
+ */
+export function autoGradableShare(assessments: AssessmentLike[]): {
+  share: number | null;
+  gradable: number;
+  total: number;
+} {
+  const questions = (assessments || [])
+    .filter((a) => a?.purpose !== 'module_summative')
+    .flatMap((a) => (Array.isArray(a?.questions) ? a.questions : []));
+  const gradable = questions.filter(isWellFormedMcq).length;
+  return {
+    share: questions.length ? gradable / questions.length : null,
+    gradable,
+    total: questions.length,
+  };
+}
 
 const strings = (list: unknown[] | undefined) =>
   (list || []).filter((v): v is string => typeof v === 'string' && !!v.trim());
@@ -59,6 +117,8 @@ export function step7Validation(input: {
   formatives: AssessmentLike[];
   summatives: SummativeLike[];
   sampleQuestionCount: number;
+  /** How many of the sample questions are multiple choice. */
+  mcqSampleCount: number;
   ploIds: string[];
   moduleIds: string[];
   /** From applyAssessmentWeightings + weightingsAreComplete, run before this. */
@@ -78,6 +138,7 @@ export function step7Validation(input: {
     ...summatives.flatMap((s) => (s?.alignmentTable || []).map((a) => a?.ploId)),
   ]);
   const assessedModules = new Set(formatives.map((f) => f?.moduleId));
+  const gradableShare = autoGradableShare(formatives);
 
   return {
     // Every module-level assessment states which outcome it assesses.
@@ -90,7 +151,9 @@ export function step7Validation(input: {
       ? summatives.every((s) => (s?.alignmentTable || []).length > 0)
       : null,
     weightsSum100: input.weightingsComplete && summatives.every(componentsSum100),
-    sufficientSampleQuestions: input.sampleQuestionCount >= MIN_SAMPLE_QUESTIONS,
+    // The total alone passed a bank with no multiple-choice sample in it (2 Nov 2026).
+    sufficientSampleQuestions:
+      input.sampleQuestionCount >= MIN_SAMPLE_QUESTIONS && input.mcqSampleCount > 0,
     plosCovered: ploIds.length ? ploIds.every((id) => covered.has(id)) : null,
     // Each Step 4 module has at least one assessment. Counting distinct module ids instead let
     // an assessment filed under a stray id stand in for a module that had none.
@@ -103,6 +166,9 @@ export function step7Validation(input: {
       );
       return graded.length ? graded.every((f) => markConsistency(f).consistent) : null;
     })(),
+    autoGradableShare: gradableShare.share,
+    autoGradableMet:
+      gradableShare.share === null ? null : gradableShare.share >= MIN_AUTO_GRADABLE_SHARE,
   };
 }
 
@@ -134,6 +200,7 @@ export function step7ValidationOf(workflow: {
       (n, kind) => n + (sampleQuestions[kind]?.length || 0),
       0
     ),
+    mcqSampleCount: sampleQuestions.mcq?.length || 0,
     ploIds: (workflow.step3?.outcomes || []).map((plo) => plo.id || plo.code || ''),
     moduleIds: (workflow.step4?.modules || []).map((m) => m.id || ''),
     weightingsComplete: weightingsAreComplete(totals),
@@ -148,5 +215,5 @@ export function step7ValidationOf(workflow: {
 
 /** Passed when every check that ran passed. A check that did not run proves nothing. */
 export function step7Passed(validation: Step7Validation): boolean {
-  return Object.values(validation).every((v) => v === true || v === null);
+  return Object.values(validation).every((v) => v === true || v === null || typeof v === 'number');
 }

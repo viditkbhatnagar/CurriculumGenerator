@@ -52,6 +52,7 @@ import {
   auditAssessmentBloom,
   normaliseQuestionType,
   TASK_SHAPES_BY_BLOOM,
+  MCQ_ITEM_SPEC,
   type FormatPlan,
 } from './bloomTaxonomy';
 import { assessmentRulesForPrompt } from './assessmentRules';
@@ -158,6 +159,12 @@ export class AssessmentGeneratorService {
    * is invisible until somebody reads the document and notices.
    */
   failedModules: { moduleId: string; moduleTitle?: string; message: string }[] = [];
+  /**
+   * Sample batches that failed twice. A failed sample type used to be logged and dropped, so a
+   * run with no multiple-choice sample at all looked the same as a complete one. Read by
+   * workflowService and stored on the step so the screen can say what is missing.
+   */
+  sampleFailures: { type: string; message: string }[] = [];
 
   /**
    * Per-module budget for the formative call.
@@ -263,6 +270,7 @@ export class AssessmentGeneratorService {
     failed: { moduleId: string; message: string }[];
   }> {
     this.failedModules = [];
+    this.sampleFailures = [];
     const request = this.buildRequest(workflow, userPreferences);
     const wanted = new Set(moduleIds);
     const modules = (request.modules || []).filter((m: any) => wanted.has(m.id));
@@ -317,6 +325,7 @@ export class AssessmentGeneratorService {
     });
 
     this.failedModules = [];
+    this.sampleFailures = [];
     const request = { ...this.buildRequest(workflow, userPreferences), checkpoint };
 
     const response: AssessmentGenerationResponse = {
@@ -613,6 +622,12 @@ export class AssessmentGeneratorService {
       max: Math.max(levelPlan.max, outcomeFloor),
     };
     const slotArtefacts = requiredArtefacts({ mlos: slotMlos });
+    // One production item is allowed only where a CREATE-level outcome in this assessment
+    // names an artefact; everything else is multiple choice, so the step stays auto-gradable.
+    const productionAllowed =
+      requiredArtefacts({
+        mlos: slotMlos.filter((m: any) => normaliseBloom(m?.bloomLevel) === 'create'),
+      }).length > 0;
     // Formative activity is ungraded by definition; the module's summative is what carries
     // the marks. Both used to be generated as graded artefacts and filed under "formative",
     // which is what the programme's author objected to.
@@ -723,6 +738,18 @@ or twelve items because that is the usual shape of a quiz.
 ${[...new Set(slotMlos.map((m: any) => normaliseBloom(m?.bloomLevel)))]
   .map((level) => `- ${String(level).toUpperCase()}: ${TASK_SHAPES_BY_BLOOM[String(level)] || ''}`)
   .join('\n')}
+
+**QUESTION TYPE — MULTIPLE CHOICE FIRST**
+The format "${assignedFormat}" names the ACTIVITY; it does not change what the questions are.
+This step is the programme's auto-gradable assessment, so the questions inside it are
+multiple choice (questionType "mcq"): ${MCQ_ITEM_SPEC}. At apply, analyse and evaluate level
+the stem is a scenario or data extract and the item makes the learner do the verb — choose the
+best action, interpret an output, diagnose an error, select the best-justified recommendation.
+${
+  productionAllowed
+    ? `A create-level outcome here names an artefact (${requiredArtefacts({ mlos: slotMlos.filter((m: any) => normaliseBloom(m?.bloomLevel) === 'create') }).join(', ')}), so you may include exactly ONE production item (file_upload, practical or short_answer) that collects it. Every other question is multiple choice.`
+    : 'No outcome here requires an artefact, so EVERY question is multiple choice. Do not use file_upload, practical, scenario, calculation or short_answer.'
+}
 ${
   isSummative && slotArtefacts.length
     ? `\n**ARTEFACTS THIS ASSESSMENT'S OUTCOMES REQUIRE THE LEARNER TO PRODUCE**
@@ -807,8 +834,8 @@ ${
         {
           "questionNumber": 1,
           "questionText": "<the complete task, with any case, data or figures the learner needs included in full>",
-          "questionType": "one of: mcq | short_answer | scenario | calculation | practical | file_upload (file_upload means the learner submits a file; say in questionText what the work is: a report, a portfolio, a recorded presentation)",
-          "options": ["<only for mcq — otherwise omit this field>"],
+          "questionType": "${productionAllowed ? 'mcq, except the ONE production item, which is file_upload | practical | short_answer (say in questionText what the work is: a report, a portfolio, a recorded presentation)' : 'mcq'}",
+          "options": ["<exactly 4 plausible options for an mcq — omit this field only on the production item>"],
           "correctAnswer": "<for mcq, the full text of the correct option; otherwise the expected response or marking points>",
 ${isSummative ? '          "points": 2,' : ''}
           "alignedMLO": "<the id of the ONE outcome above that this task evidences>",
@@ -828,10 +855,13 @@ CRITICAL REQUIREMENTS:
    produce a 10-12 item quiz unless that is the count stated for this level.
 3. For MCQs: Include 4 realistic options with clear rationales
 4. For scenario/calculation questions: Provide complete problem statements and expected answers
-5. Choose each question's type from what the task actually requires at ${slotBloom.toUpperCase()} level. Variety
-   for its own sake is NOT a goal: an MCQ inserted into an evaluate-level assessment to vary
-   the format evidences nothing. Use only these values: mcq, short_answer, scenario,
-   calculation, practical, file_upload.
+5. Default every question to type mcq. A bare recall MCQ does not evidence apply level or
+   above, but a scenario or data-stem MCQ that makes the learner carry out the verb does, and
+   it is auto-gradable. ${
+     productionAllowed
+       ? 'The one permitted production item uses file_upload, practical or short_answer.'
+       : 'Use no other question type in this assessment.'
+   }
 6. Every question must carry "alignedMLO" naming exactly one outcome id from the list above,
    and every outcome in that list must be evidenced by at least one question
 7. Make questions practical and relevant to ${request.programFoundation?.targetLearner?.industrySector || 'professional'} contexts
@@ -865,8 +895,9 @@ CRITICAL REQUIREMENTS:
     identically on any assessment ("shows good understanding") is not usable for marking.
 14. Do NOT invent a percentage weighting; the programme's formative/summative split is applied
     afterwards from the author's own settings.
-15. assessmentType MUST be the format assigned to that assessment in the list above. Do not
-    substitute a quiz or MCQ check for a case exercise or simulation.
+15. assessmentType MUST be the format assigned to that assessment in the list above. The
+    format names the activity (a mini-case exercise is a case set out in a scenario stem, then
+    asked about in MCQs); it does not make the questions free-text.
 16. BLOOM FLOOR — every question must work at or above the Bloom level of the outcome named in
     its own "alignedMLO" field. This is checked in code after you reply, against that field
     and the outcome levels stated above, and an assessment that does not reach the level its
@@ -879,11 +910,13 @@ CRITICAL REQUIREMENTS:
 17. Set each question's bloomLevel to the level that question genuinely operates at — do not
     label a recall question "apply" to satisfy rule 16.
 18. TASK SHAPE — every task must take the shape listed above for the outcome level it
-    assesses. At understand level a quiz is correct, but the items must ask the learner to
-    explain, interpret, classify, compare, summarise or pick the right explanation for a
-    situation — not to recall a definition. At analyse level give them a case, a dataset or
-    a scenario to diagnose. At evaluate level require a judgement WITH justification, or a
-    comparison leading to a recommendation. At create level the deliverable is the evidence.
+    assesses, expressed as a multiple-choice item. At understand level the items must ask the
+    learner to explain, interpret, classify, compare, summarise or pick the right explanation
+    for a situation — not to recall a definition. At analyse level the stem is a case, dataset
+    or scenario to diagnose. At evaluate level the options are all plausible recommendations
+    and only one is defensible against the stated criteria; the rationale gives the
+    justification. At create level the options are competing designs, plans or sequences for a
+    brief${productionAllowed ? ', and the one production item collects the artefact' : ''}.
 19. MCQ ANSWER DESIGN — every option in an item must be within 20% of the others in
     character count, and share the same grammatical shape. Count the characters before you
     finalise an item. Do NOT write a correct option that is longer, more qualified or more
@@ -1330,7 +1363,7 @@ JSON FORMATTING RULES - CRITICAL:
       }
 
       try {
-        const samples = await this.generateSampleQuestionsByType(request, type, count);
+        const samples = await this.generateSampleBatches(request, type, count);
         sampleQuestions[type] = samples as any; // Type assertion needed due to union type
 
         loggingService.info(`Generated ${type} samples`, { count: samples.length });
@@ -1357,7 +1390,7 @@ JSON FORMATTING RULES - CRITICAL:
         loggingService.error(`Failed to generate ${type} samples`, {
           error: error instanceof Error ? error.message : String(error),
         });
-        // Continue with next type
+        // Continue with next type; the failure is recorded in generateSampleBatches.
       }
 
       completedTypes++;
@@ -1366,13 +1399,64 @@ JSON FORMATTING RULES - CRITICAL:
     return sampleQuestions;
   }
 
+  /** How the multiple-choice samples are split: three calls of ten rather than one of thirty. */
+  private static readonly MCQ_SAMPLE_BATCH_SIZE = 10;
+
+  /**
+   * One sample type, in batches, each retried once. A failure that survives the retry is put
+   * in `sampleFailures` rather than swallowed: Logan Pacey's 2 November 2026 run held no
+   * multiple-choice sample, because the single 30-item call failed and the failure was only
+   * logged. Batches that did succeed are kept.
+   */
+  private async generateSampleBatches(
+    request: AssessmentGenerationRequest,
+    type: keyof SampleQuestions,
+    count: number
+  ): Promise<any[]> {
+    const size = type === 'mcq' ? AssessmentGeneratorService.MCQ_SAMPLE_BATCH_SIZE : count;
+    const batches: number[] = [];
+    for (let left = count; left > 0; left -= size) batches.push(Math.min(size, left));
+
+    const samples: any[] = [];
+    for (let i = 0; i < batches.length; i++) {
+      const note =
+        batches.length > 1
+          ? `\n\nThis is batch ${i + 1} of ${batches.length}. Cover different outcomes and topics from the other batches; do not reuse a scenario.`
+          : '';
+      let lastError = '';
+      let done = false;
+      for (let attempt = 0; attempt < 2 && !done; attempt++) {
+        try {
+          samples.push(
+            ...(await this.generateSampleQuestionsByType(request, type, batches[i], note))
+          );
+          done = true;
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : String(error);
+          if (attempt === 0) await this.delay(this.INTER_CALL_DELAY);
+        }
+      }
+      if (!done) {
+        this.sampleFailures = [
+          ...this.sampleFailures,
+          {
+            type,
+            message: `${batches.length > 1 ? `batch ${i + 1} of ${batches.length}: ` : ''}${lastError}`,
+          },
+        ];
+      }
+    }
+    return samples;
+  }
+
   /**
    * Generate sample questions by specific type
    */
   private async generateSampleQuestionsByType(
     request: AssessmentGenerationRequest,
     type: keyof SampleQuestions,
-    count: number
+    count: number,
+    variationNote = ''
   ): Promise<any[]> {
     const plos = request.courseFramework.programLearningOutcomes || [];
     const modules = request.modules || [];
@@ -1504,7 +1588,7 @@ Return JSON:
 
     try {
       const response = await openaiService.generateContent(
-        prompts.user + this.marketContextBlock(request),
+        prompts.user + variationNote + this.marketContextBlock(request),
         prompts.system,
         {
           maxTokens: this.MAX_TOKENS_SAMPLES,

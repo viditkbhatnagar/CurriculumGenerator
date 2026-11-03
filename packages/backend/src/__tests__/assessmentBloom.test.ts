@@ -24,6 +24,7 @@ import {
   planFormativeFormats,
   questionPlanForBloom,
   uncollectedArtefacts,
+  TASK_SHAPES_BY_BLOOM,
 } from '../services/bloomTaxonomy';
 
 const ALL_FORMATS = [
@@ -68,12 +69,32 @@ describe('questionPlanForBloom', () => {
     const understand = questionPlanForBloom('understand');
     const create = questionPlanForBloom('create');
     expect(understand.max).toBeGreaterThan(create.max);
-    expect(create.max).toBeLessThanOrEqual(4);
+    expect(create.max).toBeLessThanOrEqual(6);
   });
 
   it('tells a create-level assessment to collect the artefact, not describe it', () => {
-    expect(questionPlanForBloom('create').guidance).toMatch(/PRODUCES the artefact/i);
+    expect(questionPlanForBloom('create').guidance).toMatch(/exactly ONE production item/i);
     expect(questionPlanForBloom('create').guidance).toMatch(/does NOT evidence this level/i);
+  });
+
+  it('makes every level multiple choice by default, with scenario stems from apply up', () => {
+    for (const level of ['remember', 'understand', 'apply', 'analyse', 'evaluate', 'create']) {
+      expect(questionPlanForBloom(level).guidance).toMatch(/MCQ/);
+      expect(TASK_SHAPES_BY_BLOOM[level]).toMatch(/MCQ/);
+    }
+    expect(TASK_SHAPES_BY_BLOOM.apply).toMatch(/scenario or data-stem/);
+  });
+
+  it('offers quizzes and MCQ checks at apply and above, after the richer formats', () => {
+    const module = {
+      id: 'm',
+      mlos: [{ id: 'a', bloomLevel: 'evaluate', statement: 'Evaluate x' }],
+    };
+    const plan = planFormativeFormats(module, ['MCQ knowledge checks'], 1, {
+      includeSummative: false,
+    });
+    expect(plan.formats).toEqual(['MCQ knowledge checks']);
+    expect(plan.warning).toBeNull();
   });
 });
 

@@ -3365,6 +3365,7 @@ CRITICAL:
         (n, kind) => n + (sampleQuestions[kind]?.length || 0),
         0
       ),
+      mcqSampleCount: sampleQuestions.mcq?.length || 0,
       ploIds: ((workflow.step3?.outcomes || []) as any[]).map((plo) => plo.id || plo.code),
       moduleIds: ((workflow.step4 as any)?.modules || []).map((m: any) => m.id),
       weightingsComplete: weightingsAreComplete(totals),
@@ -3645,6 +3646,7 @@ CRITICAL:
       formatives: assessmentResponse.formativeAssessments as any[],
       summatives: assessmentResponse.summativeAssessments as any[],
       sampleQuestionCount: totalSampleQuestions,
+      mcqSampleCount: assessmentResponse.sampleQuestions.mcq.length,
       ploIds: ((workflow.step3?.outcomes || []) as any[]).map((plo) => plo.id || plo.code),
       moduleIds: ((workflow.step4 as any)?.modules || []).map((m: any) => m.id),
       weightingsComplete: weightingsAreComplete(weightingTotals),
@@ -3656,6 +3658,7 @@ CRITICAL:
     workflow.step7 = {
       userPreferences: userPreferences as any,
       failedModules,
+      sampleFailures: [...generator.sampleFailures],
       formativeAssessments: assessmentResponse.formativeAssessments as any,
       summativeAssessments: assessmentResponse.summativeAssessments as any,
       sampleQuestions: assessmentResponse.sampleQuestions as any,
@@ -3837,11 +3840,11 @@ CRITICAL:
             workflow.step7!.sampleQuestions.mcq = progress.data.samples;
           } else if (sampleType === 'sjt') {
             workflow.step7!.sampleQuestions.sjt = progress.data.samples;
-          } else if (sampleType === 'case') {
+          } else if (sampleType === 'case' || sampleType === 'caseQuestions') {
             workflow.step7!.sampleQuestions.caseQuestions = progress.data.samples;
-          } else if (sampleType === 'essay') {
+          } else if (sampleType === 'essay' || sampleType === 'essayPrompts') {
             workflow.step7!.sampleQuestions.essayPrompts = progress.data.samples;
-          } else if (sampleType === 'practical') {
+          } else if (sampleType === 'practical' || sampleType === 'practicalTasks') {
             workflow.step7!.sampleQuestions.practicalTasks = progress.data.samples;
           }
 
@@ -3966,6 +3969,7 @@ CRITICAL:
       formatives: workflow.step7!.formativeAssessments as any[],
       summatives: workflow.step7!.summativeAssessments as any[],
       sampleQuestionCount: totalSampleQuestions,
+      mcqSampleCount: workflow.step7!.sampleQuestions.mcq?.length || 0,
       ploIds: ((workflow.step3?.outcomes || []) as any[]).map((plo) => plo.id || plo.code),
       moduleIds: ((workflow.step4 as any)?.modules || []).map((m: any) => m.id),
       weightingsComplete: weightingsAreComplete(weightingTotals),
@@ -3976,6 +3980,7 @@ CRITICAL:
     // Update validation
     workflow.step7!.validation = validation;
     (workflow.step7 as any).bloomReport = bloomReport;
+    (workflow.step7 as any).sampleFailures = [...generator.sampleFailures];
     recordStepGenerated(workflow, 7);
 
     // Use queued save for final save to prevent parallel save errors

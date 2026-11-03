@@ -12,6 +12,7 @@ const base = () => ({
   ],
   summatives: [] as { alignmentTable?: { ploId?: string }[]; components?: { weight?: number }[] }[],
   sampleQuestionCount: 25,
+  mcqSampleCount: 10,
   ploIds: ['PLO1', 'PLO2'],
   moduleIds: ['m1', 'm2'],
   weightingsComplete: true,
@@ -32,6 +33,8 @@ describe('step7Validation', () => {
       bloomFloorMet: true,
       formativeCountMet: true,
       marksConsistent: null, // no graded assessments in this set
+      autoGradableShare: null, // no questions in this set
+      autoGradableMet: null,
     });
     expect(step7Passed(v)).toBe(true);
   });

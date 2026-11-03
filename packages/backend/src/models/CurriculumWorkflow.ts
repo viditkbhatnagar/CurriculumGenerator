@@ -1183,7 +1183,13 @@ export interface ICurriculumWorkflow extends Document {
       allModulesCovered?: boolean;
       /** Does every assessment reach the Bloom level its own outcomes are written at? */
       bloomFloorMet?: boolean;
+      /** Share (0-1) of formative questions that are well-formed multiple choice. */
+      autoGradableShare?: number | null;
+      autoGradableMet?: boolean | null;
     };
+
+    /** Sample batches that failed even after a retry, so the screen can say what is missing. */
+    sampleFailures?: { type: string; message: string }[];
 
     /**
      * How the generated assessments sit against the taxonomy.

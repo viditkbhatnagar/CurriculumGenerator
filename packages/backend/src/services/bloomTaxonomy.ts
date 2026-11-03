@@ -23,11 +23,14 @@ export const normaliseBloom = (level: string | undefined): string => {
 /**
  * Which formative formats can actually evidence a given Bloom level.
  *
- * A multiple-choice knowledge check cannot show that a learner can evaluate a client's
- * current-state process or create a work breakdown structure — it can only show they
- * recognise the right answer. An author who ticks every format still needs the format
- * chosen per module, because a Level 4 introduction and a Level 6 consulting module are
- * not assessed the same way.
+ * The format names the ACTIVITY; the questions inside it are multiple-choice by default
+ * (see TASK_SHAPES_BY_BLOOM). A bare recall MCQ cannot show that a learner can evaluate a
+ * client's current-state process, but a scenario or data-stem MCQ that makes the learner
+ * choose the best-justified recommendation can, and it is auto-gradable. So quizzes and MCQ
+ * checks are offered at apply, analyse and evaluate as well, after the richer formats. Create
+ * keeps its case and simulation formats because those carry its one production item.
+ * An author who ticks every format still needs the format chosen per module, because a Level 4
+ * introduction and a Level 6 consulting module are not assessed the same way.
  */
 const FORMATS_BY_BLOOM: Record<string, string[]> = {
   remember: ['Short quizzes', 'MCQ knowledge checks', 'Worksheets / problem sets'],
@@ -43,6 +46,8 @@ const FORMATS_BY_BLOOM: Record<string, string[]> = {
     'Worksheets / problem sets',
     'Practice simulations',
     'Coding / technical tasks',
+    'MCQ knowledge checks',
+    'Short quizzes',
   ],
   analyse: [
     'Mini-case exercises',
@@ -50,6 +55,8 @@ const FORMATS_BY_BLOOM: Record<string, string[]> = {
     'Practice simulations',
     'Coding / technical tasks',
     'Discussion prompts',
+    'MCQ knowledge checks',
+    'Short quizzes',
   ],
   evaluate: [
     'Mini-case exercises',
@@ -57,6 +64,8 @@ const FORMATS_BY_BLOOM: Record<string, string[]> = {
     'Short written reflections',
     'Discussion prompts',
     'Scenario-based micro-tasks',
+    'MCQ knowledge checks',
+    'Short quizzes',
   ],
   create: [
     'Mini-case exercises',
@@ -81,16 +90,22 @@ const FORMATS_BY_BLOOM: Record<string, string[]> = {
  */
 export const TASK_SHAPES_BY_BLOOM: Record<string, string> = {
   remember:
-    'recall and recognition items, used sparingly and only as scaffolding towards a higher-level task',
+    'recall and recognition MCQs, used sparingly and only as scaffolding towards a higher-level task',
   understand:
-    'explaining a concept, interpreting information, classifying examples, comparing concepts, summarising meaning, or selecting the correct explanation in a scenario — quizzes and MCQs are valid here PROVIDED they assess comprehension, not simple memorisation',
+    'MCQs that ask the learner to explain a concept, interpret information, classify examples, compare concepts, or select the correct explanation in a scenario — valid here PROVIDED they assess comprehension, not simple memorisation',
   apply:
-    'working a method or framework on a given case: calculations with interpretation, applying a model to a scenario, producing a worked output',
-  analyse: 'case analysis, data or problem analysis, scenario diagnosis',
-  evaluate: 'critical evaluation, comparison with justification, recommendations',
+    'scenario or data-stem MCQs that make the learner DO the verb: a case or figures are given and the learner picks the correct method, the correct result of applying it, or the next action — not a definition',
+  analyse:
+    'scenario or data-stem MCQs that make the learner diagnose: interpret an output or dataset, identify the cause of an error, or pick the explanation that fits the evidence supplied',
+  evaluate:
+    'scenario MCQs that make the learner judge: choose the best-justified recommendation or verdict against stated criteria, where every option is plausible and only one is defensible on the evidence given',
   create:
-    'a project or design task, a strategy proposal, an implementation plan, or a presentation/report — the learner must PRODUCE the artefact, not answer questions about producing one',
+    'scenario MCQs that make the learner select the strongest design, plan or sequence for a stated brief or spot what a draft is missing; where the outcome names an artefact, ONE production item (file_upload, practical or short_answer) collects that artefact — the learner must PRODUCE it, not describe it',
 };
+
+/** What every MCQ must look like, wherever the prompt describes one. */
+export const MCQ_ITEM_SPEC =
+  'exactly 4 options, "correctAnswer" the exact text of one option, a rationale, plausible distractors, and "alignedMLO"';
 
 /**
  * How each artefact is actually named in a deliverable.
@@ -369,38 +384,37 @@ const QUESTION_PLAN_BY_BLOOM: Record<string, { min: number; max: number; guidanc
   remember: {
     min: 10,
     max: 12,
-    guidance:
-      'short recall items — MCQ and one-line answers are appropriate, and difficulty may rise from Easy to Hard across the set',
+    guidance: 'short recall MCQs, and difficulty may rise from Easy to Hard across the set',
   },
   understand: {
     min: 10,
     max: 12,
     guidance:
-      'comprehension items — MCQ and short answers are appropriate, but each item must ask the learner to explain, interpret, classify, compare or select the right explanation for a situation, never to recall a definition',
+      'comprehension MCQs — each item must ask the learner to explain, interpret, classify, compare or select the right explanation for a situation, never to recall a definition',
   },
   apply: {
     min: 6,
     max: 8,
     guidance:
-      'worked tasks — each gives a case, dataset or figures and requires the method to be carried out and the result interpreted; a bare MCQ cannot evidence this level unless it follows a substantive worked step',
+      'scenario or data-stem MCQs — each gives a case, dataset or figures and the learner chooses the correct method, result or next action, so the item makes them carry out the verb rather than recall it',
   },
   analyse: {
+    min: 5,
+    max: 8,
+    guidance:
+      'diagnostic MCQs — each supplies a case, output or scenario, and the learner chooses what is happening and why, or what error explains it; no item may be answerable without engaging with the material supplied',
+  },
+  evaluate: {
+    min: 5,
+    max: 6,
+    guidance:
+      'judgement MCQs — each sets out a situation and criteria, and the learner chooses the best-justified recommendation; every option is plausible and the rationale explains why the others fail the criteria',
+  },
+  create: {
     min: 4,
     max: 6,
     guidance:
-      'diagnostic tasks — each supplies a case, dataset or scenario for the learner to break down, and asks what is happening and why; no item may be answerable without engaging with the material supplied',
-  },
-  evaluate: {
-    min: 3,
-    max: 5,
-    guidance:
-      'judgement tasks — each requires a reasoned verdict, a comparison against stated criteria, or a recommendation with its justification; the justification is the evidence, so an item that only asks which option is best does not qualify',
-  },
-  create: {
-    min: 2,
-    max: 4,
-    guidance:
-      'production tasks — the learner PRODUCES the artefact the outcome names (the plan, model, dashboard, proposal, report or presentation) and hands it in; describing, outlining, wireframing or listing what it would contain does NOT evidence this level. Supporting items may set up the work, but at least one task must collect the artefact itself',
+      'design-choice MCQs (select the strongest plan, structure or sequence for a brief, or what a draft lacks), plus, when the outcome names an artefact, exactly ONE production item that collects that artefact — describing, outlining or listing what it would contain does NOT evidence this level',
   },
 };
 

@@ -4417,7 +4417,37 @@ router.post('/:id/step7/approve', validateJWT, loadUser, async (req: Request, re
       return res.status(404).json({ success: false, error: 'Workflow or Step 7 not found' });
     }
 
-    // Validation is informational only - no longer blocks approval
+    // Step 7 is the auto-gradable step. When too few of its formative questions are machine-
+    // markable, or no multiple-choice sample exists, approval needs a reason (approvalChecks).
+    // The flags are recomputed from the stored assessments so a run saved before they existed
+    // is held to them too.
+    const step7Checked = {
+      ...(workflow.step7 as any),
+      validation: step7ValidationOf(workflow as any) || workflow.step7.validation,
+    };
+    const decision = approvalDecision(failedChecks(7, step7Checked), req.body?.overrideReason);
+    if (!decision.allowed) {
+      return res.status(409).json({
+        success: false,
+        code: 'OVERRIDE_REQUIRED',
+        error: 'Step 7 did not pass its checks. Fix them and regenerate, or approve with a reason.',
+        details: decision.issues,
+      });
+    }
+    if (decision.override) {
+      (workflow.step7 as any).approvalOverride = {
+        ...decision.override,
+        by: userId,
+        at: new Date(),
+      };
+      workflow.markModified('step7');
+      loggingService.warn('Step 7 approved over failed checks', {
+        workflowId: req.params.id,
+        issues: decision.override.issues.length,
+      });
+    }
+
+    // The remaining validation flags are informational and do not block approval.
     const warnings: string[] = [];
     if (!workflow.step7.validation?.plosCovered) {
       warnings.push('Some PLOs may not be fully covered');
@@ -10032,6 +10062,12 @@ router.get(
           stepNumber: step,
           status: overallStatus,
           hasData,
+          // The job's own reported percentage, or null when it has not reported one (Bull's
+          // default 0 is "nothing reported yet", not "0% done"). Never an estimate.
+          progress:
+            typeof jobStatus?.progress === 'number' && jobStatus.progress > 0
+              ? Math.min(100, jobStatus.progress)
+              : null,
           // Set when the step was left marked in-progress by a run that is no longer
           // running. The work has to be started again; nothing will advance it on its own.
           stalled,
