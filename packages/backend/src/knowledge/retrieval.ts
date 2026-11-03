@@ -18,6 +18,7 @@ import { shorten } from '../services/occupations/occupationIndex';
 import { dot } from './clustering';
 import { pickAcrossAreas } from './selection';
 import { KbConcept, KbMeta, Importance } from './models';
+import { shortReference } from './references';
 
 interface Indexed {
   id: string;
@@ -213,16 +214,28 @@ export function sourcesOf(concept: any, max = 3): string[] {
 
 export function formatConcept(
   c: any,
-  opts: { definition?: number; sources?: number } = {}
+  opts: { definition?: number; sources?: number; readable?: boolean } = {}
 ): string {
-  const head = `${c.code} ${c.name} (${c.conceptType}; ${c.importance}; ${c.bookCount} book${c.bookCount === 1 ? '' : 's'}${c.level ? `; ${c.level}` : ''})`;
+  // Readable mode (Steps 1-3): no code to copy into the text, and sources as the short reference
+  // the model is asked to cite, in square brackets.
+  const label = opts.readable ? c.name : `${c.code} ${c.name}`;
+  const head = `${label} (${c.conceptType}; ${c.importance}; ${c.bookCount} book${c.bookCount === 1 ? '' : 's'}${c.level ? `; ${c.level}` : ''})`;
   // definition: 0 lists the concept by name only (the Step 4 outline needs names, not prose).
   const def =
     c.definition && opts.definition !== 0
       ? ` — ${String(c.definition).slice(0, opts.definition ?? 220)}`
       : '';
-  const src = sourcesOf(c, opts.sources ?? 2);
+  const src = opts.readable
+    ? evidenceByRole(c)
+        .slice(0, opts.sources ?? 2)
+        .map((e) => `[${shortReference(e)}]`)
+    : sourcesOf(c, opts.sources ?? 2);
   return `- ${head}${def}${src.length ? `\n    Taught in: ${src.join('; ')}` : ''}`;
+}
+
+function readableExample(c: any): string {
+  const e = evidenceByRole(c)[0];
+  return e ? `[${shortReference(e)}]` : '[Author, Book title, ch. 1]';
 }
 
 /**
@@ -231,7 +244,7 @@ export function formatConcept(
  */
 export function formatBodyOfKnowledge(
   concepts: any[],
-  opts: { heading?: string; definition?: number; sources?: number } = {}
+  opts: { heading?: string; definition?: number; sources?: number; readable?: boolean } = {}
 ): string {
   if (!concepts.length) return '';
   const byArea = new Map<string, any[]>();
@@ -248,7 +261,12 @@ export function formatBodyOfKnowledge(
 Each entry is a concept taught in the textbooks loaded for this programme, held once however many
 books teach it. "core" = most of the domain's books treat it in depth; "supporting", "advanced" and
 "optional" follow from how many books teach it, how deeply, and at what level (computed, not
-judged). Ground the content in these concepts and refer to them by code (e.g. ${concepts[0].code}).
+judged). ${
+    opts.readable
+      ? `Ground the content in these concepts. Where you cite a textbook, copy the short reference from
+its "Taught in" line in square brackets, as in ${readableExample(concepts[0])}; never write concept codes.`
+      : `Ground the content in these concepts and refer to them by code (e.g. ${concepts[0].code}).`
+  }
 When citing a textbook, use only the books, chapters and pages listed here; never invent any.
 
 ${body}

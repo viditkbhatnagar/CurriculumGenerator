@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import ModuleConceptsList from './ModuleConceptsList';
+import ReadableRefs from './ReadableRefs';
 import { useSubmitStep4, useApproveStep4 } from '@/hooks/useWorkflow';
 import { api } from '@/lib/api';
 import { useStepStatus } from '@/hooks/useStepStatus';
@@ -808,7 +809,9 @@ function ModuleCard({
             <div>
               <span className="text-xs font-mono text-teal-500">{module.code}</span>
               <h4 className="text-teal-800 font-semibold text-lg">{module.title}</h4>
-              <p className="text-sm text-teal-600 mt-1">{module.description}</p>
+              <p className="text-sm text-teal-600 mt-1">
+                <ReadableRefs text={module.description} workflowId={workflowId} />
+              </p>
             </div>
           </div>
           <div className="text-right shrink-0">
@@ -1056,7 +1059,9 @@ function ModuleCard({
                     >
                       <div>
                         <span className="text-xs text-teal-500 mr-2">#{topic.sequence}</span>
-                        <span className="text-sm text-teal-800">{topic.title}</span>
+                        <span className="text-sm text-teal-800">
+                          <ReadableRefs text={topic.title} workflowId={workflowId} />
+                        </span>
                       </div>
                       {topic.hours !== undefined && (
                         <span className="text-xs text-teal-600">{topic.hours}h</span>

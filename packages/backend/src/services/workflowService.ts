@@ -946,10 +946,11 @@ IMPORTANT:
       limit: 160,
       definition: 90,
       heading: 'BODY OF KNOWLEDGE (what the programme textbooks teach)',
+      readable: true,
     });
     const librarySection = library.concepts
       ? `${library.block}
-Ground the KNOWLEDGE items in the body of knowledge above and name the concept codes each draws on in its description (e.g. "(K-MLE-0012, K-MLE-0014)"). Build each SKILL by joining a concept from it with a task of the matched occupations, so the skill has both an academic basis and occupational relevance.
+Ground the KNOWLEDGE items in the body of knowledge above and name the textbook each draws on in its description, as the short reference in square brackets from the "Taught in" line (e.g. "[Ault et al., Principles of Data Science, ch. 1]"); never write concept codes. Build each SKILL by joining a concept from it with a task of the matched occupations, so the skill has both an academic basis and occupational relevance.
 `
       : '';
 

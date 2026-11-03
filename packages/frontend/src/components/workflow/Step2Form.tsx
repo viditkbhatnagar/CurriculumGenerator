@@ -1,5 +1,6 @@
 'use client';
 
+import ReadableRefs from './ReadableRefs';
 import { useState, useEffect, useRef } from 'react';
 import { useSubmitStep2, useApproveStep2 } from '@/hooks/useWorkflow';
 import { useStepStatus } from '@/hooks/useStepStatus';
@@ -251,10 +252,12 @@ function KSCCard({
   item,
   type,
   onEdit,
+  workflowId,
 }: {
   item: KSCItem;
   type: 'knowledge' | 'skill' | 'competency';
   onEdit: (item: KSCItem) => void;
+  workflowId?: string;
 }) {
   const importanceColors: Record<KSCImportance, string> = {
     essential: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
@@ -280,7 +283,9 @@ function KSCCard({
           <span className={`text-xs px-2 py-1 rounded font-medium ${typeColors[type]}`}>
             {typeLabels[type]}
           </span>
-          <p className="text-teal-800">{item.statement}</p>
+          <p className="text-teal-800">
+            <ReadableRefs text={item.statement} workflowId={workflowId} />
+          </p>
         </div>
         <span
           className={`text-xs px-2 py-1 rounded-full border whitespace-nowrap ${importanceColors[item.importance as KSCImportance] || importanceColors.desirable}`}
@@ -288,7 +293,11 @@ function KSCCard({
           {item.importance}
         </span>
       </div>
-      {item.description && <p className="text-sm text-teal-600 ml-10 mb-2">{item.description}</p>}
+      {item.description && (
+        <p className="text-sm text-teal-600 ml-10 mb-2">
+          <ReadableRefs text={item.description} workflowId={workflowId} />
+        </p>
+      )}
       {item.source && (
         <p className="text-xs text-teal-500 ml-10">
           Framework named by the AI (not verified): {item.source}
@@ -1093,6 +1102,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             <div className="space-y-3">
               {step2Data?.knowledgeItems?.map((item: KSCItem) => (
                 <KSCCard
+                  workflowId={workflow._id}
                   key={item.id}
                   item={item}
                   type="knowledge"
@@ -1114,6 +1124,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             <div className="space-y-3">
               {step2Data?.skillItems?.map((item: KSCItem) => (
                 <KSCCard
+                  workflowId={workflow._id}
                   key={item.id}
                   item={item}
                   type="skill"
@@ -1135,6 +1146,7 @@ export default function Step2Form({ workflow, onComplete, onRefresh }: Props) {
             <div className="space-y-3">
               {competencyItems.map((item: KSCItem) => (
                 <KSCCard
+                  workflowId={workflow._id}
                   key={item.id}
                   item={item}
                   type="competency"

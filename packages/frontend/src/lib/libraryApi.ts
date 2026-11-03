@@ -213,3 +213,16 @@ export const getConceptsByCodes = (codes: string[], programme?: string) =>
         }`
       ).then(unwrap<Concept[]>)
     : Promise.resolve([] as Concept[]);
+
+/**
+ * Readable references for concept codes (Kotler et al., Principles of Marketing, ch. 6, p. 235).
+ * With a programme, only books that programme may use.
+ */
+export const getConceptReferences = (codes: string[], programme?: string) =>
+  codes.length
+    ? fetchAPI(
+        `${BASE}/references?codes=${encodeURIComponent(codes.join(','))}${
+          programme ? `&programme=${encodeURIComponent(programme)}` : ''
+        }`
+      ).then(unwrap<{ code: string; reference: string }[]>)
+    : Promise.resolve([] as { code: string; reference: string }[]);

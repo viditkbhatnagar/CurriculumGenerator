@@ -11,6 +11,7 @@ import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { bodyOfKnowledge, formatBodyOfKnowledge, formatConcept, searchConcepts } from './retrieval';
 import type { Importance } from './models';
 import { pickAcrossAreas } from './selection';
+import { conceptReference } from './references';
 import { chapterApa, groupByChapter, selectChapters, withChapterSpan } from './chapterSources';
 import { BookScope, restrictedFrom, visibleConcept, visibleConcepts } from './bookAccess';
 
@@ -61,8 +62,11 @@ export async function libraryContextFor(
     .filter((h) => h.concept)
     .slice(0, k)
     .map((h) => ({
-      content: formatConcept(h.concept, { definition: 500, sources: 3 }).replace(/^- /, ''),
-      source: `Textbook library ${h.concept.code}`,
+      content: formatConcept(h.concept, { definition: 500, sources: 3, readable: true }).replace(
+        /^- /,
+        ''
+      ),
+      source: `Textbook library: ${conceptReference(h.concept)?.reference || h.concept.name}`,
       relevance: h.similarity,
     }));
 }
@@ -79,6 +83,8 @@ export async function bodyOfKnowledgeBlockFor(
     heading?: string;
     definition?: number;
     sources?: number;
+    /** Cite by readable book reference instead of concept code (Steps 1-3). */
+    readable?: boolean;
   } = {}
 ): Promise<{ block: string; concepts: number }> {
   const lib = await libraryFor(workflowId);
@@ -101,6 +107,7 @@ export async function bodyOfKnowledgeBlockFor(
       heading: opts.heading,
       definition: opts.definition ?? 140,
       sources: opts.sources ?? 1,
+      readable: opts.readable,
     }),
     concepts: concepts.length,
   };

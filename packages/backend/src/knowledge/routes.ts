@@ -23,6 +23,7 @@ import { restructureBook } from './bookStructure';
 import { enqueueIngest, enqueueConsolidation } from './queue';
 import { conceptsByCodes, hiddenBooksFor, libraryFor } from './programmeLibrary';
 import { visibleConcepts } from './bookAccess';
+import { referencesForCodes } from './references';
 import { sha256, workKeyOf, removeBook, recomputeDomainStats } from './ingestBook';
 
 const router = Router();
@@ -466,6 +467,28 @@ router.get('/concepts', validateJWT, loadUser, async (req: Request, res: Respons
     const importance = asList(req.query.importance) as any[];
     const rows = await bodyOfKnowledge({ domainKeys, areas, importance, limit });
     res.json({ success: true, data: rows.map(strip) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+/**
+ * Readable references for concept codes, for screens that show text written with codes (Steps 1
+ * to 4 stored "K-MKT-0440" before the prompts asked for readable references). With
+ * ?programme=, only books that programme may use. Lean: no definitions or passages.
+ */
+router.get('/references', validateJWT, loadUser, async (req: Request, res: Response) => {
+  try {
+    const codes = asList(req.query.codes).slice(0, 200);
+    let rows = await conceptsByCodes(codes);
+    const programme = String(req.query.programme || '');
+    if (mongoose.isValidObjectId(programme)) {
+      const scope = (await libraryFor(programme)) ?? {
+        hiddenBookIds: await hiddenBooksFor(programme),
+      };
+      rows = visibleConcepts(scope, rows);
+    }
+    res.json({ success: true, data: referencesForCodes(codes, rows) });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
