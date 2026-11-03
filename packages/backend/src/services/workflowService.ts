@@ -157,6 +157,7 @@ import {
   BloomLevel,
 } from '../types/newWorkflow';
 import { normaliseTopic } from '../utils/topicShape';
+import { withModuleLevels } from './moduleLevels';
 import { essentialKscIdsOf, step4ValidationReport, studentHoursOf } from './step4Validation';
 
 // ============================================================================
@@ -1830,11 +1831,6 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
         // appear and can be regenerated or filled in by hand.
         const content = byCode.get(module.code) || {};
         const sequenceOrder = module.sequenceOrder ?? detailed.length + 1;
-        let phase: 'early' | 'middle' | 'late' = 'middle';
-        const position = sequenceOrder / blueprint.length;
-        if (position <= 0.34) phase = 'early';
-        else if (position > 0.67) phase = 'late';
-
         detailed.push({
           id: `mod-${module.code.toLowerCase()}`,
           code: module.code,
@@ -1850,7 +1846,6 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
           isCore: !module.isElective,
           isElective: !!module.isElective,
           group: module.group,
-          phase,
           prerequisites: [],
           contactActivities: content.contactActivities || [],
           independentActivities: content.independentActivities || [],
@@ -1916,13 +1911,15 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
   /** Write the assembled modules plus the validation/summary block Step 4 exposes. */
   private async finaliseStep4(
     workflowId: string,
-    modules: any[],
+    generated: any[],
     blueprint: any[]
   ): Promise<ICurriculumWorkflow> {
     const workflow = await CurriculumWorkflow.findById(workflowId);
     if (!workflow) throw new Error('Workflow not found');
 
     const step1: any = workflow.step1;
+    // Year, level and position for every module (services/moduleLevels); `phase` mirrors position.
+    const modules: any[] = withModuleLevels<any>(generated, step1);
     const totalContactHours = modules.reduce((s, m) => s + (m.contactHours || 0), 0);
     const totalIndependentHours = modules.reduce((s, m) => s + (m.independentHours || 0), 0);
     const totalHours = totalContactHours + totalIndependentHours;
@@ -2238,12 +2235,9 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       );
     }
 
-    // Process modules to add phase and validate
-    const modules = (frameworkContent.modules || []).map((m: any, index: number) => {
+    // Process modules and give each its year, level and position (services/moduleLevels)
+    const generatedModules = (frameworkContent.modules || []).map((m: any, index: number) => {
       const seq = m.sequenceOrder || index + 1;
-      let phase: 'early' | 'middle' | 'late' = 'middle';
-      if (seq <= 2) phase = 'early';
-      else if (seq >= 6) phase = 'late';
 
       return {
         id: m.id || `mod${seq}`,
@@ -2281,12 +2275,12 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
           competencyLinks: mlo.competencyLinks || mlo.linkedKSCs || [],
         })),
         topics: m.topics || [],
-        phase,
         contactActivities: m.contactActivities,
         independentActivities: m.independentActivities,
         ...(conceptCodes[index]?.length ? { knowledgeObjects: conceptCodes[index] } : {}),
       };
     });
+    const modules: any[] = withModuleLevels<any>(generatedModules, workflow.step1);
 
     // Guard against duplicate module ids. The model sometimes returns the same
     // "id" for two modules (seen in the wild: MOD102 and MOD103 both "mod2"),
@@ -2576,7 +2570,6 @@ Create exactly ${suggestedModules} MODULES with the following structure:
 
 2. **SEQUENCING**
    - sequenceOrder: Position in the programme (1 to ${suggestedModules})
-   - phase: "early" | "middle" | "late"
    - prerequisites: ids of modules whose content this one builds on. This is a proposed sequence; formal prerequisites are the institution's decision.
 
 3. **HOURS ALLOCATION** (must be arithmetically exact)
@@ -2630,7 +2623,6 @@ Return ONLY valid JSON:
       "title": "[Module title]",
       "description": "[What the module covers and what learners will be able to do]",
       "sequenceOrder": 1,
-      "phase": "early",
       "totalHours": ${exampleHours},
       "contactHours": ${exampleContact},
       "independentHours": ${exampleHours - exampleContact},

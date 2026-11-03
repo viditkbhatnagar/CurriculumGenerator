@@ -104,6 +104,7 @@ import { isValidObjectId } from 'mongoose';
 import { deleteConfirmationProblem } from '../utils/softDelete';
 import { hasActiveGeneration } from '../services/generationActivity';
 import { step4ApprovalProblems } from '../services/step4Approval';
+import { authorLevelEdit, levelsFor, withModuleLevels } from '../services/moduleLevels';
 import { essentialKscIdsOf, step4ValidationReport } from '../services/step4Validation';
 import { step6ReportOf } from '../services/step6Validation';
 import { step7ValidationOf } from '../services/step7Validation';
@@ -2359,7 +2360,29 @@ router.put(
         });
       }
 
-      Object.assign(module, moduleUpdates);
+      // Year and level are the author's to set (services/moduleLevels); the label, framework,
+      // origin and phase are ours, so a client cannot write them directly.
+      const {
+        level: editedLevel,
+        year: editedYear,
+        levelLabel: _label,
+        levelFramework: _framework,
+        levelOrigin: _origin,
+        phase: _phase,
+        ...plainUpdates
+      } = moduleUpdates;
+      let levelFields: Record<string, unknown> | null = null;
+      if (editedLevel !== undefined || editedYear !== undefined) {
+        const index = workflow.step4.modules.findIndex((m: any) => m.id === moduleId);
+        const edit = authorLevelEdit(
+          { level: editedLevel, year: editedYear },
+          levelsFor(workflow)[index]
+        );
+        if ('error' in edit) return res.status(400).json({ success: false, error: edit.error });
+        levelFields = edit.fields;
+      }
+
+      Object.assign(module, plainUpdates, levelFields || {});
       // Independent hours are stored under two names: the screens write `selfStudyHours`, and
       // generation and some readers use `independentHours` first. An edit that set only one
       // left the other stale, so the screen showed the new figure while Step 12 and the
@@ -2784,7 +2807,6 @@ router.post('/:id/step4/import', validateJWT, loadUser, (req: Request, res: Resp
               isCore: true,
               prerequisites: [],
               linkedPLOs: [],
-              phase: 'middle',
               credits: 0,
             };
 
@@ -2883,7 +2905,8 @@ router.post('/:id/step4/import', validateJWT, loadUser, (req: Request, res: Resp
         if (!matchedLiveIds.has(m.id)) summary.modulesDeleted += 1;
       });
 
-      step4.modules = newModules;
+      // Year, level and position for the new list (services/moduleLevels); author values stay.
+      step4.modules = withModuleLevels(newModules, workflow.step1);
       // Recompute totals from the new module list (selfStudyHours is the
       // canonical independent-hours field on generated modules).
       step4.totalProgramHours = newModules.reduce((sum, m) => sum + (m.totalHours || 0), 0);

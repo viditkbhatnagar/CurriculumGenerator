@@ -187,8 +187,8 @@ export function deriveModuleLevels(modules: ModuleLike[], step1: any): ModuleLev
 }
 
 /** The modules with their levels written in (new objects); author-set values are untouched. */
-export function withModuleLevels<T extends ModuleLike>(modules: T[], step1: any): T[] {
-  const levels = deriveModuleLevels(modules, step1);
+export function withModuleLevels<T extends object>(modules: T[], step1: any): T[] {
+  const levels = deriveModuleLevels((modules || []) as ModuleLike[], step1);
   return (modules || []).map((m, i) => ({
     ...m,
     year: levels[i].year,
@@ -203,6 +203,34 @@ export function withModuleLevels<T extends ModuleLike>(modules: T[], step1: any)
 /** Levels for a workflow's Step 4 modules: stored where present, derived otherwise. */
 export function levelsFor(workflow: any): ModuleLevel[] {
   return deriveModuleLevels(workflow?.step4?.modules || [], workflow?.step1);
+}
+
+/**
+ * An author's edit of a module's year or level, checked. Setting either marks the module's
+ * origin 'author', after which generation and imports leave it alone. The framework and label
+ * follow the programme's, so the author states a number, not a scheme.
+ */
+export function authorLevelEdit(
+  input: { level?: unknown; year?: unknown },
+  current: ModuleLevel
+): { error: string } | { fields: Record<string, unknown> } {
+  const level = input.level === undefined ? current.level : Number(input.level);
+  const year = input.year === undefined ? current.year : Number(input.year);
+  if (!Number.isInteger(level) || level < 1 || level > 8) {
+    return { error: 'Level must be a whole number from 1 to 8' };
+  }
+  if (!Number.isInteger(year) || year < 1 || year > 6) {
+    return { error: 'Year must be a whole number from 1 to 6' };
+  }
+  return {
+    fields: {
+      level,
+      year,
+      levelFramework: current.levelFramework,
+      levelLabel: levelLabelOf(current.levelFramework, level, year),
+      levelOrigin: 'author',
+    },
+  };
 }
 
 /** The module's level on the UK scale 3–7 that case studies are specified in. */

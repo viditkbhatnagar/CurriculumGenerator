@@ -2,7 +2,12 @@
  * Logan Pacey's re-test, 2 November 2026: no module had a year or level, and the final module
  * of a four-module certificate was tagged "middle".
  */
-import { deriveModuleLevels, levelsFor, withModuleLevels } from '../services/moduleLevels';
+import {
+  authorLevelEdit,
+  deriveModuleLevels,
+  levelsFor,
+  withModuleLevels,
+} from '../services/moduleLevels';
 
 const mods = (n: number, credits: number, extra: any = {}) =>
   Array.from({ length: n }, (_, i) => ({ code: `M0${i + 1}`, sequence: i + 1, credits, ...extra }));
@@ -66,6 +71,21 @@ describe('module levels', () => {
     expect((input[0] as any).level).toBeUndefined();
     expect(out.map((m: any) => m.phase)).toEqual(['early', 'early', 'middle', 'late']);
     expect(out.every((m: any) => m.level === 7)).toBe(true);
+  });
+
+  it("checks an author's edit and marks it as the author's", () => {
+    const current = deriveModuleLevels(mods(1, 15), {
+      academicLevel: 'certificate',
+      creditFramework: { system: 'uk_credits', credits: 60 },
+    })[0];
+    expect(authorLevelEdit({ level: 9 }, current)).toHaveProperty('error');
+    expect(authorLevelEdit({ year: 0 }, current)).toHaveProperty('error');
+    const ok: any = authorLevelEdit({ level: 5 }, current);
+    expect(ok.fields).toMatchObject({
+      level: 5,
+      levelOrigin: 'author',
+      levelLabel: 'RQF Level 5 · Year 1',
+    });
   });
 
   it('derives for an existing workflow with no stored levels', () => {
