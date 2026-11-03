@@ -942,11 +942,6 @@ export interface ICurriculumWorkflow extends Document {
       moduleIds: string[];
     }>;
 
-    progressiveComplexity: {
-      earlyModulesLowerLevel: boolean;
-      laterModulesHigherLevel: boolean;
-    };
-
     hoursIntegrity: boolean;
     validatedAt?: Date;
     approvedAt?: Date;

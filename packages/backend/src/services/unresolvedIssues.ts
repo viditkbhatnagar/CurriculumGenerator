@@ -60,6 +60,10 @@ const CHECK_LABELS: Record<number, Record<string, string>> = {
     contactHoursMatch: 'Contact hours add up to the declared contact hours',
     allPLOsCovered: 'Every programme outcome is taught by a module',
     progressionValid: 'Every prerequisite is a module that comes earlier',
+    levelsAssigned: 'Every module has an academic level and year',
+    levelsNonDecreasing: 'Module levels never fall from one module to the next',
+    capstoneAtTopLevel: "The final module is at the programme's highest level",
+    bloomRising: 'Module outcomes rise in Bloom level from early to late modules',
     noCircularDeps: 'No module depends on itself through its prerequisites',
     minMLOsPerModule: 'Every module has at least two learning outcomes',
     essentialCompetenciesTaught:
@@ -274,6 +278,7 @@ export function unresolvedIssues(workflow: Workflowish, currentYear: number): Un
           declaredHours: w.step1?.creditFramework?.totalHours || 0,
           declaredContactHours: w.step1?.creditFramework?.contactHours,
           essentialKscIds: essentialKscIdsOf(w.step2),
+          step1: w.step1,
         }) as unknown as Record<string, unknown>
       )
     );

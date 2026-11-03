@@ -1,5 +1,5 @@
 {
-  "count": 218,
+  "count": 217,
   "signatures": [
     "src/data/mockRepository.ts|TS2339|Property 'createdAt' does not exist on type 'T'.",
     "src/data/mockRepository.ts|TS2352|Conversion of type 'Omit<T, \"createdAt\" | \"updatedAt\" | \"_id\"> & { _id: string; createdAt: Date; updatedAt: Date; }' to type 'T' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.",
@@ -68,10 +68,10 @@
     "src/routes/newWorkflowRoutes.ts|TS2339|Property 'processManagementDecision' does not exist on type 'ResourceCostService'.",
     "src/routes/newWorkflowRoutes.ts|TS2551|Property 'getEvaluation' does not exist on type 'ResourceCostService'. Did you mean 'getCostEvaluation'?",
     "src/routes/newWorkflowRoutes.ts|TS2554|Expected 2 arguments, but got 1.",
-    "src/routes/programs.ts|TS2339|Property 'documentExportService' does not exist on type 'typeof import(\"/Users/viditkbhatnagar/codes/CurriculumGenerator/packages/backend/src/services/documentExportService\")'.",
-    "src/routes/programs.ts|TS2339|Property 'getPool' does not exist on type 'typeof import(\"/Users/viditkbhatnagar/codes/CurriculumGenerator/packages/backend/src/db/index\")'.",
-    "src/routes/programs.ts|TS2339|Property 'getPool' does not exist on type 'typeof import(\"/Users/viditkbhatnagar/codes/CurriculumGenerator/packages/backend/src/db/index\")'.",
-    "src/routes/programs.ts|TS2339|Property 'getPool' does not exist on type 'typeof import(\"/Users/viditkbhatnagar/codes/CurriculumGenerator/packages/backend/src/db/index\")'.",
+    "src/routes/programs.ts|TS2339|Property 'documentExportService' does not exist on type 'typeof import(\"/Users/viditkbhatnagar/codes/CurriculumGenerator/.claude/worktrees/agent-ad94665667740dbc6/packages/backend/src/services/documentExportService\")'.",
+    "src/routes/programs.ts|TS2339|Property 'getPool' does not exist on type 'typeof import(\"/Users/viditkbhatnagar/codes/CurriculumGenerator/.claude/worktrees/agent-ad94665667740dbc6/packages/backend/src/db/index\")'.",
+    "src/routes/programs.ts|TS2339|Property 'getPool' does not exist on type 'typeof import(\"/Users/viditkbhatnagar/codes/CurriculumGenerator/.claude/worktrees/agent-ad94665667740dbc6/packages/backend/src/db/index\")'.",
+    "src/routes/programs.ts|TS2339|Property 'getPool' does not exist on type 'typeof import(\"/Users/viditkbhatnagar/codes/CurriculumGenerator/.claude/worktrees/agent-ad94665667740dbc6/packages/backend/src/db/index\")'.",
     "src/routes/programs.ts|TS2551|Property 'created_at' does not exist on type 'IProgram'. Did you mean 'createdAt'?",
     "src/routes/programs.ts|TS2551|Property 'industry_sector' does not exist on type 'IProgram'. Did you mean 'industrySector'?",
     "src/routes/programs.ts|TS2551|Property 'industry_sector' does not exist on type 'IProgram'. Did you mean 'industrySector'?",
@@ -186,7 +186,7 @@
     "src/services/workflowService.ts|TS2339|Property 'competencyItems' does not exist on type '{ benchmarkPrograms: { programName: string; institution: string; url?: string; accreditationStatus?: string; publicationYear?: number; }[]; industryFrameworks?: string[]; institutionalFrameworks?: string[]; ... 8 more ...; approvedBy?: ObjectId; }'.",
     "src/services/workflowService.ts|TS2339|Property 'contactHours' does not exist on type '{}'.",
     "src/services/workflowService.ts|TS2339|Property 'contactHoursPercent' does not exist on type '{}'.",
-    "src/services/workflowService.ts|TS2339|Property 'creditSystem' does not exist on type '{ programTitle: string; programDescription: string; academicLevel: \"diploma\" | \"certificate\" | \"micro-credential\"; creditFramework: { system: \"uk_credits\" | \"ects\" | \"us_semester\" | \"non_credit\"; ... 4 more ...; independentHours: number; }; ... 11 more ...; approvedBy?: ObjectId; }'.",
+    "src/services/workflowService.ts|TS2339|Property 'creditSystem' does not exist on type '{ programTitle: string; programDescription: string; academicLevel: \"diploma\" | \"certificate\" | \"micro-credential\"; creditFramework: { system: \"ects\" | \"uk_credits\" | \"us_semester\" | \"non_credit\"; ... 4 more ...; independentHours: number; }; ... 11 more ...; approvedBy?: ObjectId; }'.",
     "src/services/workflowService.ts|TS2339|Property 'generationProgress' does not exist on type 'Step10LessonPlans'.",
     "src/services/workflowService.ts|TS2339|Property 'generationProgress' does not exist on type 'Step11PPTGeneration'.",
     "src/services/workflowService.ts|TS2339|Property 'generationProgress' does not exist on type 'Step11PPTGeneration'.",
@@ -213,12 +213,11 @@
     "src/services/workflowService.ts|TS2339|Property 'totalHours' does not exist on type '{}'.",
     "src/services/workflowService.ts|TS2353|Object literal may only specify known properties, and 'bloomDistribution' does not exist in type '{ bloomLevels: string[]; priorityCompetencies: string[]; outcomeEmphasis: \"professional\" | \"technical\" | \"strategic\" | \"mixed\"; targetCount: number; contextConstraints?: string; preferredVerbs?: string[]; ... 7 more ...; approvedBy?: ObjectId; }'.",
     "src/services/workflowService.ts|TS2353|Object literal may only specify known properties, and 'competencyItems' does not exist in type '{ benchmarkPrograms: { programName: string; institution: string; url?: string; accreditationStatus?: string; publicationYear?: number; }[]; industryFrameworks?: string[]; institutionalFrameworks?: string[]; ... 8 more ...; approvedBy?: ObjectId; }'.",
-    "src/services/workflowService.ts|TS2353|Object literal may only specify known properties, and 'isCreditAwarding' does not exist in type '{ system: \"uk_credits\" | \"ects\" | \"us_semester\" | \"non_credit\"; credits?: number; totalHours: number; contactHoursPercent: number; contactHours: number; independentHours: number; }'.",
+    "src/services/workflowService.ts|TS2353|Object literal may only specify known properties, and 'isCreditAwarding' does not exist in type '{ system: \"ects\" | \"uk_credits\" | \"us_semester\" | \"non_credit\"; credits?: number; totalHours: number; contactHoursPercent: number; contactHours: number; independentHours: number; }'.",
     "src/services/workflowService.ts|TS2353|Object literal may only specify known properties, and 'stage' does not exist in type '{ caseStudies: { id: string; type: \"discussion\" | \"practice\" | \"assessment_ready\"; title: string; industryContext: string; organizationName: string; scenario: string; moduleIds: string[]; mloIds: string[]; ... 4 more ...; brandsAnonymized: boolean; }[]; validation: { ...; }; validatedAt?: Date; approvedAt?: Date; ap...'.",
     "src/services/workflowService.ts|TS2353|Object literal may only specify known properties, and 'temperature' does not exist in type 'OpenAIGenerateOptions'.",
     "src/services/workflowService.ts|TS2353|Object literal may only specify known properties, and 'temperature' does not exist in type 'OpenAIGenerateOptions'.",
-    "src/services/workflowService.ts|TS2353|Object literal may only specify known properties, and 'terms' does not exist in type '{ entries: { id: string; term: string; definition: string; exampleSentence?: string; technicalNote?: string; relatedTerms: string[]; broaderTerms: string[]; narrowerTerms: string[]; synonyms: string[]; moduleIds: string[]; source: \"description\" | ... 4 more ... | \"outcome\"; }[]; ... 4 more ...; generatedAt: Date; }'.",
-    "src/services/workflowService.ts|TS2739|Type '{ earlyModulesValid: boolean; middleModulesValid: boolean; lateModulesValid: boolean; }' is missing the following properties from type '{ earlyModulesLowerLevel: boolean; laterModulesHigherLevel: boolean; }': earlyModulesLowerLevel, laterModulesHigherLevel"
+    "src/services/workflowService.ts|TS2353|Object literal may only specify known properties, and 'terms' does not exist in type '{ entries: { id: string; term: string; definition: string; exampleSentence?: string; technicalNote?: string; relatedTerms: string[]; broaderTerms: string[]; narrowerTerms: string[]; synonyms: string[]; moduleIds: string[]; source: \"description\" | ... 4 more ... | \"outcome\"; }[]; ... 4 more ...; generatedAt: Date; }'."
   ],
   "referenceErrors": [
     "src/routes/benchmarks.ts|TS2304|Cannot find name 'db'.",

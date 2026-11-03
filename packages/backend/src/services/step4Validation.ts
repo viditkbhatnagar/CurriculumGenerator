@@ -8,6 +8,10 @@
  * true, false, or null when there is nothing to check against. Pure, so it can be tested.
  */
 
+import { progressionAudit, ProgressionChecks } from './step4Progression';
+import { deriveModuleLevels } from './moduleLevels';
+import { programmeFraming } from './programmeFraming';
+
 interface ModuleLike {
   id?: string;
   sequence?: number;
@@ -22,7 +26,7 @@ interface ModuleLike {
   prerequisites?: unknown[];
 }
 
-export interface Step4ValidationReport {
+export interface Step4ValidationReport extends ProgressionChecks {
   hoursMatch: boolean | null;
   contactHoursMatch: boolean | null;
   allPLOsCovered: boolean | null;
@@ -45,6 +49,15 @@ export function essentialKscIdsOf(step2: any): string[] {
   return [...(step2?.knowledgeItems || []), ...(step2?.skillItems || []), ...competencies]
     .filter((i: any) => i?.importance === 'essential' && i?.id)
     .map((i: any) => String(i.id));
+}
+
+/** The progression checks and a sentence for each failure, for Step 4's modules and Step 1. */
+export function step4Progression(modules: ModuleLike[], step1: unknown) {
+  return progressionAudit(
+    modules,
+    deriveModuleLevels(modules as any[], step1),
+    programmeFraming(step1).level
+  );
 }
 
 const HOURS_TOLERANCE = 0.05;
@@ -82,6 +95,8 @@ export function step4ValidationReport(input: {
   declaredHours: number;
   declaredContactHours?: number;
   essentialKscIds?: string[];
+  /** Step 1, for the programme's level and credit system (levels of each module follow). */
+  step1?: unknown;
 }): Step4ValidationReport {
   const modules = input.modules || [];
   const order = new Map(
@@ -98,7 +113,10 @@ export function step4ValidationReport(input: {
     ])
   );
 
+  const progression = step4Progression(modules, input.step1);
+
   return {
+    ...progression.checks,
     hoursMatch:
       input.declaredHours > 0 ? within(studentHoursOf(modules), input.declaredHours) : null,
     contactHoursMatch:

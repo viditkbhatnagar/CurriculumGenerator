@@ -1947,6 +1947,7 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       declaredHours,
       declaredContactHours: step1?.creditFramework?.contactHours,
       essentialKscIds: essentialKscIdsOf(workflow.step2),
+      step1,
     });
     // Approval is blocked only by a computed failure, not by a check that could not run.
     const hoursMatch = validationReport.hoursMatch !== false;
@@ -2305,9 +2306,6 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
     // Calculate hours totals
     const totalModuleHours = modules.reduce((sum: number, m: any) => sum + (m.totalHours || 0), 0);
 
-    // Validate progressive complexity
-    const progressiveComplexity = this.validateProgressiveComplexity(modules);
-
     // Build PLO mapping
     const ploMapping: Record<string, string[]> = {};
     for (const mod of modules) {
@@ -2331,13 +2329,14 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       declaredHours: (creditFramework as { totalHours?: number }).totalHours || 0,
       declaredContactHours: (creditFramework as { contactHours?: number }).contactHours,
       essentialKscIds: essentialKscIdsOf(workflow.step2),
+      step1: workflow.step1,
     });
     const allPLOsCovered = validationReport.allPLOsCovered !== false;
     const hoursIntegrity = validationReport.hoursMatch !== false;
     const contactHoursIntegrity = validationReport.contactHoursMatch !== false;
 
     // Store step data
-    workflow.step4 = {
+    (workflow as any).step4 = {
       moduleCount: modules.length,
       contactHoursPercent: contactPercent,
       deliveryMode: workflow.step1.delivery?.mode,
@@ -2351,7 +2350,6 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
       ploCoveragePercent: allPLOsCovered
         ? 100
         : Math.round((Object.keys(ploMapping).length / ploIds.length) * 100),
-      progressiveComplexity,
       validationReport,
       validatedAt: new Date(),
     };
@@ -2392,32 +2390,6 @@ Return JSON: { "modules": [ { "code": "...", "description": "...", "topics": [..
   private validateHoursIntegrity(modules: any[], totalHours: number): boolean {
     const sum = modules.reduce((acc, m) => acc + (m.totalHours || 0), 0);
     return sum === totalHours;
-  }
-
-  private validateProgressiveComplexity(modules: any[]): {
-    earlyModulesValid: boolean;
-    middleModulesValid: boolean;
-    lateModulesValid: boolean;
-  } {
-    const lowerLevels = ['remember', 'understand', 'apply'];
-    const higherLevels = ['analyze', 'evaluate', 'create'];
-
-    const earlyModules = modules.filter((m) => m.phase === 'early');
-    const middleModules = modules.filter((m) => m.phase === 'middle');
-    const lateModules = modules.filter((m) => m.phase === 'late');
-
-    const countLevels = (mods: any[], levels: string[]) => {
-      const allMLOs = mods.flatMap((m) => m.mlos || []);
-      if (allMLOs.length === 0) return 1; // Pass if no MLOs
-      const matching = allMLOs.filter((mlo: any) => levels.includes(mlo.bloomLevel));
-      return matching.length / allMLOs.length;
-    };
-
-    return {
-      earlyModulesValid: countLevels(earlyModules, lowerLevels) >= 0.6,
-      middleModulesValid: true, // Middle is more flexible
-      lateModulesValid: lateModules.length === 0 || countLevels(lateModules, higherLevels) >= 0.3,
-    };
   }
 
   private async generateStep4Content(

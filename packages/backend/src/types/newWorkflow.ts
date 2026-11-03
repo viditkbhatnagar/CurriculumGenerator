@@ -300,12 +300,6 @@ export interface Step4CourseFramework {
     moduleIds: string[];
   }[];
 
-  // Progressive Complexity Check
-  progressiveComplexity: {
-    earlyModulesLowerLevel: boolean; // ≥60% Understand/Apply
-    laterModulesHigherLevel: boolean; // ≥30% Analyze/Evaluate/Create
-  };
-
   // Validation
   hoursIntegrity: boolean; // Σ module hours = program hours
   validatedAt?: Date;

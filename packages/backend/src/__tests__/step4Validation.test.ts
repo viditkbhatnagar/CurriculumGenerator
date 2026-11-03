@@ -22,6 +22,10 @@ describe('step4ValidationReport', () => {
       noCircularDeps: true,
       minMLOsPerModule: true,
       essentialCompetenciesTaught: null, // nothing marked essential
+      levelsAssigned: true,
+      levelsNonDecreasing: true,
+      capstoneAtTopLevel: true,
+      bloomRising: null, // the modules carry no outcomes to compare
     });
   });
 

@@ -211,10 +211,6 @@ describe('Workflow Step 10 Integration Tests', () => {
             moduleIds: ['mod1'],
           },
         ],
-        progressiveComplexity: {
-          earlyModulesLowerLevel: true,
-          laterModulesHigherLevel: true,
-        },
         hoursIntegrity: true,
         validatedAt: new Date(),
       },

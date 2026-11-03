@@ -1726,7 +1726,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
 
   // Validation
   const validation = (workflow.step4 as any)?.validationReport;
-  const progressiveComplexity = (workflow.step4 as any)?.progressiveComplexity;
+  const progressionProblems: string[] = (workflow.step4 as any)?.progressionProblems || [];
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -1951,13 +1951,17 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
           {validation && (
             <div className="bg-teal-50/50 rounded-lg p-4 border border-teal-200">
               <h4 className="text-sm font-medium text-teal-600 mb-3">Validation Report</h4>
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-3 text-xs">
+              <div className="grid grid-cols-3 md:grid-cols-5 gap-3 text-xs">
                 {(
                   [
                     ['hoursMatch', 'Hours Match', 'fail'],
                     ['contactHoursMatch', 'Contact Hours', 'fail'],
                     ['allPLOsCovered', 'PLO Coverage', 'warn'],
-                    ['progressionValid', 'Progression', 'warn'],
+                    ['progressionValid', 'Prerequisite Order', 'warn'],
+                    ['levelsAssigned', 'Levels Set', 'fail'],
+                    ['levelsNonDecreasing', 'Levels Rise', 'fail'],
+                    ['capstoneAtTopLevel', 'Capstone Level', 'fail'],
+                    ['bloomRising', 'Bloom Rises', 'fail'],
                     ['noCircularDeps', 'No Circular Deps', 'fail'],
                     ['minMLOsPerModule', 'Min MLOs', 'warn'],
                     ['essentialCompetenciesTaught', 'Essential KSCs', 'warn'],
@@ -1989,48 +1993,6 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                     </div>
                   );
                 })}
-              </div>
-            </div>
-          )}
-
-          {/* Progressive Complexity */}
-          {progressiveComplexity && (
-            <div className="bg-teal-50/50 rounded-lg p-4 border border-teal-200">
-              <h4 className="text-sm font-medium text-teal-600 mb-3">Progressive Complexity</h4>
-              <div className="flex gap-4">
-                <div
-                  className={`flex-1 p-3 rounded-lg border ${progressiveComplexity.earlyModulesValid ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}
-                >
-                  <p className="text-amber-400 font-medium text-sm">Early (1-2)</p>
-                  <p className="text-xs text-teal-600 mt-1">≥60% at Understand/Apply</p>
-                  <p
-                    className={`text-xs mt-1 ${progressiveComplexity.earlyModulesValid ? 'text-emerald-400' : 'text-amber-400'}`}
-                  >
-                    {progressiveComplexity.earlyModulesValid ? '✓ Valid' : '⚠ Review'}
-                  </p>
-                </div>
-                <div
-                  className={`flex-1 p-3 rounded-lg border ${progressiveComplexity.middleModulesValid ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}
-                >
-                  <p className="text-cyan-400 font-medium text-sm">Middle (3-5)</p>
-                  <p className="text-xs text-teal-600 mt-1">Balanced Apply/Analyze</p>
-                  <p
-                    className={`text-xs mt-1 ${progressiveComplexity.middleModulesValid ? 'text-emerald-400' : 'text-amber-400'}`}
-                  >
-                    {progressiveComplexity.middleModulesValid ? '✓ Valid' : '⚠ Review'}
-                  </p>
-                </div>
-                <div
-                  className={`flex-1 p-3 rounded-lg border ${progressiveComplexity.lateModulesValid ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}
-                >
-                  <p className="text-purple-400 font-medium text-sm">Late (6-8)</p>
-                  <p className="text-xs text-teal-600 mt-1">≥30% at Analyze/Evaluate/Create</p>
-                  <p
-                    className={`text-xs mt-1 ${progressiveComplexity.lateModulesValid ? 'text-emerald-400' : 'text-amber-400'}`}
-                  >
-                    {progressiveComplexity.lateModulesValid ? '✓ Valid' : '⚠ Review'}
-                  </p>
-                </div>
               </div>
             </div>
           )}

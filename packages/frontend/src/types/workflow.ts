@@ -288,6 +288,16 @@ export interface Step3PLOs {
 // Module phase for progressive complexity
 export type ModulePhase = 'early' | 'middle' | 'late';
 
+/** A module's year and academic level (backend services/moduleLevels). */
+export interface ModuleLevelInfo {
+  year: number;
+  level: number;
+  levelFramework: 'RQF' | 'FHEQ' | 'EQF';
+  levelLabel: string;
+  levelOrigin: 'blueprint' | 'derived' | 'author';
+  position: ModulePhase;
+}
+
 export interface MLO {
   id: string;
   code: string; // e.g., M1-LO1, M2-LO2
@@ -361,7 +371,13 @@ export interface Module {
   independentActivities?: string[];
 
   // Progressive complexity (enforced per workflow v2.2)
-  phase: ModulePhase; // early (1-2), middle (3-5), late (6-8)
+  phase: ModulePhase; // position in the sequence: thirds, the final module always late
+  // Set by Step 4 (services/moduleLevels); absent on workflows generated before levels existed.
+  year?: number;
+  level?: number;
+  levelFramework?: 'RQF' | 'FHEQ' | 'EQF';
+  levelLabel?: string;
+  levelOrigin?: 'blueprint' | 'derived' | 'author';
   bloomDistribution?: Record<BloomLevel, number>;
 }
 
@@ -385,13 +401,6 @@ export interface Step4CourseFramework {
   ploMapping: Record<string, string[]>; // PLO ID -> MLO IDs
   ploCoveragePercent: number; // All PLOs should map to ≥1 MLO
 
-  // Progressive complexity validation
-  progressiveComplexity: {
-    earlyModulesValid: boolean; // ≥60% at Understand/Apply
-    middleModulesValid: boolean; // Balanced Apply/Analyze
-    lateModulesValid: boolean; // ≥30% at Analyze/Evaluate/Create
-  };
-
   // Validation summary, computed on view. null: not checked (nothing to check against).
   validationReport?: {
     hoursMatch: boolean | null;
@@ -400,7 +409,16 @@ export interface Step4CourseFramework {
     progressionValid: boolean | null;
     noCircularDeps: boolean | null;
     minMLOsPerModule: boolean | null;
+    // Progression, computed from module levels and outcome Bloom levels
+    levelsAssigned?: boolean | null;
+    levelsNonDecreasing?: boolean | null;
+    capstoneAtTopLevel?: boolean | null;
+    bloomRising?: boolean | null;
   };
+  /** One sentence for each failed progression check, naming the modules. */
+  progressionProblems?: string[];
+  /** Each module's year, level and position, derived where none is stored. */
+  moduleLevels?: ModuleLevelInfo[];
 
   validatedAt?: string;
   approvedAt?: string;

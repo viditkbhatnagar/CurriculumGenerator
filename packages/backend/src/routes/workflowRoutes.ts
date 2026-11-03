@@ -105,7 +105,11 @@ import { deleteConfirmationProblem } from '../utils/softDelete';
 import { hasActiveGeneration } from '../services/generationActivity';
 import { step4ApprovalProblems } from '../services/step4Approval';
 import { authorLevelEdit, levelsFor, withModuleLevels } from '../services/moduleLevels';
-import { essentialKscIdsOf, step4ValidationReport } from '../services/step4Validation';
+import {
+  essentialKscIdsOf,
+  step4Progression,
+  step4ValidationReport,
+} from '../services/step4Validation';
 import { step6ReportOf } from '../services/step6Validation';
 import { step7ValidationOf } from '../services/step7Validation';
 import { step13Validation } from '../services/step13Validation';
@@ -1101,7 +1105,14 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
         declaredHours: (workflow as any).step1?.creditFramework?.totalHours || 0,
         declaredContactHours: (workflow as any).step1?.creditFramework?.contactHours,
         essentialKscIds: essentialKscIdsOf((workflow as any).step2),
+        step1: (workflow as any).step1,
       });
+      // Each module's level and the sentences for any failed progression check, response only.
+      step4Data.moduleLevels = levelsFor(workflow);
+      step4Data.progressionProblems = step4Progression(
+        step4Data.modules,
+        (workflow as any).step1
+      ).problems;
     }
 
     // Steps 6, 7 and 13 likewise (services/step6Validation, step7Validation, step13Validation):
