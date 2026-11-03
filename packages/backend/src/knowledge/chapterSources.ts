@@ -25,8 +25,12 @@ export interface ChapterGroup {
   bookId: string;
   chapterNumber: string;
   chapterTitle: string;
+  /** The chapter's full span once known; until then the pages of the module's concepts. */
   pageStart: string;
   pageEnd: string;
+  /** The pages of the concepts' own sections, kept when pageStart/End widen to the chapter. */
+  keyPageStart?: string;
+  keyPageEnd?: string;
   concepts: { code: string; name: string }[];
 }
 
@@ -57,6 +61,39 @@ export function groupByChapter(concepts: any[], maxChapters = Infinity): Chapter
   return Array.from(groups.values())
     .sort((a, b) => b.concepts.length - a.concepts.length)
     .slice(0, maxChapters);
+}
+
+/**
+ * The chapter's whole page span from the book's table of contents ("421-470"), not the pages of
+ * the one section a concept happens to sit in. Logan's 2 Nov re-test saw "p. 471" and
+ * "pp. 421-422" for chapters of 34 and 50 pages: the citation was the concept's section. Null
+ * when the book lists no usable span for the chapter.
+ */
+export function chapterSpan(
+  toc: { chapter?: string; pages?: string }[] | undefined,
+  chapterNumber: string
+): { start: string; end: string } | null {
+  if (!chapterNumber) return null;
+  const entry = (toc || []).find((t) => String(t.chapter) === String(chapterNumber));
+  const m = /^\s*(\d+)\s*[-–—]\s*(\d+)\s*$/.exec(entry?.pages || '');
+  if (!m || Number(m[2]) < Number(m[1])) return null;
+  return { start: m[1], end: m[2] };
+}
+
+/** The group with the chapter's full span as its pages and the concepts' own pages as key pages. */
+export function withChapterSpan(
+  g: ChapterGroup,
+  toc: { chapter?: string; pages?: string }[] | undefined
+): ChapterGroup {
+  const span = chapterSpan(toc, g.chapterNumber);
+  if (!span) return g;
+  return {
+    ...g,
+    keyPageStart: g.pageStart,
+    keyPageEnd: g.pageEnd,
+    pageStart: span.start,
+    pageEnd: span.end,
+  };
 }
 
 /** Step 5's recency rule: a source this many years old or newer counts as recent. */

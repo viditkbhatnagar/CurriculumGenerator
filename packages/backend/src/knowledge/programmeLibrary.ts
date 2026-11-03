@@ -11,7 +11,7 @@ import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { bodyOfKnowledge, formatBodyOfKnowledge, formatConcept, searchConcepts } from './retrieval';
 import type { Importance } from './models';
 import { pickAcrossAreas } from './selection';
-import { chapterApa, groupByChapter, selectChapters } from './chapterSources';
+import { chapterApa, groupByChapter, selectChapters, withChapterSpan } from './chapterSources';
 import { BookScope, restrictedFrom, visibleConcept, visibleConcepts } from './bookAccess';
 
 export interface ProgrammeLibrary extends BookScope {
@@ -201,7 +201,7 @@ export async function libraryChapterSources(
     candidates.filter((g) => byId.has(g.bookId)),
     3,
     { usage: bookUsage, bookYears: new Map(books.map((b) => [String(b._id), b.year])) }
-  );
+  ).map((g) => withChapterSpan(g, byId.get(g.bookId).toc));
   if (!groups.length) return [];
   const year = new Date().getFullYear();
   return groups.map((g, i) => {
@@ -219,6 +219,11 @@ export async function libraryChapterSources(
     };
     const pages =
       g.pageStart === g.pageEnd ? `p. ${g.pageStart}` : `pp. ${g.pageStart}-${g.pageEnd}`;
+    const keyPages = g.keyPageStart
+      ? g.keyPageStart === g.keyPageEnd
+        ? `p. ${g.keyPageStart}`
+        : `pp. ${g.keyPageStart}-${g.keyPageEnd}`
+      : undefined;
     const span = Number(g.pageEnd) - Number(g.pageStart) + 1;
     return {
       id: `lib-${module.code || module.id}-${i + 1}`,
@@ -255,6 +260,8 @@ export async function libraryChapterSources(
       // The book's own location for the reading, read from the PDF, not written by a model.
       chapter: { number: g.chapterNumber, title: g.chapterTitle },
       pages,
+      // Where the module's concepts sit within the chapter; `pages` is the chapter's full span.
+      ...(keyPages ? { keyPages } : {}),
       bookId: g.bookId,
       libraryConcepts: g.concepts.map((c) => c.code),
       isRecent: !!b.year && b.year >= year - 5,
