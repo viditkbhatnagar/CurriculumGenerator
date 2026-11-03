@@ -92,7 +92,7 @@ function HeroGeometric({
   badge = 'AI-Powered Curriculum',
   title1 = 'AI-Integrated Curriculum',
   title2 = 'Generator',
-  description = `Generate complete, AGI-compliant curricula in ~2 hours. ${TOTAL_STEPS}-step workflow with SME checkpoints, auto-gradable MCQ assessments, and full credit system support.`,
+  description = `Generate complete, AGI-compliant curricula in ~2 hours. ${TOTAL_STEPS}-step workflow with SME checkpoints, MCQ-first assessments (mostly auto-gradable), and full credit system support.`,
   children,
 }: HeroGeometricProps) {
   const [isMounted, setIsMounted] = useState(false);

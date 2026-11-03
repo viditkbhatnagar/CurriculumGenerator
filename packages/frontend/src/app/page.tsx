@@ -219,8 +219,8 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
-            {TOTAL_STEPS}-step AI workflow with SME checkpoints, auto-gradable assessments, and full
-            credit system support. AGI-compliant from start to finish.
+            {TOTAL_STEPS}-step AI workflow with SME checkpoints, multiple-choice-first assessments,
+            and full credit system support. AGI-compliant from start to finish.
           </motion.p>
 
           <motion.div
@@ -259,7 +259,7 @@ export default function Home() {
           {[
             { value: '11', label: 'Steps', icon: Layers },
             { value: '~2h', label: 'Total Time', icon: Clock },
-            { value: '100%', label: 'Auto-Gradable', icon: Shield },
+            { value: '75%+', label: 'Auto-Gradable Items', icon: Shield },
             { value: '3', label: 'Credit Systems', icon: Globe2 },
           ].map((stat) => (
             <motion.div
@@ -374,7 +374,8 @@ export default function Home() {
               </div>
               <h3 className="text-base font-semibold text-foreground mb-1.5">MCQ-First</h3>
               <p className="text-sm text-foreground-muted leading-relaxed">
-                Auto-gradable only. MCQ with optional Cloze. Zero manual grading.
+                Most items are multiple choice and auto-graded. Production tasks appear only where
+                an outcome requires an artefact.
               </p>
             </motion.div>
 

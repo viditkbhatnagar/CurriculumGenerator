@@ -15,6 +15,7 @@ import {
   PracticalSample,
 } from '@/types/workflow';
 import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import ApprovalOverridePanel from './ApprovalOverridePanel';
 import StepDownloadButton from './StepDownloadButton';
 import { validationFrame } from '@/lib/validationFrame';
 import { ValidationChecks } from './ValidationChecks';
@@ -505,6 +506,10 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
   const [error, setError] = useState<string | null>(null);
   // Asking a running generation to stop: it ends after the model call in progress.
   const [stopping, setStopping] = useState(false);
+  // The checks that blocked approval, shown with a way to approve anyway with a reason.
+  const [overrideIssues, setOverrideIssues] = useState<string[] | null>(null);
+  // The job's own reported percentage; null until it has reported one. Never an estimate.
+  const [reportedProgress, setReportedProgress] = useState<number | null>(null);
   const [stopError, setStopError] = useState<string | null>(null);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'advanced'>('basic');
@@ -662,6 +667,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
+      setReportedProgress(null);
       const queued = await fetch(`${API_BASE_URL}/api/v3/workflow/${workflow._id}/step7`, {
         method: 'POST',
         headers,
@@ -689,6 +695,10 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
 
         const status = await statusResponse.json();
         const state = status?.data?.status;
+        const reported = status?.data?.progress;
+        if (typeof reported === 'number' && Number.isFinite(reported)) {
+          setReportedProgress(reported);
+        }
 
         // Show real progress from the durable run. The queued path has no event stream, so
         // the counts come from what has actually been written to the curriculum — which is
@@ -736,12 +746,17 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
     }
   };
 
-  const handleApprove = async () => {
+  const handleApprove = async (overrideReason?: string) => {
     setError(null);
     try {
-      await approveStep7.mutateAsync(workflow._id);
+      await approveStep7.mutateAsync({ id: workflow._id, overrideReason });
+      setOverrideIssues(null);
       onComplete();
     } catch (err) {
+      if ((err as { code?: string })?.code === 'OVERRIDE_REQUIRED') {
+        setOverrideIssues((err as { details?: string[] }).details || []);
+        return;
+      }
       const errorMessage = err instanceof Error ? err.message : 'Failed to approve Step 7';
       console.error('Failed to approve Step 7:', err);
       setError(errorMessage);
@@ -885,6 +900,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
         ['Summatives Mapped', validation.allSummativesMapped],
         ['Weights = 100%', validation.weightsSum100],
         ['Sufficient Samples', validation.sufficientSampleQuestions],
+        ['Mostly Auto-Gradable (75%+)', validation.autoGradableMet],
         ['All PLOs Covered', validation.plosCovered],
         ['All Modules Covered', validation.allModulesCovered],
         ['Bloom Level Met', validation.bloomFloorMet],
@@ -942,7 +958,26 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
               {stopError}
             </p>
           )}
-          <GenerationProgressBar workflowId={workflow._id} step={7} />
+          {reportedProgress !== null ? (
+            <div className="space-y-1">
+              <div
+                className="h-3 overflow-hidden rounded-full bg-slate-700"
+                role="progressbar"
+                aria-label="Generating assessments"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(reportedProgress)}
+              >
+                <div
+                  className="h-full origin-left bg-gradient-to-r from-cyan-500 to-blue-500 transition-transform"
+                  style={{ transform: `scaleX(${Math.min(100, reportedProgress) / 100})` }}
+                />
+              </div>
+              <p className="text-right text-xs text-slate-400">{Math.round(reportedProgress)}%</p>
+            </div>
+          ) : (
+            <GenerationProgressBar workflowId={workflow._id} step={7} />
+          )}
 
           {/* Real-time streaming data display */}
           {(streamingFormatives.length > 0 ||
@@ -1614,6 +1649,17 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
             <div className={`rounded-lg p-4 border ${step7Frame.frame}`}>
               <h4 className={`font-medium mb-3 ${step7Frame.heading}`}>{step7Frame.title}</h4>
               <ValidationChecks checks={step7Checks} columns="grid-cols-2 md:grid-cols-3" />
+              {typeof validation.autoGradableShare === 'number' && (
+                <p className="mt-2 text-xs text-slate-400">
+                  {Math.round(validation.autoGradableShare * 100)}% of formative questions are
+                  auto-gradable multiple choice.
+                </p>
+              )}
+              {(workflow.step7?.sampleFailures || []).map((f, i) => (
+                <p key={i} className="mt-1 text-xs text-amber-400">
+                  Sample questions ({f.type}) failed to generate: {f.message}
+                </p>
+              ))}
 
               {/*
                 Naming the modules that fall short. A flag alone tells the author something is
@@ -1894,6 +1940,16 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
             </div>
           )}
 
+          {overrideIssues && (
+            <ApprovalOverridePanel
+              stepNumber={7}
+              issues={overrideIssues}
+              busy={approveStep7.isPending}
+              onApprove={(reason) => handleApprove(reason)}
+              onCancel={() => setOverrideIssues(null)}
+            />
+          )}
+
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-6 border-t border-teal-200">
             <button
@@ -1906,7 +1962,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
             <div className="flex gap-3">
               {!isApproved && (
                 <button
-                  onClick={handleApprove}
+                  onClick={() => handleApprove()}
                   disabled={
                     approveStep7.isPending ||
                     !validation?.plosCovered ||

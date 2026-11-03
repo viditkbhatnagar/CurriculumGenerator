@@ -1013,7 +1013,12 @@ export interface Step7Assessments {
     bloomFloorMet?: boolean | null;
     /** Did every module get the number of formative activities the author configured? */
     formativeCountMet?: boolean | null;
+    /** Share (0-1) of formative questions that are well-formed multiple choice. */
+    autoGradableShare?: number | null;
+    autoGradableMet?: boolean | null;
   };
+  /** Sample batches that failed even after a retry. */
+  sampleFailures?: { type: string; message: string }[];
 
   /** How the generated assessments sit against the taxonomy. */
   bloomReport?: {
@@ -2095,7 +2100,7 @@ export const STEP_DESCRIPTIONS: Record<WorkflowStep, string> = {
   4: 'Structure modules, topics, and Module Learning Outcomes',
   5: 'Assign AGI-compliant academic sources to topics',
   6: 'Create core and supplementary reading lists per module',
-  7: 'Generate MCQ-first auto-gradable assessments and quizzes',
+  7: 'Generate multiple-choice-first assessments, mostly auto-gradable, with a production task only where an outcome requires an artefact',
   8: 'Create engagement hooks and case study scenarios',
   9: 'Auto-generate glossary from all curriculum content',
   10: 'Generate detailed lesson plans for all modules',

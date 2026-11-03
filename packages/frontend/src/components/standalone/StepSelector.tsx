@@ -62,7 +62,8 @@ export const STANDALONE_STEPS: Array<{
     name: 'Auto-Gradable Assessments',
     time: '15-20 min',
     icon: CheckSquare,
-    description: 'Generate MCQ-first auto-gradable assessments and quizzes',
+    description:
+      'Generate multiple-choice-first assessments, mostly auto-gradable, with a production task only where an outcome requires an artefact',
   },
   {
     step: 8,
