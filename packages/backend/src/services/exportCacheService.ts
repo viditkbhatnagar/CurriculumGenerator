@@ -75,7 +75,8 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 //      statements without evidence and likely duplicates.
 // v34: long passages are laid out by rule (utils/proseLayout) instead of being reflowed by
 //      GPT-4o-mini, which could reword approved text.
-const EXPORT_FORMAT_VERSION = 'v34';
+// v35: each Step 4 module prints its year and level.
+const EXPORT_FORMAT_VERSION = 'v35';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the

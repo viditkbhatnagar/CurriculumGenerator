@@ -27,6 +27,7 @@ import { step12SummaryFromPacks, step12ValidationFromPacks } from './deliverable
 import { normaliseTopic } from '../utils/topicShape';
 import { cleanModelOutput, xmlSafeDeep } from '../utils/xmlSafe';
 import { layoutProse, LaidOut, paragraphsOf } from '../utils/proseLayout';
+import { deriveModuleLevels } from './moduleLevels';
 
 interface WorkflowData {
   projectName: string;
@@ -799,9 +800,13 @@ export class WordExportService {
   private async generateStep4Section(
     step4: any,
     contentChildren: any[],
-    kscMap: Map<string, string>
+    kscMap: Map<string, string>,
+    step1?: any
   ): Promise<void> {
     if (!step4?.modules?.length) return;
+    // Each module's year and level (services/moduleLevels): stored, or derived where Step 4
+    // predates levels and Step 1 is to hand.
+    const moduleLevels = step1 ? deriveModuleLevels(step4.modules, step1) : null;
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
@@ -823,7 +828,7 @@ export class WordExportService {
       })
     );
 
-    for (const module of step4.modules) {
+    for (const [moduleIndex, module] of step4.modules.entries()) {
       // Real generated modules store the code under `code` (frontend shape);
       // the typed model calls it `moduleCode`. Accept either so the heading
       // always carries a code — the re-import parser keys modules on it.
@@ -852,6 +857,22 @@ export class WordExportService {
           spacing: { after: 100, line: LINE_SPACING },
         })
       );
+
+      const levelLabel = moduleLevels?.[moduleIndex]?.levelLabel || module.levelLabel;
+      if (levelLabel) {
+        contentChildren.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Level: ${levelLabel}`,
+                size: FONT_SIZES.BODY,
+                font: FONT_FAMILY,
+              }),
+            ],
+            spacing: { after: 100, line: LINE_SPACING },
+          })
+        );
+      }
 
       // Module description — needed so SMEs can edit it in Word and have
       // the change round-trip back via the curriculum re-upload feature.
@@ -4332,7 +4353,9 @@ export class WordExportService {
       addSection(3, (out) => this.generateStep3Section(workflow.step3, out, kscMap));
     }
     if (workflow.step4?.modules?.length) {
-      addSection(4, (out) => this.generateStep4Section(workflow.step4, out, kscMap));
+      addSection(4, (out) =>
+        this.generateStep4Section(workflow.step4, out, kscMap, workflow.step1)
+      );
     }
     if (workflow.step5?.sources?.length) {
       addSection(5, (out) => this.generateStep5Section(workflow.step5, out, workflow.step4));
@@ -4606,7 +4629,7 @@ export class WordExportService {
           await this.generateStep3Section(stepData, children, kscMap);
           break;
         case 4:
-          await this.generateStep4Section(stepData, children, kscMap);
+          await this.generateStep4Section(stepData, children, kscMap, workflow.step1);
           break;
         case 5:
           await this.generateStep5Section(stepData, children, workflow.step4);

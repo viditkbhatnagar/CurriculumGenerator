@@ -189,6 +189,8 @@ class CurriculumImportService {
       // (topic/activity), or a flattened MLO-table column label.
       const isNotAHeading =
         isSubHeader ||
+        // The module's "Level: RQF Level 4 · Year 1" line, which the export prints under Hours.
+        /^Level:\s/i.test(text) ||
         /^[•‣◦-]\s/.test(text) ||
         /total\s+program(me)?\s+hours/i.test(text) ||
         / \| contact:/i.test(text) ||
