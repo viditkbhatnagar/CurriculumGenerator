@@ -159,6 +159,7 @@ import {
 import { normaliseTopic } from '../utils/topicShape';
 import { levelsFor, ukLevelOf, withModuleLevels } from './moduleLevels';
 import { moduleContextBlock } from './moduleContext';
+import { caseDifficultyChecks, caseSpecForModule, caseTopicsFor } from './caseDifficulty';
 import { essentialKscIdsOf, step4ValidationReport, studentHoursOf } from './step4Validation';
 
 // ============================================================================
@@ -4106,6 +4107,7 @@ CRITICAL:
     );
     const casesWithQuestions = casesWithAssessmentQuestions(caseStudies);
     const assessmentReadyCases: any[] = casesByType.assessment_ready || [];
+    const difficultyChecks = caseDifficultyChecks(caseStudies, modules || []);
     const validationReport = {
       // Every other check below is `caseStudies.every(...)`, and `.every()` over an empty
       // array is true — so a run that produced nothing at all passed every one of them and
@@ -4149,6 +4151,12 @@ CRITICAL:
           : null,
       // Was the constant `true`. Measured on the case text: see caseStudyValidation.
       noAssessmentQuestions: casesWithQuestions.length === 0,
+      // Level progression in the cases (services/caseDifficulty): difficulty never falls from
+      // one module to the next, the final module's cases are among the hardest, and no module's
+      // two cases share a topic or a near-identical title. Null where there is nothing to compare.
+      caseDifficultyRising: difficultyChecks.difficultyRising,
+      capstoneCaseHighest: difficultyChecks.capstoneCaseHighest,
+      casesHaveDistinctTopics: difficultyChecks.casesHaveDistinctTopics,
     };
 
     const modulesWithOneCase = modulesNeedingCases.filter(
@@ -4184,6 +4192,7 @@ CRITICAL:
       validationIssues.push('Ethics compliance issues detected');
     if (validationReport.hooksComplete === false)
       validationIssues.push('Assessment-Ready cases missing complete hooks');
+    validationIssues.push(...difficultyChecks.problems);
     if (casesWithQuestions.length > 0)
       validationIssues.push(
         `${casesWithQuestions.length} case(s) contain question-bank material (lettered options or an answer key), which belongs in assessments: ${casesWithQuestions.slice(0, 5).join('; ')}${casesWithQuestions.length > 5 ? '…' : ''}`
@@ -7608,6 +7617,8 @@ CRITICAL REQUIREMENTS:
     // Each module's case is written for the module's own year or level (caseStudySpec); this is
     // the programme's, for modules Step 4 gives no year.
     const programmeCaseSpec = caseSpecFor(caseLevelFor(undefined, academicLevel));
+    // Each module's year and level, and so how hard its cases are (services/caseDifficulty).
+    const moduleLevels = levelsFor(workflow);
 
     // Build competencies list for credential mapping
     const competencies = [
@@ -7651,7 +7662,7 @@ CRITICAL REQUIREMENTS:
     const CASE_STUDY_MODULE_CONCURRENCY = config.openai.step8ModuleConcurrency;
     const buildModuleCases = async (mod: any, i: number): Promise<any[]> => {
       const modReadings = coreReadings.filter((r: any) => r.moduleId === mod.id);
-      const tierInfo = caseSpecFor(caseLevelFor(mod, academicLevel));
+      const tierInfo = caseSpecForModule(moduleLevels, i);
       const [caseType1, caseType2] = caseTypePairs[i % caseTypePairs.length];
 
       loggingService.info(`Step 8: Starting 2 case studies for module ${i + 1}/${modules.length}`, {
@@ -7674,6 +7685,7 @@ CRITICAL REQUIREMENTS:
           industrySector,
           targetLearner,
           competencies,
+          moduleContext: moduleContextBlock(workflow, i),
         }).catch((err) => {
           loggingService.error(`Step 8: Error generating case 1 for module ${mod.id}`, {
             error: err.message,
@@ -7692,6 +7704,7 @@ CRITICAL REQUIREMENTS:
           industrySector,
           targetLearner,
           competencies,
+          moduleContext: moduleContextBlock(workflow, i),
         }).catch(async (err) => {
           // One retry, then record it. A swallowed failure left M38 with a single case study
           // in a programme where every other module had two, and nothing reported it — the
@@ -7712,6 +7725,7 @@ CRITICAL REQUIREMENTS:
               industrySector,
               targetLearner,
               competencies,
+              moduleContext: moduleContextBlock(workflow, i),
             });
           } catch (retryErr) {
             loggingService.error(`Step 8: gave up on case 2 for module ${mod.id}`, {
@@ -7815,7 +7829,7 @@ CRITICAL REQUIREMENTS:
           const mod = (modules || [])[idx];
           if (!mod) return null;
           const profile = scenarioProfileFor(idx);
-          const tierInfo = caseSpecFor(caseLevelFor(mod, academicLevel));
+          const tierInfo = caseSpecForModule(moduleLevels, idx);
 
           try {
             const fresh = await this.generateCaseStudyForModule({
@@ -7830,6 +7844,7 @@ CRITICAL REQUIREMENTS:
               industrySector,
               targetLearner,
               competencies,
+              moduleContext: moduleContextBlock(workflow, idx),
               repairNote: ukLawRepairNote(leak.markers, profile.region),
             });
             return fresh ? { originalId: (original as any).id, fresh } : null;
@@ -7889,6 +7904,8 @@ CRITICAL REQUIREMENTS:
     industrySector: string;
     targetLearner: any;
     competencies: string[];
+    /** The module's level, place and what earlier modules taught (services/moduleContext). */
+    moduleContext?: string;
     /**
      * Set when this case is being rewritten because it broke a rule — the violation is
      * quoted back rather than the standing rule simply repeated, which is the difference
@@ -7910,6 +7927,12 @@ CRITICAL REQUIREMENTS:
       competencies,
       repairNote,
     } = params;
+
+    // Each case has its own topic from the module's list, and is told the other's, so the
+    // two are not near-duplicates (services/caseDifficulty).
+    const caseTopics = caseTopicsFor(mod);
+    const focusTopic = caseTopics[Math.max(0, caseNumber - 1)] || caseTopics[0] || '';
+    const otherTopic = caseTopics[caseNumber === 1 ? 1 : 0] || '';
 
     const systemPrompt = `You are an expert Instructional Designer who has written 3,000+ teaching cases for Harvard Business School, MIT Sloan, INSEAD, Wharton, London Business School, Stanford GSB, and every major certification body worldwide (PMI, APICS/ASCM, SHRM, Google, CFA Institute, NEBOSH, Six Sigma, CIPD, CMI, ILM, etc.).
 
@@ -8021,6 +8044,8 @@ ${competencies
   .map((c: string, i: number) => `   ${i + 1}. ${c}`)
   .join('\n')}
 
+${params.moduleContext || ''}
+
 === TARGET MODULE ===
 
 **MODULE: ${mod.id} - ${mod.title}**
@@ -8031,7 +8056,18 @@ ${(mod.mlos || []).map((mlo: any) => `  - ${mlo.id}: ${mlo.statement}`).join('\n
 
 Topics:
 ${(mod.topics || []).map((t: any) => `  - ${t.id || t}: ${t.title || t}`).join('\n')}
-
+${
+  focusTopic
+    ? `
+**THIS CASE'S FOCUS TOPIC: ${focusTopic}**
+Build the central challenge and the decision point on this topic. The module's other topics may appear as background only.${
+        otherTopic && otherTopic !== focusTopic
+          ? ` The module's other case is built on "${otherTopic}": this case must pose a different business problem, a different decision and a different protagonist, in a different part of the organisation, so the two cases are not versions of one scenario.`
+          : ''
+      }
+`
+    : ''
+}
 === GENERATION REQUIREMENTS ===
 
 Generate ONE ${caseType.replace('_', ' ').toUpperCase()} case study for this module.
@@ -8270,6 +8306,8 @@ Begin output now.`;
         caseLevel: tierInfo.level,
         difficulty: tierInfo.difficulty,
         targetWords: tierInfo.words,
+        // Kept so the programme check can confirm two cases do not share a topic.
+        focusTopic,
       };
     } catch (error) {
       loggingService.error(`Error generating case study for module ${mod.id} case ${caseNumber}`, {

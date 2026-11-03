@@ -16,7 +16,7 @@
  * Levels are stored on the modules when Step 4 is generated. `levelsFor` also derives them for
  * a workflow that predates this, so no migration is needed. Pure, so it can be tested.
  */
-import { levelFromText } from './caseStudySpec';
+import { levelFromText, ukLevelFromEqf } from './caseStudySpec';
 import { programmeFraming, QualificationType } from './programmeFraming';
 import { creditsForHours } from '../utils/credits';
 
@@ -50,14 +50,6 @@ interface ModuleLike {
 /** Credits in one year of full-time study, by credit system. */
 const YEAR_CREDITS: Record<string, number> = { uk_credits: 120, ects: 60, us_semester: 30 };
 
-/**
- * EQF level to the UK's RQF/FHEQ level. The UK scale runs 1–8 with level 4 the first level of
- * higher education, which is EQF 5; from EQF 6 the two agree (a bachelor's degree is level 6).
- * EQF 1–3 are passed through. A reference table, used when the institution states no UK level.
- */
-const EQF_TO_UK: Record<number, number> = { 4: 3, 5: 4, 6: 6, 7: 7, 8: 8 };
-export const ukLevelFromEqf = (eqf: number): number => EQF_TO_UK[eqf] ?? eqf;
-
 /** The programme's level when its title and form state none: certificate and diploma are EQF 5. */
 const DEFAULT_EQF: Partial<Record<QualificationType, number>> = {
   'micro-credential': 4,
@@ -85,6 +77,8 @@ const sequenceOf = (m: ModuleLike, index: number): number =>
   m.sequence ?? m.sequenceOrder ?? index + 1;
 
 const isLevel = (v: unknown): v is number => typeof v === 'number' && v >= 1 && v <= 8;
+
+export { ukLevelFromEqf };
 
 export function levelLabelOf(framework: LevelFramework, level: number, year: number): string {
   return `${framework} Level ${level} · Year ${year}`;

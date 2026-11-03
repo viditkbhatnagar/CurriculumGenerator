@@ -68,6 +68,14 @@ const SPECS: Record<number, Omit<CaseSpec, 'level' | 'pages'>> = {
   },
 };
 
+/**
+ * EQF level to the UK's RQF/FHEQ level. The UK scale runs 1–8 with level 4 the first level of
+ * higher education, which is EQF 5; from EQF 6 the two agree (a bachelor's degree is level 6).
+ * EQF 1–3 are passed through. A reference table, used when the institution states no UK level.
+ */
+const EQF_TO_UK: Record<number, number> = { 4: 3, 5: 4, 6: 6, 7: 7, 8: 8 };
+export const ukLevelFromEqf = (eqf: number): number => EQF_TO_UK[eqf] ?? eqf;
+
 /** A level from free text: "Level 5", "Year 2", or a qualification name. Null if none is stated. */
 export function levelFromText(text: unknown): number | null {
   const t = String(text || '').toLowerCase();
@@ -88,8 +96,12 @@ export function levelFromText(text: unknown): number | null {
  * has one, otherwise the programme's.
  */
 export function caseLevelFor(module: unknown, programmeLevel: unknown): number {
-  const group = (module as { group?: unknown } | null | undefined)?.group;
-  return levelFromText(group) ?? levelFromText(programmeLevel) ?? 5;
+  const m = (module || {}) as { group?: unknown; level?: unknown; levelFramework?: unknown };
+  // The level Step 4 records for the module (services/moduleLevels) comes first.
+  if (typeof m.level === 'number' && m.level >= 1 && m.level <= 8) {
+    return m.levelFramework === 'EQF' ? ukLevelFromEqf(m.level) : m.level;
+  }
+  return levelFromText(m.group) ?? levelFromText(programmeLevel) ?? 5;
 }
 
 export function caseSpecFor(level: number): CaseSpec {
