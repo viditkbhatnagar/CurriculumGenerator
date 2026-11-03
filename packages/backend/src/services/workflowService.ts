@@ -110,6 +110,7 @@ import {
   usSpellings,
 } from './glossaryValidation';
 import { attachTextbookSources } from './glossaryTextbookSources';
+import { balanceCoreSupplementary } from './readingRanges';
 import { searchConcepts } from '../knowledge/retrieval';
 import { visibleConcept } from '../knowledge/bookAccess';
 import { casesWithAssessmentQuestions } from './caseStudyValidation';
@@ -6667,7 +6668,7 @@ Return ONLY valid JSON:
 CORE (required): every learner reads these. They directly support specific MLOs (linkedMLOs required).
 SUPPLEMENTARY (recommended): they deepen understanding or offer an alternative perspective; optional.
 
-There is no fixed number of readings. Use each source at most once: do not split one article or report into several readings to make up a count. Select as many core and supplementary readings as the sources and the module's reading time support; leave a source out if it does not serve the module.
+The institution's reading-list rule is 3-6 core and 4-8 supplementary readings a module. Aim for it, using each source at most once: never split one article or report into several readings to make up a count. If the module has fewer sources than that needs, use them all and do not pad; if it has more, leave out the sources that serve the module least. Choose the split between core and supplementary to fit the rule (the split is also checked afterwards).
 
 === READING TIME ===
 
@@ -6737,7 +6738,10 @@ RULES:
       });
 
       const parsed = this.parseJSON(response, `step6-${moduleInfo.moduleId}`);
-      const readings = tidyModuleReadings(parsed.readings, moduleInfo.sources);
+      // Which readings are core is set in code, inside the institution's 3-6 / 4-8 ranges.
+      const readings = balanceCoreSupplementary(
+        tidyModuleReadings(parsed.readings, moduleInfo.sources)
+      );
 
       return {
         readings,

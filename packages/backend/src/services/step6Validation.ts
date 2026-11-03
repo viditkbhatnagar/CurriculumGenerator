@@ -12,6 +12,7 @@
  * null when it cannot be run. Pure, so it can be tested.
  */
 import { sourceCompliant, Step5SourceLike } from './step5Validation';
+import { CORE_RANGE, MIN_READINGS, SUPPLEMENTARY_RANGE } from './readingRanges';
 
 export interface ReadingLike {
   sourceId?: string;
@@ -48,6 +49,11 @@ export interface Step6ModuleSummary {
   allCoreMapToMLO: boolean;
   academicAppliedBalance: boolean;
   agiCompliant: boolean;
+  /**
+   * The module has fewer readings than the ranges need (7) and every Step 5 source it was given
+   * is already a reading: the shortfall is Step 5's supply, not a Step 6 failure.
+   */
+  sourceSupplyShortfall: boolean;
 }
 
 export interface Step6ValidationReport {
@@ -60,8 +66,7 @@ export interface Step6ValidationReport {
   allAccessible: boolean;
 }
 
-export const CORE_RANGE = [3, 6] as const;
-export const SUPPLEMENTARY_RANGE = [4, 8] as const;
+export { CORE_RANGE, SUPPLEMENTARY_RANGE };
 
 const minutesOf = (list: ReadingLike[]) =>
   list.reduce((sum, r) => sum + (Number(r.estimatedReadingMinutes) || 0), 0);
@@ -96,7 +101,15 @@ export function step6Checks(input: {
     const supplementary = own.filter((r) => r.category === 'supplementary');
     const total = minutesOf(core) + minutesOf(supplementary);
     const hours = Number(mod.selfStudyHours || mod.independentHours) || 0;
+    const ownSources = new Set(
+      (input.sources || []).filter((s) => s?.moduleId === mod.id).map((s) => String(s.id))
+    );
+    const usedSources = new Set(own.map((r) => String(r.sourceId)));
     return {
+      sourceSupplyShortfall:
+        own.length < MIN_READINGS &&
+        usedSources.size === own.length &&
+        [...ownSources].every((id) => usedSources.has(id)),
       moduleId: mod.id,
       moduleTitle: mod.title,
       coreCount: core.length,
@@ -122,9 +135,16 @@ export function step6Checks(input: {
   return {
     moduleSummaries,
     validationReport: {
-      coreCountValid: everyModule((m) => inRange(m.coreCount, CORE_RANGE)),
-      supplementaryCountValid: everyModule((m) =>
-        inRange(m.supplementaryCount, SUPPLEMENTARY_RANGE)
+      // Below the range only counts against Step 6 when sources were left unused; above it always does.
+      coreCountValid: everyModule(
+        (m) =>
+          inRange(m.coreCount, CORE_RANGE) ||
+          (m.sourceSupplyShortfall && m.coreCount > 0 && m.coreCount <= CORE_RANGE[1])
+      ),
+      supplementaryCountValid: everyModule(
+        (m) =>
+          inRange(m.supplementaryCount, SUPPLEMENTARY_RANGE) ||
+          (m.sourceSupplyShortfall && m.supplementaryCount <= SUPPLEMENTARY_RANGE[1])
       ),
       allCoreMapToMLO: everyModule((m) => m.allCoreMapToMLO),
       allAGICompliant: readings.length > 0 && readings.every(compliant),
