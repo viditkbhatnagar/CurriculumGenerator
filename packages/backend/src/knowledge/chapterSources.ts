@@ -33,7 +33,7 @@ export interface ChapterGroup {
 const num = (p: string) => (/^\d+$/.test(p) ? Number(p) : NaN);
 
 /** Each concept's primary treatment, grouped by book and chapter, largest groups first. */
-export function groupByChapter(concepts: any[], maxChapters = 3): ChapterGroup[] {
+export function groupByChapter(concepts: any[], maxChapters = Infinity): ChapterGroup[] {
   const groups = new Map<string, ChapterGroup>();
   for (const c of concepts) {
     const ev = (c.evidence || []).find((e: any) => e.role === 'primary') || (c.evidence || [])[0];
@@ -57,6 +57,63 @@ export function groupByChapter(concepts: any[], maxChapters = 3): ChapterGroup[]
   return Array.from(groups.values())
     .sort((a, b) => b.concepts.length - a.concepts.length)
     .slice(0, maxChapters);
+}
+
+/** Step 5's recency rule: a source this many years old or newer counts as recent. */
+export const RECENT_YEARS = 5;
+/** A chapter from a book not yet used in the module is worth this many concepts. */
+const NEW_BOOK_BONUS = 1.5;
+/** A chapter from a recent edition is worth this many concepts, to settle comparable choices. */
+const RECENT_BONUS = 0.5;
+/** Each chapter already taken from the book in earlier modules costs this many concepts. */
+const USED_BOOK_PENALTY = 1;
+
+export interface SelectOptions {
+  /** Most chapters one book may supply to the module. */
+  perBookCap?: number;
+  /** Chapters already taken from each book in earlier modules of the programme. */
+  usage?: Map<string, number>;
+  bookYears?: Map<string, number | undefined>;
+  currentYear?: number;
+}
+
+/**
+ * Pick a module's chapters. On 2 Nov 2026 the top three by concept count gave 10 of 12 chapters
+ * of a four-module programme to one book (Principles of Data Science). Here one book supplies at
+ * most `perBookCap` of the module's chapters, a book not yet used in the module scores higher, a
+ * book already used by earlier modules scores lower, and a recent edition breaks ties. An older
+ * or over-used book is still taken when nothing else covers the module.
+ */
+export function selectChapters(
+  groups: ChapterGroup[],
+  maxChapters = 3,
+  opts: SelectOptions = {}
+): ChapterGroup[] {
+  const cap = opts.perBookCap ?? 2;
+  const year = opts.currentYear ?? new Date().getFullYear();
+  const picked: ChapterGroup[] = [];
+  const perBook = new Map<string, number>();
+  const pool = [...groups];
+  while (picked.length < maxChapters && pool.length) {
+    const eligible = pool.filter((g) => (perBook.get(g.bookId) || 0) < cap);
+    if (!eligible.length) break;
+    const scored = eligible
+      .map((g) => {
+        const y = opts.bookYears?.get(g.bookId);
+        const score =
+          g.concepts.length +
+          (perBook.has(g.bookId) ? 0 : NEW_BOOK_BONUS) +
+          (y && y >= year - RECENT_YEARS ? RECENT_BONUS : 0) -
+          USED_BOOK_PENALTY * (opts.usage?.get(g.bookId) || 0);
+        return { g, score };
+      })
+      .sort((a, b) => b.score - a.score);
+    const best = scored[0].g;
+    picked.push(best);
+    perBook.set(best.bookId, (perBook.get(best.bookId) || 0) + 1);
+    pool.splice(pool.indexOf(best), 1);
+  }
+  return picked;
 }
 
 /** "Simon J. D. Prince" -> "Prince, S. J. D."; joined APA-style. */

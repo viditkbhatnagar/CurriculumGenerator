@@ -11,7 +11,7 @@ import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { bodyOfKnowledge, formatBodyOfKnowledge, formatConcept, searchConcepts } from './retrieval';
 import type { Importance } from './models';
 import { pickAcrossAreas } from './selection';
-import { chapterApa, groupByChapter } from './chapterSources';
+import { chapterApa, groupByChapter, selectChapters } from './chapterSources';
 import { BookScope, restrictedFrom, visibleConcept, visibleConcepts } from './bookAccess';
 
 export interface ProgrammeLibrary extends BookScope {
@@ -169,7 +169,9 @@ ${parts.join('\n\n')}
  */
 export async function libraryChapterSources(
   workflowId: string | undefined,
-  module: any
+  module: any,
+  /** Chapters already taken from each book in earlier modules, so one book does not supply most. */
+  bookUsage: Map<string, number> = new Map()
 ): Promise<any[]> {
   const lib = await libraryFor(workflowId);
   if (!lib) return [];
@@ -181,78 +183,83 @@ export async function libraryChapterSources(
       await searchConcepts([module.title, ...topics].filter(Boolean), {
         domainKeys: lib.domainKeys,
         areas: lib.areas,
-        k: 15,
+        k: 30,
       })
     ).map((h) => h.concept);
   }
   concepts = visibleConcepts(lib, concepts);
-  const groups = groupByChapter(concepts, 3);
-  if (!groups.length) return [];
+  const candidates = groupByChapter(concepts);
+  if (!candidates.length) return [];
   const conceptByCode = new Map(concepts.map((c: any) => [c.code, c]));
   const { KbBook } = await import('./models');
   const books: any[] = await KbBook.find({
-    _id: { $in: groups.map((g) => g.bookId) },
+    _id: { $in: Array.from(new Set(candidates.map((g) => g.bookId))) },
     accessTier: 'teaching',
   }).lean();
   const byId = new Map(books.map((b) => [String(b._id), b]));
+  const groups = selectChapters(
+    candidates.filter((g) => byId.has(g.bookId)),
+    3,
+    { usage: bookUsage, bookYears: new Map(books.map((b) => [String(b._id), b.year])) }
+  );
+  if (!groups.length) return [];
   const year = new Date().getFullYear();
-  return groups
-    .filter((g) => byId.has(g.bookId))
-    .map((g, i) => {
-      const b = byId.get(g.bookId);
-      const open = String(b.licence).startsWith('cc-');
-      const book = {
-        id: g.bookId,
-        title: b.title,
-        authors: b.authors,
-        edition: b.edition,
-        year: b.year,
-        publisher: b.publisher,
-        url: b.sourceUrl || b.licenceUrl,
-        licence: b.licence,
-      };
-      const pages =
-        g.pageStart === g.pageEnd ? `p. ${g.pageStart}` : `pp. ${g.pageStart}-${g.pageEnd}`;
-      const span = Number(g.pageEnd) - Number(g.pageStart) + 1;
-      return {
-        id: `lib-${module.code || module.id}-${i + 1}`,
-        title: `${b.title}${g.chapterNumber ? `, Chapter ${g.chapterNumber}` : ''}${g.chapterTitle ? `: ${g.chapterTitle}` : ''}`,
-        authors: b.authors,
-        year: b.year,
-        publisher: b.publisher,
-        citation: chapterApa(book, g),
-        url: book.url,
-        category: 'academic_textbook',
-        type: 'academic',
-        accessStatus: open ? 'free_full_text' : 'institution_licensed',
-        accessNote: open
-          ? `Open textbook (${b.licence.toUpperCase()})`
-          : 'Licensed to the institution',
-        complianceBadges: {
-          peerReviewed: false,
-          openAccess: open,
-          fullTextAvailable: open,
-          verifiedVia: 'Textbook library',
-        },
-        moduleId: module.id,
-        linkedMLOs: [] as string[],
-        relevantTopics: (module.topics || []).slice(0, 3),
-        // What the chapter teaches, from the library's concepts: matched to the module's
-        // outcomes like a paper's abstract, and given to the lesson writer (lessonSources).
-        abstract: g.concepts
-          .map((c) => {
-            const def = conceptByCode.get(c.code)?.definition;
-            return def ? `${c.name}: ${def}` : c.name;
-          })
-          .join(' ')
-          .slice(0, 1500),
-        // The book's own location for the reading, read from the PDF, not written by a model.
-        chapter: { number: g.chapterNumber, title: g.chapterTitle },
-        pages,
-        libraryConcepts: g.concepts.map((c) => c.code),
-        isRecent: !!b.year && b.year >= year - 5,
-        estimatedReadingHours:
-          Number.isFinite(span) && span > 0 ? Math.max(0.5, Math.round(span / 12)) : 1.5,
-      };
-    });
+  return groups.map((g, i) => {
+    const b = byId.get(g.bookId);
+    const open = String(b.licence).startsWith('cc-');
+    const book = {
+      id: g.bookId,
+      title: b.title,
+      authors: b.authors,
+      edition: b.edition,
+      year: b.year,
+      publisher: b.publisher,
+      url: b.sourceUrl || b.licenceUrl,
+      licence: b.licence,
+    };
+    const pages =
+      g.pageStart === g.pageEnd ? `p. ${g.pageStart}` : `pp. ${g.pageStart}-${g.pageEnd}`;
+    const span = Number(g.pageEnd) - Number(g.pageStart) + 1;
+    return {
+      id: `lib-${module.code || module.id}-${i + 1}`,
+      title: `${b.title}${g.chapterNumber ? `, Chapter ${g.chapterNumber}` : ''}${g.chapterTitle ? `: ${g.chapterTitle}` : ''}`,
+      authors: b.authors,
+      year: b.year,
+      publisher: b.publisher,
+      citation: chapterApa(book, g),
+      url: book.url,
+      category: 'academic_textbook',
+      type: 'academic',
+      accessStatus: open ? 'free_full_text' : 'institution_licensed',
+      accessNote: open
+        ? `Open textbook (${b.licence.toUpperCase()})`
+        : 'Licensed to the institution',
+      complianceBadges: {
+        peerReviewed: false,
+        openAccess: open,
+        fullTextAvailable: open,
+        verifiedVia: 'Textbook library',
+      },
+      moduleId: module.id,
+      linkedMLOs: [] as string[],
+      relevantTopics: (module.topics || []).slice(0, 3),
+      // What the chapter teaches, from the library's concepts: matched to the module's
+      // outcomes like a paper's abstract, and given to the lesson writer (lessonSources).
+      abstract: g.concepts
+        .map((c) => {
+          const def = conceptByCode.get(c.code)?.definition;
+          return def ? `${c.name}: ${def}` : c.name;
+        })
+        .join(' ')
+        .slice(0, 1500),
+      // The book's own location for the reading, read from the PDF, not written by a model.
+      chapter: { number: g.chapterNumber, title: g.chapterTitle },
+      pages,
+      bookId: g.bookId,
+      libraryConcepts: g.concepts.map((c) => c.code),
+      isRecent: !!b.year && b.year >= year - 5,
+      estimatedReadingHours:
+        Number.isFinite(span) && span > 0 ? Math.max(0.5, Math.round(span / 12)) : 1.5,
+    };
+  });
 }

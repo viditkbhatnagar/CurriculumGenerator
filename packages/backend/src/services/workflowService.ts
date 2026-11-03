@@ -5825,6 +5825,9 @@ CRITICAL:
     // stop asking and record honestly which modules went unverified.
     let lookupUnavailable: string | null = null;
 
+    // Chapters taken from each textbook so far, so one book does not supply most of the programme.
+    const chapterBookUse = new Map<string, number>();
+
     for (const module of modules) {
       const forModule = generated.filter((s: any) => s.moduleId === module.id);
       const applied = forModule.filter((s: any) => APPLIED_CATEGORIES.has(s.category));
@@ -5832,13 +5835,20 @@ CRITICAL:
 
       // Textbook chapters from the programme's library (knowledge/), with pages read from the
       // books: the core reading, and independent of the journal lookup below.
-      const chapters = await libraryChapterSources(String(workflow._id), module).catch((error) => {
+      const chapters = await libraryChapterSources(
+        String(workflow._id),
+        module,
+        chapterBookUse
+      ).catch((error) => {
         loggingService.warn('Library chapters could not be listed for module', {
           moduleId: module.id,
           error: error instanceof Error ? error.message : String(error),
         });
         return [] as any[];
       });
+      for (const c of chapters) {
+        if (c.bookId) chapterBookUse.set(c.bookId, (chapterBookUse.get(c.bookId) || 0) + 1);
+      }
 
       let verified: any[] = [];
       try {
