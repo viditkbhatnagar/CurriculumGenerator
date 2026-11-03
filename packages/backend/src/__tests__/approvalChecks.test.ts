@@ -49,3 +49,17 @@ describe('approvalDecision', () => {
     });
   });
 });
+
+describe('Step 4 progression', () => {
+  it('lists progression problems as failed checks, and approves with a reason', () => {
+    const issues = failedChecks(4, {
+      progressionProblems: ['The final module is below the programme highest level.'],
+    });
+    expect(issues).toHaveLength(1);
+    expect(approvalDecision(issues, undefined).allowed).toBe(false);
+    expect(approvalDecision(issues, 'The capstone is deliberately applied work').allowed).toBe(
+      true
+    );
+    expect(failedChecks(4, { progressionProblems: [] })).toEqual([]);
+  });
+});

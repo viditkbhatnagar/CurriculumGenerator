@@ -2988,6 +2988,38 @@ router.post('/:id/step4/approve', validateJWT, loadUser, async (req: Request, re
       });
     }
 
+    // Level progression (services/step4Progression): computed now, from the modules as they are,
+    // not from a report stored at generation. A failed check blocks approval unless the author
+    // gives a reason, which is kept with the issues it overrode.
+    const decision = approvalDecision(
+      failedChecks(4, {
+        progressionProblems: step4Progression(workflow.step4.modules as any[], workflow.step1)
+          .problems,
+      }),
+      req.body?.overrideReason
+    );
+    if (!decision.allowed) {
+      return res.status(409).json({
+        success: false,
+        code: 'OVERRIDE_REQUIRED',
+        error:
+          'Step 4 did not pass its level-progression checks. Fix the modules, or approve with a reason.',
+        details: decision.issues,
+      });
+    }
+    if (decision.override) {
+      (workflow.step4 as any).approvalOverride = {
+        ...decision.override,
+        by: userId,
+        at: new Date(),
+      };
+      workflow.markModified('step4');
+      loggingService.warn('Step 4 approved over failed progression checks', {
+        workflowId: req.params.id,
+        issues: decision.override.issues.length,
+      });
+    }
+
     workflow.step4.approvedAt = new Date();
     workflow.step4.approvedBy = userId;
 

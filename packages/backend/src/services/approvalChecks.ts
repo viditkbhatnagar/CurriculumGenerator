@@ -16,6 +16,9 @@ const asText = (issue: any): string =>
 /** The issues that block approval of a step, from what the step recorded about itself. */
 export function failedChecks(stepNumber: number, data: any): string[] {
   if (!data) return [];
+  // Step 4 carries `progressionProblems`, computed from the modules at approval time
+  // (services/step4Progression); the other steps read what they stored about themselves.
+  if (stepNumber === 4) return (data.progressionProblems || []).filter(Boolean);
   if (stepNumber === 5 && data.agiCompliant === false) {
     const issues = (data.complianceIssues || []).map(asText).filter(Boolean);
     return issues.length ? issues : ['Step 5 did not pass its source checks'];

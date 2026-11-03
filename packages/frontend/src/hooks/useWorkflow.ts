@@ -311,14 +311,20 @@ export function useApproveStep4() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    // A reason is needed only when level progression failed (backend services/approvalChecks).
+    mutationFn: async (args: string | { id: string; overrideReason?: string }) => {
+      const { id, overrideReason } =
+        typeof args === 'string' ? { id: args, overrideReason: undefined } : args;
       const response = await fetchAPI(`${WORKFLOW_BASE}/${id}/step4/approve`, {
         method: 'POST',
+        ...(overrideReason ? { body: JSON.stringify({ overrideReason }) } : {}),
       });
       return response;
     },
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ['workflow', id] });
+    onSuccess: (_, args) => {
+      queryClient.invalidateQueries({
+        queryKey: ['workflow', typeof args === 'string' ? args : args.id],
+      });
     },
   });
 }

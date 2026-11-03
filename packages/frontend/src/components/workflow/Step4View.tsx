@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import ModuleConceptsList from './ModuleConceptsList';
 import ReadableRefs from './ReadableRefs';
 import { useSubmitStep4, useApproveStep4 } from '@/hooks/useWorkflow';
+import ApprovalOverridePanel from './ApprovalOverridePanel';
 import { api } from '@/lib/api';
 import { useStepStatus } from '@/hooks/useStepStatus';
 import {
@@ -19,6 +20,7 @@ import {
   BloomLevel,
   BLOOM_LEVELS,
   ModulePhase,
+  ModuleLevelInfo,
   independentHoursOf,
   topicView,
 } from '@/types/workflow';
@@ -64,11 +66,13 @@ const PHASE_LABELS: Record<ModulePhase, string> = {
 // Module Edit Modal Component
 function ModuleEditModal({
   module,
+  levelInfo,
   onSave,
   onCancel,
   isSaving,
 }: {
   module: Module;
+  levelInfo?: ModuleLevelInfo;
   onSave: (updatedModule: Partial<Module>) => void;
   onCancel: () => void;
   isSaving: boolean;
@@ -79,7 +83,8 @@ function ModuleEditModal({
   const [contactHours, setContactHours] = useState(module.contactHours || 0);
   const [selfStudyHours, setSelfStudyHours] = useState(independentHoursOf(module));
   const [credits, setCredits] = useState(module.credits || 0);
-  const [phase, setPhase] = useState<ModulePhase>(module.phase || 'middle');
+  const [year, setYear] = useState<number>(levelInfo?.year ?? 1);
+  const [level, setLevel] = useState<number>(levelInfo?.level ?? 4);
 
   const handleSave = () => {
     onSave({
@@ -89,7 +94,10 @@ function ModuleEditModal({
       contactHours,
       selfStudyHours,
       credits,
-      phase,
+      // Sent only when changed: setting either marks the level as the author's own.
+      ...(levelInfo && (year !== levelInfo.year || level !== levelInfo.level)
+        ? { year, level }
+        : {}),
     });
   };
 
@@ -138,25 +146,40 @@ function ModuleEditModal({
             />
           </div>
 
-          {/* Phase */}
+          {/* Year and level */}
           <div>
-            <label className="block text-sm font-medium text-teal-700 mb-2">Module Phase</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(['early', 'middle', 'late'] as ModulePhase[]).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPhase(p)}
-                  className={`py-2 px-3 rounded-lg border text-sm transition-all ${
-                    phase === p
-                      ? PHASE_COLORS[p]
-                      : 'bg-white border-teal-300 text-teal-600 hover:border-teal-400'
-                  }`}
-                >
-                  {PHASE_LABELS[p]}
-                </button>
-              ))}
+            <label className="block text-sm font-medium text-teal-700 mb-2">
+              Year and academic level
+            </label>
+            <div className="grid grid-cols-2 gap-4">
+              <label className="text-xs text-teal-600">
+                Year
+                <input
+                  type="number"
+                  min={1}
+                  max={6}
+                  value={year}
+                  onChange={(e) => setYear(parseInt(e.target.value) || 1)}
+                  className="mt-1 w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
+                />
+              </label>
+              <label className="text-xs text-teal-600">
+                Level ({levelInfo?.levelFramework || 'RQF'})
+                <input
+                  type="number"
+                  min={1}
+                  max={8}
+                  value={level}
+                  onChange={(e) => setLevel(parseInt(e.target.value) || 1)}
+                  className="mt-1 w-full px-4 py-3 bg-white border border-teal-300 rounded-lg text-teal-800 focus:outline-none focus:border-teal-500"
+                />
+              </label>
             </div>
+            <p className="text-xs text-teal-500 mt-1">
+              Currently {levelInfo?.levelLabel || 'not set'}
+              {levelInfo ? ` (${levelInfo.levelOrigin})` : ''}. Every later step pitches this
+              module's content at its level.
+            </p>
           </div>
 
           {/* Hours */}
@@ -749,6 +772,7 @@ function MLOCard({ mlo, onEdit }: { mlo: MLO; onEdit?: (mlo: MLO) => void }) {
 // Module Card Component
 function ModuleCard({
   module,
+  levelInfo,
   workflowId,
   totalProgramHours,
   contactPercent,
@@ -764,6 +788,7 @@ function ModuleCard({
   onReorderActivity,
 }: {
   module: Module;
+  levelInfo?: ModuleLevelInfo;
   workflowId: string;
   totalProgramHours: number;
   contactPercent: number;
@@ -801,10 +826,18 @@ function ModuleCard({
             <div className="flex flex-col items-center">
               <span className="text-2xl font-bold text-teal-800">{module.sequence}</span>
               <span
-                className={`text-xs px-2 py-0.5 rounded border ${PHASE_COLORS[module.phase || 'middle']}`}
+                className={`text-xs px-2 py-0.5 rounded border ${PHASE_COLORS[levelInfo?.position || module.phase || 'middle']}`}
               >
-                {PHASE_LABELS[module.phase || 'middle']}
+                {PHASE_LABELS[levelInfo?.position || module.phase || 'middle']}
               </span>
+              {levelInfo && (
+                <span
+                  className="mt-1 text-[11px] text-teal-700 text-center"
+                  title={`Level ${levelInfo.levelOrigin === 'author' ? 'set by the author' : levelInfo.levelOrigin === 'blueprint' ? 'from the programme blueprint' : 'derived from the programme level and credits'}`}
+                >
+                  {levelInfo.levelLabel}
+                </span>
+              )}
             </div>
             <div>
               <span className="text-xs font-mono text-teal-500">{module.code}</span>
@@ -1342,6 +1375,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
   const submitStep4 = useSubmitStep4();
   const approveStep4 = useApproveStep4();
   const [error, setError] = useState<string | null>(null);
+  const [overrideIssues, setOverrideIssues] = useState<string[] | null>(null);
 
   const { startGeneration, completeGeneration, failGeneration, isGenerating } = useGeneration();
 
@@ -1441,12 +1475,18 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
     }
   };
 
-  const handleApprove = async () => {
+  const handleApprove = async (overrideReason?: string) => {
     setError(null);
     try {
-      await approveStep4.mutateAsync(workflow._id);
+      await approveStep4.mutateAsync({ id: workflow._id, overrideReason });
+      setOverrideIssues(null);
       onComplete();
     } catch (err: any) {
+      // Level progression failed: show which checks, with a way to approve with a reason.
+      if (err?.code === 'OVERRIDE_REQUIRED') {
+        setOverrideIssues(err.details || []);
+        return;
+      }
       console.error('Failed to approve Step 4:', err);
       setError(err.message || 'Failed to approve Step 4');
     }
@@ -2003,10 +2043,11 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
               Modules ({workflow.step4?.modules?.length || 0})
             </h3>
             <div className="space-y-4">
-              {workflow.step4?.modules?.map((module) => (
+              {workflow.step4?.modules?.map((module, moduleIndex) => (
                 <ModuleCard
                   key={module.id}
                   module={module}
+                  levelInfo={workflow.step4?.moduleLevels?.[moduleIndex]}
                   workflowId={workflow._id}
                   totalProgramHours={workflow.step4?.totalProgramHours || totalModuleHours}
                   contactPercent={contactPercent}
@@ -2085,7 +2126,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
             <div className="flex gap-3">
               {!isApproved && (
                 <button
-                  onClick={handleApprove}
+                  onClick={() => handleApprove()}
                   disabled={approveStep4.isPending || !workflow.step4?.hoursIntegrity}
                   className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-teal-800 font-medium rounded-lg transition-all disabled:opacity-50"
                 >
