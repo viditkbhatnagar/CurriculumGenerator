@@ -20,6 +20,7 @@ import { moduleCodeOf } from '../utils/moduleIdentity';
 import { normaliseTopic } from '../utils/topicShape';
 import { citationsVerified, unmatchedCitations } from './citationMatch';
 import { xmlSafeDeep } from '../utils/xmlSafe';
+import { moduleContextBlock } from './moduleContext';
 
 /**
  * PPT Generation Service
@@ -383,6 +384,8 @@ Level: ${academicLevel}
 Delivery: ${deliveryMode}
 Target Learners: ${targetLearner}
 ${programDescription ? `Program Overview: ${programDescription.substring(0, 300)}...` : ''}
+
+${moduleContextBlock(curriculumData, moduleData)}
 
 **MODULE INFORMATION:**
 Code: ${moduleCode}

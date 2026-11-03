@@ -157,7 +157,8 @@ import {
   BloomLevel,
 } from '../types/newWorkflow';
 import { normaliseTopic } from '../utils/topicShape';
-import { withModuleLevels } from './moduleLevels';
+import { levelsFor, ukLevelOf, withModuleLevels } from './moduleLevels';
+import { moduleContextBlock } from './moduleContext';
 import { essentialKscIdsOf, step4ValidationReport, studentHoursOf } from './step4Validation';
 
 // ============================================================================
@@ -3147,6 +3148,7 @@ CRITICAL:
           levelLine: framing.level
             ? `EQF level ${framing.level} (${framing.typeLabel})`
             : `${framing.typeLabel}; level not recorded`,
+          moduleContext: moduleContextBlock(workflow, mod),
         });
         added.push(...(result.readings || []));
         repaired.push(mod.id);
@@ -6066,6 +6068,7 @@ CRITICAL:
           independentHours: mod.selfStudyHours || mod.independentHours || 10,
           programTitle,
           academicLevel,
+          moduleContext: moduleContextBlock(workflow, i),
           industrySector,
           currentYear,
           fiveYearsAgo,
@@ -6110,6 +6113,8 @@ CRITICAL:
     independentHours: number;
     programTitle: string;
     academicLevel: string;
+    /** The module's level, place and what earlier modules taught (services/moduleContext). */
+    moduleContext?: string;
     industrySector: string;
     currentYear: number;
     fiveYearsAgo: number;
@@ -6230,8 +6235,9 @@ ${kbContextSection}
 === PROGRAMME CONTEXT ===
 
 PROGRAMME TITLE: ${moduleInfo.programTitle}
-ACADEMIC LEVEL: ${moduleInfo.academicLevel}
 INDUSTRY SECTOR: ${moduleInfo.industrySector}
+
+${moduleInfo.moduleContext || `ACADEMIC LEVEL: ${moduleInfo.academicLevel}`}
 
 === MODULE DETAILS ===
 
@@ -6498,6 +6504,7 @@ Return ONLY valid JSON:
         levelLine: framing.level
           ? `EQF level ${framing.level} (${framing.typeLabel})`
           : `${framing.typeLabel}; level not recorded`,
+        moduleContext: moduleContextBlock(workflow, mod),
       };
 
       loggingService.info(`Step 6: Starting module ${i + 1}/${modules.length}`, {
@@ -6595,6 +6602,8 @@ Return ONLY valid JSON:
     programTitle: string;
     framingPhrase: string;
     levelLine: string;
+    /** The module's level, place and what earlier modules taught (services/moduleContext). */
+    moduleContext?: string;
   }): Promise<{ readings: any[]; summary: any }> {
     // Rejin's audit (17 October 2026): chapters and "realistic estimates" of page ranges for
     // sources the model had never seen; 9-14 readings from 5-6 sources; a 50%/65% budget that
@@ -6657,6 +6666,8 @@ Use UK English spelling throughout (e.g., "organisation", "behaviour", "analyse"
 === PROGRAMME ===
 
 PROGRAMME: ${moduleInfo.programTitle} (${moduleInfo.levelLine})
+
+${moduleInfo.moduleContext || ''}
 
 === MODULE: ${moduleInfo.moduleId} - ${moduleInfo.moduleTitle} ===
 
@@ -6772,6 +6783,7 @@ RULES:
           programTitle,
           academicLevel,
           industrySector,
+          moduleContext: moduleContextBlock(workflow, i),
         });
 
         loggingService.info(`Step 7: Module ${mod.id} quiz complete`, {
@@ -6843,6 +6855,7 @@ RULES:
     programTitle: string;
     academicLevel: string;
     industrySector: string;
+    moduleContext?: string;
   }): Promise<{ questions: any[]; clozeQuestions: any[] }> {
     const {
       module: mod,
@@ -6941,6 +6954,8 @@ PROGRAMME TITLE: ${programTitle}
 ACADEMIC LEVEL: ${academicLevel}
 INDUSTRY SECTOR: ${industrySector}
 PASS MARK: ${blueprint.passMark}%
+
+${params.moduleContext || ''}
 
 === MODULE: ${mod.id} - ${mod.title} ===
 
@@ -8321,6 +8336,7 @@ Begin output now.`;
           academicLevel,
           industrySector,
           globalContext,
+          moduleContext: moduleContextBlock(workflow, i),
         });
 
         loggingService.info(`Step 9: Module ${mod.id} glossary complete`, {
@@ -8509,6 +8525,8 @@ Begin output now.`;
     // Extract data from Step 9: Glossary
     const step9 = workflow.step9;
 
+    const moduleLevels = levelsFor(workflow);
+
     // Build context object
     const context = {
       // Step 1: Program Foundation
@@ -8540,6 +8558,9 @@ Begin output now.`;
         // because nothing ever told it what the module was supposed to cover.
         group: mod.group,
         phase: mod.phase,
+        level: ukLevelOf(moduleLevels[idx]),
+        levelLabel: moduleLevels[idx].levelLabel,
+        moduleContext: moduleContextBlock(workflow, idx),
         description: mod.description,
         topics: mod.topics || [],
         totalHours: mod.totalHours,
@@ -8637,6 +8658,7 @@ Begin output now.`;
     programTitle: string;
     academicLevel: string;
     industrySector: string;
+    moduleContext?: string;
     globalContext: {
       programDescription: string;
       competencies: string[];
@@ -8680,8 +8702,9 @@ Use UK English spelling throughout.`;
     const userPrompt = `Generate glossary terms for ONE MODULE:
 
 PROGRAM: ${programTitle}
-LEVEL: ${academicLevel}
 INDUSTRY: ${industrySector}
+
+${params.moduleContext || `LEVEL: ${academicLevel}`}
 
 TARGET MODULE: ${moduleId} - ${moduleTitle}
 

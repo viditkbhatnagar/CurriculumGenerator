@@ -59,6 +59,11 @@ export interface ModuleData {
   /** Where the module sits, e.g. "Year 1 – Level 4". What stops Level 6 content in a Level 4 module. */
   group?: string;
   phase?: string;
+  /** Step 4's level for the module, on the UK scale, and its label ("RQF Level 4 · Year 1"). */
+  level?: number;
+  levelLabel?: string;
+  /** The module's level, place and what earlier modules taught (services/moduleContext). */
+  moduleContext?: string;
   description?: string;
   /** The agreed syllabus. Lessons are planned against this rather than invented around the MLOs. */
   topics?: string[];
@@ -1013,10 +1018,16 @@ export class LessonPlanService {
    * this does not need editing each time a new method appears.
    */
   private buildLevelGuidance(module: ModuleData): string {
-    const group = String(module.group || '');
+    // The level Step 4 records, else the one its blueprint group names ("Year 1 – Level 4").
+    const group = String(module.levelLabel || module.group || '');
     const match = group.match(/level\s*([456])/i) || group.match(/year\s*([123])/i);
-    if (!match) return '';
-    const level = /level/i.test(match[0]) ? Number(match[1]) : Number(match[1]) + 3;
+    const stored = module.level && module.level >= 4 && module.level <= 6 ? module.level : null;
+    if (!match && !stored) return '';
+    const level =
+      stored ??
+      (/level/i.test((match as RegExpMatchArray)[0])
+        ? Number((match as RegExpMatchArray)[1])
+        : Number((match as RegExpMatchArray)[1]) + 3);
 
     const BANDS: Record<number, string> = {
       4:
@@ -1138,7 +1149,9 @@ topic above is actually about that; those belong to the modules that own them.
        * pricing; a marketing module came back with difference-in-differences and CUPED. The
        * model was not being unreasonable — nothing had told it the level.
        */
-      const levelGuidance = this.buildLevelGuidance(module);
+      const levelGuidance =
+        this.buildLevelGuidance(module) +
+        (module.moduleContext ? `${module.moduleContext}\n\n` : '');
 
       /**
        * The one approved topic this lesson is for, and the full syllabus around it.
