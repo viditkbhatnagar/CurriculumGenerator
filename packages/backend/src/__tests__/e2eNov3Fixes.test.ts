@@ -16,10 +16,11 @@ describe('chaptersServingOutcomes', () => {
 });
 
 describe('isAppliedSource', () => {
-  it('counts applied and industry sources, as Step 6 does', () => {
-    expect(isAppliedSource({ type: 'applied' })).toBe(true);
-    expect(isAppliedSource({ type: 'industry' })).toBe(true);
-    expect(isAppliedSource({ type: 'academic' })).toBe(false);
+  it('judges by category, as Step 5 keeps applied sources (4 Nov re-run)', () => {
+    expect(isAppliedSource({ category: 'industry_report' })).toBe(true);
+    expect(isAppliedSource({ category: 'government_research' })).toBe(true);
+    const typedOnly = { type: 'applied', category: 'open_access' };
+    expect(isAppliedSource(typedOnly)).toBe(false);
     expect(isAppliedSource(undefined)).toBe(false);
   });
 });

@@ -80,9 +80,25 @@ const RECENT_YEARS = 5;
 const MIN_PEER_REVIEWED_SHARE = 0.3;
 const MIN_FREE_ACCESS_SHARE = 0.7;
 
-/** A source Step 6 counts as applied: practice-facing, not academic (its `type`). */
-export const isAppliedSource = (s: { type?: string } | null | undefined): boolean =>
-  s?.type === 'applied' || s?.type === 'industry';
+/**
+ * The categories of model-written source Step 5 keeps as applied; its academic sources come
+ * from the lookup instead, so a model source in any other category is dropped.
+ */
+export const APPLIED_SOURCE_CATEGORIES: ReadonlySet<string> = new Set([
+  'professional_body',
+  'industry_report',
+  'government_research',
+  'institutional',
+]);
+
+/**
+ * A model-written source Step 5 will keep as applied. Judged by `category`, as Step 5 keeps
+ * them: on the 4 November re-run modules 1 and 3 had sources typed "applied" but categorised
+ * otherwise, so a check on `type` saw an applied source, asked for no more, and Step 5 then
+ * dropped them, leaving both modules with none.
+ */
+export const isAppliedSource = (s: { category?: string } | null | undefined): boolean =>
+  !!s?.category && APPLIED_SOURCE_CATEGORIES.has(s.category);
 
 export function isPeerReviewed(s: Step5SourceLike): boolean {
   return s.category === 'peer_reviewed_journal' || !!s.complianceBadges?.peerReviewed;

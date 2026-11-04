@@ -5778,12 +5778,6 @@ CRITICAL:
     const modules = (workflow.step4 as any)?.modules || [];
     if (modules.length === 0) return generated;
 
-    const APPLIED_CATEGORIES = new Set([
-      'professional_body',
-      'industry_report',
-      'government_research',
-      'institutional',
-    ]);
     const currentYear = new Date().getFullYear();
     const shortfalls: string[] = [];
     const output: any[] = [];
@@ -5845,7 +5839,12 @@ CRITICAL:
 
     for (const module of modules) {
       const forModule = generated.filter((s: any) => s.moduleId === module.id);
-      const applied = forModule.filter((s: any) => APPLIED_CATEGORIES.has(s.category));
+      // Typed "applied" as Step 6 counts them, whatever type the model wrote.
+      const applied = forModule
+        .filter(isAppliedSource)
+        .map((s: any) =>
+          s.type === 'industry' || s.type === 'applied' ? s : { ...s, type: 'applied' }
+        );
       const mloIds = (module.mlos || []).map((m: any) => m.id).filter(Boolean);
 
       // Textbook chapters from the programme's library (knowledge/), with pages read from the
