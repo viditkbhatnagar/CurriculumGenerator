@@ -175,3 +175,23 @@ export function chapterApa(book: ChapterBook, g: ChapterGroup): string {
     .replace(/\s+\./g, '.')
     .trim();
 }
+
+/**
+ * The module's sources without the library chapters that serve none of its outcomes.
+ *
+ * Chapters are chosen by concept search before outcomes are scored. The end-to-end run of
+ * 3 November 2026 picked "Machine Learning Systems, Volume I, ch. 1: Introduction" for a
+ * business analytics project module; its best match to any of the module's outcomes was 0.39,
+ * below the support floor, so it was linked to none and Step 5 failed "Some sources serve no
+ * outcome". A chapter that serves no outcome is dropped. Other sources are left to the checks.
+ */
+export function chaptersServingOutcomes<T extends { id?: unknown; linkedMLOs?: string[] }>(
+  sources: T[]
+): { kept: T[]; dropped: T[] } {
+  const isUnservingChapter = (s: T) =>
+    String(s.id || '').startsWith('lib-') && !(s.linkedMLOs || []).length;
+  return {
+    kept: sources.filter((s) => !isUnservingChapter(s)),
+    dropped: sources.filter(isUnservingChapter),
+  };
+}

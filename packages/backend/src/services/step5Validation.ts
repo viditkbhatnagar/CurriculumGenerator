@@ -80,6 +80,10 @@ const RECENT_YEARS = 5;
 const MIN_PEER_REVIEWED_SHARE = 0.3;
 const MIN_FREE_ACCESS_SHARE = 0.7;
 
+/** A source Step 6 counts as applied: practice-facing, not academic (its `type`). */
+export const isAppliedSource = (s: { type?: string } | null | undefined): boolean =>
+  s?.type === 'applied' || s?.type === 'industry';
+
 export function isPeerReviewed(s: Step5SourceLike): boolean {
   return s.category === 'peer_reviewed_journal' || !!s.complianceBadges?.peerReviewed;
 }

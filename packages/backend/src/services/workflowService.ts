@@ -94,6 +94,7 @@ import {
   topicsCoveredWeakly,
   sourcesPerTopic,
   sourceCompliant,
+  isAppliedSource,
 } from './step5Validation';
 import {
   step11ValidationFromDecks,
@@ -114,6 +115,7 @@ import { attachTextbookSources } from './glossaryTextbookSources';
 import { balanceCoreSupplementary } from './readingRanges';
 import { searchConcepts } from '../knowledge/retrieval';
 import { visibleConcept } from '../knowledge/bookAccess';
+import { chaptersServingOutcomes } from '../knowledge/chapterSources';
 import { casesWithAssessmentQuestions } from './caseStudyValidation';
 import {
   scenarioProfileFor,
@@ -238,6 +240,9 @@ export function suggestedModuleCount(step1: any, requested?: number): number {
  * Larger programmes are outlined first and then detailed in batches.
  */
 const SINGLE_CALL_MODULE_LIMIT = 8;
+
+/** Appended to a module's source prompt when its first answer had no applied source. */
+const APPLIED_ONLY_INSTRUCTION = `THIS REQUEST IS FOR APPLIED SOURCES ONLY. The module's first list had no applied source, and every module needs at least one. Return 2-3 sources of type "applied": free industry_report, professional_body or government_research publications from real, named organisations that support this module's outcomes, each with its URL. Return no academic sources.`;
 
 // Moved to utils/bloomLevels so pure, testable modules can use them; re-exported for callers.
 export { BLOOM_LEVEL_ORDER, normaliseBloomLevel } from '../utils/bloomLevels';
@@ -5939,6 +5944,14 @@ CRITICAL:
           semantics.get(module.id),
           applied
         );
+        const { kept, dropped } = chaptersServingOutcomes(verified);
+        if (dropped.length) {
+          loggingService.info('Step 5: textbook chapters that serve no outcome were dropped', {
+            moduleId: module.id,
+            chapters: dropped.map((c: any) => c.title),
+          });
+        }
+        verified = kept;
       } catch (error) {
         if (error instanceof SourceLookupUnavailable) {
           lookupUnavailable = error.message;
@@ -6069,7 +6082,7 @@ CRITICAL:
       });
 
       try {
-        const moduleSources = await this.generateSourcesForModule({
+        const request = {
           moduleId: mod.id,
           moduleTitle: mod.title,
           mlos,
@@ -6082,7 +6095,30 @@ CRITICAL:
           currentYear,
           fiveYearsAgo,
           workflowId: String(workflow._id),
-        });
+        };
+        let moduleSources = await this.generateSourcesForModule(request);
+
+        // Every module needs an applied source (Step 6's academic/applied rule). The prompt asks
+        // for one, but on the 3 November 2026 run module 3 got none, so its reading list could
+        // not pass. One more call asks for applied sources only, and only those are kept.
+        if (!moduleSources.some(isAppliedSource)) {
+          const extra = await this.generateSourcesForModule({
+            ...request,
+            appliedOnly: true,
+          }).catch((error) => {
+            loggingService.warn(`Step 5: applied-source top-up failed for ${mod.id}`, {
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return [] as any[];
+          });
+          const applied = extra
+            .filter(isAppliedSource)
+            .map((s: any, n: number) => ({ ...s, id: `src-${mod.id}-applied-${n + 1}` }));
+          loggingService.info(`Step 5: applied-source top-up for ${mod.id}`, {
+            added: applied.length,
+          });
+          moduleSources = [...moduleSources, ...applied];
+        }
 
         loggingService.info(`Step 5: Module ${mod.id} complete`, {
           sourcesGenerated: moduleSources.length,
@@ -6128,6 +6164,8 @@ CRITICAL:
     currentYear: number;
     fiveYearsAgo: number;
     workflowId?: string;
+    /** Ask only for applied sources: the module's first answer had none. */
+    appliedOnly?: boolean;
   }): Promise<any[]> {
     // Retrieve KB context for this specific module
     const kbQueries = [
@@ -6433,7 +6471,10 @@ Return ONLY valid JSON:
 ✓ Balance academic rigour with practical application`;
 
     try {
-      const response = await openaiService.generateContent(userPrompt, systemPrompt, {
+      const prompt = moduleInfo.appliedOnly
+        ? `${userPrompt}\n\n${APPLIED_ONLY_INSTRUCTION}`
+        : userPrompt;
+      const response = await openaiService.generateContent(prompt, systemPrompt, {
         maxTokens: 32000, // Good size for detailed single-module generation
         timeout: 600000, // 10 minutes — GPT-5.2 high thinking needs more time
       });
