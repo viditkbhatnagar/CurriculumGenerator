@@ -6067,8 +6067,8 @@ CRITICAL:
       academicLevel,
     });
 
-    // Generate sources for ALL modules in PARALLEL (much faster!)
-    const modulePromises = modules.map(async (mod: any, i: number) => {
+    // One module's sources; null when its request failed, so it can be tried again.
+    const sourcesForModule = async (mod: any, i: number): Promise<any[] | null> => {
       const mlos = (mod.mlos || []).map((mlo: any) => ({
         id: mlo.id,
         statement: mlo.statement,
@@ -6128,15 +6128,26 @@ CRITICAL:
         loggingService.error(`Step 5: Error generating sources for module ${mod.id}`, {
           error: moduleError instanceof Error ? moduleError.message : String(moduleError),
         });
-        return [];
+        return null;
       }
-    });
+    };
 
-    // Wait for ALL modules to complete in parallel
-    const results = await Promise.all(modulePromises);
+    // Generate sources for ALL modules in PARALLEL (much faster!)
+    const results = await Promise.all(
+      modules.map((mod: any, i: number) => sourcesForModule(mod, i))
+    );
+
+    // A module whose request failed gets one more try on its own, once the others are done.
+    // With four modules at once, one module's request failed in every run on 3-4 November 2026;
+    // it then had no model-written sources at all, so no applied source, and failed Step 6.
+    for (let i = 0; i < modules.length; i += 1) {
+      if (results[i] !== null) continue;
+      loggingService.warn(`Step 5: retrying sources for module ${modules[i].id} on its own`);
+      results[i] = await sourcesForModule(modules[i], i);
+    }
 
     // Combine all sources
-    const allSources: any[] = results.flat();
+    const allSources: any[] = results.flatMap((r) => r || []);
 
     loggingService.info('Step 5: PARALLEL generation complete', {
       totalSources: allSources.length,
