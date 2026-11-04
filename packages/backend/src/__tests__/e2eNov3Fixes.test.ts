@@ -40,4 +40,16 @@ describe('casesWithAssessmentQuestions: answer keys', () => {
     expect(casesWithAssessmentQuestions([keyed])).toEqual(['A']);
     expect(casesWithAssessmentQuestions([stated])).toEqual(['B']);
   });
+
+  it("does not read the teaching note's answer guidance for its discussion prompts (4 Nov re-run)", () => {
+    const guided = {
+      title: 'Orbit Learning',
+      teachingNote: {
+        answerGuidance: 'Question 1: Strong answers separate the problem from the request.',
+      },
+    };
+    const banked = { title: 'Bank', teachingNote: { quiz: 'Question 1: Which is correct?' } };
+    expect(casesWithAssessmentQuestions([guided])).toEqual([]);
+    expect(casesWithAssessmentQuestions([banked])).toEqual(['Bank']);
+  });
 });

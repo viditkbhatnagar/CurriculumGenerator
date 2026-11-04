@@ -23,10 +23,21 @@ const OPTION_LIST =
 const ANSWER_KEY =
   /\b(?:correct|model) answer\s*(?:is\b|[:\u2013\u2014-])|\banswer key\b|\bthe answer is\b|\bQuestion\s+\d+\s*[:.)]/i;
 
+/**
+ * Fields not read. `answerGuidance` is the teaching note's key points for the case's own
+ * discussion prompts, which the Step 8 prompt asks for ("Key points for each question"); the
+ * 4 November re-run flagged its "Question 1: Strong answers..." as a question bank.
+ */
+const NOT_ASSESSMENT = new Set(['answerGuidance']);
+
 function strings(value: unknown, out: string[] = []): string[] {
   if (typeof value === 'string') out.push(value);
   else if (Array.isArray(value)) value.forEach((v) => strings(v, out));
-  else if (value && typeof value === 'object') Object.values(value).forEach((v) => strings(v, out));
+  else if (value && typeof value === 'object') {
+    Object.entries(value).forEach(([key, v]) => {
+      if (!NOT_ASSESSMENT.has(key)) strings(v, out);
+    });
+  }
   return out;
 }
 
