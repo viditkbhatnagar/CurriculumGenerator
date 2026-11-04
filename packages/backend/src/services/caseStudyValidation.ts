@@ -14,9 +14,14 @@
 const OPTION_LIST =
   /(?:^|\s)\(?A[).]\s+\S[\s\S]{0,400}?(?:^|\s)\(?B[).]\s+\S[\s\S]{0,400}?(?:^|\s)\(?C[).]\s+\S|(?:^|\s)\(a\)\s+\S[\s\S]{0,400}?(?:^|\s)\(b\)\s+\S[\s\S]{0,400}?(?:^|\s)\(c\)\s+\S/m;
 
-/** Answer keys and numbered questions. "Q1" alone is left out: it is usually a quarter. */
+/**
+ * Answer keys and numbered questions. "Q1" alone is left out: it is usually a quarter. A
+ * "correct answer" counts only when one follows it ("Correct answer: B", "the correct answer is
+ * C"): the 3 November 2026 run flagged a teaching note saying the case "supports discussion
+ * rather than a single correct answer".
+ */
 const ANSWER_KEY =
-  /\b(correct answer|answer key|the answer is|model answer)\b|\bQuestion\s+\d+\s*[:.)]/i;
+  /\b(?:correct|model) answer\s*(?:is\b|[:\u2013\u2014-])|\banswer key\b|\bthe answer is\b|\bQuestion\s+\d+\s*[:.)]/i;
 
 function strings(value: unknown, out: string[] = []): string[] {
   if (typeof value === 'string') out.push(value);
