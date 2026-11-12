@@ -284,18 +284,26 @@ export class OpenAIService {
             `[OpenAI] Response - choices: ${response.choices?.length}, finish_reason: ${response.choices?.[0]?.finish_reason}, content_length: ${response.choices?.[0]?.message?.content?.length || 0}`
           );
 
+          // Recorded before the content is checked: an empty reply is still paid for. Step 5's
+          // empty replies on 12 November 2026 cost money that never reached the cost log.
+          this.recordUsage(model, response.usage, Date.now() - startTime);
+
           const content = response.choices[0]?.message?.content;
           if (!content) {
+            const finishReason = response.choices?.[0]?.finish_reason;
             loggingService.error('OpenAI returned empty content', {
               model,
-              finishReason: response.choices?.[0]?.finish_reason,
+              finishReason,
               messageRole: response.choices?.[0]?.message?.role,
               usage: response.usage,
             });
-            throw new Error('No content generated from OpenAI');
+            // A reasoning model that spends its whole budget thinking returns nothing.
+            throw new Error(
+              finishReason === 'length'
+                ? `The model used its whole output budget (${maxTokens} tokens) without finishing`
+                : 'No content generated from OpenAI'
+            );
           }
-
-          this.recordUsage(model, response.usage, Date.now() - startTime);
 
           // The model sometimes emits control characters (U+0014 where a dash was meant). Stored,
           // they make every Word or PowerPoint export of that content invalid. See xmlSafe.
