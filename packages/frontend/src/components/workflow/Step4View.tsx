@@ -2042,6 +2042,17 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
             <h3 className="text-lg font-semibold text-teal-800 mb-4">
               Modules ({workflow.step4?.modules?.length || 0})
             </h3>
+            {/* A defaulted level is never silent (Logan Pacey, 12 November 2026). Each module's
+                level can still be edited below. */}
+            {workflow.step4?.programmeLevel?.note && (
+              <p
+                role="status"
+                className="mb-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"
+              >
+                {workflow.step4.programmeLevel.note}. Confirm it in Step 1, or edit a module's level
+                below.
+              </p>
+            )}
             <div className="space-y-4">
               {workflow.step4?.modules?.map((module, moduleIndex) => (
                 <ModuleCard

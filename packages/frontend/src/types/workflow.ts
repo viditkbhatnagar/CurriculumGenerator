@@ -419,6 +419,13 @@ export interface Step4CourseFramework {
   progressionProblems?: string[];
   /** Each module's year, level and position, derived where none is stored. */
   moduleLevels?: ModuleLevelInfo[];
+  /** The programme level and, when it was defaulted, the note to confirm (backend, response only). */
+  programmeLevel?: {
+    level: number | null;
+    framework: 'RQF' | 'FHEQ' | 'EQF';
+    origin: 'stated' | 'default';
+    note: string | null;
+  };
 
   validatedAt?: string;
   approvedAt?: string;
@@ -2037,6 +2044,9 @@ export interface Step1FormData {
   programTitle: string;
   programDescription: string;
   academicLevel: AcademicLevel;
+  /** UK-scale level 3-8, set in Step 1 (lib/programmeLevel); 'default' until the author confirms. */
+  programmeLevel: number;
+  programmeLevelOrigin: 'stated' | 'default';
 
   // Declared scope (backend services/capabilityScope)
   subjectArea?: string;

@@ -28,6 +28,13 @@ import {
   calculateCreditEquivalencies,
   calculateContactHours,
 } from '@/types/workflow';
+import {
+  defaultLevelFor,
+  defaultedLevelNote,
+  isProgrammeLevel,
+  MAX_PROGRAMME_LEVEL,
+  MIN_PROGRAMME_LEVEL,
+} from '@/lib/programmeLevel';
 import StepDownloadButton from './StepDownloadButton';
 
 interface Props {
@@ -54,6 +61,22 @@ function comparableInputs(form: any): string {
       tasks: (r.tasks || []).map((t: string) => t.trim()).filter(Boolean),
     }));
   return JSON.stringify({ ...form, totalHours: undefined, jobRoles: roles });
+}
+
+const LEVEL_OPTIONS = Array.from(
+  { length: MAX_PROGRAMME_LEVEL - MIN_PROGRAMME_LEVEL + 1 },
+  (_, i) => MIN_PROGRAMME_LEVEL + i
+);
+
+/** The form with a change applied; a level the author has not stated follows the credential. */
+function withIdentity(prev: Step1FormData, change: Partial<Step1FormData>): Step1FormData {
+  const next = { ...prev, ...change };
+  if (next.programmeLevelOrigin === 'stated') return next;
+  return {
+    ...next,
+    programmeLevel: defaultLevelFor(next.academicLevel, next.programTitle),
+    programmeLevelOrigin: 'default',
+  };
 }
 
 export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
@@ -97,6 +120,8 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
     programTitle: '',
     programDescription: '',
     academicLevel: 'certificate',
+    programmeLevel: defaultLevelFor('certificate', ''),
+    programmeLevelOrigin: 'default',
     subjectArea: '',
     scopeAcknowledged: false,
 
@@ -184,6 +209,18 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
         programTitle: step1.programTitle || '',
         programDescription: step1.programDescription || '',
         academicLevel: step1.academicLevel || 'certificate',
+        // A workflow saved before the level was a field has none stored: it is a default.
+        ...(isProgrammeLevel((step1 as any).programmeLevel)
+          ? {
+              programmeLevel: (step1 as any).programmeLevel as number,
+              programmeLevelOrigin: ((step1 as any).programmeLevelOrigin === 'stated'
+                ? 'stated'
+                : 'default') as 'stated' | 'default',
+            }
+          : {
+              programmeLevel: defaultLevelFor(step1.academicLevel, step1.programTitle),
+              programmeLevelOrigin: 'default' as const,
+            }),
         subjectArea: (step1 as any).subjectArea || '',
         scopeAcknowledged: !!(step1 as any).scopeAcknowledged,
 
@@ -458,7 +495,9 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
             <input
               type="text"
               value={formData.programTitle}
-              onChange={(e) => setFormData((prev) => ({ ...prev, programTitle: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => withIdentity(prev, { programTitle: e.target.value }))
+              }
               placeholder="e.g., Professional Diploma in Project Management"
               className="w-full px-4 py-3 bg-white border border-teal-200 rounded-lg text-teal-800 placeholder-teal-400 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-cyan-500"
               required
@@ -520,7 +559,9 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                 <button
                   key={level.value}
                   type="button"
-                  onClick={() => setFormData((prev) => ({ ...prev, academicLevel: level.value }))}
+                  onClick={() =>
+                    setFormData((prev) => withIdentity(prev, { academicLevel: level.value }))
+                  }
                   className={`p-4 rounded-lg border text-left transition-all ${
                     formData.academicLevel === level.value
                       ? 'bg-cyan-500/20 border-cyan-500 text-teal-800'
@@ -532,6 +573,55 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Programme level (Logan Pacey, 12 November 2026): pre-filled from the credential, and
+              flagged until the author chooses or confirms it, so it is never assumed unseen. */}
+          <div>
+            <label
+              htmlFor="programme-level"
+              className="block text-sm font-medium text-teal-700 mb-2"
+            >
+              Programme level <span className="text-red-400">*</span>
+            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                id="programme-level"
+                value={formData.programmeLevel}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    programmeLevel: Number(e.target.value),
+                    programmeLevelOrigin: 'stated',
+                  }))
+                }
+                className="px-3 py-2 rounded-lg border border-teal-200 bg-white text-teal-800"
+              >
+                {LEVEL_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    RQF Level {n}
+                  </option>
+                ))}
+              </select>
+              {formData.programmeLevelOrigin === 'stated' ? (
+                <span className="text-xs text-teal-600">Level confirmed</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData((prev) => ({ ...prev, programmeLevelOrigin: 'stated' }))
+                  }
+                  className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 text-amber-800 hover:bg-amber-50"
+                >
+                  Confirm RQF Level {formData.programmeLevel}
+                </button>
+              )}
+            </div>
+            {formData.programmeLevelOrigin !== 'stated' && (
+              <p className="text-xs text-amber-700 mt-1" role="status">
+                {defaultedLevelNote('default', 'RQF', formData.programmeLevel)}. Please confirm.
+              </p>
+            )}
           </div>
         </section>
 
