@@ -263,6 +263,14 @@ export async function libraryChapterSources(
   ).map((g) => withChapterSpan(g, byId.get(g.bookId).toc));
   if (!groups.length) return [];
   const year = new Date().getFullYear();
+  const { booksWithNewerEdition } = await import('./latestEdition');
+  const held: any[] = await KbBook.find({
+    workKey: { $in: books.map((b) => b.workKey).filter(Boolean) },
+    accessTier: 'teaching',
+  })
+    .select('workKey year')
+    .lean();
+  const superseded = booksWithNewerEdition(books, held);
   return groups.map((g, i) => {
     const b = byId.get(g.bookId);
     const open = String(b.licence).startsWith('cc-');
@@ -324,6 +332,8 @@ export async function libraryChapterSources(
       bookId: g.bookId,
       libraryConcepts: g.concepts.map((c) => c.code),
       isRecent: !!b.year && b.year >= year - 5,
+      // False when the library holds a newer edition of this book (sourceRecency).
+      isLatestEdition: !superseded.has(g.bookId),
       estimatedReadingHours:
         Number.isFinite(span) && span > 0 ? Math.max(0.5, Math.round(span / 12)) : 1.5,
     };

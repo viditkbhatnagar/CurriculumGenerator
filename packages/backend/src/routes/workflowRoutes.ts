@@ -16,6 +16,7 @@
  * 9. Glossary - Auto-Generated (5 min)
  */
 
+import { withLatestEditionFlags } from '../knowledge/latestEdition';
 import { MIN_MODULES } from '../services/moduleFramework';
 import { approvalDecision, failedChecks } from '../services/approvalChecks';
 import { step1InputProblems } from '../services/step1Rules';
@@ -1130,6 +1131,8 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
       // Step 5's report too: its source floor became two per weekly topic on 2 October 2026.
       const step5 = (workflow as any).step5;
       if (Array.isArray(step5?.sources)) {
+        // Which library textbooks are the newest edition held (a read of the library only).
+        step5.sources = await withLatestEditionFlags(step5.sources);
         const fresh = workflowService.buildStep5Summary(
           step5.sources,
           (workflow as any).step4?.modules || [],
@@ -1139,6 +1142,7 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
             retractionsRemoved: step5.retractionsRemoved,
           }
         );
+        step5.sources = fresh.sources;
         step5.validationReport = fresh.validationReport;
         step5.complianceIssues = fresh.complianceIssues;
         step5.agiCompliant = fresh.agiCompliant;

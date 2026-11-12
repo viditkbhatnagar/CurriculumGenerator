@@ -13,7 +13,19 @@
  * live outside it.
  */
 
+import {
+  RecencyModule,
+  isFastMovingModule,
+  moduleRecencyProblems,
+  sourceCurrency,
+} from './sourceRecency';
+
 export interface Step5SourceLike {
+  id?: string;
+  /** Newest edition the library holds (sourceRecency). Unset on a library chapter: the latest. */
+  isLatestEdition?: boolean;
+  /** Why an older source counts as current, e.g. "latest edition (2019)". */
+  recencyNote?: string;
   moduleId?: string;
   linkedMLOs?: string[];
   category?: string;
@@ -35,7 +47,7 @@ export interface Step5SourceLike {
   complianceBadges?: { peerReviewed?: boolean; freeAccess?: boolean; fullTextAvailable?: boolean };
 }
 
-export interface Step5ModuleLike {
+export interface Step5ModuleLike extends RecencyModule {
   id?: string;
   mlos?: { id?: string }[];
   /** Weekly topics, stored as strings or as { title }. */
@@ -48,6 +60,8 @@ export type CheckResult = boolean | null;
 export interface Step5ValidationReport {
   allSourcesApproved: CheckResult;
   recencyCompliance: CheckResult;
+  /** Every module has a source from the last five years; fast-moving ones a recent textbook. */
+  moduleRecency: CheckResult;
   minimumSourcesPerTopic: CheckResult;
   academicAppliedBalance: CheckResult;
   peerReviewRatio: CheckResult;
@@ -76,7 +90,6 @@ export const APPROVED_SOURCE_CATEGORIES = [
  * per learning outcome, which she did not mean.
  */
 export const MIN_SOURCES_PER_TOPIC = 2;
-const RECENT_YEARS = 5;
 const MIN_PEER_REVIEWED_SHARE = 0.3;
 const MIN_FREE_ACCESS_SHARE = 0.7;
 
@@ -118,9 +131,13 @@ export function isFreeAccess(s: Step5SourceLike): boolean {
   );
 }
 
-const isRecentOrJustified = (s: Step5SourceLike, currentYear: number) =>
-  currentYear - (s.year || 0) <= RECENT_YEARS ||
-  (!!s.isSeminal && !!s.seminalJustification && !!s.pairedRecentSourceId);
+/**
+ * Recent, a justified seminal work, or a textbook that is the latest edition (sourceRecency).
+ * `fastMoving` is the source's module being on a subject where the latest-edition exception
+ * does not apply.
+ */
+const isRecentOrJustified = (s: Step5SourceLike, currentYear: number, fastMoving = false) =>
+  sourceCurrency(s, currentYear, { fastMoving }).current;
 
 const hasCompleteCitation = (s: Step5SourceLike) =>
   !!s.citation && (s.authors || []).length > 0 && !!s.year && !!s.title;
@@ -132,11 +149,15 @@ const hasCompleteCitation = (s: Step5SourceLike) =>
  * sources as compliant unless the model said otherwise. A source an author added by hand is
  * not compliant until someone reviews it, as before.
  */
-export function sourceCompliant(s: Step5SourceLike, currentYear: number): boolean {
+export function sourceCompliant(
+  s: Step5SourceLike,
+  currentYear: number,
+  fastMoving = false
+): boolean {
   return (
     !s.userAdded &&
     APPROVED_SOURCE_CATEGORIES.includes(s.category || '') &&
-    isRecentOrJustified(s, currentYear) &&
+    isRecentOrJustified(s, currentYear, fastMoving) &&
     hasCompleteCitation(s) &&
     s.accessStatus !== 'rejected'
   );
@@ -234,13 +255,18 @@ export function step5ValidationReport(
   const share = (test: (s: Step5SourceLike) => boolean) =>
     any ? list.filter(test).length / list.length : 0;
 
+  const fastById = new Map(mods.map((m) => [String(m.id), isFastMovingModule(m)]));
   const outcomes = sourcesPerOutcome(list, mods);
   const everyModuleHasOutcomes = mods.length > 0 && mods.every((m) => (m.mlos || []).length > 0);
   const everyMLOSupported = any && everyModuleHasOutcomes && outcomes.every((o) => o.count > 0);
 
   return {
     allSourcesApproved: all((s) => APPROVED_SOURCE_CATEGORIES.includes(s.category || '')),
-    recencyCompliance: all((s) => isRecentOrJustified(s, currentYear)),
+    recencyCompliance: all((s) =>
+      isRecentOrJustified(s, currentYear, fastById.get(String(s.moduleId)) === true)
+    ),
+    moduleRecency:
+      !any || !mods.length ? null : moduleRecencyProblems(list, mods, currentYear).length === 0,
     // Two sources per weekly topic, once topics are scored; until then not checked.
     minimumSourcesPerTopic: !topicsScored(list)
       ? null

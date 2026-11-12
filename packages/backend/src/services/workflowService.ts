@@ -97,6 +97,7 @@ import {
   sourceCompliant,
   isAppliedSource,
 } from './step5Validation';
+import { isFastMovingModule, moduleRecencyProblems, withRecencyNotes } from './sourceRecency';
 import {
   step11ValidationFromDecks,
   step12SummaryFromPacks,
@@ -2802,7 +2803,13 @@ CRITICAL:
     if (!validationReport.allSourcesApproved)
       complianceIssues.push('Some sources are from prohibited categories');
     if (!validationReport.recencyCompliance)
-      complianceIssues.push('Some sources are outdated without seminal justification');
+      complianceIssues.push(
+        'Some sources are outdated: not from the last five years, not the latest edition of a textbook, and no seminal justification'
+      );
+    if (validationReport.moduleRecency === false) {
+      for (const p of moduleRecencyProblems(sources, modules, currentYear))
+        complianceIssues.push(p.message);
+    }
     if (!validationReport.academicAppliedBalance)
       complianceIssues.push('Missing academic/applied source balance');
     if (!validationReport.peerReviewRatio) complianceIssues.push('Academic source ratio below 30%');
@@ -2829,7 +2836,8 @@ CRITICAL:
 
     return {
       weakTopicCoverage,
-      sources,
+      // Each older-but-current textbook carries its note ("latest edition (2019)").
+      sources: withRecencyNotes(sources, modules, currentYear),
       sourcesByModule,
       moduleSummaries,
       totalSources,
@@ -5939,7 +5947,7 @@ CRITICAL:
         // Was hard-set to true. Measured against the same rules the programme-level checks use.
         verified = [...chapters, ...verified].map((v: any) => ({
           ...v,
-          agiCompliant: sourceCompliant(v, new Date().getFullYear()),
+          agiCompliant: sourceCompliant(v, new Date().getFullYear(), isFastMovingModule(module)),
         }));
 
         await this.linkSourcesToMLOs(
@@ -5971,7 +5979,7 @@ CRITICAL:
       if (verified.length === 0 && chapters.length) {
         verified = chapters.map((v: any) => ({
           ...v,
-          agiCompliant: sourceCompliant(v, new Date().getFullYear()),
+          agiCompliant: sourceCompliant(v, new Date().getFullYear(), isFastMovingModule(module)),
         }));
         await this.linkSourcesToMLOs(
           verified,

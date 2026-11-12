@@ -12,6 +12,7 @@
  * null when it cannot be run. Pure, so it can be tested.
  */
 import { sourceCompliant, Step5SourceLike } from './step5Validation';
+import { isFastMovingModule } from './sourceRecency';
 import { CORE_RANGE, MIN_READINGS, SUPPLEMENTARY_RANGE } from './readingRanges';
 
 export interface ReadingLike {
@@ -29,6 +30,8 @@ export interface Step6SourceLike extends Step5SourceLike {
 interface ModuleLike {
   id?: string;
   title?: string;
+  description?: string;
+  topics?: unknown[];
   selfStudyHours?: number;
   independentHours?: number;
 }
@@ -83,11 +86,15 @@ export function step6Checks(input: {
   const sourceById = new Map(
     (input.sources || []).filter((s) => s?.id).map((s) => [String(s.id), s] as const)
   );
+  const fastById = new Map(modules.map((m) => [String(m.id), isFastMovingModule(m)]));
   const sourceOf = (r: ReadingLike) => sourceById.get(String(r.sourceId));
   // A reading whose source cannot be found cannot be shown to be anything.
   const compliant = (r: ReadingLike) => {
     const source = sourceOf(r);
-    return !!source && sourceCompliant(source, input.currentYear);
+    return (
+      !!source &&
+      sourceCompliant(source, input.currentYear, fastById.get(String(source.moduleId)) === true)
+    );
   };
   const accessible = (r: ReadingLike) => {
     const source = sourceOf(r);
