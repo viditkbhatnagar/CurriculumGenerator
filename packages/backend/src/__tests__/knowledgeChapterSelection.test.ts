@@ -49,3 +49,34 @@ describe('selectChapters', () => {
     expect(out[0].bookId).toBe('b');
   });
 });
+
+describe('selectChapters: fast-moving modules take recent books only', () => {
+  const year = 2026;
+  const g = (bookId: string, n: number) => ({
+    bookId,
+    chapter: '1',
+    concepts: Array.from({ length: n }, (_, i) => ({ code: `${bookId}-${i}` })),
+  });
+  const bookYears = new Map([
+    ['old', 2020],
+    ['new', 2024],
+  ]);
+
+  it('skips an older book when a recent one covers the module', () => {
+    const picked = selectChapters([g('old', 9), g('new', 2)] as any, 3, {
+      bookYears,
+      currentYear: year,
+      recentOnly: true,
+    });
+    expect(picked.map((p) => p.bookId)).toEqual(['new']);
+  });
+
+  it('still takes an older book when nothing recent exists', () => {
+    const picked = selectChapters([g('old', 9)] as any, 3, {
+      bookYears,
+      currentYear: year,
+      recentOnly: true,
+    });
+    expect(picked.map((p) => p.bookId)).toEqual(['old']);
+  });
+});

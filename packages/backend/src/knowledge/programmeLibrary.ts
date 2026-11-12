@@ -14,6 +14,7 @@ import { pickAcrossAreas } from './selection';
 import { conceptReference } from './references';
 import { chapterApa, groupByChapter, selectChapters, withChapterSpan } from './chapterSources';
 import { BookScope, restrictedFrom, visibleConcept, visibleConcepts } from './bookAccess';
+import { isFastMovingModule } from '../services/sourceRecency';
 
 export interface ProgrammeLibrary extends BookScope {
   enabled: boolean;
@@ -259,7 +260,11 @@ export async function libraryChapterSources(
   const groups = selectChapters(
     candidates.filter((g) => byId.has(g.bookId)),
     3,
-    { usage: bookUsage, bookYears: new Map(books.map((b) => [String(b._id), b.year])) }
+    {
+      usage: bookUsage,
+      bookYears: new Map(books.map((b) => [String(b._id), b.year])),
+      recentOnly: isFastMovingModule(module),
+    }
   ).map((g) => withChapterSpan(g, byId.get(g.bookId).toc));
   if (!groups.length) return [];
   const year = new Date().getFullYear();

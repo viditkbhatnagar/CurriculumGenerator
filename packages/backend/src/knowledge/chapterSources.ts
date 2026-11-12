@@ -112,6 +112,13 @@ export interface SelectOptions {
   usage?: Map<string, number>;
   bookYears?: Map<string, number | undefined>;
   currentYear?: number;
+  /**
+   * Fast-moving modules (AI, data tools, regulation, digital): Logan Pacey's rule of 12 November
+   * 2026 gives their textbooks no latest-edition exception, so only books from the last
+   * RECENT_YEARS are offered when any candidate is that recent. The end-to-end programme's
+   * analytics project module got "Entrepreneurship, ch. 6" (2020) beside a 2024 textbook.
+   */
+  recentOnly?: boolean;
 }
 
 /**
@@ -130,7 +137,11 @@ export function selectChapters(
   const year = opts.currentYear ?? new Date().getFullYear();
   const picked: ChapterGroup[] = [];
   const perBook = new Map<string, number>();
-  const pool = [...groups];
+  const isRecent = (g: ChapterGroup) => {
+    const y = opts.bookYears?.get(g.bookId);
+    return !!y && y >= year - RECENT_YEARS;
+  };
+  const pool = opts.recentOnly && groups.some(isRecent) ? groups.filter(isRecent) : [...groups];
   while (picked.length < maxChapters && pool.length) {
     const eligible = pool.filter((g) => (perBook.get(g.bookId) || 0) < cap);
     if (!eligible.length) break;
