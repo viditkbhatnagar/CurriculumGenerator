@@ -6498,8 +6498,10 @@ Return ONLY valid JSON:
         ? `${userPrompt}\n\n${APPLIED_ONLY_INSTRUCTION}`
         : userPrompt;
       const response = await openaiService.generateContent(prompt, systemPrompt, {
-        maxTokens: 32000, // Good size for detailed single-module generation
-        timeout: 600000, // 10 minutes — GPT-5.2 high thinking needs more time
+        // Reasoning counts against this budget. At 32,000 the other modules used 22,000-25,000
+        // and one module of each run on 3-12 November ran out and returned nothing.
+        maxTokens: 64000,
+        timeout: 900000, // 15 minutes, for the larger budget
       });
 
       const parsed = this.parseJSON(response, `step5-${moduleInfo.moduleId}`);
