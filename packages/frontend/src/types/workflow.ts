@@ -500,6 +500,8 @@ export interface Source {
 
   // Seminal work handling (for >5 year sources)
   isSeminal?: boolean;
+  /** Why an older source counts as current, e.g. "latest edition (2019)". */
+  recencyNote?: string;
   seminalJustification?: string;
   pairedRecentSourceId?: string; // Required for seminal works
 
@@ -569,7 +571,8 @@ export interface Step5Sources {
   // Validation (AGI Standards)
   validationReport: {
     allSourcesApproved: boolean; // No prohibited sources
-    recencyCompliance: boolean; // All ≤5 years OR justified seminal
+    recencyCompliance: boolean; // ≤5 years, latest-edition textbook ≤10 years, or justified seminal
+    moduleRecency?: boolean | null; // every module has a source ≤5 years; fast-moving ones a recent textbook
     minimumSourcesPerTopic: boolean | null; // every weekly topic has ≥2 of its module's sources; null until topics are matched
     academicAppliedBalance: boolean; // Each topic has both
     peerReviewRatio: boolean; // ≥30% peer-reviewed

@@ -1042,6 +1042,10 @@ function SourceCard({
             <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded">
               ✓ Recent (&lt;5 years)
             </span>
+          ) : source.recencyNote ? (
+            <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded">
+              ✓ {source.recencyNote.charAt(0).toUpperCase() + source.recencyNote.slice(1)}
+            </span>
           ) : source.isSeminal ? (
             <span className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded">
               ⚠ Seminal (&gt;5 years)
@@ -1750,6 +1754,8 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
                 checks={[
                   ['Approved Sources', validation.allSourcesApproved],
                   ['Recency', validation.recencyCompliance],
+                  // Logan Pacey, 12 Nov 2026: each module has a source from the last five years.
+                  ['Recent Source per Module', validation.moduleRecency ?? null],
                   // Dr. Sherin Thomas, 2 October 2026: at least 2 sources for each week's topic.
                   // Not checked until the programme's sources are matched to its topics.
                   ['≥2 Sources per Weekly Topic', validation.minimumSourcesPerTopic],
