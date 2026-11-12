@@ -104,7 +104,13 @@ import { isValidObjectId } from 'mongoose';
 import { deleteConfirmationProblem } from '../utils/softDelete';
 import { hasActiveGeneration } from '../services/generationActivity';
 import { step4ApprovalProblems } from '../services/step4Approval';
-import { authorLevelEdit, levelsFor, withModuleLevels } from '../services/moduleLevels';
+import {
+  authorLevelEdit,
+  levelsFor,
+  programmeLevelInfo,
+  withModuleLevels,
+} from '../services/moduleLevels';
+import { programmeLevelFromInput } from '../services/programmeLevel';
 import {
   essentialKscIdsOf,
   step4Progression,
@@ -1109,6 +1115,8 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
       });
       // Each module's level and the sentences for any failed progression check, response only.
       step4Data.moduleLevels = levelsFor(workflow);
+      // The programme level and, when it was defaulted, the note a reviewer must confirm.
+      step4Data.programmeLevel = programmeLevelInfo((workflow as any).step1);
       step4Data.progressionProblems = step4Progression(
         step4Data.modules,
         (workflow as any).step1
@@ -1324,6 +1332,8 @@ router.post('/:id/step1', validateJWT, loadUser, async (req: Request, res: Respo
       subjectArea,
       scopeAcknowledged,
     } = req.body;
+    // The level set in Step 1 and whether the author stated it (services/programmeLevel).
+    const levelInput = programmeLevelFromInput(req.body);
 
     // Minimal validation stays synchronous
     if (!programTitle || programTitle.length < 3) {
@@ -1379,6 +1389,7 @@ router.post('/:id/step1', validateJWT, loadUser, async (req: Request, res: Respo
       jobRoles: filteredJobRoles,
       subjectArea: typeof subjectArea === 'string' ? subjectArea : undefined,
       scopeAcknowledged: scopeAcknowledged === true,
+      ...(levelInput || {}),
     };
 
     if (stepQueue) {

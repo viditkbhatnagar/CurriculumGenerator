@@ -10,6 +10,7 @@
  * - RAG-enhanced generation from ingested knowledge base documents
  */
 
+import { programmeLevelFromInput } from './programmeLevel';
 import { step7Percent } from './step7Progress';
 import { StepStopped, step7TimeLimitMinutes, stopReason } from './stepStop';
 import mongoose from 'mongoose';
@@ -312,6 +313,8 @@ class WorkflowService {
       qualificationType?: string;
       frameworkLevel?: string;
       governingFramework?: string;
+      programmeLevel?: number;
+      programmeLevelOrigin?: 'stated' | 'default';
 
       // Credit Framework (v2.2)
       isCreditAwarding?: boolean;
@@ -437,6 +440,8 @@ class WorkflowService {
       ...(input.qualificationType ? { qualificationType: input.qualificationType } : {}),
       ...(input.frameworkLevel ? { frameworkLevel: input.frameworkLevel } : {}),
       ...(input.governingFramework ? { governingFramework: input.governingFramework } : {}),
+      // The level set in Step 1 and whether the author stated it (services/programmeLevel).
+      ...(programmeLevelFromInput(input) || {}),
       executiveSummary: generatedContent.executiveSummary,
       programAims: generatedContent.programAims,
       entryRequirements: generatedContent.entryRequirements,

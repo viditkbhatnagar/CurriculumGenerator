@@ -19,6 +19,13 @@
 import { levelFromText, ukLevelFromEqf } from './caseStudySpec';
 import { programmeFraming, QualificationType } from './programmeFraming';
 import { creditsForHours } from '../utils/credits';
+import {
+  defaultedLevelNote,
+  eqfFromUkLevel,
+  isProgrammeLevel,
+  levelOriginOf,
+  ProgrammeLevelOrigin,
+} from './programmeLevel';
 
 export type LevelFramework = 'RQF' | 'FHEQ' | 'EQF';
 export type LevelOrigin = 'blueprint' | 'derived' | 'author';
@@ -89,9 +96,12 @@ function programmeLevels(step1: any) {
   const system: string = String(step1?.creditFramework?.system || '');
   const framework: LevelFramework =
     system === 'uk_credits' ? (DEGREE_TYPES.includes(framing.type) ? 'FHEQ' : 'RQF') : 'EQF';
+  // The level set in Step 1 (services/programmeLevel) is on the UK scale and wins outright.
+  const set: number | null = isProgrammeLevel(step1?.programmeLevel) ? step1.programmeLevel : null;
   const eqf = framing.level ?? DEFAULT_EQF[framing.type] ?? null;
-  const top =
+  const derived =
     eqf == null ? null : framework === 'EQF' ? eqf : (UK_TOP[framing.type] ?? ukLevelFromEqf(eqf));
+  const top = set == null ? derived : framework === 'EQF' ? eqfFromUkLevel(set) : set;
   return { framing, system, framework, top };
 }
 
@@ -230,4 +240,22 @@ export function authorLevelEdit(
 /** The module's level on the UK scale 3–7 that case studies are specified in. */
 export function ukLevelOf(level: Pick<ModuleLevel, 'level' | 'levelFramework'>): number {
   return level.levelFramework === 'EQF' ? ukLevelFromEqf(level.level) : level.level;
+}
+
+export interface ProgrammeLevelInfo {
+  level: number | null;
+  framework: LevelFramework;
+  origin: ProgrammeLevelOrigin;
+  /** "Level not stated, defaulted to RQF 4", or null when the author stated the level. */
+  note: string | null;
+}
+
+/**
+ * The programme's level, who set it, and the note for a reviewer when nobody did. A workflow
+ * saved before Step 1 held a level has none stored, so its derived level counts as defaulted.
+ */
+export function programmeLevelInfo(step1: any): ProgrammeLevelInfo {
+  const { framework, top } = programmeLevels(step1);
+  const origin = levelOriginOf(step1);
+  return { level: top, framework, origin, note: defaultedLevelNote(origin, framework, top) };
 }

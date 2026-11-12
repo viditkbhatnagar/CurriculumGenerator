@@ -17,6 +17,8 @@
  * Pure, so it can be tested.
  */
 
+import { eqfFromUkLevel, isProgrammeLevel } from './programmeLevel';
+
 export type QualificationType =
   | 'micro-credential'
   | 'certificate'
@@ -133,6 +135,10 @@ export function programmeFraming(step1: unknown): ProgrammeFraming {
   } else if (titleLevel) {
     level = titleLevel;
     levelBasis = 'programme title';
+  } else if (s.programmeLevelOrigin === 'stated' && isProgrammeLevel(s.programmeLevel)) {
+    // The author chose the level in Step 1 (services/programmeLevel), on the UK scale.
+    level = eqfFromUkLevel(s.programmeLevel);
+    levelBasis = 'stated by the institution';
   } else if (TYPE_LEVELS[type]) {
     level = TYPE_LEVELS[type] as number;
     levelBasis = basis;
