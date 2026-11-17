@@ -10,6 +10,18 @@ import {
 } from './pptLessonContent';
 import { loggingService } from './loggingService';
 import {
+  DECK_MAX_SLIDES,
+  DECK_MIN_SLIDES,
+  MODEL_MAX_SLIDES,
+  MODEL_MIN_SLIDES,
+  deckMloCoverage,
+  deckShapeIssues,
+  mloCoverageOk,
+  normaliseMloId,
+  slideCountValid,
+} from './deckRules';
+import { withRequiredSlides } from './deckRequiredSlides';
+import {
   LessonPlan,
   ModuleLessonPlan,
   LessonActivity,
@@ -101,6 +113,8 @@ export interface SlideContent {
   xAxis?: string;
   yAxis?: string;
   notes?: string;
+  /** Ids of the lesson's linked outcomes this slide teaches (deckRules.deckMloCoverage). */
+  mlos?: string[];
 }
 
 /**
@@ -142,7 +156,13 @@ export interface PPTDeck {
     mlosCovered: boolean;
     citationsValid: boolean;
     glossaryTermsDefined: boolean;
+    /** A formative-check slide is present. */
+    hasFormativeSlide?: boolean;
+    /** A case slide is present; null when the lesson has no case. */
+    hasCaseSlide?: boolean | null;
   };
+  /** Which linked outcomes the slides teach, computed in code (deckRules.deckMloCoverage). */
+  mloCoverage?: { covered: string[]; missing: string[]; checked: boolean };
 }
 
 /**
@@ -156,6 +176,11 @@ export interface PPTContext {
   glossaryEntries?: any[];
   sources?: any[];
   readingLists?: any[];
+  /** Step 4 outcome statements by outcome id, for the outcome-coverage fallback. */
+  mloStatements?: Record<string, string>;
+  /** Step 8 cases and Step 7 formative assessments, for the case and formative slides. */
+  caseStudies?: any[];
+  formativeAssessments?: any[];
 }
 
 /**
@@ -211,8 +236,7 @@ export class PPTGenerationService {
 
       const prompt = this.buildOpenAIPrompt(moduleData, curriculumData);
 
-      const systemPrompt =
-        'You are an academic self-study teaching-materials production engine creating delivery-ready PowerPoint content for asynchronous learning. Generate 8-15 slides per lesson, designed to be understood without instructor narration. UK academic conventions, professional tone, no emojis. Return ONLY valid JSON, no markdown formatting.';
+      const systemPrompt = `You are an academic self-study teaching-materials production engine creating delivery-ready PowerPoint content for asynchronous learning. Generate ${MODEL_MIN_SLIDES}-${MODEL_MAX_SLIDES} slides per lesson, designed to be understood without instructor narration. UK academic conventions, professional tone, no emojis. Return ONLY valid JSON, no markdown formatting.`;
 
       loggingService.info('Calling OpenAI with enhanced settings', {
         promptLength: prompt.length,
@@ -445,7 +469,7 @@ ${lessonPlanSection}`
 
 **PPT SCOPE & LENGTH:**
 - One PPT per lesson
-- 8-15 slides per lesson
+- ${MODEL_MIN_SLIDES}-${MODEL_MAX_SLIDES} slides per lesson
 - Designed to be completed in the stated lesson duration
 - Learner must be able to understand the lesson WITHOUT instructor narration
 
@@ -1198,6 +1222,23 @@ Return ONLY valid JSON, no markdown formatting.`;
       });
     }
 
+    // A whole deck with the wrong number of slides, or that leaves a linked outcome untaught,
+    // is asked for once more with the problem stated; the better of the two is kept.
+    const statements = context.mloStatements || {};
+    const issues = deckShapeIssues(slides, lesson, statements);
+    if (slides.length && deckComplete(slides) && issues.length) {
+      try {
+        const retry = await this.generateLessonSlidesWithLLM(lesson, context, 32000, issues);
+        const retryIssues = deckShapeIssues(retry, lesson, statements);
+        if (deckComplete(retry) && retryIssues.length < issues.length) slides = retry;
+      } catch (error) {
+        loggingService.warn('Lesson PPT retry for slide count or coverage failed; keeping deck', {
+          lessonId: lesson.lessonId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     if (!slides.length) {
       loggingService.warn('LLM PPT generation failed, building an outline from the lesson plan', {
         lessonId: lesson.lessonId,
@@ -1210,6 +1251,7 @@ Return ONLY valid JSON, no markdown formatting.`;
       } as PPTDeck);
     }
 
+    const coverage = deckMloCoverage(lesson, slides, statements);
     const deck: PPTDeck = {
       deckId: `${lesson.lessonId}-PPT`,
       lessonId: lesson.lessonId,
@@ -1223,10 +1265,16 @@ Return ONLY valid JSON, no markdown formatting.`;
       generatedBy: 'ai',
       complete: deckComplete(slides),
       validation: {
-        slideCountValid: slides.length >= 10 && slides.length <= 20,
-        mlosCovered: this.validateMLOCoverage(lesson, slides),
+        slideCountValid: slideCountValid(slides.length),
+        mlosCovered: mloCoverageOk(coverage),
         citationsValid: this.validateCitations(lesson, context),
         glossaryTermsDefined: this.validateGlossaryTermsInGeneration(lesson, context),
+        ...this.slideKindChecks(lesson, slides),
+      },
+      mloCoverage: {
+        checked: coverage.checked,
+        covered: coverage.covered,
+        missing: coverage.missing,
       },
     } as PPTDeck;
 
@@ -1241,10 +1289,21 @@ Return ONLY valid JSON, no markdown formatting.`;
   /**
    * Generate slides using GPT-5.2 with high reasoning for production-grade content
    */
+  /** Whether the deck holds a formative slide, and a case slide where the lesson has a case. */
+  private slideKindChecks(lesson: LessonPlan, slides: PPTSlide[]) {
+    return {
+      hasFormativeSlide: slides.some((s) => s.slideType === 'formative_check'),
+      hasCaseSlide: lesson.caseStudyActivity
+        ? slides.some((s) => s.slideType === 'case_study')
+        : null,
+    };
+  }
+
   private async generateLessonSlidesWithLLM(
     lesson: LessonPlan,
     context: PPTContext,
-    maxTokens = 32000
+    maxTokens = 32000,
+    corrections: string[] = []
   ): Promise<PPTSlide[]> {
     const durationHours = Math.floor(lesson.duration / 60);
     const durationMinutes = lesson.duration % 60;
@@ -1281,6 +1340,18 @@ Return ONLY valid JSON, no markdown formatting.`;
 
     const caseStudyText = caseForSlides(lesson);
 
+    const statements = context.mloStatements || {};
+    const outcomeStatement = (id: string) =>
+      Object.entries(statements).find(([k]) => normaliseMloId(k) === normaliseMloId(id))?.[1];
+    const outcomesText = (lesson.linkedMLOs || []).length
+      ? lesson.linkedMLOs
+          .map((id) => `- ${id}${outcomeStatement(id) ? `: ${outcomeStatement(id)}` : ''}`)
+          .join('\n')
+      : 'None linked';
+    const correctionText = corrections.length
+      ? `\n**CORRECTIONS TO YOUR PREVIOUS ATTEMPT (fix all of them):**\n${corrections.map((c) => `- ${c}`).join('\n')}\n`
+      : '';
+
     const systemPrompt = `You are a senior academic and instructional designer writing the slides a lecturer presents to students in a university class.
 
 The slides teach the subject. They show students the academic content: concepts, definitions, frameworks, models, comparisons, worked examples with figures, and the questions students work on. The lesson plan you are given describes what the lecturer will do; turn that into the content students should see. Never put instructions to the lecturer on a slide ("Explain…", "Instructor:", "Facilitate…", "Ask students to…"); those belong in the notes.
@@ -1292,7 +1363,7 @@ Each slide MUST contain TWO layers:
 Professional UK academic tone. No emojis. No marketing language.
 Return ONLY valid JSON, no markdown.`;
 
-    const userPrompt = `Convert this lesson into a structured teaching PowerPoint of 12-18 slides.
+    const userPrompt = `Convert this lesson into a structured teaching PowerPoint of ${MODEL_MIN_SLIDES}-${MODEL_MAX_SLIDES} slides.
 
 **LESSON INFORMATION:**
 Title: ${lesson.lessonTitle}
@@ -1323,7 +1394,10 @@ ${formativeText}
 **RELEVANT GLOSSARY TERMS:**
 ${glossaryText}
 
-**REQUIRED SLIDE STRUCTURE (12-18 slides):**
+**LINKED OUTCOMES (every one must be taught on at least one slide other than the cover):**
+${outcomesText}
+${correctionText}
+**REQUIRED SLIDE STRUCTURE (${MODEL_MIN_SLIDES}-${MODEL_MAX_SLIDES} slides; a formative check and any case slides are added after yours, so do not write them):**
 1. Cover: programme, module code and title, lesson title, duration.
 2. Objectives: what students will be able to do.
 3. Core content: one "concept" slide for EACH key concept the lesson teaches, giving a definition, an explanation of 2-3 sentences (how it works, why it matters) and a concrete business example.
@@ -1350,6 +1424,8 @@ ${glossaryText}
 - "two_column": "leftTitle", "leftColumn", "rightTitle", "rightColumn"
 - "bullets": "content" as an array of bullets
 
+**OUTCOME TAGS (every slide except the cover):** "mlos": the ids of the linked outcomes above that the slide teaches, copied exactly. Tag only outcomes the slide really teaches.
+
 **NOTES (every slide):** expand on the slide as if speaking to students: deeper explanation, a mini-example, a probing question and a common misconception.
 
 **OUTPUT FORMAT (JSON):**
@@ -1364,6 +1440,7 @@ ${glossaryText}
       "quadrants": [{"title": "", "text": ""}], "xAxis": "", "yAxis": "",
       "table": {"headers": [""], "rows": [[""]]},
       "leftTitle": "", "leftColumn": [""], "rightTitle": "", "rightColumn": [""],
+      "mlos": ["M1-LO1"],
       "notes": ""
     }
   ]
@@ -1388,7 +1465,13 @@ Return ONLY valid JSON.`;
     const rawSlides = parsed.slides || [];
 
     // Post-process slides for quality and length limits
-    return withoutCIPD(this.postProcessSlides(rawSlides, lesson, context));
+    // The case and formative slides are built in code from the lesson (deckRequiredSlides).
+    return withoutCIPD(
+      withRequiredSlides(this.postProcessSlides(rawSlides, lesson, context), lesson, {
+        caseStudies: context.caseStudies,
+        formativeAssessments: context.formativeAssessments,
+      }) as PPTSlide[]
+    );
   }
 
   /**
@@ -1400,6 +1483,18 @@ Return ONLY valid JSON.`;
     for (let i = 0; i < rawSlides.length; i++) {
       const raw = rawSlides[i];
       const slideNumber = i + 1;
+
+      // Outcome tags the model gave, kept only where they name an outcome of this lesson.
+      const linked = new Map((lesson.linkedMLOs || []).map((id) => [normaliseMloId(id), id]));
+      const mlos = Array.isArray(raw.mlos)
+        ? [
+            ...new Set(
+              raw.mlos
+                .map((m: unknown) => linked.get(normaliseMloId(m)))
+                .filter(Boolean) as string[]
+            ),
+          ]
+        : [];
 
       // Truncate title
       const title = raw.title ? String(raw.title).substring(0, 80) : `Slide ${slideNumber}`;
@@ -1434,6 +1529,7 @@ Return ONLY valid JSON.`;
               title,
               content: firstHalf,
               notes: raw.notes || '',
+              ...(mlos.length ? { mlos } : {}),
             },
             speakerNotes: raw.notes || '',
           });
@@ -1448,6 +1544,7 @@ Return ONLY valid JSON.`;
               title: `${title} (continued)`,
               content: secondHalf,
               notes: '',
+              ...(mlos.length ? { mlos } : {}),
             },
             speakerNotes: '',
           });
@@ -1471,6 +1568,8 @@ Return ONLY valid JSON.`;
         concept: 'concepts',
         process: 'content',
         matrix: 'content',
+        case_study: 'case_study',
+        formative_check: 'formative_check',
       };
       const cleanText = (v: unknown, max = 400) =>
         typeof v === 'string' && v.trim() ? v.trim().substring(0, max) : undefined;
@@ -1506,6 +1605,7 @@ Return ONLY valid JSON.`;
           xAxis: cleanText(raw.xAxis, 80),
           yAxis: cleanText(raw.yAxis, 80),
           notes: raw.notes || '',
+          ...(mlos.length ? { mlos } : {}),
         } as any,
         speakerNotes: raw.notes || '',
       });
@@ -1577,10 +1677,11 @@ Return ONLY valid JSON.`;
       deliveryMode: context.deliveryMode,
       generatedAt: new Date(),
       validation: {
-        slideCountValid: slides.length >= 8 && slides.length <= 15,
-        mlosCovered: this.validateMLOCoverage(lesson, slides),
+        slideCountValid: slideCountValid(slides.length),
+        mlosCovered: this.validateMLOCoverage(lesson, slides, context.mloStatements),
         citationsValid: this.validateCitations(lesson, context),
         glossaryTermsDefined: this.validateGlossaryTermsInGeneration(lesson, context),
+        ...this.slideKindChecks(lesson, slides),
       },
     };
 
@@ -2143,13 +2244,14 @@ Return ONLY valid JSON.`;
    * Validate MLO coverage in slides
    * Requirement 9.2: Verify all MLOs appear in corresponding slide sequences
    */
-  private validateMLOCoverage(lesson: LessonPlan, slides: PPTSlide[]): boolean {
-    // Check if objectives slide exists and contains all MLOs
-    const objectivesSlide = slides.find((s) => s.slideType === 'objectives');
-    if (!objectivesSlide) return false;
-
-    // All objectives should be present in the objectives slide
-    return lesson.objectives.every((obj) => JSON.stringify(objectivesSlide.content).includes(obj));
+  private validateMLOCoverage(
+    lesson: LessonPlan,
+    slides: PPTSlide[],
+    statements: Record<string, string> = {}
+  ): boolean {
+    // Computed in code from the outcomes the slides are tagged with (deckRules); the old check
+    // needed a slide of type 'objectives' that nothing writes, so it could never pass.
+    return mloCoverageOk(deckMloCoverage(lesson, slides, statements));
   }
 
   /**
@@ -2708,16 +2810,11 @@ Return ONLY valid JSON.`;
       return false;
     }
 
-    // Check if MLO IDs are referenced somewhere in the deck
-    const allSlideContent = deck.slides
-      .map((s) => JSON.stringify(s))
-      .join(' ')
-      .toLowerCase();
-    const missingMLOs: string[] = [];
-
-    for (const mloId of lesson.linkedMLOs) {
-      // MLOs should be covered through objectives, so we check if objectives are present
-      // This is a soft check - we already validated objectives above
+    // The linked outcomes must each be taught on a slide (tagged, or shown by their key words).
+    const coverage = deckMloCoverage(lesson, deck.slides);
+    if (coverage.checked && coverage.missing.length) {
+      errors.push(`Outcomes not taught on any slide: ${coverage.missing.join(', ')}`);
+      return false;
     }
 
     return true;
@@ -2835,8 +2932,8 @@ Return ONLY valid JSON.`;
    * Requirement 9.5: Verify slide count per deck remains within 15-35 slides
    */
   private validateSlideCount(deck: PPTDeck, errors: string[], warnings: string[]): boolean {
-    const MIN_SLIDES = 15;
-    const MAX_SLIDES = 35;
+    const MIN_SLIDES = DECK_MIN_SLIDES;
+    const MAX_SLIDES = DECK_MAX_SLIDES;
 
     if (deck.slideCount < MIN_SLIDES) {
       errors.push(`Slide count ${deck.slideCount} is below minimum of ${MIN_SLIDES}`);

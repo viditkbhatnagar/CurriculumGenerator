@@ -299,6 +299,8 @@ export interface PPTSlide {
     xAxis?: string;
     yAxis?: string;
     notes?: string;
+    /** Ids of the lesson's linked outcomes this slide teaches. */
+    mlos?: string[];
   };
   speakerNotes: string;
   visualSuggestion?: string;
@@ -323,7 +325,12 @@ export interface PPTDeck {
     mlosCovered: boolean;
     citationsValid: boolean;
     glossaryTermsDefined: boolean;
+    hasFormativeSlide?: boolean;
+    /** null when the lesson has no case study. */
+    hasCaseSlide?: boolean | null;
   };
+  /** Which linked outcomes the slides teach, computed in code (services/deckRules). */
+  mloCoverage?: { checked: boolean; covered: string[]; missing: string[] };
 }
 
 export interface ModulePPTDecks {
@@ -348,6 +355,8 @@ export interface Step11PPTGeneration {
     allSlideCountsValid: boolean;
     allMLOsCovered: boolean;
     allCitationsValid: boolean;
+    allDecksHaveFormativeSlide?: boolean;
+    allCaseLessonsHaveCaseSlide?: boolean | null;
   };
 
   // Summary statistics

@@ -16,6 +16,7 @@ import { loadModulePlans } from './step10Store';
 import { hydrateModuleDecks, offloadModuleDecks } from './pptDeckStore';
 import { getS3Client, isS3Configured } from './s3Service';
 import { chosenForRewrite, deckProblems, replacesDeck } from './pptLessonContent';
+import { deckSourcesFromWorkflow } from './deckRequiredSlides';
 import { withUsageContext } from './usageContext';
 
 export type DeckSelection = 'problems' | 'all';
@@ -133,6 +134,7 @@ export async function startDeckRegeneration(
           deliveryMode: workflow.step1?.delivery?.mode || 'online',
           glossaryEntries: workflow.step9?.terms || workflow.step9?.entries || [],
           sources: workflow.step5?.sources || [],
+          ...deckSourcesFromWorkflow(workflow),
         };
         let next = 0;
         await Promise.all(

@@ -97,6 +97,7 @@ import {
   sourceCompliant,
   isAppliedSource,
 } from './step5Validation';
+import { deckSourcesFromWorkflow } from './deckRequiredSlides';
 import { isFastMovingModule, moduleRecencyProblems, withRecencyNotes } from './sourceRecency';
 import { step5ProgressAt } from './step5Progress';
 import {
@@ -4876,6 +4877,7 @@ CRITICAL:
       // See the matching note in the module-by-module path below.
       glossaryEntries: (workflow.step9 as any)?.terms || workflow.step9?.entries || [],
       sources: (workflow.step5 as any)?.sources || [],
+      ...deckSourcesFromWorkflow(workflow),
     };
 
     // Import PPT generation service
@@ -5138,6 +5140,7 @@ CRITICAL:
         // The verified Step 5 sources, which the deck's citation check matches against. Never
         // passed before, so that check returned "assume valid" for every deck.
         sources: (workflow.step5 as any)?.sources || [],
+        ...deckSourcesFromWorkflow(workflow),
       };
 
       const pptDecks: any[] = [];
