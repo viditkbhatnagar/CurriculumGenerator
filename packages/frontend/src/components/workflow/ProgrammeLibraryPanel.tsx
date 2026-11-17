@@ -13,6 +13,61 @@ import {
 } from '@/lib/libraryApi';
 
 /**
+ * Limit the programme to chosen books; none ticked means every book in its domains. Logan Pacey
+ * (17 November 2026) needed a programme to draw on particular older editions to test the
+ * textbook recency rules, which the domains alone could not do.
+ */
+function BookChoice({
+  books,
+  chosen,
+  onChange,
+}: {
+  books: LibraryBook[];
+  chosen: string[];
+  onChange: (bookIds: string[]) => void;
+}) {
+  const toggle = (id: string) =>
+    onChange(chosen.includes(id) ? chosen.filter((c) => c !== id) : [...chosen, id]);
+  return (
+    <details
+      className="mt-4 rounded-lg border border-teal-200 bg-white p-3"
+      open={chosen.length > 0}
+    >
+      <summary className="cursor-pointer text-sm font-medium text-teal-800">
+        {chosen.length
+          ? `Limited to ${chosen.length} chosen book${chosen.length === 1 ? '' : 's'}`
+          : 'All books in these domains (choose specific books)'}
+      </summary>
+      <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto text-sm">
+        {books.map((b) => (
+          <li key={b.id}>
+            <label className="inline-flex items-center gap-2 text-teal-800">
+              <input
+                type="checkbox"
+                checked={chosen.includes(b.id)}
+                onChange={() => toggle(b.id)}
+                className="h-4 w-4 accent-teal-600"
+              />
+              {b.title}
+              {b.year ? <span className="text-teal-500">({b.year})</span> : null}
+            </label>
+          </li>
+        ))}
+      </ul>
+      {chosen.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          className="mt-2 text-xs text-teal-700 underline"
+        >
+          Use all books again
+        </button>
+      )}
+    </details>
+  );
+}
+
+/**
  * Which part of the textbook library this programme is built from. With it on, Steps 1-5 draw
  * on the books' concepts (with chapter and page citations), Step 2 builds skills from them and
  * Step 4 draws its modules as clusters of them. Saved as soon as it changes.
@@ -123,6 +178,19 @@ export default function ProgrammeLibraryPanel({ workflowId }: { workflowId: stri
             );
           })}
         </div>
+      )}
+      {library.enabled && library.domainKeys.length > 0 && (
+        <BookChoice
+          books={books.filter(
+            (b) =>
+              b.status === 'ready' &&
+              b.accessTier === 'teaching' &&
+              usable(b) &&
+              b.domainKeys.some((k) => library.domainKeys.includes(k))
+          )}
+          chosen={library.bookIds || []}
+          onChange={(bookIds) => save({ ...library, bookIds })}
+        />
       )}
       {library.enabled && !library.domainKeys.length && (
         <p className="mt-2 text-sm text-amber-700">Choose at least one domain.</p>
