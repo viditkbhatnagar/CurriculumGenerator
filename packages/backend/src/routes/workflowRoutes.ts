@@ -121,7 +121,7 @@ import {
 } from '../services/step4Validation';
 import { step6ReportOf } from '../services/step6Validation';
 import { step7ValidationOf } from '../services/step7Validation';
-import { step13Validation } from '../services/step13Validation';
+import { refreshExamCounts, step13Validation } from '../services/step13Validation';
 import { applyStep12Edit } from '../utils/step12Edit';
 import {
   loadPackRows,
@@ -1161,6 +1161,11 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
       if (step7View) (workflow as any).step7.validation = step7View;
       const step13 = (workflow as any).step13;
       if (step13?.sectionA) {
+        // Counts come from the exam's own items, so an exam stored with a mixed-unit summary
+        // reads correctly without regeneration.
+        const refreshed = refreshExamCounts(step13);
+        step13.summary = refreshed.summary;
+        step13.overview = refreshed.overview;
         step13.validation = step13Validation(step13, (workflow as any).step3?.outcomes || []);
       }
       // Step 2: which stored passages count as evidence under the current floor.
