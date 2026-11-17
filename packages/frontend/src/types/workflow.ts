@@ -1728,6 +1728,8 @@ export interface AssignmentPack {
   markScheme?: { maxMarks: number; passMark: number | null };
   /** The form this delivery mode takes. */
   form?: { label: string; description: string };
+  /** Pack-rule checks computed when the pack was generated. */
+  checks?: { passed: boolean; problems: string[] };
 }
 
 export interface ModuleAssignmentPacks {

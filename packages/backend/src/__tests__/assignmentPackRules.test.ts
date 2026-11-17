@@ -7,6 +7,7 @@ import {
   enforcePackRules,
   markingModeFor,
   moduleChecks,
+  packChecksByVariant,
   passMarkFrom,
 } from '../services/assignmentPackRules';
 import {
@@ -197,5 +198,28 @@ describe('completeness for auto-marked packs', () => {
     expect(step12ValidationFromPacks([pack], [{ id: 'm1', mlos: [] }]).allRubricsComplete).toBe(
       true
     );
+  });
+});
+
+describe('packChecksByVariant', () => {
+  it('stores each variant its own problems plus the shared ones', () => {
+    const variants: any = {};
+    for (const v of ['in_person', 'self_study', 'hybrid'] as const) {
+      variants[v] = enforcePackRules(rubricPack(), v, writtenApproved).pack;
+    }
+    variants.hybrid.rubric[0].weight = 10; // breaks only this variant's weights, and the alikeness
+    const checks = packChecksByVariant(variants, writtenApproved);
+    expect(checks.in_person!.passed).toBe(false); // shared: criteria differ across modes
+    expect(checks.hybrid!.problems.join(' ')).toMatch(/weights total 50/);
+    expect(checks.in_person!.problems.join(' ')).not.toMatch(/weights total/);
+  });
+
+  it('passes consistent packs', () => {
+    const variants: any = {};
+    for (const v of ['in_person', 'self_study', 'hybrid'] as const) {
+      variants[v] = enforcePackRules(rubricPack(), v, writtenApproved).pack;
+    }
+    const checks = packChecksByVariant(variants, writtenApproved);
+    expect(Object.values(checks).every((c) => c!.passed)).toBe(true);
   });
 });

@@ -456,6 +456,8 @@ export interface AssignmentPack {
   markScheme?: { maxMarks: number; passMark: number | null };
   /** The form this delivery mode takes; outcomes, marks and criteria are the same in all modes. */
   form?: { label: string; description: string };
+  /** Pack-rule checks computed at generation (assignmentPackRules); problems are plain sentences. */
+  checks?: { passed: boolean; problems: string[] };
 }
 
 export interface ModuleAssignmentPacks {

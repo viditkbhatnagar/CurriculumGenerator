@@ -31,6 +31,7 @@ import {
   enforcePackRules,
   markingModeFor,
   moduleChecks,
+  packChecksByVariant,
 } from './assignmentPackRules';
 
 interface ModuleContext {
@@ -160,8 +161,18 @@ export class AssignmentPackService {
       })
     );
 
-    // Computed from what was stored, not asked of the model.
-    const checks = moduleChecks(result, module.approvedSummative as ApprovedAssessment | undefined);
+    // Computed from what was stored, not asked of the model, and stored on each pack so a
+    // failure is visible on the screen and in the export.
+    const approved = module.approvedSummative as ApprovedAssessment | undefined;
+    const perVariant = packChecksByVariant(result, approved);
+    for (const name of Object.keys(perVariant) as PackVariantName[]) {
+      const pack = result[name];
+      // A placeholder is already reported as a failed variant; its checks add nothing.
+      if (pack && !pack.assignmentId.endsWith('-placeholder')) {
+        (pack as any).checks = perVariant[name];
+      }
+    }
+    const checks = moduleChecks(result, approved);
     if (!checks.passed) {
       loggingService.warn('Assignment pack failed its post-generation checks', {
         moduleCode: module.moduleCode,

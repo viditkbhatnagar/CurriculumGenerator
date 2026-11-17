@@ -291,3 +291,22 @@ export function moduleChecks(
   ];
   return { problems, passed: problems.length === 0 };
 }
+
+/**
+ * The check result to store on each variant: its own problems plus the ones that concern the
+ * three modes together. Stored with the pack so a failure shows on the Step 12 screen and in
+ * the export, not only in a log line.
+ */
+export function packChecksByVariant(
+  variants: Partial<Record<PackVariantName, any>>,
+  approved?: ApprovedAssessment
+): Partial<Record<PackVariantName, { passed: boolean; problems: string[] }>> {
+  const shared = checkVariantsAlike(variants);
+  const out: Partial<Record<PackVariantName, { passed: boolean; problems: string[] }>> = {};
+  for (const [name, pack] of Object.entries(variants) as [PackVariantName, any][]) {
+    if (!pack) continue;
+    const problems = [...checkPack(pack, approved), ...shared];
+    out[name] = { passed: problems.length === 0, problems };
+  }
+  return out;
+}

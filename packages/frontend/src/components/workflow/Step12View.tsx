@@ -973,6 +973,21 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                     )}
                   </div>
 
+                  {/* Pack-rule check failures, computed in code at generation */}
+                  {currentPack.checks && !currentPack.checks.passed && (
+                    <div
+                      role="alert"
+                      className="px-5 py-3 border-b border-red-200 bg-red-50 text-sm text-red-700"
+                    >
+                      <p className="font-semibold mb-1">This pack fails its checks</p>
+                      <ul className="list-disc list-inside">
+                        {currentPack.checks.problems.map((problem, i) => (
+                          <li key={i}>{problem}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   {/* Form of this delivery mode */}
                   {currentPack.form && (
                     <div className="px-5 py-3 border-b border-teal-100 bg-teal-50/40 text-sm text-teal-700">
