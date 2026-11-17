@@ -144,6 +144,8 @@ const CHECK_LABELS: Record<number, Record<string, string>> = {
     allSlideCountsValid: 'Every deck has a valid number of slides',
     allMLOsCovered: 'Every module outcome appears in the slides',
     allCitationsValid: "Every slide citation is one of the programme's sources",
+    allDecksHaveFormativeSlide: 'Every deck has a formative-check slide',
+    allCaseLessonsHaveCaseSlide: 'Every lesson with a case study has case-study slides',
   },
   12: {
     allModulesHaveAssignments: 'Every module has an assignment pack',
