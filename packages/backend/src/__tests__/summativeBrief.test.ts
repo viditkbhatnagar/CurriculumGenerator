@@ -90,6 +90,7 @@ describe('summativeContentProblem', () => {
   const q = (questionType: string) => ({ questionType });
   it('fails a written summative whose questions are mostly MCQ', () => {
     const a = {
+      purpose: 'module_summative',
       assessmentType: 'Mini-case exercises',
       questions: [q('mcq'), q('mcq'), q('mcq'), q('short_answer')],
     };
