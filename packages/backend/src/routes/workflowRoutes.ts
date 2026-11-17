@@ -34,6 +34,7 @@ import Folder from '../models/Folder';
 import { snapshotStep, loadSnapshot } from '../services/stepVersionService';
 import { docxBufferToPdf } from '../services/pdfService';
 import { wordExportService } from '../services/wordExportService';
+import { exportContentOf, exportRenderDataOf } from '../services/exportWorkflowData';
 import {
   serveCachedExport,
   getCachedExport,
@@ -7636,25 +7637,7 @@ router.get('/:id/export/word', async (req: Request, res: Response) => {
     }
 
     // Allow export even if not fully complete (for preview purposes)
-    const workflowData = {
-      projectName: workflow.projectName,
-      step1: workflow.step1,
-      step2: workflow.step2,
-      step3: workflow.step3,
-      step4: workflow.step4,
-      step5: workflow.step5,
-      step6: workflow.step6,
-      step7: workflow.step7,
-      step8: workflow.step8,
-      step9: workflow.step9,
-      step10: workflow.step10,
-      step11: workflow.step11,
-      step12: workflow.step12,
-      step13: workflow.step13,
-      assessmentRules: workflow.assessmentRules,
-      createdAt: workflow.createdAt?.toISOString(),
-      updatedAt: workflow.updatedAt?.toISOString(),
-    };
+    const workflowData = exportRenderDataOf(workflow);
 
     // Generate filename
     const filename = `${workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}-${new Date().toISOString().split('T')[0]}.docx`;
@@ -7664,23 +7647,7 @@ router.get('/:id/export/word', async (req: Request, res: Response) => {
     await serveCachedExport(res, {
       workflowId: String(workflow._id),
       artifact: 'full-word.docx',
-      contentHash: hashExportInput({
-        projectName: workflow.projectName,
-        step1: workflow.step1,
-        step2: workflow.step2,
-        step3: workflow.step3,
-        step4: workflow.step4,
-        step5: workflow.step5,
-        step6: workflow.step6,
-        step7: workflow.step7,
-        step8: workflow.step8,
-        step9: workflow.step9,
-        step10: workflow.step10,
-        step11: workflow.step11,
-        step12: workflow.step12,
-        step13: workflow.step13,
-        assessmentRules: workflow.assessmentRules,
-      }),
+      contentHash: hashExportInput(exportContentOf(workflow)),
       contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       filename,
       generate: () => wordExportService.generateDocument(workflowData),
@@ -8087,49 +8054,14 @@ router.get('/:id/export/pdf', async (req: Request, res: Response) => {
     });
 
     // First generate Word document
-    const workflowData = {
-      projectName: workflow.projectName,
-      step1: workflow.step1,
-      step2: workflow.step2,
-      step3: workflow.step3,
-      step4: workflow.step4,
-      step5: workflow.step5,
-      step6: workflow.step6,
-      step7: workflow.step7,
-      step8: workflow.step8,
-      step9: workflow.step9,
-      step10: workflow.step10,
-      step11: workflow.step11,
-      step12: workflow.step12,
-      step13: workflow.step13,
-      assessmentRules: workflow.assessmentRules,
-      createdAt: workflow.createdAt?.toISOString(),
-      updatedAt: workflow.updatedAt?.toISOString(),
-    };
+    const workflowData = exportRenderDataOf(workflow);
 
     // Generate filename
     const filename = `${workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}-${new Date().toISOString().split('T')[0]}.pdf`;
 
     // The PDF and the Word export render from identical workflow data, so
     // they share one content hash — letting the PDF reuse a cached .docx.
-    const exportContentHash = hashExportInput({
-      projectName: workflow.projectName,
-      step1: workflow.step1,
-      step2: workflow.step2,
-      step3: workflow.step3,
-      step4: workflow.step4,
-      step5: workflow.step5,
-      step6: workflow.step6,
-      step7: workflow.step7,
-      step8: workflow.step8,
-      step9: workflow.step9,
-      step10: workflow.step10,
-      step11: workflow.step11,
-      step12: workflow.step12,
-      step13: workflow.step13,
-      // Must match the Word export's hash exactly: the PDF reuses its cached render.
-      assessmentRules: workflow.assessmentRules,
-    });
+    const exportContentHash = hashExportInput(exportContentOf(workflow));
 
     // Cached in S3 — a re-download skips both the Word render (per-section
     // OpenAI calls) and the docx→PDF conversion.

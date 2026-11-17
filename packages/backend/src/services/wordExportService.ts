@@ -28,6 +28,7 @@ import { normaliseTopic } from '../utils/topicShape';
 import { cleanModelOutput, xmlSafeDeep } from '../utils/xmlSafe';
 import { layoutProse, LaidOut, paragraphsOf } from '../utils/proseLayout';
 import { deriveModuleLevels } from './moduleLevels';
+import { programmeSyllabusBody } from './syllabusDocx';
 
 interface WorkflowData {
   projectName: string;
@@ -44,7 +45,11 @@ interface WorkflowData {
   step11?: any;
   step12?: any;
   step13?: any;
+  step14?: any;
   assessmentRules?: AssessmentRules;
+  occupationEvidence?: any;
+  kbEvidence?: any;
+  knowledgeLibrary?: any;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -91,6 +96,7 @@ const SECTION_HEADINGS: Record<number, string> = {
   11: '11. PowerPoint Decks',
   12: '12. Assignment Packs',
   13: '13. Summative Exam',
+  14: '14. Programme Syllabus',
 };
 const UNRESOLVED_HEADING = 'Unresolved Issues';
 
@@ -3664,6 +3670,30 @@ export class WordExportService {
   /**
    * Generate Step 13 (Summative Exam) section
    */
+  /**
+   * The programme-wide syllabus, from the same body as the stand-alone syllabus download
+   * (syllabusDocx), so the whole-programme document no longer stops at Step 13.
+   */
+  private async generateStep14Section(
+    step14: any,
+    contentChildren: any[],
+    step1: any
+  ): Promise<void> {
+    if (!step14?.generatedSections) return;
+    contentChildren.push(
+      new Paragraph({ children: [new PageBreak()] }),
+      this.createH1(SECTION_HEADINGS[14])
+    );
+    if (!step14.approvedAt) {
+      contentChildren.push(
+        ...this.createFormattedParagraphs([
+          'This syllabus has been generated but not yet approved in Step 14.',
+        ])
+      );
+    }
+    contentChildren.push(...programmeSyllabusBody(step1, step14, true));
+  }
+
   private async generateStep13Section(
     step13: any,
     contentChildren: any[],
@@ -4223,6 +4253,7 @@ export class WordExportService {
       workflow.step11,
       workflow.step12,
       workflow.step13,
+      workflow.step14?.generatedSections,
     ].filter(Boolean).length;
 
     let sectionsCompleted = 0;
@@ -4334,6 +4365,7 @@ export class WordExportService {
       11: 'PowerPoints',
       12: 'Assignment Packs',
       13: 'Summative Exam',
+      14: 'Programme Syllabus',
     };
 
     // Each step section renders into its own children array; Promise.all preserves input order,
@@ -4411,6 +4443,11 @@ export class WordExportService {
       addSection(13, (out) =>
         this.generateStep13Section(workflow.step13, out, workflow.step3?.outcomes || [])
       );
+    }
+    // Step 14 is optional (it needs the cohort's instructor details), so it is printed only
+    // once a syllabus has been generated; an unapproved one is labelled as such.
+    if (workflow.step14?.generatedSections) {
+      addSection(14, (out) => this.generateStep14Section(workflow.step14, out, workflow.step1));
     }
 
     // The contents page, on its own page after the title (the 21 September review, 6.7).
