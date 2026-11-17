@@ -124,6 +124,45 @@ export function sectionCountLabel(letter: 'A' | 'B' | 'C', counts: ExamCounts): 
   return plural(counts.sectionCTasks, 'task');
 }
 
+/**
+ * A copy of the exam whose summary counts and section-breakdown rows are taken from its own
+ * items. Exams stored before countExamItems carry a summary that mixes units (27 where the
+ * items are 24 questions, 4 scenarios and 3 tasks); read paths use this so they show the
+ * counts without regenerating. The input is not changed.
+ */
+export function refreshExamCounts<T extends ExamLike>(exam: T): T {
+  const counts = countExamItems(exam);
+  const next: any = structuredClone(exam);
+  next.summary = {
+    ...(next.summary || {}),
+    totalQuestions: counts.totalQuestions,
+    totalScenarios: counts.totalScenarios,
+    totalTasks: counts.totalTasks,
+    countLabel: examCountLabel(counts),
+    // The per-section figures the Step 13 screen shows; scenarios for B, as in the breakdown.
+    sectionACount: counts.sectionAQuestions,
+    sectionBCount: counts.sectionBScenarios,
+    sectionCCount: counts.sectionCTasks,
+  };
+  for (const row of next.overview?.sectionBreakdown || []) {
+    const letter = /^\s*section\s+([ABC])\b/i.exec(row?.section || '')?.[1]?.toUpperCase() as
+      | 'A'
+      | 'B'
+      | 'C'
+      | undefined;
+    if (!letter) continue;
+    row.unit = letter === 'A' ? 'questions' : letter === 'B' ? 'scenarios' : 'tasks';
+    row.questionCount =
+      letter === 'A'
+        ? counts.sectionAQuestions
+        : letter === 'B'
+          ? counts.sectionBScenarios
+          : counts.sectionCTasks;
+    row.countLabel = sectionCountLabel(letter, counts);
+  }
+  return next;
+}
+
 /** The whole exam in one line, e.g. "24 questions, 4 scenarios, 3 tasks". */
 export function examCountLabel(counts: ExamCounts): string {
   return [

@@ -17,7 +17,12 @@ import { loggingService } from './loggingService';
 import { moduleLabelOf } from '../utils/moduleIdentity';
 import { bloomIndex, statedBloom } from './assessmentGeneratorService';
 import { modulesInDocument, outlinesStep10, validationFromPlans } from './step10Completion';
-import { step13Validation } from './step13Validation';
+import {
+  examCountLabel,
+  countExamItems,
+  refreshExamCounts,
+  step13Validation,
+} from './step13Validation';
 import { unresolvedIssues } from './unresolvedIssues';
 import { ASSESSMENT_RULES, AssessmentRules } from './assessmentRules';
 import { evidenceLabel } from './competencyEvidence';
@@ -3511,6 +3516,28 @@ export class WordExportService {
             );
           }
 
+          // How this delivery mode is taken (outcomes, marks and criteria are the same in all modes)
+          if (variant.form?.label) {
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: 'Form of this delivery mode: ',
+                    bold: true,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
+                  }),
+                  new TextRun({
+                    text: `${variant.form.label}. ${variant.form.description || ''}`,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
+                  }),
+                ],
+                spacing: { before: 100, after: 100, line: LINE_SPACING },
+              })
+            );
+          }
+
           // Brief
           if (variant.brief) {
             if (variant.brief.studentFacingIntro) {
@@ -3574,10 +3601,24 @@ export class WordExportService {
               children: [
                 this.createTableCell('Criterion', { bold: true, shading: 'E3F2FD' }),
                 this.createTableCell('Weight', { bold: true, shading: 'E3F2FD' }),
-                this.createTableCell('Fail', { bold: true, shading: 'FFEBEE' }),
-                this.createTableCell('Pass', { bold: true, shading: 'E8F5E9' }),
-                this.createTableCell('Merit', { bold: true, shading: 'FFF3E0' }),
-                this.createTableCell('Distinction', { bold: true, shading: 'E8EAF6' }),
+                // The band names the pack was built with; packs generated before they were
+                // recorded keep the grade names they were written under.
+                this.createTableCell(variant.bandLabels?.[0] ?? 'Fail', {
+                  bold: true,
+                  shading: 'FFEBEE',
+                }),
+                this.createTableCell(variant.bandLabels?.[1] ?? 'Pass', {
+                  bold: true,
+                  shading: 'E8F5E9',
+                }),
+                this.createTableCell(variant.bandLabels?.[2] ?? 'Merit', {
+                  bold: true,
+                  shading: 'FFF3E0',
+                }),
+                this.createTableCell(variant.bandLabels?.[3] ?? 'Distinction', {
+                  bold: true,
+                  shading: 'E8EAF6',
+                }),
               ],
             });
 
@@ -3599,6 +3640,53 @@ export class WordExportService {
               new Table({
                 width: { size: 100, type: WidthType.PERCENTAGE },
                 rows: [rubricHeaderRow, ...rubricDataRows],
+              }),
+              new Paragraph({ children: [], spacing: { after: 100 } })
+            );
+          }
+
+          // Answer key and mark scheme: an auto-marked pack is marked against these, not a rubric
+          if (variant.markingMode === 'auto_marked' && variant.answerKey?.length) {
+            const passMark = variant.markScheme?.passMark;
+            contentChildren.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `Answer Key and Mark Scheme (${variant.markScheme?.maxMarks ?? variant.maxMarks ?? '?'} marks, ${
+                      passMark != null
+                        ? `pass mark ${passMark}`
+                        : "pass mark per the institution's rules"
+                    }):`,
+                    bold: true,
+                    size: FONT_SIZES.BODY,
+                    font: FONT_FAMILY,
+                  }),
+                ],
+                spacing: { before: 100, after: 50, line: LINE_SPACING },
+              }),
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: [
+                  new TableRow({
+                    children: [
+                      this.createTableCell('No.', { bold: true, shading: 'E3F2FD', width: 8 }),
+                      this.createTableCell('Question', { bold: true, shading: 'E3F2FD' }),
+                      this.createTableCell('Correct answer', { bold: true, shading: 'E3F2FD' }),
+                      this.createTableCell('Marks', { bold: true, shading: 'E3F2FD', width: 10 }),
+                    ],
+                  }),
+                  ...variant.answerKey.map(
+                    (k: any) =>
+                      new TableRow({
+                        children: [
+                          this.createTableCell(String(k.questionNumber ?? '')),
+                          this.createTableCell(k.question || ''),
+                          this.createTableCell(k.correctAnswer || ''),
+                          this.createTableCell(String(k.marks ?? '')),
+                        ],
+                      })
+                  ),
+                ],
               }),
               new Paragraph({ children: [], spacing: { after: 100 } })
             );
@@ -3700,6 +3788,8 @@ export class WordExportService {
     outcomes: { id?: string; code?: string }[] = []
   ): Promise<void> {
     if (!step13) return;
+    // Counts are taken from the exam's own items, so an exam stored with a mixed-unit summary prints right.
+    step13 = refreshExamCounts(step13);
 
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
@@ -3737,6 +3827,12 @@ export class WordExportService {
         }),
         new TableRow({
           children: [
+            this.createTableCell('Items'),
+            this.createTableCell(examCountLabel(countExamItems(step13))),
+          ],
+        }),
+        new TableRow({
+          children: [
             this.createTableCell('Permitted Materials'),
             this.createTableCell(step13.overview.permittedMaterials || ''),
           ],
@@ -3768,7 +3864,7 @@ export class WordExportService {
           children: [
             this.createTableCell('Section', { bold: true, shading: 'E8EAF6' }),
             this.createTableCell('Marks', { bold: true, shading: 'E8EAF6' }),
-            this.createTableCell('Questions', { bold: true, shading: 'E8EAF6' }),
+            this.createTableCell('Items', { bold: true, shading: 'E8EAF6' }),
             this.createTableCell('Time Allocation', { bold: true, shading: 'E8EAF6' }),
           ],
         });
@@ -3779,7 +3875,9 @@ export class WordExportService {
               children: [
                 this.createTableCell(s.section || ''),
                 this.createTableCell(String(s.marks || 0)),
-                this.createTableCell(String(s.questionCount || 0)),
+                this.createTableCell(
+                  s.countLabel || `${s.questionCount || 0} ${s.unit || ''}`.trim()
+                ),
                 this.createTableCell(s.timeAllocation || ''),
               ],
             })
@@ -4200,6 +4298,7 @@ export class WordExportService {
       ['All PLOs covered', validation.allPLOsCovered],
       ['Marking scheme covers every question', validation.markingSchemeComplete],
       ['Every question has a model answer', validation.modelAnswersComplete],
+      ['Question, scenario and task counts agree', validation.countsConsistent],
     ];
     const validationRows = [
       new TableRow({

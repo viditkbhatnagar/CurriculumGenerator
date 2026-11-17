@@ -78,7 +78,9 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 // v35: each Step 4 module prints its year and level.
 // v36: the whole-programme export prints Step 14, and its Unresolved Issues list reads the
 //      stored occupation and knowledge-base evidence and the programme level's origin.
-const EXPORT_FORMAT_VERSION = 'v36';
+// v37: Step 12 packs print their band labels, delivery form and, for quizzes, an answer key and
+//      mark scheme; Step 13 prints counts with units (questions, scenarios, tasks).
+const EXPORT_FORMAT_VERSION = 'v37';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the

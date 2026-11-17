@@ -1,6 +1,7 @@
 import {
   countExamItems,
   examCountLabel,
+  refreshExamCounts,
   sectionCountLabel,
   step13Validation,
 } from '../services/step13Validation';
@@ -182,5 +183,46 @@ describe('countExamItems', () => {
     e.summary = { totalQuestions: 24, totalScenarios: 4, totalTasks: 3 };
     e.overview.sectionBreakdown[1].questionCount = 8;
     expect(step13Validation(e, []).countsConsistent).toBe(false);
+  });
+});
+
+describe('refreshExamCounts', () => {
+  const stored = (): any => ({
+    overview: {
+      sectionBreakdown: [
+        { section: 'Section A: Knowledge', marks: 0, questionCount: 99 },
+        { section: 'Section B: Scenario-Based Analysis', marks: 0, questionCount: 99 },
+        { section: 'Section C: Applied Tasks', marks: 0, questionCount: 99 },
+      ],
+    },
+    summary: { totalQuestions: 27, totalMarks: 180 },
+    sectionA: [{}, {}],
+    sectionBIncluded: true,
+    sectionB: [{ questions: [{}, {}] }, { questions: [{}] }],
+    sectionC: [{}],
+  });
+
+  it('replaces a stored mixed-unit summary with counted figures and labelled rows', () => {
+    const out = refreshExamCounts(stored());
+    expect(out.summary).toMatchObject({
+      totalQuestions: 5,
+      totalScenarios: 2,
+      totalTasks: 1,
+      totalMarks: 180,
+      countLabel: '5 questions, 2 scenarios, 1 task',
+    });
+    expect(out.overview!.sectionBreakdown!.map((r: any) => r.countLabel)).toEqual([
+      '2 questions',
+      '2 scenarios (3 questions)',
+      '1 task',
+    ]);
+    expect(out.overview!.sectionBreakdown!.map((r: any) => r.questionCount)).toEqual([2, 2, 1]);
+    expect(step13Validation(out, []).countsConsistent).toBe(true);
+  });
+
+  it('does not change its input', () => {
+    const input = stored();
+    refreshExamCounts(input);
+    expect(input.summary.totalQuestions).toBe(27);
   });
 });
