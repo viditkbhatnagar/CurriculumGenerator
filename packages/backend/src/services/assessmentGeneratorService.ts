@@ -632,8 +632,7 @@ export class AssessmentGeneratorService {
     // A written or practical summative is a brief with a few substantial tasks, not a
     // multiple-choice set; its format follows summativeBrief.
     const writtenSummative =
-      (assignedSlot?.purpose || 'module_summative') === 'module_summative' &&
-      isWrittenSummative(assignedFormat);
+      assignedSlot?.purpose === 'module_summative' && isWrittenSummative(assignedFormat);
     const questionPlan = writtenSummative
       ? writtenSummativePlan(outcomeFloor)
       : {

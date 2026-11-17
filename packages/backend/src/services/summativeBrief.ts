@@ -145,8 +145,13 @@ export const MAX_MCQ_SHARE_IN_WRITTEN_SUMMATIVE = 0.5;
  */
 export function summativeContentProblem(assessment: {
   assessmentType?: string;
+  purpose?: string;
   questions?: QuestionLike[];
 }): string | null {
+  // Formatives are multiple choice by design, whatever their format is called. Without this,
+  // the end-to-end run of 17 November 2026 regenerated every non-quiz formative as written
+  // work and Step 7 fell to 15% auto-gradable.
+  if (assessment?.purpose !== 'module_summative') return null;
   if (!isWrittenSummative(assessment?.assessmentType)) return null;
   const share = mcqShare(assessment);
   if (share === null || share <= MAX_MCQ_SHARE_IN_WRITTEN_SUMMATIVE) return null;

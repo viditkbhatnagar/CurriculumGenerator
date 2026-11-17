@@ -122,3 +122,26 @@ describe('writtenSummativePlan', () => {
     expect(writtenSummativePlan(6)).toMatchObject({ min: 6, max: 6 });
   });
 });
+
+describe('summativeContentProblem only judges module summatives (17 Nov run)', () => {
+  const mcqs = Array.from({ length: 6 }, () => ({
+    questionType: 'mcq',
+    options: ['a', 'b', 'c', 'd'],
+  }));
+  it('leaves a mostly multiple-choice formative alone, whatever its format is called', () => {
+    const formative = {
+      purpose: 'formative',
+      assessmentType: 'Practice simulations',
+      questions: mcqs,
+    };
+    expect(summativeContentProblem(formative)).toBeNull();
+  });
+  it('still flags a written summative that came back as multiple choice', () => {
+    const summative = {
+      purpose: 'module_summative',
+      assessmentType: 'Mini-case exercises',
+      questions: mcqs,
+    };
+    expect(summativeContentProblem(summative)).toMatch(/multiple choice/);
+  });
+});
