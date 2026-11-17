@@ -507,7 +507,11 @@ export interface ExamOverview {
   sectionBreakdown: Array<{
     section: string;
     marks: number;
+    /** Items in this section, in `unit`: questions (A), scenarios (B) or tasks (C). */
     questionCount: number;
+    unit?: 'questions' | 'scenarios' | 'tasks';
+    /** The count with its unit, e.g. "4 scenarios (8 questions)". */
+    countLabel?: string;
     timeAllocation: string;
     plosAssessed: string[];
   }>;
@@ -616,10 +620,16 @@ export interface Step13SummativeExam {
     allPLOsCovered: boolean | null;
     markingSchemeComplete: boolean;
     modelAnswersComplete: boolean;
+    /** Summary totals and breakdown counts agree with the exam's own items. */
+    countsConsistent?: boolean | null;
   };
 
   summary: {
+    /** Leaf questions: Section A plus the questions inside Section B scenarios. */
     totalQuestions: number;
+    totalScenarios?: number;
+    totalTasks?: number;
+    countLabel?: string;
     totalMarks: number;
     sectionAMarks: number;
     sectionBMarks: number;

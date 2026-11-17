@@ -43,6 +43,7 @@ export interface ExamLike {
     totalMarks?: number;
     sectionBreakdown?: { section?: string; marks?: number; questionCount?: number }[];
   };
+  summary?: { totalQuestions?: number; totalScenarios?: number; totalTasks?: number };
   sectionA?: QuestionA[];
   sectionB?: ScenarioB[];
   sectionBIncluded?: boolean;
@@ -65,6 +66,71 @@ export interface Step13Validation {
   markingSchemeComplete: boolean;
   /** Every Section A question has an answer, and every B question and C task a model answer. */
   modelAnswersComplete: boolean;
+  /**
+   * The summary's question, scenario and task totals, and each section's count in the breakdown,
+   * all equal what countExamItems finds in the exam. Null when the exam has no summary.
+   */
+  countsConsistent: boolean | null;
+}
+
+/** What an exam holds, counted once, in named units. */
+export interface ExamCounts {
+  /** Section A questions. */
+  sectionAQuestions: number;
+  /** Section B scenarios, and the questions nested inside them. */
+  sectionBScenarios: number;
+  sectionBQuestions: number;
+  /** Section C tasks. */
+  sectionCTasks: number;
+  /** Every question that carries marks: Section A plus the questions inside Section B scenarios. */
+  totalQuestions: number;
+  totalScenarios: number;
+  totalTasks: number;
+}
+
+/**
+ * Count an exam's items.
+ *
+ * Logan Pacey's email of 17 November 2026 on the Diploma in Logistics pilot (workflow
+ * 6af5a0a3b706bd9a5b7af54a) noticed an exam that said 27 questions on one screen and listed
+ * sections adding to 23. Both were right in their own units: the summary added 16 questions,
+ * 8 questions nested in scenarios and 3 tasks; the breakdown counted 16 questions, 4 scenarios
+ * and 3 tasks. One function now counts, and every figure shown is taken from it with its unit.
+ */
+export function countExamItems(exam: ExamLike): ExamCounts {
+  const a = exam.sectionA || [];
+  const b = exam.sectionBIncluded === false ? [] : exam.sectionB || [];
+  const c = exam.sectionC || [];
+  const sectionBQuestions = b.reduce((n, s) => n + (s?.questions || []).length, 0);
+  return {
+    sectionAQuestions: a.length,
+    sectionBScenarios: b.length,
+    sectionBQuestions,
+    sectionCTasks: c.length,
+    totalQuestions: a.length + sectionBQuestions,
+    totalScenarios: b.length,
+    totalTasks: c.length,
+  };
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** A section's count with its unit, e.g. "4 scenarios (8 questions)". */
+export function sectionCountLabel(letter: 'A' | 'B' | 'C', counts: ExamCounts): string {
+  if (letter === 'A') return plural(counts.sectionAQuestions, 'question');
+  if (letter === 'B') {
+    return `${plural(counts.sectionBScenarios, 'scenario')} (${plural(counts.sectionBQuestions, 'question')})`;
+  }
+  return plural(counts.sectionCTasks, 'task');
+}
+
+/** The whole exam in one line, e.g. "24 questions, 4 scenarios, 3 tasks". */
+export function examCountLabel(counts: ExamCounts): string {
+  return [
+    plural(counts.totalQuestions, 'question'),
+    plural(counts.totalScenarios, 'scenario'),
+    plural(counts.totalTasks, 'task'),
+  ].join(', ');
 }
 
 const marksOf = (list: Marked[]) => list.reduce((n, item) => n + (Number(item?.marks) || 0), 0);
@@ -82,6 +148,25 @@ export function step13Validation(exam: ExamLike, outcomes: OutcomeLike[]): Step1
   const b = exam.sectionBIncluded === false ? [] : exam.sectionB || [];
   const c = exam.sectionC || [];
   const bQuestions = b.flatMap((s) => s?.questions || []);
+  const counts = countExamItems(exam);
+  const summary = exam.summary;
+  const countsConsistent = summary
+    ? summary.totalQuestions === counts.totalQuestions &&
+      summary.totalScenarios === counts.totalScenarios &&
+      summary.totalTasks === counts.totalTasks &&
+      (exam.overview?.sectionBreakdown || []).every((entry) => {
+        const letter = /^\s*section\s+([ABC])\b/i.exec(entry?.section || '')?.[1]?.toUpperCase();
+        const expected =
+          letter === 'A'
+            ? counts.sectionAQuestions
+            : letter === 'B'
+              ? counts.sectionBScenarios
+              : letter === 'C'
+                ? counts.sectionCTasks
+                : null;
+        return expected !== null && Number(entry?.questionCount) === expected;
+      })
+    : null;
 
   const sections = [
     { letter: 'A', marks: marksOf(a), count: a.length },
@@ -144,5 +229,6 @@ export function step13Validation(exam: ExamLike, outcomes: OutcomeLike[]): Step1
       ) &&
       bQuestions.every((q) => filled(q?.modelAnswer)) &&
       c.every((t) => filled(t?.modelAnswer)),
+    countsConsistent,
   };
 }

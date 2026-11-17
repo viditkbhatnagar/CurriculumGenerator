@@ -12,7 +12,12 @@
  */
 
 import { openaiService } from './openaiService';
-import { step13Validation } from './step13Validation';
+import {
+  countExamItems,
+  examCountLabel,
+  sectionCountLabel,
+  step13Validation,
+} from './step13Validation';
 import { loggingService } from './loggingService';
 import { buildBookGroundingBlock } from './bookGroundingService';
 import { examPlan } from './step7Authority';
@@ -359,6 +364,21 @@ export class SummativeExamService {
       });
     }
 
+    const examCounts = countExamItems({
+      sectionA,
+      sectionB,
+      sectionBIncluded: includeSectionB,
+      sectionC,
+    });
+    // Each breakdown row says what it counts, using the same counts as the summary.
+    for (const row of sectionBreakdown) {
+      const letter = /Section ([ABC])/.exec(row.section)?.[1] as 'A' | 'B' | 'C' | undefined;
+      if (letter) {
+        row.unit = letter === 'A' ? 'questions' : letter === 'B' ? 'scenarios' : 'tasks';
+        row.countLabel = sectionCountLabel(letter, examCounts);
+      }
+    }
+
     const result: Step13SummativeExam = {
       overview: {
         ...overview,
@@ -376,10 +396,12 @@ export class SummativeExamService {
       // Filled in below from the finished exam: see step13Validation.
       validation: undefined as any,
       summary: {
-        totalQuestions:
-          sectionA.length +
-          (sectionB?.reduce((sum, s) => sum + s.questions.length, 0) || 0) +
-          (sectionC?.length || 0),
+        // Counted by countExamItems with units: leaf questions, scenarios and tasks are
+        // separate figures, so no screen adds a scenario's questions to its tasks.
+        totalQuestions: examCounts.totalQuestions,
+        totalScenarios: examCounts.totalScenarios,
+        totalTasks: examCounts.totalTasks,
+        countLabel: examCountLabel(examCounts),
         totalMarks,
         sectionAMarks,
         sectionBMarks,

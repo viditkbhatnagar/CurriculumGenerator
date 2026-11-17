@@ -200,6 +200,7 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
         ['All PLOs Covered', exam.validation.allPLOsCovered],
         ['Marking Scheme Complete', exam.validation.markingSchemeComplete],
         ['Model Answers Complete', exam.validation.modelAnswersComplete],
+        ['Counts Consistent', exam.validation.countsConsistent],
       ]
     : [];
   const validationPanel = validationFrame(step13Checks.map(([, value]) => value));
@@ -534,6 +535,9 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
                 {exam?.summary?.totalQuestions || 0}
               </p>
               <p className="text-xs text-teal-500 mt-1">Total Questions</p>
+              {exam?.summary?.countLabel && (
+                <p className="text-xs text-teal-400 mt-1">{exam.summary.countLabel}</p>
+              )}
             </div>
             <div className="bg-teal-50/50 rounded-xl p-4 border border-teal-200 text-center">
               <p className="text-3xl font-bold text-amber-500">

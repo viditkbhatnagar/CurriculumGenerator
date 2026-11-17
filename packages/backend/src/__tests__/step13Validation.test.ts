@@ -1,4 +1,9 @@
-import { step13Validation } from '../services/step13Validation';
+import {
+  countExamItems,
+  examCountLabel,
+  sectionCountLabel,
+  step13Validation,
+} from '../services/step13Validation';
 
 const outcomes = [
   { id: 'PLO1', code: 'PLO1' },
@@ -51,6 +56,7 @@ describe('step13Validation', () => {
       allPLOsCovered: true,
       markingSchemeComplete: true,
       modelAnswersComplete: true,
+      countsConsistent: null, // the fixture carries no summary
     });
   });
 
@@ -118,5 +124,63 @@ describe('step13Validation', () => {
     expect(v.allSectionsPresent).toBe(false);
     expect(v.markingSchemeComplete).toBe(false);
     expect(v.modelAnswersComplete).toBe(false);
+  });
+});
+
+describe('countExamItems', () => {
+  // The pilot's shape: 16 Section A questions, 4 scenarios of 2 questions each, 3 tasks.
+  const pilot = () => ({
+    overview: {
+      totalMarks: 0,
+      sectionBreakdown: [
+        { section: 'Section A: Knowledge', marks: 0, questionCount: 16 },
+        { section: 'Section B: Scenario-Based Analysis', marks: 0, questionCount: 4 },
+        { section: 'Section C: Applied Tasks', marks: 0, questionCount: 3 },
+      ],
+    },
+    sectionA: Array.from({ length: 16 }, (_, i) => ({ questionId: `A${i}` })),
+    sectionBIncluded: true,
+    sectionB: Array.from({ length: 4 }, (_, i) => ({
+      scenarioId: `B${i}`,
+      questions: [{}, {}],
+    })),
+    sectionC: Array.from({ length: 3 }, (_, i) => ({ taskId: `C${i}` })),
+  });
+
+  it('counts leaf questions, scenarios and tasks separately', () => {
+    const counts = countExamItems(pilot());
+    expect(counts).toMatchObject({
+      totalQuestions: 24,
+      totalScenarios: 4,
+      totalTasks: 3,
+      sectionBQuestions: 8,
+    });
+    expect(examCountLabel(counts)).toBe('24 questions, 4 scenarios, 3 tasks');
+    expect(sectionCountLabel('B', counts)).toBe('4 scenarios (8 questions)');
+    expect(sectionCountLabel('C', counts)).toBe('3 tasks');
+  });
+
+  it('leaves Section B out when the exam excludes it', () => {
+    const e = { ...pilot(), sectionBIncluded: false };
+    expect(countExamItems(e)).toMatchObject({ totalQuestions: 16, totalScenarios: 0 });
+  });
+
+  it('flags the pilot summary of 27 against the 24 questions that are there', () => {
+    const e: any = pilot();
+    e.summary = { totalQuestions: 27 };
+    expect(step13Validation(e, []).countsConsistent).toBe(false);
+  });
+
+  it('passes a summary and breakdown taken from the same count', () => {
+    const e: any = pilot();
+    e.summary = { totalQuestions: 24, totalScenarios: 4, totalTasks: 3 };
+    expect(step13Validation(e, []).countsConsistent).toBe(true);
+  });
+
+  it('flags a breakdown row that counts the wrong unit', () => {
+    const e: any = pilot();
+    e.summary = { totalQuestions: 24, totalScenarios: 4, totalTasks: 3 };
+    e.overview.sectionBreakdown[1].questionCount = 8;
+    expect(step13Validation(e, []).countsConsistent).toBe(false);
   });
 });

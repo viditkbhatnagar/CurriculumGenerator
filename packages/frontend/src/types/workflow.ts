@@ -1844,9 +1844,13 @@ export interface Step13SummativeExam {
     allPLOsCovered: boolean | null;
     markingSchemeComplete: boolean;
     modelAnswersComplete: boolean;
+    countsConsistent?: boolean | null;
   };
   summary: {
     totalQuestions: number;
+    totalScenarios?: number;
+    totalTasks?: number;
+    countLabel?: string;
     totalMarks: number;
     sectionACount: number;
     sectionBCount: number;
