@@ -325,8 +325,8 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
             </h3>
             <p className="text-sm text-teal-700 mb-4">
               Generate complete assignment packs for each module, tailored to all three delivery
-              modes. Each pack includes assignment briefs, rubrics (Fail/Pass/Merit/Distinction),
-              evidence requirements, and marking guides.
+              modes. Each pack includes assignment briefs, rubrics or answer keys (by assessment
+              type), evidence requirements, and marking guides.
             </p>
 
             <div className="bg-teal-50/50 rounded-lg p-4 mb-4">
@@ -973,94 +973,125 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                     )}
                   </div>
 
-                  {/* Rubric */}
-                  <div className="border-b border-teal-100">
-                    <button
-                      onClick={() => toggleSection('rubric')}
-                      className="w-full p-5 flex items-center justify-between hover:bg-teal-50/50 transition-colors"
-                    >
-                      <h4 className="font-semibold text-teal-800">
-                        Rubric ({currentPack.rubric?.length || 0} criteria)
+                  {/* Form of this delivery mode */}
+                  {currentPack.form && (
+                    <div className="px-5 py-3 border-b border-teal-100 bg-teal-50/40 text-sm text-teal-700">
+                      <span className="font-semibold">{currentPack.form.label}.</span>{' '}
+                      {currentPack.form.description}
+                    </div>
+                  )}
+
+                  {/* Answer key: an auto-marked pack is marked against this, not a rubric */}
+                  {currentPack.markingMode === 'auto_marked' && (
+                    <div className="p-5 border-b border-teal-100">
+                      <h4 className="font-semibold text-teal-800 mb-2">
+                        Answer key ({currentPack.answerKey?.length || 0} questions,{' '}
+                        {currentPack.markScheme?.maxMarks ?? currentPack.maxMarks ?? '?'} marks
+                        {currentPack.markScheme?.passMark != null
+                          ? `, pass mark ${currentPack.markScheme.passMark}`
+                          : ', pass mark per the institution'}
+                        )
                       </h4>
-                      <svg
-                        className={`w-5 h-5 text-teal-500 transition-transform ${expandedSections['rubric'] ? 'rotate-180' : ''}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
+                      <ol className="list-decimal list-inside space-y-1 text-sm text-teal-700">
+                        {currentPack.answerKey?.map((k) => (
+                          <li key={k.questionNumber}>
+                            {k.question} <strong>{k.correctAnswer}</strong> ({k.marks})
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+
+                  {/* Rubric */}
+                  {currentPack.markingMode !== 'auto_marked' && (
+                    <div className="border-b border-teal-100">
+                      <button
+                        onClick={() => toggleSection('rubric')}
+                        className="w-full p-5 flex items-center justify-between hover:bg-teal-50/50 transition-colors"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    </button>
-                    {expandedSections['rubric'] && currentPack.rubric && (
-                      <div className="px-5 pb-5 overflow-x-auto">
-                        <table className="w-full text-sm border-collapse">
-                          <thead>
-                            <tr className="bg-teal-50">
-                              <th className="p-2 text-left text-teal-700 font-medium border border-teal-200">
-                                Criterion
-                              </th>
-                              <th className="p-2 text-left text-red-500 font-medium border border-teal-200">
-                                Fail
-                              </th>
-                              <th className="p-2 text-left text-amber-600 font-medium border border-teal-200">
-                                Pass
-                              </th>
-                              <th className="p-2 text-left text-blue-600 font-medium border border-teal-200">
-                                Merit
-                              </th>
-                              <th className="p-2 text-left text-emerald-600 font-medium border border-teal-200">
-                                Distinction
-                              </th>
-                              <th className="p-2 text-center text-teal-700 font-medium border border-teal-200 w-16">
-                                Weight
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {currentPack.rubric.map((criterion, i) => (
-                              <tr key={i} className="hover:bg-teal-50/30">
-                                <td className="p-2 border border-teal-200 font-medium text-teal-800">
-                                  {criterion.criterionName}
-                                  {criterion.linkedMLOs?.length > 0 && (
-                                    <div className="flex gap-1 mt-1">
-                                      {criterion.linkedMLOs.map((mlo, j) => (
-                                        <span
-                                          key={j}
-                                          className="px-1 py-0.5 bg-teal-100 text-xs text-teal-500 rounded"
-                                        >
-                                          {mlo}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </td>
-                                <td className="p-2 border border-teal-200 text-xs text-teal-600">
-                                  {criterion.fail}
-                                </td>
-                                <td className="p-2 border border-teal-200 text-xs text-teal-600">
-                                  {criterion.pass}
-                                </td>
-                                <td className="p-2 border border-teal-200 text-xs text-teal-600">
-                                  {criterion.merit}
-                                </td>
-                                <td className="p-2 border border-teal-200 text-xs text-teal-600">
-                                  {criterion.distinction}
-                                </td>
-                                <td className="p-2 border border-teal-200 text-center text-teal-700 font-medium">
-                                  {criterion.weight}%
-                                </td>
+                        <h4 className="font-semibold text-teal-800">
+                          Rubric ({currentPack.rubric?.length || 0} criteria)
+                        </h4>
+                        <svg
+                          className={`w-5 h-5 text-teal-500 transition-transform ${expandedSections['rubric'] ? 'rotate-180' : ''}`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 9l-7 7-7-7"
+                          />
+                        </svg>
+                      </button>
+                      {expandedSections['rubric'] && currentPack.rubric && (
+                        <div className="px-5 pb-5 overflow-x-auto">
+                          <table className="w-full text-sm border-collapse">
+                            <thead>
+                              <tr className="bg-teal-50">
+                                <th className="p-2 text-left text-teal-700 font-medium border border-teal-200">
+                                  Criterion
+                                </th>
+                                <th className="p-2 text-left text-red-500 font-medium border border-teal-200">
+                                  {currentPack.bandLabels?.[0] ?? 'Fail'}
+                                </th>
+                                <th className="p-2 text-left text-amber-600 font-medium border border-teal-200">
+                                  {currentPack.bandLabels?.[1] ?? 'Pass'}
+                                </th>
+                                <th className="p-2 text-left text-blue-600 font-medium border border-teal-200">
+                                  {currentPack.bandLabels?.[2] ?? 'Merit'}
+                                </th>
+                                <th className="p-2 text-left text-emerald-600 font-medium border border-teal-200">
+                                  {currentPack.bandLabels?.[3] ?? 'Distinction'}
+                                </th>
+                                <th className="p-2 text-center text-teal-700 font-medium border border-teal-200 w-16">
+                                  Weight
+                                </th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
+                            </thead>
+                            <tbody>
+                              {currentPack.rubric.map((criterion, i) => (
+                                <tr key={i} className="hover:bg-teal-50/30">
+                                  <td className="p-2 border border-teal-200 font-medium text-teal-800">
+                                    {criterion.criterionName}
+                                    {criterion.linkedMLOs?.length > 0 && (
+                                      <div className="flex gap-1 mt-1">
+                                        {criterion.linkedMLOs.map((mlo, j) => (
+                                          <span
+                                            key={j}
+                                            className="px-1 py-0.5 bg-teal-100 text-xs text-teal-500 rounded"
+                                          >
+                                            {mlo}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="p-2 border border-teal-200 text-xs text-teal-600">
+                                    {criterion.fail}
+                                  </td>
+                                  <td className="p-2 border border-teal-200 text-xs text-teal-600">
+                                    {criterion.pass}
+                                  </td>
+                                  <td className="p-2 border border-teal-200 text-xs text-teal-600">
+                                    {criterion.merit}
+                                  </td>
+                                  <td className="p-2 border border-teal-200 text-xs text-teal-600">
+                                    {criterion.distinction}
+                                  </td>
+                                  <td className="p-2 border border-teal-200 text-center text-teal-700 font-medium">
+                                    {criterion.weight}%
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Evidence Requirements */}
                   <div className="border-b border-teal-100">

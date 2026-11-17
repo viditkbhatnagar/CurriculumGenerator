@@ -24,6 +24,14 @@ import {
   ModuleAssignmentPacks,
 } from '../models/CurriculumWorkflow';
 import { AssessmentRules, assessmentRulesForPrompt } from './assessmentRules';
+import {
+  ApprovedAssessment,
+  PackVariantName,
+  deliveryFormFor,
+  enforcePackRules,
+  markingModeFor,
+  moduleChecks,
+} from './assignmentPackRules';
 
 interface ModuleContext {
   moduleId: string;
@@ -52,6 +60,10 @@ interface ModuleContext {
     assessmentType?: string;
     description?: string;
     maxMarks?: number;
+    /** The module's share of the programme grade, as Step 7 weighted it. */
+    weighting?: number;
+    /** The approved questions, from which an auto-marked pack's answer key is taken. */
+    questions?: any[];
     alignedMLOs?: string[];
     studentBrief?: any;
     markingGuide?: any;
@@ -148,6 +160,15 @@ export class AssignmentPackService {
       })
     );
 
+    // Computed from what was stored, not asked of the model.
+    const checks = moduleChecks(result, module.approvedSummative as ApprovedAssessment | undefined);
+    if (!checks.passed) {
+      loggingService.warn('Assignment pack failed its post-generation checks', {
+        moduleCode: module.moduleCode,
+        problems: checks.problems,
+      });
+    }
+
     return {
       moduleId: module.moduleId,
       moduleCode: module.moduleCode,
@@ -179,14 +200,16 @@ export class AssignmentPackService {
         });
 
         const parsed = JSON.parse(response);
-        if (!isUsableGeneratedPack(parsed)) {
+        const autoMarked =
+          markingModeFor(module.approvedSummative?.assessmentType) === 'auto_marked';
+        if (!isUsableGeneratedPack(parsed, { autoMarked })) {
           throw new Error('reply had no rubric or no instructions');
         }
         // A positional "MLO 2" is still resolved to the stored id, for a model that numbers
         // the outcomes anyway.
         const outcomeIds = module.mlos.map((mlo) => mlo.id);
         const toId = (label: string) => resolveOutcomeLabel(label, outcomeIds);
-        const pack: AssignmentPack = {
+        const built: AssignmentPack = {
           assignmentId: `${module.moduleCode}-${variant}`,
           deliveryVariant: variant,
           overview: parsed.overview || {},
@@ -202,7 +225,26 @@ export class AssignmentPackService {
           evidenceRequirements: parsed.evidenceRequirements || [],
           academicIntegrity: parsed.academicIntegrity || '',
           accessibilityOptions: parsed.accessibilityOptions || '',
-        };
+          ...(Array.isArray(parsed.bandLabels) ? { bandLabels: parsed.bandLabels } : {}),
+        } as AssignmentPack;
+        // Bind the pack to the approved Step 7 assessment: type, weighting, marking material and
+        // delivery form are decided in code (assignmentPackRules), not left to the model.
+        const { pack, corrections } = enforcePackRules(
+          built,
+          variant as PackVariantName,
+          module.approvedSummative as ApprovedAssessment | undefined,
+          {
+            gradingScheme: (context.assessmentRules as any)?.gradingScheme,
+            passRequirements: context.assessmentRules?.passRequirements,
+          }
+        );
+        if (corrections.length) {
+          loggingService.info('Assignment pack corrected to match Step 7', {
+            moduleCode: module.moduleCode,
+            variant,
+            corrections,
+          });
+        }
 
         loggingService.info(`${variant} variant generated`, {
           moduleCode: module.moduleCode,
@@ -248,6 +290,12 @@ Return ONLY valid JSON, no markdown formatting.`;
       variant === 'in_person' ? 'In-Person' : variant === 'self_study' ? 'Self-Study' : 'Hybrid';
 
     const variantGuidance = this.getVariantGuidance(variant);
+    const autoMarked = markingModeFor(module.approvedSummative?.assessmentType) === 'auto_marked';
+    const deliveryForm = deliveryFormFor(
+      variant as PackVariantName,
+      module.approvedSummative?.assessmentType
+    );
+    const gradingScheme = String((context.assessmentRules as any)?.gradingScheme ?? '').trim();
 
     // Each outcome is listed under its stored id. Numbering them "MLO 1, MLO 2" and then asking
     // for the "exact MLO ID" left the model nothing to copy but the number, so every pack named
@@ -284,12 +332,18 @@ logistics, supervision, timing). Do NOT change what is being assessed or how it 
 
 Binding constraints, which override the general guidance below:
 - "assessedOutcomes" MUST be exactly these outcome ids, no more and no fewer: ${(module.approvedSummative.alignedMLOs || []).join(', ') || 'as listed in the module outcomes above'}
-- "overview.weighting" MUST be 100 — this is the module's sole summative assessment and
-  carries the whole module grade. Do not invent a percentage.
+- "overview.weighting" MUST be ${module.approvedSummative.weighting ?? 'the weighting Step 7 gave this assessment'} — the share of the module grade Step 7 assigned to this assessment. Do not invent a percentage.
 - "overview.assignmentType" MUST describe the approved assessment's own type${module.approvedSummative.assessmentType ? ` (${module.approvedSummative.assessmentType})` : ''}, not a different one.
-- The rubric criteria MUST correspond to the approved rubric's criteria, in the same
+${
+  autoMarked
+    ? `- This is an auto-marked assessment. Return "rubric": [] — it has no banded rubric. The answer
+  key and mark scheme are taken from the approved questions after you reply.`
+    : `- The rubric criteria MUST correspond to the approved rubric's criteria, in the same
   proportions. You may reword a descriptor for the delivery mode; you may not add, drop or
-  re-weight a criterion.
+  re-weight a criterion.`
+}
+- The outcomes, marks and criteria are identical in every delivery mode. Only the FORM of the
+  work changes: ${deliveryForm.label} — ${deliveryForm.description}
 `
       : '';
 
@@ -320,7 +374,7 @@ ${mlosList}
 ${plosList}
 
 **DELIVERY VARIANT: ${variantLabel}**
-${variantGuidance}
+${module.approvedSummative ? `Form for this mode: ${deliveryForm.label}. ${deliveryForm.description}\n` : ''}${variantGuidance}
 
 **OUTPUT REQUIREMENTS (JSON):**
 {
@@ -347,17 +401,22 @@ ${variantGuidance}
     "stepByStepInstructions": ["Step 1...", "Step 2..."],
     "deliverables": ["Deliverable 1...", "Deliverable 2..."]
   },
+${
+  autoMarked
+    ? '  "rubric": [],'
+    : `  "bandLabels": ["lowest band", "second band", "third band", "highest band"],
   "rubric": [
     {
       "criterionName": "Criterion name",
       "linkedMLOs": ["MLO IDs"],
-      "fail": "Observable descriptor for Fail",
-      "pass": "Observable descriptor for Pass",
-      "merit": "Observable descriptor for Merit",
-      "distinction": "Observable descriptor for Distinction",
+      "fail": "Observable descriptor for the LOWEST band",
+      "pass": "Observable descriptor for the second band",
+      "merit": "Observable descriptor for the third band",
+      "distinction": "Observable descriptor for the HIGHEST band",
       "weight": number (percentage)
     }
-  ],
+  ],`
+}
   "evidenceRequirements": [
     {
       "artefactType": "What must be submitted",
@@ -370,7 +429,15 @@ ${variantGuidance}
   "accessibilityOptions": "Reasonable adjustments, alternative formats (without lowering standards)"
 }
 
-Ensure rubric criteria are mapped directly to MLOs with observable, measurable descriptors aligned with Bloom levels. Performance levels must be Fail / Pass / Merit / Distinction.
+${
+  autoMarked
+    ? 'This assessment is marked automatically against an answer key, so give no rubric and no performance bands.'
+    : `Ensure rubric criteria are mapped directly to MLOs with observable, measurable descriptors aligned with Bloom levels. The four descriptor fields (fail, pass, merit, distinction) are storage slots for four performance bands, lowest to highest, named in "bandLabels". ${
+        gradingScheme
+          ? `Name the bands from the institution's grading scheme: ${gradingScheme}. Give exactly four labels, lowest first.`
+          : `The institution has not stated a grading scheme, so use the descriptive levels ${['Not yet demonstrated', 'Satisfactory', 'Good', 'Excellent'].join(', ')} and never grade names such as Distinction, Merit, Pass or Fail.`
+      } Criterion weights add up to 100.`
+}
 
 ${assessmentRulesForPrompt(context.assessmentRules)}
 For academicIntegrity and accessibilityOptions, state the institution's rules above where given; where none is given, describe what this assessment permits and requires, and say that the institution's own policy applies.

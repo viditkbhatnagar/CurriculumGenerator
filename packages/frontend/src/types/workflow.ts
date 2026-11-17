@@ -1692,6 +1692,8 @@ export interface RubricCriterion {
   merit: string;
   distinction: string;
   weight: number;
+  /** Marks for this criterion, from the weight and the approved mark total. */
+  marks?: number;
 }
 
 export interface EvidenceRequirement {
@@ -1710,6 +1712,21 @@ export interface AssignmentPack {
   evidenceRequirements: EvidenceRequirement[];
   academicIntegrity: string;
   accessibilityOptions: string;
+  /** Absent on packs generated before Step 12 was bound to the Step 7 assessment type. */
+  markingMode?: 'auto_marked' | 'rubric';
+  maxMarks?: number;
+  /** The four rubric band names, lowest to highest. */
+  bandLabels?: string[];
+  answerKey?: {
+    questionNumber: number;
+    question: string;
+    correctAnswer: string;
+    rationale?: string;
+    marks: number;
+  }[];
+  markScheme?: { maxMarks: number; passMark: number | null };
+  /** The form this delivery mode takes. */
+  form?: { label: string; description: string };
 }
 
 export interface ModuleAssignmentPacks {

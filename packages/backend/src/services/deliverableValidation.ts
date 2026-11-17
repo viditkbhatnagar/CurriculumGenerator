@@ -93,6 +93,8 @@ export function step11ValidationFromDecks(
 
 export interface PackVariantLike {
   assignmentId?: string;
+  answerKey?: unknown[];
+  markScheme?: unknown;
   rubric?: { linkedMLOs?: string[] }[];
   assessedOutcomes?: { mloId?: string }[];
 }
@@ -116,6 +118,11 @@ export interface Step12ValidationFlags {
   allVariantsGenerated: boolean;
   allMLOsCovered: boolean;
   allRubricsComplete: boolean;
+}
+
+/** An auto-marked pack is complete with an answer key and mark scheme in place of a rubric. */
+function hasMarkScheme(v: PackVariantLike | undefined): boolean {
+  return Array.isArray(v?.answerKey) && v!.answerKey!.length > 0 && !!v?.markScheme;
 }
 
 function variantsOf(pack: PackLike): (PackVariantLike | undefined)[] {
@@ -187,13 +194,14 @@ export function nextIncompleteModuleIndex(
  * limit, or one that answers with an outline, parses to an object without a rubric or
  * instructions; storing it as generated is the failure this replaces.
  */
-export function isUsableGeneratedPack(parsed: any): boolean {
+export function isUsableGeneratedPack(parsed: any, opts: { autoMarked?: boolean } = {}): boolean {
   if (!parsed || typeof parsed !== 'object') return false;
   const rubric = Array.isArray(parsed.rubric) ? parsed.rubric : [];
   const steps = Array.isArray(parsed.brief?.stepByStepInstructions)
     ? parsed.brief.stepByStepInstructions
     : [];
-  return rubric.length > 0 && steps.length > 0;
+  // An auto-marked assessment has no rubric; its marking material is attached after the reply.
+  return (opts.autoMarked || rubric.length > 0) && steps.length > 0;
 }
 
 /**
@@ -255,7 +263,9 @@ export function step12ValidationFromPacks(
         );
         return mlos.every((id) => assessed.has(id));
       }),
-    allRubricsComplete: every((p) => variantsOf(p).every((v) => (v?.rubric || []).length > 0)),
+    allRubricsComplete: every((p) =>
+      variantsOf(p).every((v) => (v?.rubric || []).length > 0 || hasMarkScheme(v))
+    ),
   };
 }
 

@@ -418,6 +418,8 @@ export interface RubricCriterion {
   merit: string;
   distinction: string;
   weight: number;
+  /** Marks for this criterion, derived from the weight and the approved mark total. */
+  marks?: number;
 }
 
 export interface EvidenceRequirement {
@@ -437,6 +439,23 @@ export interface AssignmentPack {
   evidenceRequirements: EvidenceRequirement[];
   academicIntegrity: string;
   accessibilityOptions: string;
+  /** Auto-marked (answer key, no rubric) or marked against the rubric. Absent on older packs. */
+  markingMode?: 'auto_marked' | 'rubric';
+  /** The approved Step 7 mark total. */
+  maxMarks?: number;
+  /** Names of the four rubric bands, lowest to highest (the rubric's fail..distinction slots). */
+  bandLabels?: string[];
+  /** Auto-marked packs only: the key, taken from the approved Step 7 questions. */
+  answerKey?: Array<{
+    questionNumber: number;
+    question: string;
+    correctAnswer: string;
+    rationale?: string;
+    marks: number;
+  }>;
+  markScheme?: { maxMarks: number; passMark: number | null };
+  /** The form this delivery mode takes; outcomes, marks and criteria are the same in all modes. */
+  form?: { label: string; description: string };
 }
 
 export interface ModuleAssignmentPacks {

@@ -94,10 +94,32 @@ describe('buildAssignmentPrompt with an approved Step 7 summative', () => {
     expect(prompt).toMatch(/assessedOutcomes.*MUST be exactly these outcome ids/s);
   });
 
-  it('fixes the weighting instead of letting the model invent a percentage', () => {
-    // The module summative is the module's sole graded assessment, so it carries the whole
-    // module grade; the schema invites a free-choice percentage that would contradict that.
-    expect(prompt).toMatch(/weighting.*MUST be 100/s);
+  it('fixes the weighting to the one Step 7 assigned, not a hard-coded 100', () => {
+    // Step 7 holds a split (30/70, say); the pack used to say 100 whatever it was.
+    const weighted: string = svc.buildAssignmentPrompt(
+      { ...moduleBase, approvedSummative: { ...approvedSummative, weighting: 70 } },
+      context,
+      'in_person'
+    );
+    expect(weighted).toMatch(/weighting.*MUST be 70/s);
+    expect(weighted).not.toMatch(/weighting.*MUST be 100/s);
+  });
+
+  it('does not write Fail/Pass/Merit/Distinction into the bands when no scheme is stated', () => {
+    expect(prompt).toContain('never grade names such as Distinction, Merit, Pass or Fail');
+  });
+
+  it('asks an auto-marked assessment for no rubric', () => {
+    const quiz: string = svc.buildAssignmentPrompt(
+      {
+        ...moduleBase,
+        approvedSummative: { ...approvedSummative, assessmentType: 'MCQ knowledge checks' },
+      },
+      context,
+      'self_study'
+    );
+    expect(quiz).toContain('"rubric": [],');
+    expect(quiz).toContain('no rubric and no performance bands');
   });
 
   it('forbids re-weighting or dropping a rubric criterion', () => {
