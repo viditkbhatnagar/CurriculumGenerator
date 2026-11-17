@@ -1048,6 +1048,7 @@ export interface Step7Assessments {
     /** Share (0-1) of formative questions that are well-formed multiple choice. */
     autoGradableShare?: number | null;
     autoGradableMet?: boolean | null;
+    summativeFormatsFit?: boolean | null;
   };
   /** Sample batches that failed even after a retry. */
   sampleFailures?: { type: string; message: string }[];

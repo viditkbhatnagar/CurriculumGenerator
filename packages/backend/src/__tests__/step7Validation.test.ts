@@ -3,6 +3,7 @@ import {
   step7Passed,
   step7Validation,
   step7ValidationOf,
+  summativeFormatsFit,
 } from '../services/step7Validation';
 
 const base = () => ({
@@ -35,6 +36,7 @@ describe('step7Validation', () => {
       marksConsistent: null, // no graded assessments in this set
       autoGradableShare: null, // no questions in this set
       autoGradableMet: null,
+      summativeFormatsFit: null, // no module list supplied
     });
     expect(step7Passed(v)).toBe(true);
   });
@@ -139,5 +141,35 @@ describe('step7ValidationOf', () => {
 
   it('returns null when there is no Step 7', () => {
     expect(step7ValidationOf({})).toBeNull();
+  });
+});
+
+describe('summativeFormatsFit', () => {
+  const modules = [
+    { id: 'm1', mlos: [{ bloomLevel: 'apply' }, { bloomLevel: 'understand' }] },
+    { id: 'm2', mlos: [{ bloomLevel: 'remember' }, { bloomLevel: 'understand' }] },
+  ];
+  const summative = (moduleId: string, assessmentType: string) => ({
+    moduleId,
+    purpose: 'module_summative',
+    graded: true,
+    assessmentType,
+  });
+
+  it('fails an MCQ summative where the module reaches apply (the Logistics pilot case)', () => {
+    expect(summativeFormatsFit([summative('m1', 'MCQ knowledge checks')], modules)).toBe(false);
+  });
+
+  it('accepts a quiz summative where every outcome is remember or understand', () => {
+    expect(summativeFormatsFit([summative('m2', 'Short quizzes')], modules)).toBe(true);
+  });
+
+  it('accepts a written summative at apply', () => {
+    expect(summativeFormatsFit([summative('m1', 'Mini-case exercises')], modules)).toBe(true);
+  });
+
+  it('is null with no module list or no graded summative', () => {
+    expect(summativeFormatsFit([summative('m1', 'Short quizzes')], undefined)).toBeNull();
+    expect(summativeFormatsFit([{ moduleId: 'm1', purpose: 'formative' }], modules)).toBeNull();
   });
 });

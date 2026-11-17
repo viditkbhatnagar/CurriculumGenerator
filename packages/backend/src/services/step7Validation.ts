@@ -11,7 +11,8 @@
  */
 import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/assessmentWeighting';
 import { markConsistency } from './assessmentMarks';
-import { normaliseQuestionType } from './bloomTaxonomy';
+import { bloomIndex, normaliseQuestionType } from './bloomTaxonomy';
+import { isAutoMarked } from './assessmentKind';
 
 interface AssessmentLike {
   moduleId?: string;
@@ -51,6 +52,35 @@ export interface Step7Validation {
    */
   autoGradableShare: number | null;
   autoGradableMet: boolean | null;
+  /**
+   * No graded module summative is a quiz or MCQ check where the module's outcomes reach apply
+   * or above. Logan Pacey's pilot (17 November 2026, Diploma in Logistics) had modules 1 to 3
+   * each graded by "MCQ knowledge checks" with every flag green. Null when no module has a
+   * graded summative or no module list was supplied.
+   */
+  summativeFormatsFit: boolean | null;
+}
+
+/**
+ * Whether each module's graded summative is a format that can evidence the module's outcomes:
+ * a quiz-type summative is acceptable only where every outcome is remember or understand.
+ */
+export function summativeFormatsFit(assessments: AssessmentLike[], modules: any[] | undefined) {
+  if (!modules || !modules.length) return null;
+  const summatives = (assessments || []).filter(
+    (a: any) => a?.purpose === 'module_summative' && a?.graded !== false
+  );
+  if (!summatives.length) return null;
+  const byId = new Map(modules.map((m: any) => [String(m?.id), m]));
+  return summatives.every((a: any) => {
+    if (!isAutoMarked(a?.assessmentType)) return true;
+    const module = byId.get(String(a?.moduleId));
+    const highest = Math.max(
+      -1,
+      ...((module?.mlos || []) as any[]).map((mlo) => bloomIndex(mlo?.bloomLevel))
+    );
+    return highest < bloomIndex('apply');
+  });
 }
 
 export const MIN_SAMPLE_QUESTIONS = 20;
@@ -127,6 +157,8 @@ export function step7Validation(input: {
   bloomFloorMet: boolean | null;
   /** null when formative counts have not been checked. */
   formativeGapCount: number | null;
+  /** Step 4's modules with their outcomes, for the summative format check. */
+  modules?: any[];
 }): Step7Validation {
   const formatives = input.formatives || [];
   const summatives = input.summatives || [];
@@ -169,6 +201,7 @@ export function step7Validation(input: {
     autoGradableShare: gradableShare.share,
     autoGradableMet:
       gradableShare.share === null ? null : gradableShare.share >= MIN_AUTO_GRADABLE_SHARE,
+    summativeFormatsFit: summativeFormatsFit(formatives, input.modules),
   };
 }
 
@@ -183,7 +216,7 @@ const SAMPLE_KINDS = ['mcq', 'sjt', 'caseQuestions', 'essayPrompts', 'practicalT
  */
 export function step7ValidationOf(workflow: {
   step3?: { outcomes?: { id?: string; code?: string }[] };
-  step4?: { modules?: { id?: string }[] };
+  step4?: { modules?: { id?: string; mlos?: any[] }[] };
   step7?: any;
 }): Step7Validation | null {
   const step7 = workflow.step7;
@@ -203,6 +236,7 @@ export function step7ValidationOf(workflow: {
     mcqSampleCount: sampleQuestions.mcq?.length || 0,
     ploIds: (workflow.step3?.outcomes || []).map((plo) => plo.id || plo.code || ''),
     moduleIds: (workflow.step4?.modules || []).map((m) => m.id || ''),
+    modules: workflow.step4?.modules || [],
     weightingsComplete: weightingsAreComplete(totals),
     bloomFloorMet: typeof stored.bloomFloorMet === 'boolean' ? stored.bloomFloorMet : null,
     formativeGapCount: Array.isArray(step7.formativeGaps)

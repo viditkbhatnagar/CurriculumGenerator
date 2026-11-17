@@ -544,3 +544,28 @@ describe('formativeShortfalls', () => {
     expect(formativeShortfalls(legacy, modules, 2)).toEqual([]);
   });
 });
+
+describe('planFormativeFormats: the module summative', () => {
+  const isQuiz = (f: string) => /quiz|MCQ/i.test(f);
+
+  it('is never a quiz where the module reaches apply, though formatives may be', () => {
+    const module = { id: 'M1', mlos: [mlo('LO1', 'apply'), mlo('LO2', 'understand')] };
+    for (let seq = 0; seq < 6; seq += 1) {
+      const plan = planFormativeFormats({ ...module, sequenceOrder: seq }, ALL_FORMATS, 2);
+      const summative = plan.slots.find((s) => s.purpose === 'module_summative');
+      expect(isQuiz(summative!.format)).toBe(false);
+    }
+  });
+
+  it('may be a quiz where every outcome is remember or understand', () => {
+    const module = { id: 'M2', mlos: [mlo('LO1', 'understand')] };
+    const plan = planFormativeFormats(module, ['MCQ knowledge checks'], 1);
+    expect(plan.slots[1].format).toBe('MCQ knowledge checks');
+  });
+
+  it('avoids a quiz at apply when the author permitted anything else', () => {
+    const module = { id: 'M3', mlos: [mlo('LO1', 'apply')] };
+    const plan = planFormativeFormats(module, ['MCQ knowledge checks', 'Discussion prompts'], 1);
+    expect(plan.slots[1].format).toBe('Discussion prompts');
+  });
+});

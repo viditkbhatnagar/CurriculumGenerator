@@ -1196,6 +1196,7 @@ export interface ICurriculumWorkflow extends Document {
       /** Share (0-1) of formative questions that are well-formed multiple choice. */
       autoGradableShare?: number | null;
       autoGradableMet?: boolean | null;
+      summativeFormatsFit?: boolean | null;
     };
 
     /** Sample batches that failed even after a retry, so the screen can say what is missing. */

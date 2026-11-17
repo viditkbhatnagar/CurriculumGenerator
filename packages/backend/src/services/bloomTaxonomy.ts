@@ -8,6 +8,8 @@
  * Bloom's taxonomy needs. Splitting them is what made these rules testable at all.
  */
 
+import { isAutoMarked } from './assessmentKind';
+
 /** Bloom levels in order, so "at least this demanding" is answerable. */
 export const BLOOM_ORDER = ['remember', 'understand', 'apply', 'analyse', 'evaluate', 'create'];
 
@@ -66,6 +68,54 @@ const FORMATS_BY_BLOOM: Record<string, string[]> = {
     'Scenario-based micro-tasks',
     'MCQ knowledge checks',
     'Short quizzes',
+  ],
+  create: [
+    'Mini-case exercises',
+    'Practice simulations',
+    'Coding / technical tasks',
+    'Scenario-based micro-tasks',
+  ],
+};
+
+/**
+ * Formats a module's graded summative may take, per Bloom level.
+ *
+ * Logan Pacey's email of 17 November 2026 on the Diploma in Logistics pilot found modules 1 to
+ * 3 each summatively assessed by "MCQ knowledge checks". The summative used to be built from
+ * the same pool as the formatives, and that pool had just been widened so quizzes are allowed
+ * at apply, analyse and evaluate: an MCQ-first change meant for the ungraded activities, which
+ * reached the graded one as well. A summative that stands as the module's grade has to make the
+ * learner produce something, so at apply and above it draws only on written or practical
+ * formats. A quiz or MCQ summative is left to modules whose outcomes are remember or
+ * understand only.
+ */
+export const SUMMATIVE_FORMATS_BY_BLOOM: Record<string, string[]> = {
+  remember: ['Short quizzes', 'MCQ knowledge checks', 'Worksheets / problem sets'],
+  understand: [
+    'Short written reflections',
+    'Worksheets / problem sets',
+    'Short quizzes',
+    'MCQ knowledge checks',
+  ],
+  apply: [
+    'Scenario-based micro-tasks',
+    'Worksheets / problem sets',
+    'Practice simulations',
+    'Coding / technical tasks',
+    'Mini-case exercises',
+  ],
+  analyse: [
+    'Mini-case exercises',
+    'Scenario-based micro-tasks',
+    'Practice simulations',
+    'Coding / technical tasks',
+    'Worksheets / problem sets',
+  ],
+  evaluate: [
+    'Mini-case exercises',
+    'Practice simulations',
+    'Short written reflections',
+    'Scenario-based micro-tasks',
   ],
   create: [
     'Mini-case exercises',
@@ -317,9 +367,19 @@ export function planFormativeFormats(
     const bloom = levels.length
       ? levels.reduce((a, b) => (bloomIndex(b) > bloomIndex(a) ? b : a))
       : highestBloom;
-    const suited = (FORMATS_BY_BLOOM[bloom] || []).filter((f) => allowed.includes(f));
+    const table = purpose === 'module_summative' ? SUMMATIVE_FORMATS_BY_BLOOM : FORMATS_BY_BLOOM;
+    const suited = (table[bloom] || []).filter((f) => allowed.includes(f));
     if (suited.length === 0) unsuitedLevels.push(bloom);
-    const pool = suited.length > 0 ? suited : allowed;
+    // A summative with no suited format still avoids a quiz where the author permitted
+    // anything else; only an all-quiz list leaves it one, and the validation flag says so.
+    const writtenAllowed = allowed.filter((f) => !isAutoMarked(f));
+    const fallback =
+      purpose === 'module_summative' &&
+      bloomIndex(bloom) >= bloomIndex('apply') &&
+      writtenAllowed.length
+        ? writtenAllowed
+        : allowed;
+    const pool = suited.length > 0 ? suited : fallback;
     return { format: pool[(rotation + rotationIndex) % pool.length], mloIds, bloom, purpose };
   };
 

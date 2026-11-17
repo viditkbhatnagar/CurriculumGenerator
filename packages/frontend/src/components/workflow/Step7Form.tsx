@@ -907,6 +907,8 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
         ['Formative Count Met', validation.formativeCountMet],
         // Guide, rubric and points agree with the mark total (backend: assessmentMarks).
         ['Marks Consistent', (validation as { marksConsistent?: boolean | null }).marksConsistent],
+        // A graded summative is not a quiz where the outcomes reach apply or above.
+        ['Summative Formats Fit', validation.summativeFormatsFit],
       ]
     : [];
   const step7Frame = validationFrame(step7Checks.map(([, value]) => value));
