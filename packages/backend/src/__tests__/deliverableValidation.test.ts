@@ -12,13 +12,18 @@ import {
 
 describe('step11ValidationFromDecks', () => {
   const deck = (extra: any = {}) => ({
-    slideCount: 10,
-    validation: { mlosCovered: true, citationsValid: true },
+    slideCount: 14,
+    validation: {
+      mlosCovered: true,
+      citationsValid: true,
+      hasFormativeSlide: true,
+      hasCaseSlide: null,
+    },
     ...extra,
   });
 
   it('passes nothing when there are no decks', () => {
-    expect(Object.values(step11ValidationFromDecks([], 0))).toEqual(Array(4).fill(false));
+    expect(Object.values(step11ValidationFromDecks([], 0))).toEqual(Array(6).fill(false));
   });
 
   it('reports each deck check from the decks, not as a constant', () => {
@@ -36,15 +41,15 @@ describe('step11ValidationFromDecks', () => {
     );
   });
 
-  it('fails slide counts outside 8-15 and missing decks', () => {
-    const v = step11ValidationFromDecks([deck({ slideCount: 20 })], 2);
+  it('fails slide counts outside 12-20 and missing decks', () => {
+    const v = step11ValidationFromDecks([deck({ slideCount: 21 })], 2);
     expect(v.allSlideCountsValid).toBe(false);
     expect(v.allLessonsHavePPTs).toBe(false);
   });
 
   it('reports citations not checked, rather than valid, when decks had no sources', () => {
     const v = step11ValidationFromDecks(
-      [deck({ validation: { mlosCovered: true, citationsValid: null } })],
+      [deck({ validation: { mlosCovered: true, citationsValid: null, hasFormativeSlide: true } })],
       1
     );
     expect(v.allCitationsValid).toBeNull();
@@ -59,6 +64,33 @@ describe('step11ValidationFromDecks', () => {
       2
     );
     expect(v.allCitationsValid).toBe(false);
+  });
+
+  it('requires a formative slide on every deck and a case slide where a lesson has a case', () => {
+    const withCase = (hasCaseSlide: boolean) =>
+      deck({
+        validation: {
+          mlosCovered: true,
+          citationsValid: true,
+          hasFormativeSlide: true,
+          hasCaseSlide,
+        },
+      });
+    expect(step11ValidationFromDecks([withCase(true), deck()], 2).allCaseLessonsHaveCaseSlide).toBe(
+      true
+    );
+    expect(step11ValidationFromDecks([deck()], 1).allCaseLessonsHaveCaseSlide).toBeNull();
+    expect(
+      step11ValidationFromDecks([withCase(true), withCase(false)], 2).allCaseLessonsHaveCaseSlide
+    ).toBe(false);
+    expect(step11ValidationFromDecks([deck()], 1).allDecksHaveFormativeSlide).toBe(true);
+  });
+
+  it('does not pass decks stored before these checks existed', () => {
+    const old = deck({ validation: { mlosCovered: true, citationsValid: true } });
+    const v = step11ValidationFromDecks([old], 1);
+    expect(v.allDecksHaveFormativeSlide).toBe(false);
+    expect(v.allCaseLessonsHaveCaseSlide).toBe(false);
   });
 
   it('does not let two decks for one lesson stand in for a lesson with none', () => {

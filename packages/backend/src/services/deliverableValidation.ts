@@ -9,19 +9,30 @@
  *
  * Every flag below is computed from the stored decks or packs and is false for an empty list.
  *
- * Pure functions only, and no imports: workflowService cannot be imported by a test (it
+ * Slide counts follow the one rule in deckRules (Logan Pacey's email of 17 November 2026: the
+ * step-level check said 8-15 while the decks were written to 12-18, so 60 of 61 failed).
+ *
+ * Pure functions only, and no imports beyond deckRules, itself import-free: workflowService cannot be imported by a test (it
  * carries pre-existing type errors that fail the suite), so logic that needs testing has to
  * live outside it.
  */
 
-export const MIN_SLIDES_PER_DECK = 8;
-export const MAX_SLIDES_PER_DECK = 15;
+import { DECK_MAX_SLIDES, DECK_MIN_SLIDES } from './deckRules';
+
+export const MIN_SLIDES_PER_DECK = DECK_MIN_SLIDES;
+export const MAX_SLIDES_PER_DECK = DECK_MAX_SLIDES;
 
 export interface DeckLike {
   lessonId?: string;
   slideCount?: number;
   // citationsValid is null when the deck had no verified sources to check against.
-  validation?: { mlosCovered?: boolean; citationsValid?: boolean | null };
+  validation?: {
+    mlosCovered?: boolean;
+    citationsValid?: boolean | null;
+    hasFormativeSlide?: boolean;
+    // null when the lesson has no case study.
+    hasCaseSlide?: boolean | null;
+  };
 }
 
 export interface Step11ValidationFlags {
@@ -30,6 +41,10 @@ export interface Step11ValidationFlags {
   allMLOsCovered: boolean;
   /** null: no deck's citations could be checked, because no verified sources were supplied. */
   allCitationsValid: boolean | null;
+  /** Every deck has a formative-check slide; false for decks that never recorded the check. */
+  allDecksHaveFormativeSlide: boolean;
+  /** Every deck of a lesson with a case has a case slide; null when no lesson has a case. */
+  allCaseLessonsHaveCaseSlide: boolean | null;
 }
 
 /**
@@ -41,6 +56,17 @@ function citationsAcross(list: DeckLike[]): boolean | null {
   const results = list.map((d) => d.validation?.citationsValid);
   if (results.some((r) => r === false || r === undefined)) return false;
   return results.every((r) => r === true) ? true : null;
+}
+
+/**
+ * False if a deck of a lesson with a case lacks the case slide, or never recorded the check; null
+ * when no deck's lesson has a case; true when every such deck has one.
+ */
+function caseSlidesAcross(list: DeckLike[]): boolean | null {
+  if (list.length === 0) return false;
+  const results = list.map((d) => d.validation?.hasCaseSlide);
+  if (results.some((r) => r === false || r === undefined)) return false;
+  return results.some((r) => r === true) ? true : null;
 }
 
 export function step11ValidationFromDecks(
@@ -60,6 +86,8 @@ export function step11ValidationFromDecks(
     ),
     allMLOsCovered: every((d) => d.validation?.mlosCovered === true),
     allCitationsValid: citationsAcross(list),
+    allDecksHaveFormativeSlide: every((d) => d.validation?.hasFormativeSlide === true),
+    allCaseLessonsHaveCaseSlide: caseSlidesAcross(list),
   };
 }
 
