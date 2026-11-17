@@ -1597,7 +1597,12 @@ export interface PPTDeck {
     // null: not checked, because no verified Step 5 sources were supplied.
     citationsValid: boolean | null;
     glossaryTermsDefined: boolean;
+    // Absent on decks written before these checks existed: shown as not checked.
+    hasFormativeSlide?: boolean;
+    // null: the lesson has no case study.
+    hasCaseSlide?: boolean | null;
   };
+  mloCoverage?: { checked: boolean; covered: string[]; missing: string[] };
 }
 
 export interface ModulePPTDecks {
@@ -1617,6 +1622,9 @@ export interface Step11PPTGeneration {
     allMLOsCovered: boolean;
     // null: no deck's citations could be checked against verified sources.
     allCitationsValid: boolean | null;
+    allDecksHaveFormativeSlide?: boolean;
+    // null: no lesson has a case study.
+    allCaseLessonsHaveCaseSlide?: boolean | null;
   };
 
   summary: {

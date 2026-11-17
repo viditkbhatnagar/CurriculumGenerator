@@ -16,6 +16,52 @@ interface Props {
   onRefresh: () => void;
 }
 
+// The slide-count range of a finished deck. Mirrors DECK_MIN_SLIDES / DECK_MAX_SLIDES in
+// packages/backend/src/services/deckRules.ts, the one rule the prompt and every check use.
+const DECK_MIN_SLIDES = 12;
+const DECK_MAX_SLIDES = 20;
+
+interface FlagProps {
+  value: boolean | null | undefined;
+  label: string;
+  nullText?: string;
+}
+
+// A step-level check. undefined: the decks were written before the check existed, so it is
+// shown as not checked, never as a pass.
+function CheckFlag({ value, label, nullText }: FlagProps) {
+  if (value === undefined || value === null) {
+    return (
+      <span
+        className="text-slate-400"
+        title={
+          value === null
+            ? nullText
+            : 'These decks were written before this check existed. Regenerate them to run it.'
+        }
+      >
+        — {value === null ? nullText : `${label}: not checked`}
+      </span>
+    );
+  }
+  return (
+    <span className={value ? 'text-emerald-400' : 'text-red-400'}>
+      {value ? '✓' : '✗'} {label}
+    </span>
+  );
+}
+
+// The same check on one deck's badge row.
+function DeckFlag({ value, label, nullText }: FlagProps) {
+  if (value === undefined) return <span className="text-slate-400">— {label} not checked</span>;
+  if (value === null) return <span className="text-slate-400">{nullText}</span>;
+  return (
+    <span className={value ? 'text-emerald-400' : 'text-amber-400'}>
+      {value ? '✓' : '⚠'} {label}
+    </span>
+  );
+}
+
 export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
   const submitStep11 = useSubmitStep11();
   const approveStep11 = useApproveStep11();
@@ -279,6 +325,11 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
           validation.allSlideCountsValid,
           validation.allMLOsCovered,
           validation.allCitationsValid,
+          validation.allDecksHaveFormativeSlide,
+          // null means no lesson has a case: nothing to check, not a missing check.
+          ...(validation.allCaseLessonsHaveCaseSlide === null
+            ? []
+            : [validation.allCaseLessonsHaveCaseSlide]),
         ]
       : []
   );
@@ -394,7 +445,9 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                 <div className="bg-white/50 rounded p-3">
                   <p className="text-teal-600 font-medium mb-2">🎯 Features</p>
                   <ul className="text-teal-600 space-y-1">
-                    <li>• 15-35 slides per lesson</li>
+                    <li>
+                      • {DECK_MIN_SLIDES}-{DECK_MAX_SLIDES} slides per lesson
+                    </li>
                     <li>• Speaker notes included</li>
                     <li>• Visual suggestions</li>
                     <li>• Delivery mode adapted</li>
@@ -1004,7 +1057,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
               <h4 className={`font-medium mb-3 ${validationPanel.heading}`}>
                 {validationPanel.title}
               </h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
                 <span
                   className={validation.allLessonsHavePPTs ? 'text-emerald-400' : 'text-red-400'}
                 >
@@ -1032,6 +1085,15 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                     {validation.allCitationsValid ? '✓' : '✗'} Citations Valid
                   </span>
                 )}
+                <CheckFlag
+                  value={validation.allDecksHaveFormativeSlide}
+                  label="Formative slide in every deck"
+                />
+                <CheckFlag
+                  value={validation.allCaseLessonsHaveCaseSlide}
+                  label="Case slides where a lesson has a case"
+                  nullText="No lesson has a case"
+                />
               </div>
             </div>
           )}
@@ -1181,6 +1243,12 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                         >
                           {deck.validation?.mlosCovered ? '✓' : '⚠'} MLOs
                         </span>
+                        <DeckFlag value={deck.validation?.hasFormativeSlide} label="Formative" />
+                        <DeckFlag
+                          value={deck.validation?.hasCaseSlide}
+                          label="Case"
+                          nullText="— No case"
+                        />
                       </div>
                     </div>
                   ))}
