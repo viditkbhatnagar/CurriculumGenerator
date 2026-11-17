@@ -236,18 +236,25 @@ export async function libraryChapterSources(
   const lib = await libraryFor(workflowId);
   if (!lib) return [];
   const codes: string[] = module.knowledgeObjects || [];
-  let concepts = codes.length ? await conceptsByCodes(codes) : [];
+  // Filtered before the fallback: a programme limited to chosen books must still find chapters
+  // when the module's stored concepts all come from other books.
+  let concepts = codes.length ? visibleConcepts(lib, await conceptsByCodes(codes)) : [];
   if (!concepts.length) {
     const topics = (module.topics || []).map((t: any) => t?.title || t).slice(0, 6);
-    concepts = (
-      await searchConcepts([module.title, ...topics].filter(Boolean), {
-        domainKeys: lib.domainKeys,
-        areas: lib.areas,
-        k: 30,
-      })
-    ).map((h) => h.concept);
+    // The search ranks the whole library; with chosen books, look further down the ranking so
+    // their concepts are not cut off before the books are applied.
+    const narrowed = !!lib.bookIds?.length;
+    concepts = visibleConcepts(
+      lib,
+      (
+        await searchConcepts([module.title, ...topics].filter(Boolean), {
+          domainKeys: lib.domainKeys,
+          areas: lib.areas,
+          k: narrowed ? 400 : 30,
+        })
+      ).map((h) => h.concept)
+    ).slice(0, 30);
   }
-  concepts = visibleConcepts(lib, concepts);
   const candidates = groupByChapter(concepts);
   if (!candidates.length) return [];
   const conceptByCode = new Map(concepts.map((c: any) => [c.code, c]));
