@@ -909,6 +909,8 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
         ['Marks Consistent', (validation as { marksConsistent?: boolean | null }).marksConsistent],
         // A graded summative is not a quiz where the outcomes reach apply or above.
         ['Summative Formats Fit', validation.summativeFormatsFit],
+        // A written or practical summative is not a set of multiple-choice items.
+        ['Summative Content Fits', validation.summativeContentFits],
       ]
     : [];
   const step7Frame = validationFrame(step7Checks.map(([, value]) => value));

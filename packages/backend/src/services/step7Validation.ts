@@ -13,6 +13,7 @@ import { applyAssessmentWeightings, weightingsAreComplete } from '../utils/asses
 import { markConsistency } from './assessmentMarks';
 import { bloomIndex, normaliseQuestionType } from './bloomTaxonomy';
 import { isAutoMarked } from './assessmentKind';
+import { summativeContentProblem } from './summativeBrief';
 
 interface AssessmentLike {
   moduleId?: string;
@@ -59,6 +60,21 @@ export interface Step7Validation {
    * graded summative or no module list was supplied.
    */
   summativeFormatsFit: boolean | null;
+  /**
+   * No written or practical graded summative is mostly multiple-choice questions: a "case
+   * exercise" summative made of a dozen MCQs is a quiz under another name. Null when there is
+   * no graded summative.
+   */
+  summativeContentFits: boolean | null;
+}
+
+/** Whether every graded written or practical summative holds written or practical tasks. */
+export function summativeContentFits(assessments: AssessmentLike[]): boolean | null {
+  const summatives = (assessments || []).filter(
+    (a: any) => a?.purpose === 'module_summative' && a?.graded !== false
+  );
+  if (!summatives.length) return null;
+  return summatives.every((a: any) => summativeContentProblem(a) === null);
 }
 
 /**
@@ -202,6 +218,7 @@ export function step7Validation(input: {
     autoGradableMet:
       gradableShare.share === null ? null : gradableShare.share >= MIN_AUTO_GRADABLE_SHARE,
     summativeFormatsFit: summativeFormatsFit(formatives, input.modules),
+    summativeContentFits: summativeContentFits(formatives),
   };
 }
 

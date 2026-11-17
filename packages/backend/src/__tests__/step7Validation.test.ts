@@ -3,6 +3,7 @@ import {
   step7Passed,
   step7Validation,
   step7ValidationOf,
+  summativeContentFits,
   summativeFormatsFit,
 } from '../services/step7Validation';
 
@@ -37,6 +38,7 @@ describe('step7Validation', () => {
       autoGradableShare: null, // no questions in this set
       autoGradableMet: null,
       summativeFormatsFit: null, // no module list supplied
+      summativeContentFits: null, // no graded summative
     });
     expect(step7Passed(v)).toBe(true);
   });
@@ -171,5 +173,21 @@ describe('summativeFormatsFit', () => {
   it('is null with no module list or no graded summative', () => {
     expect(summativeFormatsFit([summative('m1', 'Short quizzes')], undefined)).toBeNull();
     expect(summativeFormatsFit([{ moduleId: 'm1', purpose: 'formative' }], modules)).toBeNull();
+  });
+});
+
+describe('summativeContentFits', () => {
+  const written = (types: string[]) => ({
+    purpose: 'module_summative',
+    graded: true,
+    assessmentType: 'Mini-case exercises',
+    questions: types.map((questionType) => ({ questionType })),
+  });
+  it('fails a case-exercise summative made of multiple-choice items', () => {
+    expect(summativeContentFits([written(['mcq', 'mcq', 'mcq'])])).toBe(false);
+  });
+  it('passes written tasks, and is null without a graded summative', () => {
+    expect(summativeContentFits([written(['short_answer', 'practical'])])).toBe(true);
+    expect(summativeContentFits([{ purpose: 'formative' }])).toBeNull();
   });
 });

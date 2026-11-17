@@ -1226,6 +1226,7 @@ export interface ICurriculumWorkflow extends Document {
       autoGradableShare?: number | null;
       autoGradableMet?: boolean | null;
       summativeFormatsFit?: boolean | null;
+      summativeContentFits?: boolean | null;
     };
 
     /** Sample batches that failed even after a retry, so the screen can say what is missing. */

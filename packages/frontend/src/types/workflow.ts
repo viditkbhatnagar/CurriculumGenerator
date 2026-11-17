@@ -1049,6 +1049,7 @@ export interface Step7Assessments {
     autoGradableShare?: number | null;
     autoGradableMet?: boolean | null;
     summativeFormatsFit?: boolean | null;
+    summativeContentFits?: boolean | null;
   };
   /** Sample batches that failed even after a retry. */
   sampleFailures?: { type: string; message: string }[];

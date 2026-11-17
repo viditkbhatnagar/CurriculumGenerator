@@ -56,6 +56,13 @@ import {
   MCQ_ITEM_SPEC,
   type FormatPlan,
 } from './bloomTaxonomy';
+import {
+  WRITTEN_TASK_SHAPES_BY_BLOOM,
+  isWrittenSummative,
+  summativeContentProblem,
+  writtenSummativeDirective,
+  writtenSummativePlan,
+} from './summativeBrief';
 import { assessmentRulesForPrompt } from './assessmentRules';
 
 /**
@@ -622,11 +629,18 @@ export class AssessmentGeneratorService {
     // one rule or the other.
     const levelPlan = questionPlanForBloom(slotBloom);
     const outcomeFloor = (assignedSlot?.mloIds || []).length || 1;
-    const questionPlan = {
-      ...levelPlan,
-      min: Math.max(levelPlan.min, outcomeFloor),
-      max: Math.max(levelPlan.max, outcomeFloor),
-    };
+    // A written or practical summative is a brief with a few substantial tasks, not a
+    // multiple-choice set; its format follows summativeBrief.
+    const writtenSummative =
+      (assignedSlot?.purpose || 'module_summative') === 'module_summative' &&
+      isWrittenSummative(assignedFormat);
+    const questionPlan = writtenSummative
+      ? writtenSummativePlan(outcomeFloor)
+      : {
+          ...levelPlan,
+          min: Math.max(levelPlan.min, outcomeFloor),
+          max: Math.max(levelPlan.max, outcomeFloor),
+        };
     const slotArtefacts = requiredArtefacts({ mlos: slotMlos });
     // One production item is allowed only where a CREATE-level outcome in this assessment
     // names an artefact; everything else is multiple choice, so the step stays auto-gradable.
@@ -743,10 +757,16 @@ or twelve items because that is the usual shape of a quiz.
 
 **WHAT THE TASK MUST ASK THE LEARNER TO DO, BY OUTCOME LEVEL**
 ${[...new Set(slotMlos.map((m: any) => normaliseBloom(m?.bloomLevel)))]
-  .map((level) => `- ${String(level).toUpperCase()}: ${TASK_SHAPES_BY_BLOOM[String(level)] || ''}`)
+  .map(
+    (level) =>
+      `- ${String(level).toUpperCase()}: ${(writtenSummative ? WRITTEN_TASK_SHAPES_BY_BLOOM : TASK_SHAPES_BY_BLOOM)[String(level)] || ''}`
+  )
   .join('\n')}
 
-**QUESTION TYPE — MULTIPLE CHOICE FIRST**
+${
+  writtenSummative
+    ? writtenSummativeDirective(assignedFormat, slotArtefacts)
+    : `**QUESTION TYPE — MULTIPLE CHOICE FIRST**
 The format "${assignedFormat}" names the ACTIVITY; it does not change what the questions are.
 This step is the programme's auto-gradable assessment, so the questions inside it are
 multiple choice (questionType "mcq"): ${MCQ_ITEM_SPEC}. At apply, analyse and evaluate level
@@ -756,6 +776,7 @@ ${
   productionAllowed
     ? `A create-level outcome here names an artefact (${requiredArtefacts({ mlos: slotMlos.filter((m: any) => normaliseBloom(m?.bloomLevel) === 'create') }).join(', ')}), so you may include exactly ONE production item (file_upload, practical or short_answer) that collects it. Every other question is multiple choice.`
     : 'No outcome here requires an artefact, so EVERY question is multiple choice. Do not use file_upload, practical, scenario, calculation or short_answer.'
+}`
 }
 ${
   isSummative && slotArtefacts.length
@@ -841,8 +862,8 @@ ${
         {
           "questionNumber": 1,
           "questionText": "<the complete task, with any case, data or figures the learner needs included in full>",
-          "questionType": "${productionAllowed ? 'mcq, except the ONE production item, which is file_upload | practical | short_answer (say in questionText what the work is: a report, a portfolio, a recorded presentation)' : 'mcq'}",
-          "options": ["<exactly 4 plausible options for an mcq — omit this field only on the production item>"],
+          "questionType": "${writtenSummative ? 'short_answer | practical | file_upload (say in questionText what the work is)' : productionAllowed ? 'mcq, except the ONE production item, which is file_upload | practical | short_answer (say in questionText what the work is: a report, a portfolio, a recorded presentation)' : 'mcq'}",
+${writtenSummative ? '' : '          "options": ["<exactly 4 plausible options for an mcq — omit this field only on the production item>"],'}
           "correctAnswer": "<for mcq, the full text of the correct option; otherwise the expected response or marking points>",
 ${isSummative ? '          "points": 2,' : ''}
           "alignedMLO": "<the id of the ONE outcome above that this task evidences>",
@@ -862,13 +883,17 @@ CRITICAL REQUIREMENTS:
    produce a 10-12 item quiz unless that is the count stated for this level.
 3. For MCQs: Include 4 realistic options with clear rationales
 4. For scenario/calculation questions: Provide complete problem statements and expected answers
-5. Default every question to type mcq. A bare recall MCQ does not evidence apply level or
+5. ${
+      writtenSummative
+        ? 'Every task is short_answer, practical or file_upload. Write no multiple-choice items.'
+        : `Default every question to type mcq. A bare recall MCQ does not evidence apply level or
    above, but a scenario or data-stem MCQ that makes the learner carry out the verb does, and
    it is auto-gradable. ${
      productionAllowed
        ? 'The one permitted production item uses file_upload, practical or short_answer.'
        : 'Use no other question type in this assessment.'
-   }
+   }`
+    }
 6. Every question must carry "alignedMLO" naming exactly one outcome id from the list above,
    and every outcome in that list must be evidenced by at least one question
 7. Make questions practical and relevant to ${request.programFoundation?.targetLearner?.industrySector || 'professional'} contexts
@@ -903,8 +928,13 @@ CRITICAL REQUIREMENTS:
 14. Do NOT invent a percentage weighting; the programme's formative/summative split is applied
     afterwards from the author's own settings.
 15. assessmentType MUST be the format assigned to that assessment in the list above. The
-    format names the activity (a mini-case exercise is a case set out in a scenario stem, then
-    asked about in MCQs); it does not make the questions free-text.
+    ${
+      writtenSummative
+        ? `format names the kind of work (a mini-case exercise is a case analysis the learner writes up);
+    a graded summative is written or practical work, never a set of multiple-choice items.`
+        : `format names the activity (a mini-case exercise is a case set out in a scenario stem, then
+    asked about in MCQs); it does not make the questions free-text.`
+    }
 16. BLOOM FLOOR — every question must work at or above the Bloom level of the outcome named in
     its own "alignedMLO" field. This is checked in code after you reply, against that field
     and the outcome levels stated above, and an assessment that does not reach the level its
@@ -916,7 +946,15 @@ CRITICAL REQUIREMENTS:
     whose main tasks meet the outcome's level, and the assessment as a whole must reach it.
 17. Set each question's bloomLevel to the level that question genuinely operates at — do not
     label a recall question "apply" to satisfy rule 16.
-18. TASK SHAPE — every task must take the shape listed above for the outcome level it
+${
+  writtenSummative
+    ? `18. TASK SHAPE — every task must take the written or practical shape listed above for the outcome
+    level it assesses, as a short_answer, practical or file_upload task with its own "points".
+    The tasks together make up the brief the learner works on; the marking guide says what a
+    strong response to each contains and where partial credit is awarded.
+19. MARKS — give every task "points" and make them sum to maxMarks. A task worth marks must say
+    in its questionText what a complete response includes (length, evidence, format).`
+    : `18. TASK SHAPE — every task must take the shape listed above for the outcome level it
     assesses, expressed as a multiple-choice item. At understand level the items must ask the
     learner to explain, interpret, classify, compare, summarise or pick the right explanation
     for a situation — not to recall a definition. At analyse level the stem is a case, dataset
@@ -930,7 +968,8 @@ CRITICAL REQUIREMENTS:
     detailed than its distractors: measured on an earlier bank the correct option was the
     longest in 82% of items and, at the median, 36% longer than the average distractor, so a
     candidate scoring by length alone passed without studying. A distractor must be wrong on
-    the subject, never wrong because it is terser or vaguer than the answer.
+    the subject, never wrong because it is terser or vaguer than the answer.`
+}
 20. Difficulty may rise from Easy to Hard across a set of short items, but never by opening a
     demanding assessment with recall: at analyse level and above, the first task already sits
     at the outcome's level. "Easy" there means a smaller case, not a lower cognitive demand.`;
@@ -1033,11 +1072,16 @@ CRITICAL REQUIREMENTS:
       if (!repairNote) {
         const failing = formativeAssessments
           .map((fa: any) => ({ fa, audit: auditAssessmentBloom(fa, module) }))
-          .filter(({ audit }) => !audit.meetsFloor || audit.belowFloor.length > 0);
+          .filter(
+            ({ fa, audit }) =>
+              !audit.meetsFloor || audit.belowFloor.length > 0 || !!summativeContentProblem(fa)
+          );
 
         if (failing.length > 0) {
-          const { audit } = failing[0];
+          const { audit, fa: failingAssessment } = failing[0];
+          const contentProblem = summativeContentProblem(failingAssessment);
           const note = [
+            contentProblem,
             !audit.meetsFloor
               ? `No task reached ${String(audit.required).toUpperCase()} level — the highest was ${String(audit.reached || 'none').toUpperCase()}. The outcomes this assessment carries are written at ${String(audit.required).toUpperCase()}, so at least one task must operate there: ${TASK_SHAPES_BY_BLOOM[String(audit.required)] || ''}.`
               : null,
@@ -1093,7 +1137,12 @@ CRITICAL REQUIREMENTS:
           const scoreOf = (list: any[]) =>
             list.reduce((worst: number, fa: any) => {
               const a = auditAssessmentBloom(fa, module);
-              return worst + (a.meetsFloor ? 0 : 100) + a.belowFloor.length;
+              return (
+                worst +
+                (a.meetsFloor ? 0 : 100) +
+                a.belowFloor.length +
+                (summativeContentProblem(fa) ? 50 : 0)
+              );
             }, 0);
           if (repaired.length > 0 && scoreOf(repaired) <= scoreOf(formativeAssessments)) {
             return repaired;
