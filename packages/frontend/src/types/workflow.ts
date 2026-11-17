@@ -419,6 +419,8 @@ export interface Step4CourseFramework {
   progressionProblems?: string[];
   /** Each module's year, level and position, derived where none is stored. */
   moduleLevels?: ModuleLevelInfo[];
+  /** Ids of modules on a fast-moving subject (backend, response only). */
+  fastMovingModuleIds?: string[];
   /** The programme level and, when it was defaulted, the note to confirm (backend, response only). */
   programmeLevel?: {
     level: number | null;
@@ -542,6 +544,8 @@ export interface UploadedFile {
 export interface ModuleSourceSummary {
   moduleId: string;
   moduleTitle: string;
+  /** On a fast-moving subject: a textbook from the last five years is required. */
+  fastMoving?: boolean;
   totalSources: number;
   peerReviewedCount: number;
   peerReviewedPercent: number; // Must be ≥50%

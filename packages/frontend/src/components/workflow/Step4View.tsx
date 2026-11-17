@@ -32,6 +32,7 @@ import StaleStepNotice, { explainStepFailure } from './StaleStepNotice';
 import ModuleBlueprintPanel from './ModuleBlueprintPanel';
 import ModuleCountControl from './ModuleCountControl';
 import { downloadFile } from '@/lib/download';
+import FastMovingBadge from './FastMovingBadge';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -773,6 +774,7 @@ function MLOCard({ mlo, onEdit }: { mlo: MLO; onEdit?: (mlo: MLO) => void }) {
 function ModuleCard({
   module,
   levelInfo,
+  fastMoving,
   workflowId,
   totalProgramHours,
   contactPercent,
@@ -789,6 +791,8 @@ function ModuleCard({
 }: {
   module: Module;
   levelInfo?: ModuleLevelInfo;
+  /** On a fast-moving subject: Step 5 needs a recent textbook (backend, response only). */
+  fastMoving?: boolean;
   workflowId: string;
   totalProgramHours: number;
   contactPercent: number;
@@ -842,6 +846,7 @@ function ModuleCard({
             <div>
               <span className="text-xs font-mono text-teal-500">{module.code}</span>
               <h4 className="text-teal-800 font-semibold text-lg">{module.title}</h4>
+              {fastMoving && <FastMovingBadge className="mt-1" />}
               <p className="text-sm text-teal-600 mt-1">
                 <ReadableRefs text={module.description} workflowId={workflowId} />
               </p>
@@ -2059,6 +2064,7 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
                   key={module.id}
                   module={module}
                   levelInfo={workflow.step4?.moduleLevels?.[moduleIndex]}
+                  fastMoving={(workflow.step4?.fastMovingModuleIds || []).includes(module.id)}
                   workflowId={workflow._id}
                   totalProgramHours={workflow.step4?.totalProgramHours || totalModuleHours}
                   contactPercent={contactPercent}

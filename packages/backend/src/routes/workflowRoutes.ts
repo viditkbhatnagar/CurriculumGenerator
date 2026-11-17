@@ -25,6 +25,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import JSZip from 'jszip';
 import { validateJWT, loadUser } from '../middleware/auth';
 import { workflowService, normaliseBloomLevel } from '../services/workflowService';
+import { isFastMovingModule } from '../services/sourceRecency';
 import { examPlan, step7SpecifiesExam, withExamAdded } from '../services/step7Authority';
 import { parseBlueprintWorkbook, applyProgrammeHours } from '../services/moduleBlueprintService';
 import { loggingService } from '../services/loggingService';
@@ -1116,6 +1117,11 @@ router.get('/:id', validateJWT, loadUser, async (req: Request, res: Response) =>
       });
       // Each module's level and the sentences for any failed progression check, response only.
       step4Data.moduleLevels = levelsFor(workflow);
+      // Ids of the modules on a fast-moving subject, for the "recent textbook required" badge.
+      // A list beside the modules, so the stored module fields are left as they are.
+      step4Data.fastMovingModuleIds = step4Data.modules
+        .filter((m: any) => isFastMovingModule(m))
+        .map((m: any) => m.id);
       // The programme level and, when it was defaulted, the note a reviewer must confirm.
       step4Data.programmeLevel = programmeLevelInfo((workflow as any).step1);
       step4Data.progressionProblems = step4Progression(
