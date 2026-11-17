@@ -54,7 +54,9 @@ export const STEP_ESTIMATED_DURATIONS: Record<number, number> = {
   2: 420, // KSC Framework
   3: 240, // PLOs
   4: 300, // Course Framework & MLOs — one large structured call
-  5: 360, // Topic-Level Sources — needs research
+  // Topic-Level Sources: runs took 11-18 minutes in November 2026 (Logan Pacey, 17 November),
+  // so the estimate says 15 rather than the 6 it used to promise.
+  5: 900,
   6: 450, // Reading Lists
   7: 1800, // Assessments — streams, many questions
   // Case studies are two model calls per module, each producing a full narrative plus

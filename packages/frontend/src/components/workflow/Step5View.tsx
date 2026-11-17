@@ -25,6 +25,8 @@ import { downloadFile } from '@/lib/download';
 import { formatAuthorList, toAuthorArray } from '@/lib/citation';
 import { safeHref } from '@/lib/safeHref';
 import { ValidationChecks } from './ValidationChecks';
+import FastMovingBadge from './FastMovingBadge';
+import DeterminateProgressBar from './DeterminateProgressBar';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -1259,6 +1261,7 @@ function ModuleSummaryCard({ summary }: { summary: ModuleSourceSummary }) {
     >
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-teal-800 font-medium">{summary.moduleTitle}</h4>
+        {summary.fastMoving && <FastMovingBadge />}
         <span
           className={`text-xs px-2 py-1 rounded ${summary.agiCompliant ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}
         >
@@ -1606,11 +1609,18 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
               </p>
             </div>
           </div>
-          <GenerationProgressBar
-            workflowId={workflow._id}
-            step={5}
-            queueStatus={stepStatus?.status}
-          />
+          {typeof stepStatus?.job?.progress === 'number' && stepStatus.job.progress > 0 ? (
+            <DeterminateProgressBar
+              percent={stepStatus.job.progress}
+              label="Generating topic-level sources"
+            />
+          ) : (
+            <GenerationProgressBar
+              workflowId={workflow._id}
+              step={5}
+              queueStatus={stepStatus?.status}
+            />
+          )}
         </div>
       )}
 

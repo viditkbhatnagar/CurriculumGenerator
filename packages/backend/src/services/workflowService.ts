@@ -98,6 +98,7 @@ import {
   isAppliedSource,
 } from './step5Validation';
 import { isFastMovingModule, moduleRecencyProblems, withRecencyNotes } from './sourceRecency';
+import { step5ProgressAt } from './step5Progress';
 import {
   step11ValidationFromDecks,
   step12SummaryFromPacks,
@@ -2756,6 +2757,8 @@ CRITICAL:
       return {
         moduleId: mod.id,
         moduleTitle: mod.title,
+        // Shown beside the module so an author sees why a recent textbook is required.
+        fastMoving: isFastMovingModule(mod),
         totalSources: modSources.length,
         peerReviewedCount: modPeerReviewed.length,
         peerReviewedPercent:
@@ -2912,7 +2915,10 @@ CRITICAL:
    * Per workflow v2.2: Identify, validate, and tag high-quality academic and
    * professional sources with APA 7th edition citations
    */
-  async processStep5(workflowId: string): Promise<ICurriculumWorkflow> {
+  async processStep5(
+    workflowId: string,
+    onProgress?: (pct: number) => void
+  ): Promise<ICurriculumWorkflow> {
     const workflow = await CurriculumWorkflow.findById(workflowId);
     if (!workflow || !workflow.step4) {
       throw new Error('Workflow not found or Step 4 not complete');
@@ -2920,7 +2926,7 @@ CRITICAL:
 
     loggingService.info('Processing Step 5: Topic-Level Sources (AGI Standards)', { workflowId });
 
-    const sourcesContent = await this.generateStep5Content(workflow);
+    const sourcesContent = await this.generateStep5Content(workflow, onProgress);
 
     // Replace model-written journal citations with ones looked up for real.
     //
@@ -2931,10 +2937,12 @@ CRITICAL:
     // the academic half of the list is now searched rather than written. Applied
     // sources (professional bodies, industry reports, government research) stay
     // as generated: those are named organisations with real, checkable pages.
+    onProgress?.(step5ProgressAt('matching'));
     const sources = await this.replaceAcademicSourcesWithVerified(
       workflow,
       sourcesContent.sources || []
     );
+    onProgress?.(step5ProgressAt('saving'));
     workflow.step5 = this.buildStep5Summary(sources, workflow.step4.modules || [], {
       sourceShortfalls: (workflow as any).__sourceShortfalls || [],
       subjectFields: (workflow as any).__subjectFields || [],
@@ -6061,7 +6069,10 @@ CRITICAL:
     return output;
   }
 
-  private async generateStep5Content(workflow: ICurriculumWorkflow): Promise<any> {
+  private async generateStep5Content(
+    workflow: ICurriculumWorkflow,
+    onProgress?: (pct: number) => void
+  ): Promise<any> {
     const currentYear = new Date().getFullYear();
     const fiveYearsAgo = currentYear - 5;
 
@@ -6079,6 +6090,12 @@ CRITICAL:
       programTitle,
       academicLevel,
     });
+
+    let modulesDone = 0;
+    const reportModuleDone = () => {
+      modulesDone += 1;
+      onProgress?.(step5ProgressAt('modules', modulesDone, modules.length));
+    };
 
     // One module's sources; null when its request failed, so it can be tried again.
     const sourcesForModule = async (mod: any, i: number): Promise<any[] | null> => {
@@ -6135,6 +6152,7 @@ CRITICAL:
         loggingService.info(`Step 5: Module ${mod.id} complete`, {
           sourcesGenerated: moduleSources.length,
         });
+        reportModuleDone();
 
         return moduleSources;
       } catch (moduleError) {
