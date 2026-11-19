@@ -7,6 +7,7 @@ import { useSubmitStep1, useApproveStep1 } from '@/hooks/useWorkflow';
 import { api } from '@/lib/api';
 import CapabilityScopePanel from './CapabilityScopePanel';
 import ProgrammeLibraryPanel from './ProgrammeLibraryPanel';
+import CourseDocumentImportPanel, { type Step1Prefill } from './CourseDocumentImportPanel';
 import { useStepStatus } from '@/hooks/useStepStatus';
 import {
   useGeneration,
@@ -469,8 +470,22 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
         </div>
       )}
 
-      <ProgrammeLibraryPanel workflowId={workflow._id} />
+      <CourseDocumentImportPanel
+        workflowId={workflow._id}
+        disabled={isCurrentlyGenerating}
+        onApplyStep1={(prefill: Step1Prefill) =>
+          setFormData((prev) => {
+            const { jobRoles, ...rest } = prefill;
+            const next = withIdentity(prev, rest as Partial<Step1FormData>);
+            if (!jobRoles?.length) return next;
+            const padded = [...jobRoles];
+            while (padded.length < 2) padded.push({ ...EMPTY_JOB_ROLE });
+            return { ...next, jobRoles: padded };
+          })
+        }
+      />
 
+      <ProgrammeLibraryPanel workflowId={workflow._id} />
       <form onSubmit={handleSubmit} className="space-y-8">
         <CapabilityScopePanel
           subjectArea={formData.subjectArea || ''}
