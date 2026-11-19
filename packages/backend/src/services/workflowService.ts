@@ -11,6 +11,7 @@
  */
 
 import { programmeLevelFromInput } from './programmeLevel';
+import { outlineBlock } from './courseDocumentMapping';
 import { step7Percent } from './step7Progress';
 import { StepStopped, step7TimeLimitMinutes, stopReason } from './stepStop';
 import mongoose from 'mongoose';
@@ -1778,7 +1779,7 @@ ${mods
       `${m.code} | ${m.title} | ${m.credits ?? '?'} credits | ${m.contactHours ?? '?'} contact h | ${m.independentHours ?? '?'} independent h | ${m.group}${m.isElective ? ' | ELECTIVE' : ''}`
   )
   .join('\n')}
-${writtenSoFar ? `\nMODULES ALREADY SPECIFIED (do not repeat their topics; build on them where these modules come later):\n${writtenSoFar}\n` : ''}
+${outlineBlock(mods)}${writtenSoFar ? `\nMODULES ALREADY SPECIFIED (do not repeat their topics; build on them where these modules come later):\n${writtenSoFar}\n` : ''}
 For EACH module return:
 - code: exactly as given above
 - description: 2-3 sentences on the module's focus
