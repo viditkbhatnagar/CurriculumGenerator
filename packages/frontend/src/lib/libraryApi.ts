@@ -127,6 +127,36 @@ export interface NewBook {
 const unwrap = <T>(res: { data: T }) => res.data;
 
 export const getOntology = () => fetchAPI(`${BASE}/ontology`).then(unwrap<OntologyDomain[]>);
+/** Add a domain (administrators only). Areas are optional: one per line, `Name`. */
+export const addDomain = (input: {
+  key: string;
+  name: string;
+  description?: string;
+  areas?: string[];
+}) =>
+  fetchAPI(`${BASE}/domains`, { method: 'POST', body: JSON.stringify(input) }).then(
+    unwrap<OntologyDomain>
+  );
+
+/** A domain key from its name: "Fashion & Design" becomes "fashion-design". */
+export const domainKeyFromName = (name: string): string =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+
+/** A readable title from a PDF's file name: "intro_to-textiles.v2.pdf" becomes "Intro to textiles v2". */
+export function titleFromFileName(fileName: string): string {
+  const base = fileName
+    .replace(/\.pdf$/i, '')
+    .replace(/[_.]+/g, ' ')
+    .replace(/-+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return base ? base.charAt(0).toUpperCase() + base.slice(1) : fileName;
+}
+
 export const getBooks = () => fetchAPI(`${BASE}/books`).then(unwrap<LibraryBook[]>);
 export const resumeBook = (id: string) =>
   fetchAPI(`${BASE}/books/${id}/ingest`, { method: 'POST', body: '{}' });

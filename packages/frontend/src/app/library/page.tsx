@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getBooks, getOntology, LibraryBook, OntologyDomain } from '@/lib/libraryApi';
 import { AddBookForm } from '@/components/library/AddBookForm';
+import { BulkUploadForm } from '@/components/library/BulkUploadForm';
 import { BooksPanel } from '@/components/library/BooksPanel';
 import { ConceptsPanel } from '@/components/library/ConceptsPanel';
 
@@ -15,7 +16,7 @@ export default function LibraryPage() {
   const [tab, setTab] = useState<'books' | 'concepts'>('books');
   const [books, setBooks] = useState<LibraryBook[] | null>(null);
   const [domains, setDomains] = useState<OntologyDomain[]>([]);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<'one' | 'many' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -24,12 +25,16 @@ export default function LibraryPage() {
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load the library'));
   }, []);
 
-  useEffect(() => {
-    load();
+  const loadDomains = useCallback(() => {
     getOntology()
       .then(setDomains)
       .catch(() => undefined);
-  }, [load]);
+  }, []);
+
+  useEffect(() => {
+    load();
+    loadDomains();
+  }, [load, loadDomains]);
 
   // Ingests run in the background; refresh while any is in progress.
   const busy = books?.some((b) => ['queued', 'reading', 'extracting'].includes(b.status));
@@ -98,24 +103,44 @@ export default function LibraryPage() {
             ))}
           </div>
           {tab === 'books' && !adding && (
-            <button
-              onClick={() => setAdding(true)}
-              className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-700"
-            >
-              Add a book
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setAdding('many')}
+                className="rounded-lg border border-teal-600 bg-white px-4 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50"
+              >
+                Upload several books
+              </button>
+              <button
+                onClick={() => setAdding('one')}
+                className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-700"
+              >
+                Add a book
+              </button>
+            </div>
           )}
         </div>
 
         {error && <p className="mb-4 text-red-600">{error}</p>}
         {tab === 'books' && (
           <div className="space-y-6">
-            {adding && (
+            {adding === 'one' && (
               <AddBookForm
                 domains={domains}
-                onCancel={() => setAdding(false)}
+                onDomainAdded={loadDomains}
+                onCancel={() => setAdding(null)}
                 onAdded={() => {
-                  setAdding(false);
+                  setAdding(null);
+                  load();
+                }}
+              />
+            )}
+            {adding === 'many' && (
+              <BulkUploadForm
+                domains={domains}
+                onDomainAdded={loadDomains}
+                onCancel={() => setAdding(null)}
+                onDone={() => {
+                  setAdding(null);
                   load();
                 }}
               />

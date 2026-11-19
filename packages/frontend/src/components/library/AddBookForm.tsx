@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { DomainPicker } from './DomainPicker';
 import { addBook, Licence, LICENCE_LABELS, OntologyDomain } from '@/lib/libraryApi';
 
 interface Props {
   domains: OntologyDomain[];
+  onDomainAdded?: (domain: OntologyDomain) => void;
   onAdded: () => void;
   onCancel: () => void;
 }
@@ -18,7 +20,7 @@ const label = 'block text-xs font-semibold uppercase tracking-wide text-slate-50
  * site (the server fetches it from an allow-listed host). The licence and access tier are
  * recorded with the book; a restricted book (a test bank, an answer key) never feeds generation.
  */
-export function AddBookForm({ domains, onAdded, onCancel }: Props) {
+export function AddBookForm({ domains, onAdded, onCancel, onDomainAdded }: Props) {
   const [mode, setMode] = useState<'link' | 'upload'>('link');
   const [file, setFile] = useState<File | null>(null);
   const [form, setForm] = useState({
@@ -39,14 +41,6 @@ export function AddBookForm({ domains, onAdded, onCancel }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const set = (k: keyof typeof form, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
-  const toggleDomain = (key: string) =>
-    set(
-      'domainKeys',
-      form.domainKeys.includes(key)
-        ? form.domainKeys.filter((d) => d !== key)
-        : [...form.domainKeys, key]
-    );
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -221,19 +215,12 @@ export function AddBookForm({ domains, onAdded, onCancel }: Props) {
 
         <fieldset className="md:col-span-3">
           <legend className={label}>Domains</legend>
-          <div className="flex flex-wrap gap-2">
-            {domains.map((d) => (
-              <button
-                key={d.key}
-                type="button"
-                aria-pressed={form.domainKeys.includes(d.key)}
-                onClick={() => toggleDomain(d.key)}
-                className={`rounded-full border px-3 py-1 text-sm transition ${form.domainKeys.includes(d.key) ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:border-teal-400'}`}
-              >
-                {d.name}
-              </button>
-            ))}
-          </div>
+          <DomainPicker
+            domains={domains}
+            selected={form.domainKeys}
+            onChange={(keys) => set('domainKeys', keys)}
+            onDomainAdded={onDomainAdded}
+          />
         </fieldset>
         <fieldset className="md:col-span-3">
           <legend className={label}>Use</legend>
