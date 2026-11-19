@@ -1929,6 +1929,7 @@ export interface Step14SyllabusInputs {
     communicationNorms?: string;
     academicIntegrity?: string;
     accessibility?: string;
+    gradingScale?: string;
   };
 }
 
@@ -1950,15 +1951,19 @@ export interface SyllabusAssignmentItem {
   source: 'step12' | 'step13' | 'user';
 }
 
+export interface CourseCheck {
+  key: string;
+  label: string;
+  ok: boolean;
+  detail?: string;
+}
+
+/** One course syllabus per module; the content is rebuilt from the steps when downloaded. */
 export interface ModuleSyllabus {
   moduleId: string;
   moduleCode: string;
   moduleTitle: string;
-  moduleDescription: string;
-  contactHours?: number;
-  moduleLearningOutcomes: string[];
-  weeklySchedule: SyllabusWeekRow[];
-  assignments: SyllabusAssignmentItem[];
+  completeness?: { ok: boolean; checks: CourseCheck[] };
 }
 
 export interface Step14Syllabus {
@@ -1966,18 +1971,8 @@ export interface Step14Syllabus {
   generatedSections?: {
     courseDescription: string;
     learningOutcomes: string[];
-    weeklySchedule: SyllabusWeekRow[];
-    assignments: SyllabusAssignmentItem[];
-    gradingScale: Array<{ grade: string; range: string }>;
-    policies: {
-      attendance: string;
-      lateWork: string;
-      technologyUse: string;
-      communicationNorms: string;
-      academicIntegrity: string;
-      accessibility: string;
-    };
     moduleSyllabi?: ModuleSyllabus[];
+    missingRules?: string[];
   };
   generatedAt?: string;
   approvedAt?: string;

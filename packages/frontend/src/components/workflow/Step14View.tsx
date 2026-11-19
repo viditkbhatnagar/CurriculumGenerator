@@ -320,7 +320,7 @@ export default function Step14View({ workflow, onComplete, onRefresh }: Props) {
               placeholder="e.g. Room A101"
             />
           </Field>
-          <Field label="Start Date">
+          <Field label="Start Date (gives every week a date; leave blank for Week 1, Week 2 only)">
             <Input
               type="date"
               value={inputs.startDate || ''}
@@ -408,18 +408,20 @@ export default function Step14View({ workflow, onComplete, onRefresh }: Props) {
         </button>
       </Section>
 
-      {/* Policies */}
-      <Section title="Course Policies (optional overrides)">
+      {/* Rules the institution sets */}
+      <Section title="Rules students are told about">
         <p className="text-xs text-teal-600 mb-3">
-          Leave blank to use sensible defaults. Anything you enter here replaces the default.
+          Enter only what your institution has stated. Nothing is written for you: a rule left blank
+          is shown to students as &ldquo;Your programme handbook sets this&rdquo; and is listed in
+          Unresolved Issues. The pass mark and resit rules are read from the assessment rules
+          entered for the programme.
         </p>
         {[
-          ['attendance', 'Attendance and Participation'],
-          ['lateWork', 'Late Work and Make-up'],
-          ['technologyUse', 'Technology Use'],
-          ['communicationNorms', 'Email / Communication Norms'],
-          ['academicIntegrity', 'Academic Integrity'],
-          ['accessibility', 'Accessibility / Accommodations'],
+          ['gradingScale', 'Grading scale'],
+          ['lateWork', 'Late work'],
+          ['attendance', 'Attendance'],
+          ['technologyUse', 'Technology use (optional)'],
+          ['communicationNorms', 'Contacting your tutor (optional)'],
         ].map(([key, label]) => (
           <Field key={key} label={label}>
             <textarea
@@ -427,7 +429,7 @@ export default function Step14View({ workflow, onComplete, onRefresh }: Props) {
               value={(inputs.policies as any)?.[key] || ''}
               onChange={(e) => updatePolicies(key, e.target.value)}
               disabled={isApproved}
-              placeholder="(default will be used if left blank)"
+              placeholder="As stated by the institution"
             />
           </Field>
         ))}
@@ -462,9 +464,9 @@ export default function Step14View({ workflow, onComplete, onRefresh }: Props) {
           <button
             onClick={handleDownload}
             className="px-4 py-2 bg-white hover:bg-amber-50 border border-amber-400 text-amber-700 rounded-lg text-sm font-medium"
-            title="Single program-wide syllabus document"
+            title="Programme overview followed by every course syllabus"
           >
-            Programme overview .docx
+            Overview + all courses .docx
           </button>
         )}
         {canApprove && (
@@ -483,17 +485,14 @@ export default function Step14View({ workflow, onComplete, onRefresh }: Props) {
         )}
       </div>
 
-      {/* Generated preview */}
+      {/* Programme overview preview */}
       {generated && (
-        <Section title="Generated Syllabus Preview">
+        <Section title="Programme Overview">
           <div className="space-y-4 text-sm text-teal-800">
-            <div>
-              <h4 className="font-semibold mb-1">Course Description</h4>
-              <p className="whitespace-pre-wrap">{generated.courseDescription}</p>
-            </div>
+            <p className="whitespace-pre-wrap">{generated.courseDescription}</p>
             <div>
               <h4 className="font-semibold mb-1">
-                Learning Outcomes ({generated.learningOutcomes.length})
+                What the whole programme prepares you to do ({generated.learningOutcomes.length})
               </h4>
               <ol className="list-decimal pl-5 space-y-1">
                 {generated.learningOutcomes.map((o, i) => (
@@ -501,158 +500,73 @@ export default function Step14View({ workflow, onComplete, onRefresh }: Props) {
                 ))}
               </ol>
             </div>
-            <div>
-              <h4 className="font-semibold mb-1">
-                Schedule ({generated.weeklySchedule.length} sessions)
-              </h4>
-              <div className="overflow-auto">
-                <table className="text-xs w-full border-collapse">
-                  <thead>
-                    <tr className="bg-teal-100/50 text-left">
-                      <th className="p-2 border border-teal-200">Wk</th>
-                      <th className="p-2 border border-teal-200">Sess</th>
-                      <th className="p-2 border border-teal-200">Date</th>
-                      <th className="p-2 border border-teal-200">Module</th>
-                      <th className="p-2 border border-teal-200">Topics</th>
-                      <th className="p-2 border border-teal-200">Due</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {generated.weeklySchedule.map((row, i) => (
-                      <tr key={i} className="even:bg-teal-50/30">
-                        <td className="p-2 border border-teal-200">{row.week}</td>
-                        <td className="p-2 border border-teal-200">{row.sessionNumber}</td>
-                        <td className="p-2 border border-teal-200">{row.date || '—'}</td>
-                        <td className="p-2 border border-teal-200">{row.moduleCode}</td>
-                        <td className="p-2 border border-teal-200">{row.topics.join('; ')}</td>
-                        <td className="p-2 border border-teal-200">{row.dueItems.join('; ')}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {generated.missingRules && generated.missingRules.length > 0 && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
+                <p className="font-semibold">Institution rules not entered</p>
+                <p className="text-xs mt-1">
+                  Students are told to check the programme handbook for:{' '}
+                  {generated.missingRules.join(', ').toLowerCase()}.
+                </p>
               </div>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-1">
-                Assignments &amp; Grading ({generated.assignments.length})
-              </h4>
-              <ul className="space-y-1">
-                {generated.assignments.map((a, i) => (
-                  <li key={i}>
-                    <span className="font-medium">{a.title}</span>
-                    {a.weight ? ` — ${a.weight}%` : ''}
-                    {a.dueDate ? ` (due ${a.dueDate})` : ''}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            )}
           </div>
         </Section>
       )}
 
-      {/* Per-module syllabi preview — Logan's primary ask */}
+      {/* One course syllabus per module, with its completeness check */}
       {generated && generated.moduleSyllabi && generated.moduleSyllabi.length > 0 && (
-        <Section title={`Per-Module Syllabi (${generated.moduleSyllabi.length})`}>
+        <Section title={`Course Syllabi (${generated.moduleSyllabi.length})`}>
           <p className="text-xs text-teal-600 mb-4">
-            Each module has its own focused syllabus with that module's MLOs, topic schedule, and
-            assignments. Use the buttons to download one module at a time, or the "Download All"
-            button above for a zip.
+            One syllabus per module. Each answers: what will I learn, how should I prepare, what
+            work must I complete, and how will I be assessed. The checks below are computed from the
+            steps; the download is rebuilt from them each time.
           </p>
           <div className="space-y-3">
-            {generated.moduleSyllabi.map((mod) => (
-              <details
-                key={mod.moduleId}
-                className="bg-white rounded-lg border border-teal-200 group"
-              >
-                <summary className="cursor-pointer flex items-center justify-between p-3 list-none">
-                  <div className="flex-1">
-                    <div className="text-sm font-semibold text-teal-800">
-                      {mod.moduleCode}: {mod.moduleTitle}
-                    </div>
-                    <div className="text-xs text-teal-600 mt-0.5">
-                      {mod.moduleLearningOutcomes.length} outcomes · {mod.weeklySchedule.length}{' '}
-                      sessions · {mod.assignments.length} assignment
-                      {mod.assignments.length === 1 ? '' : 's'}
-                      {mod.contactHours ? ` · ${mod.contactHours} contact hrs` : ''}
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleDownloadModule(mod.moduleId);
-                    }}
-                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded font-semibold flex-shrink-0 ml-3"
-                  >
-                    Download .docx
-                  </button>
-                </summary>
-                <div className="px-3 pb-3 text-sm text-teal-800 space-y-3 border-t border-teal-100 pt-3">
-                  {mod.moduleDescription && (
-                    <div>
-                      <p className="text-xs font-semibold text-teal-700 mb-1">Description</p>
-                      <p className="text-xs whitespace-pre-wrap">{mod.moduleDescription}</p>
-                    </div>
-                  )}
-                  {mod.moduleLearningOutcomes.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-teal-700 mb-1">
-                        Module Learning Outcomes
-                      </p>
-                      <ol className="list-decimal pl-5 text-xs space-y-0.5">
-                        {mod.moduleLearningOutcomes.map((o, i) => (
-                          <li key={i}>{o}</li>
-                        ))}
-                      </ol>
-                    </div>
-                  )}
-                  {mod.weeklySchedule.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-teal-700 mb-1">Schedule</p>
-                      <div className="overflow-auto">
-                        <table className="text-xs w-full border-collapse">
-                          <thead>
-                            <tr className="bg-teal-50 text-left">
-                              <th className="p-1.5 border border-teal-200">Wk</th>
-                              <th className="p-1.5 border border-teal-200">Sess</th>
-                              <th className="p-1.5 border border-teal-200">Date</th>
-                              <th className="p-1.5 border border-teal-200">Topics</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {mod.weeklySchedule.map((row, i) => (
-                              <tr key={i} className="even:bg-teal-50/30">
-                                <td className="p-1.5 border border-teal-200">{row.week}</td>
-                                <td className="p-1.5 border border-teal-200">
-                                  {row.sessionNumber}
-                                </td>
-                                <td className="p-1.5 border border-teal-200">{row.date || '—'}</td>
-                                <td className="p-1.5 border border-teal-200">
-                                  {row.topics.join('; ')}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+            {generated.moduleSyllabi.map((mod) => {
+              const checks = mod.completeness?.checks || [];
+              const failed = checks.filter((c) => !c.ok);
+              return (
+                <details
+                  key={mod.moduleId}
+                  className="bg-white rounded-lg border border-teal-200 group"
+                >
+                  <summary className="cursor-pointer flex items-center justify-between p-3 list-none">
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold text-teal-800">
+                        {mod.moduleCode}: {mod.moduleTitle}
+                      </div>
+                      <div
+                        className={`text-xs mt-0.5 ${failed.length ? 'text-amber-700' : 'text-emerald-700'}`}
+                      >
+                        {!mod.completeness
+                          ? 'Not checked: regenerate the syllabus'
+                          : failed.length
+                            ? `${failed.length} of ${checks.length} checks not met`
+                            : `All ${checks.length} checks met`}
                       </div>
                     </div>
-                  )}
-                  {mod.assignments.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-teal-700 mb-1">Assignments</p>
-                      <ul className="text-xs space-y-0.5">
-                        {mod.assignments.map((a, i) => (
-                          <li key={i}>
-                            <span className="font-medium">{a.title}</span>
-                            {a.weight ? ` — ${a.weight}%` : ''}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </details>
-            ))}
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDownloadModule(mod.moduleId);
+                      }}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded font-semibold flex-shrink-0 ml-3"
+                    >
+                      Download .docx
+                    </button>
+                  </summary>
+                  <ul className="px-3 pb-3 text-xs text-teal-800 space-y-1 border-t border-teal-100 pt-3">
+                    {checks.map((c) => (
+                      <li key={c.key} className={c.ok ? '' : 'text-amber-800'}>
+                        <span className="font-semibold">{c.ok ? 'Met' : 'Not met'}</span>: {c.label}
+                        {c.detail ? ` (${c.detail})` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              );
+            })}
           </div>
         </Section>
       )}
