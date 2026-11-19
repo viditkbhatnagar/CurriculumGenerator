@@ -3759,14 +3759,11 @@ export class WordExportService {
    * Generate Step 13 (Summative Exam) section
    */
   /**
-   * The programme-wide syllabus, from the same body as the stand-alone syllabus download
+   * The programme overview and one course syllabus per module, from the same body as the stand-alone syllabus download
    * (syllabusDocx), so the whole-programme document no longer stops at Step 13.
    */
-  private async generateStep14Section(
-    step14: any,
-    contentChildren: any[],
-    step1: any
-  ): Promise<void> {
+  private async generateStep14Section(workflow: any, contentChildren: any[]): Promise<void> {
+    const step14 = workflow.step14;
     if (!step14?.generatedSections) return;
     contentChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
@@ -3779,7 +3776,7 @@ export class WordExportService {
         ])
       );
     }
-    contentChildren.push(...programmeSyllabusBody(step1, step14, true));
+    contentChildren.push(...programmeSyllabusBody(workflow, step14, true));
   }
 
   private async generateStep13Section(
@@ -4546,7 +4543,7 @@ export class WordExportService {
     // Step 14 is optional (it needs the cohort's instructor details), so it is printed only
     // once a syllabus has been generated; an unapproved one is labelled as such.
     if (workflow.step14?.generatedSections) {
-      addSection(14, (out) => this.generateStep14Section(workflow.step14, out, workflow.step1));
+      addSection(14, (out) => this.generateStep14Section(workflow, out));
     }
 
     // The contents page, on its own page after the title (the 21 September review, 6.7).

@@ -1,11 +1,15 @@
 /**
- * The Word pieces of a Step 14 syllabus, shared by the stand-alone syllabus download
+ * The Word pieces of a Step 14 syllabus, shared by the stand-alone syllabus downloads
  * (syllabusExportService) and the whole-programme export (wordExportService).
  *
  * Logan Pacey's email of 17 November 2026 (Diploma in Logistics pilot) found that the
- * whole-programme document stopped at Step 13: a syllabus that had been generated and
- * approved appeared only in its own download. Both documents now draw the same body from
- * here, so they cannot drift apart.
+ * whole-programme document stopped at Step 13; both documents now draw the same body from
+ * here, so they cannot drift apart. Dr Sherin Thomas's feedback of 18 November 2026 (Bachelor
+ * in Business Administration) then found the body itself wrong: one syllabus for the whole
+ * programme, labelled as a course, with blank columns and invented policies. It is now a
+ * programme overview followed by one course syllabus per module (services/courseSyllabus),
+ * each answering what the student will learn, how to prepare, what work to complete and how
+ * they will be assessed.
  */
 import {
   Paragraph,
@@ -17,9 +21,11 @@ import {
   AlignmentType,
   HeadingLevel,
   BorderStyle,
+  PageBreak,
   convertInchesToTwip,
 } from 'docx';
 import type { Step14Syllabus } from '../models/CurriculumWorkflow';
+import { buildCourseSyllabi, CourseSyllabus, SyllabusTable } from './courseSyllabus';
 
 export const FONT_FAMILY = 'Arial';
 export const FONT_SIZES = {
@@ -125,37 +131,6 @@ export function creditsLine(step1: any): string | undefined {
   return parts.join(' · ') || undefined;
 }
 
-export function scheduleTable(rows: any[]): Table {
-  const header = ['Wk', 'Session', 'Date', 'Module', 'Topics', 'Readings', 'Due'];
-  const body = rows.map((r) => [
-    String(r.week),
-    String(r.sessionNumber),
-    r.date || '',
-    r.moduleCode || '',
-    (r.topics || []).join('; '),
-    (r.readings || []).map((x: string) => x.substring(0, 80)).join(' | '),
-    (r.dueItems || []).join('; '),
-  ]);
-  return simpleTable(header, body, [5, 7, 9, 10, 30, 30, 9]);
-}
-
-export function assignmentsTable(items: any[]): Table {
-  const header = ['Assessment', 'Description', 'Weight', 'Due'];
-  const body = items.map((a) => [
-    a.title || '',
-    (a.description || '').substring(0, 200),
-    a.weight ? `${a.weight}%` : '',
-    a.dueDate || '',
-  ]);
-  return simpleTable(header, body, [25, 50, 10, 15]);
-}
-
-export function gradingScaleTable(scale: any[]): Table {
-  const header = ['Grade', 'Range'];
-  const body = scale.map((g) => [g.grade, g.range]);
-  return simpleTable(header, body, [30, 70]);
-}
-
 /** Generic table builder with header row + body rows + percent column widths */
 export function simpleTable(header: string[], body: string[][], widthsPercent: number[]): Table {
   const headerRow = new TableRow({
@@ -191,15 +166,14 @@ export function simpleTable(header: string[], body: string[][], widthsPercent: n
                 type: WidthType.PERCENTAGE,
               },
               children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: cell,
-                      size: FONT_SIZES.SMALL,
-                      font: FONT_FAMILY,
-                    }),
-                  ],
-                }),
+                ...cell.split('\n').map(
+                  (line) =>
+                    new Paragraph({
+                      children: [
+                        new TextRun({ text: line, size: FONT_SIZES.SMALL, font: FONT_FAMILY }),
+                      ],
+                    })
+                ),
               ],
             })
         ),
@@ -220,92 +194,192 @@ export function simpleTable(header: string[], body: string[][], widthsPercent: n
   });
 }
 
+export function syllabusTable(table: SyllabusTable): Table {
+  const first = Math.round(100 / (table.headers.length * 2));
+  const widths = table.headers.map((_, i) =>
+    i === 0 ? Math.max(first, 8) : (100 - Math.max(first, 8)) / (table.headers.length - 1)
+  );
+  return simpleTable(table.headers, table.rows, widths);
+}
+
+type HeadingFn = (text: string) => Paragraph;
+
+/** Heading functions for a block whose main headings sit at `level` (0 is Heading 1). */
+function headings(level: 0 | 1 | 2): { top: HeadingFn; section: HeadingFn; sub: HeadingFn } {
+  if (level === 0) return { top: h1, section: h2, sub: h3 };
+  if (level === 1) return { top: h2, section: h3, sub: h3 };
+  return { top: h3, section: h3, sub: h3 };
+}
+
+const HANDBOOK = (label: string) =>
+  `${label.replace(/^The /, 'Your programme handbook sets the ')}. It has not been entered into this syllabus yet, so ask your programme office until it is.`;
+
 /**
- * Course basics through policies, for the programme-wide syllabus. With `nested` the headings
- * drop one level (Heading 2 and 3), so the block sits under a section heading of its own.
+ * One course syllabus: the four questions a student asks, in order. `level` is the heading
+ * level of the four main headings (0 for a stand-alone document, lower when under others).
+ */
+export function courseSyllabusBody(
+  course: CourseSyllabus,
+  level: 0 | 1 | 2 = 0
+): (Paragraph | Table)[] {
+  const { top, section, sub } = headings(level);
+  const out: (Paragraph | Table)[] = [];
+
+  out.push(top('What you will learn'));
+  out.push(...kvLines(course.facts));
+  if (course.description) out.push(body(course.description));
+  out.push(body('By the end of this module you will be able to:'));
+  course.outcomes.forEach((o, i) => out.push(bullet(`${i + 1}. ${o}`)));
+  if (course.buildsOn.length) {
+    out.push(body('This module builds on what you learned in:'));
+    course.buildsOn.forEach((m) => out.push(bullet(m)));
+  } else {
+    out.push(
+      body('This module has no prerequisite module, so you can start it without earlier study.')
+    );
+  }
+
+  out.push(top('How to prepare'));
+  if (course.weeks.length) {
+    out.push(
+      body(
+        'Work through the weeks in order. Each row says what we cover and what to prepare or read before the week begins.'
+      )
+    );
+    out.push(syllabusTable(course.scheduleTable));
+  } else {
+    out.push(body('The week-by-week plan for this module is not available yet.'));
+  }
+  if (course.materials.length) {
+    out.push(sub('Materials you will need'));
+    course.materials.forEach((m) => out.push(bullet(m)));
+  }
+
+  out.push(top('What work you must complete'));
+  if (course.workTable.rows.length) {
+    out.push(
+      body('This is everything you hand in or practise during the module, and when it is due.')
+    );
+    out.push(syllabusTable(course.workTable));
+  } else {
+    out.push(body('The work for this module is not available yet.'));
+  }
+  course.workNotes.forEach((n) => out.push(body(n)));
+
+  out.push(top('How you will be assessed'));
+  if (course.components.length) {
+    out.push(body('Your module mark is made up of the work below. The weights add up to 100%.'));
+    out.push(syllabusTable(course.componentsTable));
+  } else {
+    out.push(body('The graded work for this module is not available yet.'));
+  }
+  out.push(section('How your work is marked'));
+  if (course.criteriaTable) {
+    out.push(
+      body(
+        'Your work is judged against these criteria. Each row describes what each band looks like.'
+      )
+    );
+    out.push(syllabusTable(course.criteriaTable));
+  } else {
+    out.push(body(course.criteriaNote));
+  }
+  out.push(section('Rules that apply to you'));
+  for (const rule of course.rules) {
+    out.push(sub(rule.label));
+    out.push(body(rule.text || HANDBOOK(rule.label)));
+  }
+  return out;
+}
+
+/**
+ * The programme overview, then one course syllabus per module. `workflow` must have its Step
+ * 10 lessons and Step 12 packs loaded. With `nested` the headings drop one level, so the block
+ * sits under a section heading of its own.
  */
 export function programmeSyllabusBody(
-  step1: any,
+  workflow: any,
   step14: Step14Syllabus,
   nested = false
 ): (Paragraph | Table)[] {
   const sections = step14.generatedSections;
   if (!sections) return [];
+  const step1 = workflow.step1 || {};
   const inputs = step14.inputs || ({} as Step14Syllabus['inputs']);
   const instructor = inputs.instructor || ({} as Step14Syllabus['inputs']['instructor']);
-  const top = nested ? h2 : h1;
-  const sub = nested ? h3 : h2;
-  const policies = sections.policies || ({} as typeof sections.policies);
+  const { top, sub } = headings(nested ? 1 : 0);
   const out: (Paragraph | Table)[] = [];
 
-  out.push(top('Course Basics'));
+  out.push(top('Programme Overview'));
   out.push(
     ...kvLines([
-      ['Course Title', step1?.programTitle],
-      ['Course Number', inputs.courseNumber],
-      ['Credit Hours', creditsLine(step1 || {})],
+      ['Programme', step1.programTitle],
+      ['Credits and hours', creditsLine(step1)],
+      ['Delivery mode', step1.delivery?.mode],
       ['Semester', inputs.semester],
-      ['Meeting Time', inputs.meetingPattern],
+      ['Course number', inputs.courseNumber],
+      ['Meeting time', inputs.meetingPattern],
       ['Location', inputs.meetingLocation],
-      ['Delivery Mode', step1?.delivery?.mode],
     ])
   );
-
-  out.push(top('Instructor Information'));
-  out.push(
-    ...kvLines([
-      ['Name', instructor.name],
-      ['Title', instructor.title],
-      ['Email', instructor.email],
-      ['Office Hours', instructor.officeHours],
-      ['Office Location', instructor.officeLocation],
-      ['Preferred Communication', instructor.preferredCommunication],
-      ['Expected Response Time', instructor.expectedResponseTime],
-    ])
-  );
-  if (inputs.taInfo?.name) {
-    out.push(sub('Teaching Assistant / Grader'));
+  if (sections.courseDescription) out.push(body(sections.courseDescription));
+  const outcomes = sections.learningOutcomes || [];
+  if (outcomes.length) {
+    out.push(sub('What the whole programme prepares you to do'));
+    outcomes.forEach((o, i) => out.push(bullet(`${i + 1}. ${o}`)));
+  }
+  const exam = workflow.step13?.overview;
+  if (exam) {
+    out.push(sub('Final exam'));
     out.push(
       ...kvLines([
-        ['Name', inputs.taInfo.name],
-        ['Email', inputs.taInfo.email],
-        ['Role', inputs.taInfo.role],
+        ['Exam', exam.examTitle],
+        ['Length', exam.totalDuration],
+        ['Permitted materials', exam.permittedMaterials],
       ])
     );
   }
 
-  out.push(top('Course Description'));
-  out.push(body(sections.courseDescription || ''));
+  const courses = buildCourseSyllabi(workflow, inputs);
+  out.push(sub('Your course syllabi'));
+  out.push(
+    body(
+      'Each module below has its own course syllabus. It answers four questions: what you will learn, how to prepare, what work you must complete and how you will be assessed.'
+    )
+  );
+  out.push(
+    simpleTable(
+      ['Module', 'Title', 'Credits', 'Level'],
+      courses.map((c) => [
+        c.moduleCode,
+        c.moduleTitle,
+        c.facts.find(([k]) => k === 'Credits')?.[1] || 'Not set',
+        c.facts.find(([k]) => k === 'Level')?.[1] || 'Not set',
+      ]),
+      [12, 58, 12, 18]
+    )
+  );
 
-  const outcomes = sections.learningOutcomes || [];
-  if (outcomes.length > 0) {
-    out.push(top('Learning Outcomes'));
-    out.push(body('By the end of this course, students will be able to:'));
-    outcomes.forEach((outcome, i) => out.push(bullet(`${i + 1}. ${outcome}`)));
+  const hasInstructor = Object.values(instructor).some((v) => v);
+  if (hasInstructor) {
+    out.push(sub('Your tutor'));
+    out.push(
+      ...kvLines([
+        ['Name', instructor.name],
+        ['Title', instructor.title],
+        ['Email', instructor.email],
+        ['Office hours', instructor.officeHours],
+        ['Office location', instructor.officeLocation],
+        ['Preferred communication', instructor.preferredCommunication],
+        ['Expected response time', instructor.expectedResponseTime],
+      ])
+    );
   }
-  if ((sections.weeklySchedule || []).length > 0) {
-    out.push(top('Schedule'));
-    out.push(scheduleTable(sections.weeklySchedule));
-  }
-  if ((sections.assignments || []).length > 0) {
-    out.push(top('Assignments and Grading'));
-    out.push(assignmentsTable(sections.assignments));
-  }
-  out.push(sub('Grading Scale'));
-  out.push(gradingScaleTable(sections.gradingScale || []));
 
-  out.push(top('Course Policies'));
-  const policyBlocks: Array<[string, string | undefined]> = [
-    ['Attendance and Participation', policies.attendance],
-    ['Late Work and Make-up', policies.lateWork],
-    ['Technology Use', policies.technologyUse],
-    ['Communication', policies.communicationNorms],
-    ['Academic Integrity', policies.academicIntegrity],
-    ['Accessibility and Accommodations', policies.accessibility],
-  ];
-  for (const [heading, text] of policyBlocks) {
-    out.push(sub(heading));
-    out.push(body(text || ''));
+  for (const course of courses) {
+    out.push(new Paragraph({ children: [new PageBreak()] }));
+    out.push(top(`${course.moduleCode}: ${course.moduleTitle}`));
+    out.push(...courseSyllabusBody(course, nested ? 2 : 1));
   }
   return out;
 }

@@ -80,7 +80,10 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 //      stored occupation and knowledge-base evidence and the programme level's origin.
 // v37: Step 12 packs print their band labels, delivery form and, for quizzes, an answer key and
 //      mark scheme; Step 13 prints counts with units (questions, scenarios, tasks).
-const EXPORT_FORMAT_VERSION = 'v37';
+// v38: Step 14 is a programme overview plus one course syllabus per module (what you will learn,
+//      how to prepare, what work to complete, how you will be assessed); no invented grade scale
+//      or policies; Unresolved Issues lists the course syllabi's failed checks.
+const EXPORT_FORMAT_VERSION = 'v38';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the

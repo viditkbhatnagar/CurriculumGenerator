@@ -38,17 +38,14 @@ const step14 = (extra: object = {}) => ({
   generatedSections: {
     courseDescription: 'SYLLABUSMARKER description',
     learningOutcomes: ['Explain freight'],
-    weeklySchedule: [],
-    assignments: [],
-    gradingScale: [{ grade: 'A', range: '70-100' }],
-    policies: {
-      attendance: 'a',
-      lateWork: 'b',
-      technologyUse: 'c',
-      communicationNorms: 'd',
-      academicIntegrity: 'e',
-      accessibility: 'f',
-    },
+    moduleSyllabi: [
+      {
+        moduleId: 'm1',
+        moduleCode: 'M1',
+        moduleTitle: 'Freight',
+        completeness: { ok: true, checks: [{ key: 'learn', label: 'Learn', ok: true }] },
+      },
+    ],
   },
   ...extra,
 });
@@ -94,6 +91,26 @@ describe('occupation evidence in the unresolved issues', () => {
 describe('Step 14 in the unresolved issues', () => {
   it('does not call an absent syllabus a missing step', () => {
     expect(unresolvedIssues({}, 2026).some((i) => i.step === 14)).toBe(false);
+  });
+
+  it('lists a course syllabus whose check failed, and one never checked', () => {
+    const failing = step14({ approvedAt: new Date() }) as any;
+    failing.generatedSections.moduleSyllabi[0].completeness = {
+      ok: false,
+      checks: [
+        { key: 'weightsSum100', label: 'Weights add up', ok: false, detail: 'They add up to 40%' },
+      ],
+    };
+    const issues = unresolvedIssues({ step14: failing }, 2026).filter((i) => i.step === 14);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ kind: 'fail' });
+    expect(issues[0].issue).toContain('M1 Freight');
+
+    const legacy = step14({ approvedAt: new Date() }) as any;
+    delete legacy.generatedSections.moduleSyllabi;
+    expect(unresolvedIssues({ step14: legacy }, 2026).find((i) => i.step === 14)).toMatchObject({
+      kind: 'not_checked',
+    });
   });
 
   it('flags a syllabus generated but not approved, and one never generated', () => {

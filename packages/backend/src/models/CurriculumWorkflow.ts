@@ -695,6 +695,8 @@ export interface Step14SyllabusInputs {
     communicationNorms?: string;
     academicIntegrity?: string;
     accessibility?: string;
+    // Entered by the institution; the syllabus never writes a scale of its own.
+    gradingScale?: string;
   };
 }
 
@@ -717,25 +719,19 @@ export interface SyllabusAssignmentItem {
 }
 
 /**
- * One per-module syllabus section. Logan asked for syllabi to be generated
- * per module rather than program-wide; we now produce both — `moduleSyllabi`
- * is the primary output, the program-wide section is kept for the
- * occasional "single document" use case.
+ * One course syllabus per module. The content is built from the stored steps each time a
+ * document is written (services/courseSyllabus), so only the index and the completeness
+ * result are kept here. Documents generated before 18 November 2026 also hold the old
+ * `weeklySchedule` and `assignments`, which nothing reads now.
  */
 export interface ModuleSyllabus {
   moduleId: string;
   moduleCode: string;
   moduleTitle: string;
-  moduleDescription: string;
-  contactHours?: number;
-  // Module Learning Outcomes (MLOs) for this module — pulled from step4.
-  moduleLearningOutcomes: string[];
-  // Topics from step4 distributed across this module's sessions, with
-  // readings + due items folded in.
-  weeklySchedule: SyllabusWeekRow[];
-  // Step 12 assignment packs scoped to this module (+ any user exam due
-  // dates that fall during the module's session window).
-  assignments: SyllabusAssignmentItem[];
+  completeness?: {
+    ok: boolean;
+    checks: Array<{ key: string; label: string; ok: boolean; detail?: string }>;
+  };
 }
 
 export interface Step14Syllabus {
@@ -743,22 +739,18 @@ export interface Step14Syllabus {
 
   // Generated content
   generatedSections?: {
+    // The programme overview: description and the programme outcomes.
     courseDescription: string;
     learningOutcomes: string[];
-    weeklySchedule: SyllabusWeekRow[];
-    assignments: SyllabusAssignmentItem[];
-    gradingScale: Array<{ grade: string; range: string }>;
-    policies: {
-      attendance: string;
-      lateWork: string;
-      technologyUse: string;
-      communicationNorms: string;
-      academicIntegrity: string;
-      accessibility: string;
-    };
-    // Per-module syllabi — Logan's primary ask. Each module gets its own
-    // focused syllabus (own MLOs, own topic schedule, own assignments).
+    // One entry per module with its completeness check (services/courseSyllabusChecks).
     moduleSyllabi?: ModuleSyllabus[];
+    // Institution rules the course syllabi could not state because none were entered.
+    missingRules?: string[];
+    // Written before 18 November 2026; no longer generated or read.
+    weeklySchedule?: SyllabusWeekRow[];
+    assignments?: SyllabusAssignmentItem[];
+    gradingScale?: Array<{ grade: string; range: string }>;
+    policies?: Record<string, string>;
   };
 
   generatedAt?: Date;

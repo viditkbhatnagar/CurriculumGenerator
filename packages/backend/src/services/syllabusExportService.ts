@@ -1,9 +1,10 @@
 /**
  * Syllabus DOCX Export Service
  *
- * Renders an approved Step 14 syllabus to a Word document with the standard
- * sections faculty expect: course basics → instructor → description →
- * outcomes → schedule table → assignments table → grading scale → policies.
+ * Renders Step 14 to Word. The programme download is a programme overview followed by one
+ * complete course syllabus per module; the per-module download and the zip are the same course
+ * syllabi singly. All three read the stored steps through services/courseSyllabus, so they
+ * cannot disagree (Dr Sherin Thomas, 18 November 2026).
  */
 
 import { Document, Packer, Paragraph, Table, convertInchesToTwip } from 'docx';
@@ -11,60 +12,43 @@ import type { ICurriculumWorkflow, Step14Syllabus } from '../models/CurriculumWo
 import { loggingService } from './loggingService';
 import JSZip from 'jszip';
 import { xmlSafeDeep } from '../utils/xmlSafe';
-import {
-  title,
-  subtitle,
-  h1,
-  h2,
-  body,
-  bullet,
-  scheduleTable,
-  assignmentsTable,
-  gradingScaleTable,
-  programmeSyllabusBody,
-} from './syllabusDocx';
+import { title, subtitle, courseSyllabusBody, programmeSyllabusBody } from './syllabusDocx';
+import { buildCourseSyllabus } from './courseSyllabus';
+import { withLessons } from './step10Store';
+import { withPacks } from './step12Store';
+
+const PAGE = {
+  page: {
+    margin: {
+      top: convertInchesToTwip(1),
+      bottom: convertInchesToTwip(1),
+      left: convertInchesToTwip(1),
+      right: convertInchesToTwip(1),
+    },
+  },
+};
+
+/** The workflow with Step 10 lessons and Step 12 packs loaded, and control characters removed. */
+async function loadedWorkflow(workflow: ICurriculumWorkflow): Promise<any> {
+  return xmlSafeDeep(await withPacks(await withLessons(workflow)));
+}
 
 class SyllabusExportService {
-  async generateSyllabusDocument(workflow: ICurriculumWorkflow): Promise<Buffer> {
-    // Office files are XML: a control character in the data makes the file corrupt. See xmlSafe.
-    workflow = xmlSafeDeep(workflow);
+  async generateSyllabusDocument(source: ICurriculumWorkflow): Promise<Buffer> {
+    const workflow = await loadedWorkflow(source);
     const step14 = workflow.step14 as Step14Syllabus | undefined;
     if (!step14?.generatedSections) {
       throw new Error('Syllabus has not been generated yet');
     }
-
-    const step1 = (workflow as any).step1 || {};
-    const sections = step14.generatedSections;
-    const inputs = step14.inputs;
-
-    // Tables can't live inside Paragraph[] but Document section.children
-    // accepts (Paragraph | Table)[], so we assemble a single mixed list.
-    const docChildren: (Paragraph | Table)[] = [];
-    docChildren.push(title(step1.programTitle || workflow.projectName || 'Course Syllabus'));
-    if (inputs.courseNumber) docChildren.push(subtitle(inputs.courseNumber));
-    docChildren.push(subtitle(inputs.semester));
-
-    docChildren.push(...programmeSyllabusBody(step1, step14));
-
-    const doc = new Document({
-      sections: [
-        {
-          properties: {
-            page: {
-              margin: {
-                top: convertInchesToTwip(1),
-                bottom: convertInchesToTwip(1),
-                left: convertInchesToTwip(1),
-                right: convertInchesToTwip(1),
-              },
-            },
-          },
-          children: docChildren,
-        },
-      ],
-    });
-
-    const buffer = await Packer.toBuffer(doc);
+    const step1 = workflow.step1 || {};
+    const docChildren: (Paragraph | Table)[] = [
+      title(step1.programTitle || workflow.projectName || 'Programme Syllabus'),
+      subtitle('Programme overview and course syllabi'),
+      ...programmeSyllabusBody(workflow, step14),
+    ];
+    const buffer = await Packer.toBuffer(
+      new Document({ sections: [{ properties: PAGE, children: docChildren }] })
+    );
     loggingService.info('Syllabus DOCX generated', {
       workflowId: workflow._id?.toString(),
       paragraphs: docChildren.length,
@@ -72,127 +56,52 @@ class SyllabusExportService {
     return buffer;
   }
 
-  /**
-   * Per-module syllabus DOCX. Same instructor/policies/grading scaffolding
-   * as the program-wide doc, but the description, outcomes, schedule and
-   * assignments are scoped to a single module.
-   */
+  /** One module's course syllabus. */
   async generateModuleSyllabusDocument(
-    workflow: ICurriculumWorkflow,
+    source: ICurriculumWorkflow,
     moduleId: string
   ): Promise<Buffer> {
-    workflow = xmlSafeDeep(workflow);
+    return this.moduleDocument(await loadedWorkflow(source), moduleId);
+  }
+
+  private async moduleDocument(workflow: any, moduleId: string): Promise<Buffer> {
     const step14 = workflow.step14 as Step14Syllabus | undefined;
-    const sections = step14?.generatedSections;
-    if (!sections) throw new Error('Syllabus has not been generated yet');
+    if (!step14?.generatedSections) throw new Error('Syllabus has not been generated yet');
+    const mod = (workflow.step4?.modules || []).find((m: any) => m.id === moduleId);
+    if (!mod) throw new Error(`No module found for moduleId=${moduleId}`);
 
-    const mod = (sections.moduleSyllabi || []).find((m) => m.moduleId === moduleId);
-    if (!mod) throw new Error(`No module syllabus found for moduleId=${moduleId}`);
-
-    const inputs = step14!.inputs;
-    const step1 = (workflow as any).step1 || {};
-
-    const docChildren: (Paragraph | Table)[] = [];
-    docChildren.push(title(`${mod.moduleCode}: ${mod.moduleTitle}`));
-    docChildren.push(subtitle(step1.programTitle || workflow.projectName || ''));
-
-    // Module Basics and Instructor Information are intentionally omitted from per-module
-    // syllabi — instructor, meeting time, location and hours are decided per-cohort
-    // based on faculty availability, so embedding them here produces stale documents.
-
-    // Module description
-    if (mod.moduleDescription) {
-      docChildren.push(h1('Module Description'));
-      docChildren.push(body(mod.moduleDescription));
-    }
-
-    // MLOs
-    if (mod.moduleLearningOutcomes.length > 0) {
-      docChildren.push(h1('Module Learning Outcomes'));
-      docChildren.push(body('By the end of this module, students will be able to:'));
-      mod.moduleLearningOutcomes.forEach((o, i) => {
-        docChildren.push(bullet(`${i + 1}. ${o}`));
-      });
-    }
-
-    // Schedule
-    if (mod.weeklySchedule.length > 0) {
-      docChildren.push(h1('Module Schedule'));
-      docChildren.push(scheduleTable(mod.weeklySchedule));
-    }
-
-    // Assignments
-    if (mod.assignments.length > 0) {
-      docChildren.push(h1('Assignments'));
-      docChildren.push(assignmentsTable(mod.assignments));
-    }
-
-    // Grading scale (shared)
-    docChildren.push(h2('Grading Scale'));
-    docChildren.push(gradingScaleTable(sections.gradingScale));
-
-    // Policies (shared) — keep concise per-module
-    docChildren.push(h1('Course Policies'));
-    docChildren.push(h2('Attendance and Participation'));
-    docChildren.push(body(sections.policies.attendance));
-    docChildren.push(h2('Late Work and Make-up'));
-    docChildren.push(body(sections.policies.lateWork));
-    docChildren.push(h2('Technology Use'));
-    docChildren.push(body(sections.policies.technologyUse));
-    docChildren.push(h2('Communication'));
-    docChildren.push(body(sections.policies.communicationNorms));
-    docChildren.push(h2('Academic Integrity'));
-    docChildren.push(body(sections.policies.academicIntegrity));
-    docChildren.push(h2('Accessibility and Accommodations'));
-    docChildren.push(body(sections.policies.accessibility));
-
-    const doc = new Document({
-      sections: [
-        {
-          properties: {
-            page: {
-              margin: {
-                top: convertInchesToTwip(1),
-                bottom: convertInchesToTwip(1),
-                left: convertInchesToTwip(1),
-                right: convertInchesToTwip(1),
-              },
-            },
-          },
-          children: docChildren,
-        },
-      ],
-    });
-
-    const buffer = await Packer.toBuffer(doc);
+    const course = buildCourseSyllabus(workflow, mod, step14.inputs);
+    const children: (Paragraph | Table)[] = [
+      title(`${course.moduleCode}: ${course.moduleTitle}`),
+      subtitle(workflow.step1?.programTitle || workflow.projectName || ''),
+      ...courseSyllabusBody(course),
+    ];
+    const buffer = await Packer.toBuffer(
+      new Document({ sections: [{ properties: PAGE, children }] })
+    );
     loggingService.info('Module syllabus DOCX generated', {
       workflowId: workflow._id?.toString(),
       moduleId,
-      moduleCode: mod.moduleCode,
+      moduleCode: course.moduleCode,
     });
     return buffer;
   }
 
-  /**
-   * Zip of one DOCX per module. Saves the user from clicking download N
-   * times when they want every module's syllabus.
-   */
-  async generateAllModuleSyllabiZip(workflow: ICurriculumWorkflow): Promise<Buffer> {
-    workflow = xmlSafeDeep(workflow);
-    const step14 = workflow.step14 as Step14Syllabus | undefined;
-    const moduleSyllabi = step14?.generatedSections?.moduleSyllabi || [];
-    if (moduleSyllabi.length === 0) {
+  /** Zip of one DOCX per module, so nobody clicks download once for each. */
+  async generateAllModuleSyllabiZip(source: ICurriculumWorkflow): Promise<Buffer> {
+    const workflow = await loadedWorkflow(source);
+    const modules: any[] = workflow.step4?.modules || [];
+    if (modules.length === 0 || !workflow.step14?.generatedSections) {
       throw new Error('No module syllabi generated yet');
     }
-
     const zip = new JSZip();
-    for (const mod of moduleSyllabi) {
-      const buf = await this.generateModuleSyllabusDocument(workflow, mod.moduleId);
-      const safe =
-        `${mod.moduleCode || mod.moduleId}_${(mod.moduleTitle || '').replace(/[^a-zA-Z0-9]+/g, '_')}`
-          .substring(0, 80)
-          .replace(/_+$/, '');
-      zip.file(`${safe || mod.moduleId}_syllabus.docx`, buf);
+    for (const mod of modules) {
+      const buf = await this.moduleDocument(workflow, mod.id);
+      const code = mod.code || mod.moduleCode || mod.id;
+      const safe = `${code}_${(mod.title || '').replace(/[^a-zA-Z0-9]+/g, '_')}`
+        .substring(0, 80)
+        .replace(/_+$/, '');
+      zip.file(`${safe || mod.id}_syllabus.docx`, buf);
     }
     return zip.generateAsync({ type: 'nodebuffer' });
   }
