@@ -6,7 +6,9 @@
  * Domains and areas are fixed here so every book files its concepts in the same places; the
  * extractor chooses an area from this list and may name a sub-area beneath it. The Business &
  * Management tree follows the one in Rejin's design; AI, Data & Computing covers the first
- * trial programme (SP Jain's Master of AI in Business). Each area has a three-letter code used
+ * trial programme (SP Jain's Master of AI in Business); Fashion & Design was added for Athira
+ * Hari's fashion programme (India Learns, 19 November 2026). Administrators can add further
+ * domains in the database (knowledge/domainRegistry). Each area has a three-letter code used
  * in concept codes (K-STR-0014).
  *
  * Pure data and lookups, so it can be tested.
@@ -22,6 +24,7 @@ export interface Area {
 export interface Domain {
   key: string;
   name: string;
+  description?: string;
   areas: Area[];
 }
 
@@ -309,21 +312,110 @@ export const DOMAINS: Domain[] = [
       },
     ],
   },
+  {
+    key: 'fashion-design',
+    name: 'Fashion & Design',
+    areas: [
+      {
+        code: 'FDP',
+        name: 'Fashion Design Process',
+        subAreas: [
+          'Research and inspiration',
+          'Sketching and illustration',
+          'Colour and mood boards',
+          'Collection development',
+          'Design briefs',
+        ],
+      },
+      {
+        code: 'TEX',
+        name: 'Textiles & Materials',
+        subAreas: [
+          'Fibres and yarns',
+          'Fabric construction',
+          'Dyeing, printing and finishing',
+          'Fabric performance and testing',
+          'Trims and fastenings',
+        ],
+      },
+      {
+        code: 'GPM',
+        name: 'Pattern Making & Garment Construction',
+        subAreas: [
+          'Body measurement and sizing',
+          'Flat pattern cutting',
+          'Draping',
+          'Sewing techniques',
+          'Fit and alteration',
+        ],
+      },
+      {
+        code: 'CAD',
+        name: 'Fashion Technology & CAD',
+        subAreas: [
+          'Digital illustration',
+          '2D and 3D CAD',
+          'Technical packs',
+          'Digital prototyping',
+        ],
+      },
+      {
+        code: 'FHC',
+        name: 'Fashion History & Culture',
+        subAreas: [
+          'Historical periods',
+          'Designers and houses',
+          'Dress and identity',
+          'Global fashion',
+        ],
+      },
+      {
+        code: 'TRD',
+        name: 'Trend Forecasting & Consumer Insight',
+        subAreas: ['Trend research', 'Consumer behaviour', 'Seasonal planning', 'Cultural signals'],
+      },
+      {
+        code: 'FMM',
+        name: 'Fashion Marketing & Merchandising',
+        subAreas: [
+          'Brand identity',
+          'Visual merchandising',
+          'Retail buying',
+          'Fashion communication',
+          'Fashion e-commerce',
+        ],
+      },
+      {
+        code: 'SUS',
+        name: 'Sustainability & Ethical Production',
+        subAreas: [
+          'Circular fashion',
+          'Sustainable materials',
+          'Supply chain ethics',
+          'Production and sourcing',
+          'Environmental impact',
+        ],
+      },
+    ],
+  },
 ];
 
 export const OTHER_AREA: Area = { code: 'GEN', name: 'Other', subAreas: [] };
 
-export function domainByKey(key: string): Domain | undefined {
-  return DOMAINS.find((d) => d.key === key);
+export function domainByKey(key: string, domains: Domain[] = DOMAINS): Domain | undefined {
+  return domains.find((d) => d.key === key);
 }
 
 const squash = (s: string) => s.toLowerCase().replace(/[^a-z]+/g, '');
 
 /** The area a name refers to (exact name or code, case and punctuation ignored), across domains. */
-export function findArea(name: string): { domain: Domain; area: Area } | null {
+export function findArea(
+  name: string,
+  domains: Domain[] = DOMAINS
+): { domain: Domain; area: Area } | null {
   const want = squash(name);
   if (!want) return null;
-  for (const domain of DOMAINS) {
+  for (const domain of domains) {
     for (const area of domain.areas) {
       if (squash(area.name) === want || area.code.toLowerCase() === want) return { domain, area };
     }
@@ -332,7 +424,10 @@ export function findArea(name: string): { domain: Domain; area: Area } | null {
 }
 
 /** Areas offered to the extractor for a book: its domains' areas, or every area if none. */
-export function areasFor(domainKeys: string[]): { domain: Domain; area: Area }[] {
-  const domains = domainKeys.length ? DOMAINS.filter((d) => domainKeys.includes(d.key)) : DOMAINS;
+export function areasFor(
+  domainKeys: string[],
+  all: Domain[] = DOMAINS
+): { domain: Domain; area: Area }[] {
+  const domains = domainKeys.length ? all.filter((d) => domainKeys.includes(d.key)) : all;
   return domains.flatMap((domain) => domain.areas.map((area) => ({ domain, area })));
 }

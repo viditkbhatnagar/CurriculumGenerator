@@ -34,7 +34,8 @@ import {
   tidyEvidence,
   Existing,
 } from './clustering';
-import { areasFor, findArea, DOMAINS, OTHER_AREA } from './ontology';
+import { areasFor, findArea, OTHER_AREA } from './ontology';
+import { allDomains, refreshDomains } from './domainRegistry';
 import { KbBook, KbConcept, KbCounter, KbMeta, KbPassage } from './models';
 
 /** Extraction is reading, not reasoning: a small model at low effort keeps a book near $1. */
@@ -93,7 +94,7 @@ async function extractSection(book: any, section: BookSection, areaNames: string
           sectionKind: section.kind,
           areas: areaNames,
           subAreas: Object.fromEntries(
-            areasFor(book.domainKeys).map(({ area }) => [area.name, area.subAreas])
+            areasFor(book.domainKeys, allDomains()).map(({ area }) => [area.name, area.subAreas])
           ),
         },
         window
@@ -129,8 +130,8 @@ async function mergeSection(
     const c = extracted[i];
     counters.extracted++;
     if (!c.pagesVerified) counters.unverified++;
-    const placed = findArea(c.area);
-    const domainKey = placed?.domain.key || book.domainKeys[0] || DOMAINS[0].key;
+    const placed = findArea(c.area, allDomains());
+    const domainKey = placed?.domain.key || book.domainKeys[0] || allDomains()[0].key;
     const area = placed?.area || OTHER_AREA;
     const vector = shorten(vectors[i]);
     const keys = keysFor(c.name, c.aliases);
@@ -316,9 +317,12 @@ export async function ingestBook(bookId: string): Promise<void> {
       book.markModified('progress');
       await book.save();
 
-      const areaNames = areasFor(book.domainKeys).map((a) => a.area.name);
+      await refreshDomains();
+      const areaNames = areasFor(book.domainKeys, allDomains()).map((a) => a.area.name);
       const known: any[] = await KbConcept.find({
-        domainKey: { $in: book.domainKeys.length ? book.domainKeys : DOMAINS.map((d) => d.key) },
+        domainKey: {
+          $in: book.domainKeys.length ? book.domainKeys : allDomains().map((d) => d.key),
+        },
       })
         .select('key aliasKeys area embedding')
         .lean();

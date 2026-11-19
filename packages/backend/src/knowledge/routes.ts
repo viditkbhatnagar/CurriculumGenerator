@@ -16,7 +16,9 @@ import { openaiService } from '../services/openaiService';
 import { shorten } from '../services/occupations/occupationIndex';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { KbBook, KbConcept, KbMeta, KbPassage, LICENCES } from './models';
-import { DOMAINS } from './ontology';
+import { allDomains, refreshDomains, addDomain } from './domainRegistry';
+import { requireRole } from '../middleware/auth';
+import { UserRole } from '../types/auth';
 import { dot } from './clustering';
 import { bodyOfKnowledge, searchConcepts, citation, evidenceByRole } from './retrieval';
 import { restructureBook } from './bookStructure';
@@ -153,7 +155,7 @@ const asList = (v: unknown): string[] =>
 
 /** Book metadata from a form or JSON body, checked against the fixed lists. */
 function bookFields(body: any) {
-  const domainKeys = asList(body.domainKeys).filter((k) => DOMAINS.some((d) => d.key === k));
+  const domainKeys = asList(body.domainKeys).filter((k) => allDomains().some((d) => d.key === k));
   const licence = LICENCES.includes(body.licence) ? body.licence : 'unknown';
   const year = Number(body.year);
   return {
@@ -211,7 +213,24 @@ const bookSummary = (b: any) => ({
   updatedAt: b.updatedAt,
 });
 
-router.get('/ontology', (_req, res) => res.json({ success: true, data: DOMAINS }));
+router.get('/ontology', async (_req: Request, res: Response) => {
+  await refreshDomains();
+  res.json({ success: true, data: allDomains() });
+});
+
+/** Add a domain (administrators only): key, name, optional description and areas. */
+router.post(
+  '/domains',
+  validateJWT,
+  loadUser,
+  requireRole(UserRole.ADMINISTRATOR),
+  async (req: Request, res: Response) => {
+    const result = await addDomain(req.body || {}, (req as any).user?.email);
+    if ('error' in result) return res.status(400).json({ success: false, error: result.error });
+    loggingService.info('Library: domain added', { key: result.domain.key });
+    res.status(201).json({ success: true, data: result.domain });
+  }
+);
 
 router.get('/books', validateJWT, loadUser, async (_req: Request, res: Response) => {
   const books: any[] = await KbBook.find().select('-toc').sort({ createdAt: -1 }).lean();
@@ -238,13 +257,16 @@ router.post(
   upload.single('file'),
   async (req: Request, res: Response) => {
     try {
+      await refreshDomains();
       const fields = bookFields(req.body || {});
       if (!fields.title)
         return res.status(400).json({ success: false, error: 'A title is required' });
       if (!fields.domainKeys.length) {
         return res.status(400).json({
           success: false,
-          error: `domainKeys must include one of: ${DOMAINS.map((d) => d.key).join(', ')}`,
+          error: `domainKeys must include one of: ${allDomains()
+            .map((d) => d.key)
+            .join(', ')}`,
         });
       }
       let buffer: Buffer;
@@ -310,6 +332,7 @@ router.post(
 router.patch('/books/:id', validateJWT, loadUser, async (req: Request, res: Response) => {
   if (!mongoose.isValidObjectId(req.params.id))
     return res.status(404).json({ success: false, error: 'Book not found' });
+  await refreshDomains();
   const fields: any = bookFields({ ...req.body });
   const set: any = {};
   for (const k of [
@@ -581,7 +604,10 @@ router.post('/calibrate', validateJWT, loadUser, async (req: Request, res: Respo
  * shortlist pairs, a model judges them (knowledge/consolidate). Runs after queued ingests.
  */
 router.post('/consolidate', validateJWT, loadUser, async (req: Request, res: Response) => {
-  const domainKeys = asList(req.body?.domainKeys).filter((k) => DOMAINS.some((d) => d.key === k));
+  await refreshDomains();
+  const domainKeys = asList(req.body?.domainKeys).filter((k) =>
+    allDomains().some((d) => d.key === k)
+  );
   res.status(202).json({ success: true, data: { mode: await enqueueConsolidation(domainKeys) } });
 });
 
@@ -612,18 +638,23 @@ router.put(
   async (req: Request, res: Response) => {
     if (!mongoose.isValidObjectId(req.params.workflowId))
       return res.status(404).json({ success: false, error: 'Programme not found' });
-    const domainKeys = asList(req.body?.domainKeys).filter((k) => DOMAINS.some((d) => d.key === k));
+    await refreshDomains();
+    const domainKeys = asList(req.body?.domainKeys).filter((k) =>
+      allDomains().some((d) => d.key === k)
+    );
     const enabled = req.body?.enabled !== false;
     if (enabled && !domainKeys.length) {
       return res.status(400).json({
         success: false,
-        error: `domainKeys must include one of: ${DOMAINS.map((d) => d.key).join(', ')}`,
+        error: `domainKeys must include one of: ${allDomains()
+          .map((d) => d.key)
+          .join(', ')}`,
       });
     }
     const bookIds = asList(req.body?.bookIds)
       .filter((id) => mongoose.isValidObjectId(id))
       .slice(0, 50);
-    const knownAreas = new Set(DOMAINS.flatMap((d) => d.areas.map((a) => a.name)));
+    const knownAreas = new Set(allDomains().flatMap((d) => d.areas.map((a) => a.name)));
     const areas = asList(req.body?.areas)
       .filter((a) => knownAreas.has(a))
       .slice(0, 40);

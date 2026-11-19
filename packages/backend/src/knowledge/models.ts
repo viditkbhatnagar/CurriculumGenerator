@@ -257,8 +257,21 @@ const KbMetaSchema = new Schema(
   { strict: false }
 );
 
+/** Domains an administrator added (knowledge/domainRegistry); the built-in ones live in code. */
+const KbDomainSchema = new Schema(
+  {
+    key: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
+    description: { type: String, default: '' },
+    areas: { type: Schema.Types.Mixed, default: [] },
+    createdBy: { type: String },
+  },
+  { timestamps: true }
+);
+
 export const KbBook = mongoose.model('KbBook', KbBookSchema, 'kbbooks');
 export const KbPassage = mongoose.model('KbPassage', KbPassageSchema, 'kbpassages');
 export const KbConcept = mongoose.model('KbConcept', KbConceptSchema, 'kbconcepts');
 export const KbCounter = mongoose.model('KbCounter', KbCounterSchema, 'kbcounters');
 export const KbMeta = mongoose.model('KbMeta', KbMetaSchema, 'kbmeta');
+export const KbDomain = mongoose.model('KbDomain', KbDomainSchema, 'kbdomains');
