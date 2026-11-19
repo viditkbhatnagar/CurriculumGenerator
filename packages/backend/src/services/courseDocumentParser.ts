@@ -91,6 +91,38 @@ const fieldFor = (label: string): keyof ExtractedProgramme | null => {
   return hit && hit[1] !== 'modules' ? hit[1] : null;
 };
 
+/**
+ * A paragraph holding several labelled fields, as Word makes of consecutive lines pasted from
+ * ChatGPT: "Level: Level 5 Diploma Credits: 60 Duration: 600 hours". Cut wherever a known label
+ * (up to four words) ends in a colon, so each field is read on its own; otherwise the whole line
+ * was taken as the level and the credits and hours were lost.
+ */
+export function splitLabelled(text: string): string[] {
+  const cuts: number[] = [];
+  const colon = /[:\uff1a]/g;
+  let m: RegExpExecArray | null;
+  while ((m = colon.exec(text))) {
+    const before = text.slice(0, m.index);
+    const starts: number[] = [];
+    const word = /\S+/g;
+    let w: RegExpExecArray | null;
+    while ((w = word.exec(before))) starts.push(w.index);
+    for (let k = Math.min(4, starts.length); k >= 1; k -= 1) {
+      const start = starts[starts.length - k];
+      if (fieldFor(before.slice(start).trim())) {
+        if (start > 0) cuts.push(start);
+        break;
+      }
+    }
+  }
+  if (!cuts.length) return [text];
+  const points = [0, ...cuts, text.length];
+  return points
+    .slice(0, -1)
+    .map((p, i) => text.slice(p, points[i + 1]).trim())
+    .filter(Boolean);
+}
+
 const sectionFor = (heading: string): SectionKey | null => {
   const text = heading
     .replace(/[:：]\s*$/, '')
@@ -403,6 +435,19 @@ function programmeFrom(blocks: CourseBlock[]): ExtractedProgramme {
       continue;
     }
 
+    const pieces = splitLabelled(block.text);
+    if (pieces.length > 1) {
+      for (const piece of pieces) {
+        const one = labelOf(piece);
+        const f = one ? fieldFor(one.label) : null;
+        if (!one || !f || !one.value) continue;
+        if (f === 'title') p.title = p.title || one.value;
+        else if (f === 'credits') p.credits = toNumber(one.value);
+        else if (f === 'totalHours') p.totalHours = toHours(one.value);
+        else if (f === 'levelText' || f === 'credentialText') p[f] = one.value;
+      }
+      continue;
+    }
     const lab = labelOf(block.text);
     const field = lab ? fieldFor(lab.label) : null;
     if (lab && field && lab.value) {

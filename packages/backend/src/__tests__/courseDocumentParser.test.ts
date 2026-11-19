@@ -10,7 +10,7 @@ jest.mock('../services/openaiService', () => ({
 }));
 
 import { blocksFromMarkdown, blocksFromHtml } from '../services/courseDocumentBlocks';
-import { parseCourseBlocks, parseTitleLine } from '../services/courseDocumentParser';
+import { parseCourseBlocks, parseTitleLine, splitLabelled } from '../services/courseDocumentParser';
 import { toStep1Prefill, toBlueprint, academicLevelFrom } from '../services/courseDocumentMapping';
 import { normaliseModelCourse } from '../services/courseDocumentModel';
 import { importCourseDocument } from '../services/courseDocumentImport';
@@ -216,5 +216,18 @@ describe('model fallback', () => {
   it('rejects unreadable model replies', async () => {
     generate.mockResolvedValue('not json');
     await expect(importCourseDocument({ text: 'prose only' })).rejects.toThrow(/did not return/);
+  });
+});
+
+describe('splitLabelled (several fields in one Word paragraph)', () => {
+  it('cuts "Level: … Credits: … Duration: …" into its fields', () => {
+    expect(splitLabelled('Level: Level 5 Diploma Credits: 60 Duration: 600 hours')).toEqual([
+      'Level: Level 5 Diploma',
+      'Credits: 60',
+      'Duration: 600 hours',
+    ]);
+    expect(splitLabelled('Purpose: to prepare learners for roles in X')).toEqual([
+      'Purpose: to prepare learners for roles in X',
+    ]);
   });
 });
