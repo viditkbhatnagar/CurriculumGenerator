@@ -191,7 +191,8 @@ export async function addBook(book: NewBook): Promise<LibraryBook> {
     licence: book.licence,
     licenceStatement: book.licenceStatement || '',
     domainKeys: book.domainKeys.join(','),
-    programmes: book.programmes || '',
+    // Only a licensed book is limited to programmes; any other serves every programme in its domains.
+    programmes: book.licence === 'institution-licensed' ? book.programmes || '' : '',
     providedBy: book.providedBy || '',
     accessTier: book.accessTier,
   };

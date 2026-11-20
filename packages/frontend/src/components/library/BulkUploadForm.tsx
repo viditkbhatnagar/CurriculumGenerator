@@ -9,6 +9,7 @@ import {
   titleFromFileName,
 } from '@/lib/libraryApi';
 import { DomainPicker } from './DomainPicker';
+import { ProgrammePicker } from './ProgrammePicker';
 
 interface Props {
   domains: OntologyDomain[];
@@ -186,17 +187,15 @@ export function BulkUploadForm({ domains, onDomainAdded, onDone, onCancel }: Pro
             ))}
           </select>
         </div>
-        <div className="md:col-span-2">
-          <label className={label} htmlFor="bulk-programmes">
-            Programmes (comma separated)
-          </label>
-          <input
-            id="bulk-programmes"
-            className={field}
-            value={shared.programmes}
-            onChange={(e) => setShared((s) => ({ ...s, programmes: e.target.value }))}
-          />
-        </div>
+        {shared.licence === 'institution-licensed' && (
+          <div className="md:col-span-2">
+            <ProgrammePicker
+              id="bulk-programmes"
+              value={shared.programmes}
+              onChange={(v) => setShared((s) => ({ ...s, programmes: v }))}
+            />
+          </div>
+        )}
         <div className="md:col-span-2">
           <label className={label} htmlFor="bulk-provided">
             Provided by

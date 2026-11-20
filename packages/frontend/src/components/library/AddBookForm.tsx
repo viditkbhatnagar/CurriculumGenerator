@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { DomainPicker } from './DomainPicker';
+import { ProgrammePicker } from './ProgrammePicker';
 import { addBook, Licence, LICENCE_LABELS, OntologyDomain } from '@/lib/libraryApi';
 
 interface Props {
@@ -245,18 +246,15 @@ export function AddBookForm({ domains, onAdded, onCancel, onDomainAdded }: Props
             </label>
           </div>
         </fieldset>
-        <div className="md:col-span-3">
-          <label className={label} htmlFor="kb-programmes">
-            Programmes (comma separated)
-          </label>
-          <input
-            id="kb-programmes"
-            className={field}
-            placeholder="BBA, MBA"
-            value={form.programmes}
-            onChange={(e) => set('programmes', e.target.value)}
-          />
-        </div>
+        {form.licence === 'institution-licensed' && (
+          <div className="md:col-span-3">
+            <ProgrammePicker
+              id="kb-programmes"
+              value={form.programmes}
+              onChange={(v) => set('programmes', v)}
+            />
+          </div>
+        )}
         <div className="md:col-span-3">
           <label className={label} htmlFor="kb-provided">
             Provided by
