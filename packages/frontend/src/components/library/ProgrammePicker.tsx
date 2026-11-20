@@ -37,8 +37,8 @@ export function ProgrammePicker({
         Licensed for these programmes only
       </legend>
       <p className="mb-2 text-xs text-teal-600">
-        An institution-licensed book is used only by the programmes ticked here. Leave none ticked
-        and it is used by no programme.
+        Tick programmes to limit this licensed book to them. Leave none ticked and every programme
+        in its domains may use it.
       </p>
       {isLoading ? (
         <p className="text-sm text-teal-600">Loading programmes…</p>
