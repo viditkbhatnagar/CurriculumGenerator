@@ -15,6 +15,7 @@
  * Pure, so it can be tested; reading the PDF is in pdf/readPdf.
  */
 import type { PdfOutlineItem, PdfText } from './pdf/readPdf';
+import { isMatterTitle, numberedOutline } from './numberedOutline';
 import {
   bodySize,
   headingsFromNumbers,
@@ -65,7 +66,7 @@ export function classifySection(sectionTitle: string, chapterTitle = ''): Sectio
   const s = stripNumber(sectionTitle);
   const c = stripNumber(chapterTitle);
   if (RESTRICTED.test(s) || RESTRICTED.test(c)) return 'restricted';
-  if (MATTER.test(c) || MATTER.test(s)) return 'matter';
+  if (MATTER.test(c) || MATTER.test(s) || isMatterTitle(c) || isMatterTitle(s)) return 'matter';
   // An index's letter headings ("X", "Y", "Z" in Sloman's bookmarks).
   if (/^[A-Z]$/.test(c.trim())) return 'matter';
   // An index's letter headings ("X", "Y", "Z" in Sloman's bookmarks).
@@ -182,8 +183,8 @@ export function isPartTitle(title: string): boolean {
   );
 }
 
-function nodesFrom(outline: PdfOutlineItem[]): Node[] {
-  const globalDepth = chapterDepth(outline);
+function nodesFrom(outline: PdfOutlineItem[], forcedDepth?: number): Node[] {
+  const globalDepth = forcedDepth ?? chapterDepth(outline);
   const nodes: Node[] = [];
   let chapter: { index: number; number: string; title: string } | null = null;
   let sectionIndex = 0;
@@ -247,8 +248,12 @@ function headingAt(blocks: Block[], from: number, title: string): number {
 
 export function structureBook(pdf: PdfText): { sections: BookSection[]; usedOutline: boolean } {
   const usedOutline = pdf.outline.filter((o) => o.page !== null).length >= 3;
-  const outline = usedOutline ? titledOutline(pdf, pdf.outline) : headingsWithoutBookmarks(pdf);
-  const nodes = nodesFrom(outline).sort((a, b) => a.page - b.page);
+  const titled = usedOutline ? titledOutline(pdf, pdf.outline) : headingsWithoutBookmarks(pdf);
+  // Numbers printed in the bookmark titles ("1: Title", "1.1: Title") outrank bookmark depth.
+  const numbered = usedOutline ? numberedOutline(titled) : null;
+  const nodes = (numbered ? nodesFrom(numbered, 0) : nodesFrom(titled)).sort(
+    (a, b) => a.page - b.page
+  );
   const sections: BookSection[] = nodes.map((n) => {
     const kind = classifySection(n.sectionTitle, n.chapterTitle);
     return {
