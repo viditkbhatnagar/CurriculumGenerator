@@ -246,14 +246,41 @@ function headingAt(blocks: Block[], from: number, title: string): number {
   return -1;
 }
 
+/**
+ * A document with text but no bookmarks or chapter headings (a journal article, a handout) as a
+ * single chapter, titled from the largest line on its first page with text. Without this it had
+ * no sections and was refused as "No readable text": Athira Hari's two fashion articles (21
+ * November 2026) were, with 4,502 and 264 words in them.
+ */
+function wholeDocument(pdf: PdfText): Node[] {
+  const first = pdf.pages.find((p) => p.paragraphs.some((x) => x.text.trim()));
+  if (!first) return [];
+  const lines = first.paragraphs.filter((x) => x.text.trim().length >= 3);
+  const largest = lines.reduce((a, b) => (b.size > a.size ? b : a), lines[0]);
+  const title = (largest?.text || 'Document').trim().replace(/\s+/g, ' ').slice(0, 120);
+  return [
+    {
+      chapterIndex: 0,
+      chapterNumber: '1',
+      chapterCounted: false,
+      chapterTitle: title,
+      sectionIndex: 0,
+      sectionNumber: '1.0',
+      sectionTitle: 'Introduction',
+      page: first.number,
+    },
+  ];
+}
+
 export function structureBook(pdf: PdfText): { sections: BookSection[]; usedOutline: boolean } {
   const usedOutline = pdf.outline.filter((o) => o.page !== null).length >= 3;
   const titled = usedOutline ? titledOutline(pdf, pdf.outline) : headingsWithoutBookmarks(pdf);
   // Numbers printed in the bookmark titles ("1: Title", "1.1: Title") outrank bookmark depth.
   const numbered = usedOutline ? numberedOutline(titled) : null;
-  const nodes = (numbered ? nodesFrom(numbered, 0) : nodesFrom(titled)).sort(
+  const found = (numbered ? nodesFrom(numbered, 0) : nodesFrom(titled)).sort(
     (a, b) => a.page - b.page
   );
+  const nodes = found.length ? found : wholeDocument(pdf);
   const sections: BookSection[] = nodes.map((n) => {
     const kind = classifySection(n.sectionTitle, n.chapterTitle);
     return {
