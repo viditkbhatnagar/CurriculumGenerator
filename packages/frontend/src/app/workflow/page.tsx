@@ -94,6 +94,9 @@ export default function WorkflowListPage() {
     workflow?: CurriculumWorkflow;
   }>({ show: false });
   const [facultyOptions, setFacultyOptions] = useState<Array<{ id: string; email: string }>>([]);
+  // Why the faculty list could not be read. An empty list and a refused request are different:
+  // the dialog said "No faculty invited yet" when the request was refused (expired sign-in).
+  const [facultyLoadError, setFacultyLoadError] = useState<string | null>(null);
   const [assignTargetId, setAssignTargetId] = useState<string>('');
   const [assigning, setAssigning] = useState(false);
   const [assignDropdownOpen, setAssignDropdownOpen] = useState(false);
@@ -182,6 +185,7 @@ export default function WorkflowListPage() {
       try {
         const resp = await api.get('/api/users?role=faculty&limit=200');
         if (!cancelled) {
+          setFacultyLoadError(null);
           setFacultyOptions(
             (resp.data?.users || []).map((u: { id: string; email: string }) => ({
               id: u.id,
@@ -189,8 +193,15 @@ export default function WorkflowListPage() {
             }))
           );
         }
-      } catch {
-        // Non-fatal — admin can still type an email if the list is empty
+      } catch (err: unknown) {
+        if (cancelled) return;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const status = (err as any)?.response?.status;
+        setFacultyLoadError(
+          status === 401 || status === 403
+            ? 'Your sign-in has expired. Sign out and sign in again to see the faculty list.'
+            : 'The faculty list could not be loaded. Reload the page and try again.'
+        );
       }
     })();
     return () => {
@@ -947,12 +958,14 @@ export default function WorkflowListPage() {
                   className="w-full flex items-center justify-between px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground hover:border-primary/60 focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                 >
                   <span className={cn('truncate', !assignTargetId && 'text-foreground-muted')}>
-                    {facultyOptions.length === 0
-                      ? 'No faculty invited yet — go to Faculty management first'
-                      : assignTargetId
-                        ? facultyOptions.find((f) => f.id === assignTargetId)?.email ||
-                          'Choose a faculty member…'
-                        : 'Choose a faculty member…'}
+                    {facultyLoadError
+                      ? 'Faculty list unavailable'
+                      : facultyOptions.length === 0
+                        ? 'No faculty invited yet — go to Faculty management first'
+                        : assignTargetId
+                          ? facultyOptions.find((f) => f.id === assignTargetId)?.email ||
+                            'Choose a faculty member…'
+                          : 'Choose a faculty member…'}
                   </span>
                   <ChevronDown
                     className={cn(
@@ -990,6 +1003,11 @@ export default function WorkflowListPage() {
                     </motion.ul>
                   )}
                 </AnimatePresence>
+                {facultyLoadError && (
+                  <p className="mt-2 text-xs text-red-600" role="alert">
+                    {facultyLoadError}
+                  </p>
+                )}
               </div>
 
               <div className="flex gap-2">
