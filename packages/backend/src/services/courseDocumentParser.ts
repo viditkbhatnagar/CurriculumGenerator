@@ -80,6 +80,8 @@ const MODULE_SECTION =
   /^(\d+[.)]\s*)?((course|programme|program)\s+)?(structure|modules?|curriculum|syllabus|course outline|module (list|breakdown|overview)|course content)$/i;
 const MODULE_HEADING = /^(module|unit|week|session|part)\s*(\d+|[ivx]+)\b\s*[:.\-–—]?\s*(.*)$/i;
 const TOTAL_ROW = /^\s*(grand|sub)?[\s-]*totals?\b/i;
+/** "6 modules", "12 units": a count standing in a total row's title cell. */
+const COUNT_TITLE = /^\s*\d+\s+(modules?|units?|courses?|subjects?|weeks?|sessions?)\s*$/i;
 
 const labelOf = (text: string): { label: string; value: string } | null => {
   const m = /^([A-Za-z][A-Za-z /&-]{1,40}?)\s*[:：]\s*(.*)$/.exec(text);
@@ -264,8 +266,9 @@ function modulesFromTables(blocks: CourseBlock[]): ExtractedModule[] {
       return '';
     };
     const titleRaw = cell('title');
-    if (!titleRaw || TOTAL_ROW.test(titleRaw) || /^\d+$/.test(titleRaw) || titleRaw.length < 3)
-      continue;
+    if (!titleRaw || /^\d+$/.test(titleRaw) || titleRaw.length < 3) continue;
+    // A total row: "Total" in any cell (often the code column), or a count as the title.
+    if (block.cells.some((c) => TOTAL_ROW.test(c)) || COUNT_TITLE.test(titleRaw)) continue;
 
     const parsed = parseTitleLine(titleRaw);
     const m = blankModule(parsed.title);

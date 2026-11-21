@@ -89,6 +89,22 @@ describe('table-structured course', () => {
     expect(course.modules[1].topics).toEqual(['selects, joins', 'grouping']);
   });
 
+  it('skips a total row whose title cell is a count ("6 modules"), wherever "Total" sits', () => {
+    // Athira's Fashion Illustration course (21 November 2026) became seven modules, the last
+    // titled "6 modules" with 96 hours: the word "Total" was in the code column.
+    const md = `# Fashion Illustration
+| Code | Module | Independent Hours |
+|---|---|---|
+| M01 | Drawing Fundamentals | 16 |
+| M02 | Garment Rendering | 16 |
+| Total | 2 modules | 32 |
+`;
+    expect(parse(md).modules.map((m) => m.title)).toEqual([
+      'Drawing Fundamentals',
+      'Garment Rendering',
+    ]);
+  });
+
   it('reads an HTML table the same way', () => {
     const html = `<h1>Course</h1><table><tr><th>Module</th><th>ECTS</th></tr><tr><td>Ethics</td><td>5</td></tr></table>`;
     const c = parseCourseBlocks(blocksFromHtml(html));
