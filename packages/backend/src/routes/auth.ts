@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { validateJWT, loadUser, handleAuthError } from '../middleware/auth';
+import { validateJWT, loadUser, requireSignedIn, handleAuthError } from '../middleware/auth';
 import { createSession, deleteSession, refreshSession } from '../services/sessionService';
 import { createAuditLog } from '../services/auditService';
 import { login as passwordLogin, InvalidCredentialsError } from '../services/passwordAuthService';
@@ -56,9 +56,15 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 /**
- * Get current user profile
+ * Get current user profile.
+ *
+ * Only a real sign-in answers. While REQUIRE_AUTH is off, a GET with an expired or unreadable
+ * token falls through to the anonymous stand-in, which is an administrator; /me used to return
+ * it, so the app kept an expired session open as "administrator" and the account screens (which
+ * do need a real sign-in) refused it. Athira Hari (India Learns, 21 November 2026) was told "No
+ * faculty invited yet" with 30 faculty on record. A 401 here sends the app to the sign-in screen.
  */
-router.get('/me', validateJWT, loadUser, async (req: Request, res: Response) => {
+router.get('/me', validateJWT, loadUser, requireSignedIn, async (req: Request, res: Response) => {
   try {
     if (!req.user) {
       res.status(401).json({
