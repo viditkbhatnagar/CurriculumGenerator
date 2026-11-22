@@ -120,6 +120,12 @@ export function checkCourseSyllabus(course: CourseSyllabus, mod: any): CourseCom
         : 'The outcomes shown differ from the Step 4 module outcomes',
     },
     {
+      key: 'packsCurrent',
+      label: 'The graded work agrees with the module summative that was approved',
+      ok: !course.packMismatch,
+      detail: course.packMismatch || undefined,
+    },
+    {
       key: 'institutionRules',
       label: "The institution's pass, grading, late-work, resit and attendance rules are stated",
       ok: missingRules.length === 0,

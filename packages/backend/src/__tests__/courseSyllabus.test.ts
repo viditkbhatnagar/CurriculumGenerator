@@ -202,9 +202,23 @@ describe('buildCourseSyllabus', () => {
     expect(c.weightTotal).toBe(100);
   });
 
-  it('takes band names from the pack', () => {
+  it('shows descriptive bands, not Fail/Pass/Merit/Distinction, when no scale is entered', () => {
     const w = workflow();
     const c = buildCourseSyllabus(w, modOf(w), {});
+    expect(c.criteriaTable?.headers).toEqual([
+      'Criterion',
+      'Not yet demonstrated',
+      'Satisfactory',
+      'Good',
+      'Excellent',
+    ]);
+  });
+
+  it('keeps the pack band names when the institution entered a scale', () => {
+    const w = workflow();
+    const c = buildCourseSyllabus(w, modOf(w), {
+      policies: { gradingScale: 'Refer to Distinction' },
+    });
     expect(c.criteriaTable?.headers).toEqual([
       'Criterion',
       'Refer',
@@ -212,6 +226,34 @@ describe('buildCourseSyllabus', () => {
       'Merit',
       'Distinction',
     ]);
+  });
+
+  it('follows Step 7 and flags the pack when its type differs (Logan, 21 Nov 2026)', () => {
+    const w = workflow();
+    w.step7.formativeAssessments[1].title = 'Dubai Case Pack';
+    w.step7.formativeAssessments[1].assessmentType = 'Mini-case exercises';
+    w.step7.formativeAssessments[1].description = 'Work through three mini-cases.';
+    w.step12.moduleAssignmentPacks[0].variants.in_person.overview.assignmentType =
+      'MCQ knowledge checks';
+    const c = buildCourseSyllabus(w, modOf(w), {});
+    const graded = c.workTable.rows.find((r) => r[2] === 'Graded')!;
+    expect(graded[0]).toBe('Dubai Case Pack');
+    expect(graded[1]).toContain('three mini-cases');
+    expect(graded[1]).not.toContain('seven short cases');
+    expect(c.components[0]).toMatchObject({
+      title: 'Dubai Case Pack',
+      type: 'Mini-case exercises',
+    });
+    expect(c.criteriaTable).toBeNull();
+    expect(c.packMismatch).toMatch(/Regenerate the Step 12 packs/);
+    const check = checkCourseSyllabus(c, modOf(w)).checks.find((x) => x.key === 'packsCurrent');
+    expect(check?.ok).toBe(false);
+  });
+
+  it('reports no mismatch when the pack agrees with Step 7', () => {
+    const w = workflow();
+    const c = buildCourseSyllabus(w, modOf(w), {});
+    expect(c.packMismatch).toBeNull();
   });
 
   it('falls back to Step 4 topics when there are no lessons', () => {

@@ -83,7 +83,7 @@ import { createSlots, singleFlight } from '../utils/exportSlots';
 // v38: Step 14 is a programme overview plus one course syllabus per module (what you will learn,
 //      how to prepare, what work to complete, how you will be assessed); no invented grade scale
 //      or policies; Unresolved Issues lists the course syllabi's failed checks.
-const EXPORT_FORMAT_VERSION = 'v38';
+const EXPORT_FORMAT_VERSION = 'v39';
 
 /**
  * Builds in progress, by file and content hash: a second request for the same file shares the

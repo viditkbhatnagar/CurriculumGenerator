@@ -27,6 +27,7 @@ import { topicTitle } from '../utils/topicShape';
 import { isUngraded, applyAssessmentWeightings } from '../utils/assessmentWeighting';
 import { levelsFor } from './moduleLevels';
 import type { AssessmentRules } from './assessmentRules';
+import { packMismatch, syllabusBandLabels } from './syllabusAssessmentRules';
 
 export interface SyllabusTable {
   headers: string[];
@@ -76,6 +77,11 @@ export interface CourseSyllabus {
   componentsTable: SyllabusTable;
   criteriaTable: SyllabusTable | null;
   criteriaNote: string;
+  /**
+   * Why the Step 12 pack does not match Step 7's module summative (Logan Pacey, 21 Nov 2026),
+   * or null. While set, the syllabus follows Step 7 and shows no pack criteria.
+   */
+  packMismatch: string | null;
   rules: StudentRule[];
 }
 
@@ -287,7 +293,10 @@ export function moduleComponents(assessments: any[]): {
   return { components, total };
 }
 
-function criteriaOf(pack: any): { table: SyllabusTable | null; note: string } {
+function criteriaOf(
+  pack: any,
+  statedScale: string | null
+): { table: SyllabusTable | null; note: string } {
   const variant: any = pack && Object.values(pack.variants || {})[0];
   const rubric: any[] = Array.isArray(variant?.rubric) ? variant.rubric : [];
   if (!rubric.length) {
@@ -299,17 +308,19 @@ function criteriaOf(pack: any): { table: SyllabusTable | null; note: string } {
         : 'The marking criteria for this work have not been written yet.',
     };
   }
-  const keys = ['fail', 'pass', 'merit', 'distinction'].filter((k) =>
-    rubric.some((c) => text(c[k]))
-  );
-  const labels: string[] = Array.isArray(variant.bandLabels) ? variant.bandLabels : [];
-  const header = keys.map((k, i) => text(labels[i]) || k[0].toUpperCase() + k.slice(1));
+  // The four stored slots are lowest to highest; their names come from the institution's
+  // grading scale or are descriptive, never an assumed Fail/Pass/Merit/Distinction.
+  const slots = ['fail', 'pass', 'merit', 'distinction'];
+  const names = syllabusBandLabels(statedScale, variant.bandLabels);
+  const used = slots
+    .map((k, i) => ({ k, name: names[i] }))
+    .filter(({ k }) => rubric.some((c) => text(c[k])));
   return {
     table: {
-      headers: ['Criterion', ...header],
+      headers: ['Criterion', ...used.map((u) => u.name)],
       rows: rubric.map((c) => [
         text(c.criterionName) || 'Criterion',
-        ...keys.map((k) => text(c[k]) || 'Not described'),
+        ...used.map((u) => text(c[u.k]) || 'Not described'),
       ]),
     },
     note: '',
@@ -373,7 +384,25 @@ export function buildCourseSyllabus(
   const practice = module7.filter((a: any) => isUngraded(a));
   const graded = module7.filter((a: any) => !isUngraded(a));
   const pack = packOf(workflow, mod);
-  const variants: Array<[string, any]> = Object.entries(pack?.variants || {});
+  const allVariants: Array<[string, any]> = Object.entries(pack?.variants || {});
+  // Step 7's module summative is the approved assessment; the Step 12 pack is built from it.
+  // When the pack no longer matches, follow Step 7 (Logan Pacey, 21 Nov 2026: an old MCQ pack
+  // was listed as "Mini-case exercises") and let the check report that the packs are old.
+  const summative7 = graded.find((a: any) => a.purpose === 'module_summative') || graded[0];
+  const mismatch =
+    pack && summative7 && allVariants[0]
+      ? packMismatch({
+          step7: summative7,
+          variant: allVariants[0][1],
+          packAt:
+            pack.generatedAt || pack.updatedAt || pack.createdAt || workflow.step12?.generatedAt,
+          step7At: summative7.generatedAt || workflow.step7?.generatedAt,
+        })
+      : null;
+  const usePack = Boolean(pack) && !mismatch;
+  const variants = usePack ? allVariants : [];
+  const rules = studentRules(workflow.assessmentRules, inputs);
+  const statedScale = rules.find((r) => r.key === 'gradingScale')?.text || null;
   const lastWeek = weeks.length;
   const dueWeekOf = (i: number, n: number) =>
     Math.min(lastWeek, Math.max(1, Math.round(((i + 1) * lastWeek) / (n + 1))));
@@ -394,7 +423,7 @@ export function buildCourseSyllabus(
   });
   if (pack || graded.length) {
     const variant: any = variants[0]?.[1];
-    const g0 = graded[0];
+    const g0 = summative7;
     const name = text(variant?.overview?.title) || text(g0?.title) || 'Module assignment';
     const intro = summarise(
       variant?.brief?.studentFacingIntro || g0?.studentBrief || g0?.description
@@ -465,10 +494,15 @@ export function buildCourseSyllabus(
   // One graded piece of work is the one the student is told about under "work to complete":
   // the Step 12 brief and the Step 7 record carry different titles for it, and two names
   // would read as two assessments.
-  if (components.length === 1 && workRows.length && pack) {
+  if (components.length === 1 && workRows.length && usePack) {
     components[0].title = workRows[workRows.length - 1][0];
   }
-  const { table: criteriaTable, note: criteriaNote } = criteriaOf(pack);
+  const { table: criteriaTable, note: criteriaNote } = mismatch
+    ? {
+        table: null,
+        note: 'The marking criteria for this work are being updated to match the current assessment. Your tutor will confirm them.',
+      }
+    : criteriaOf(pack, statedScale);
   const hasMarks = components.some((c) => c.marks);
   const componentsTable: SyllabusTable = {
     headers: ['Assessed work', 'Type', 'Weight', ...(hasMarks ? ['Marks'] : [])],
@@ -500,7 +534,8 @@ export function buildCourseSyllabus(
     componentsTable,
     criteriaTable,
     criteriaNote,
-    rules: studentRules(workflow.assessmentRules, inputs),
+    packMismatch: mismatch,
+    rules,
   };
 }
 
