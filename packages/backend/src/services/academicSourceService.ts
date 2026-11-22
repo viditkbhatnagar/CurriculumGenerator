@@ -18,10 +18,17 @@
  */
 import { loggingService } from './loggingService';
 import { topicTitle } from '../utils/topicShape';
+import { readLookupCache, writeLookupCache } from './academicLookupCache';
 
 const OPENALEX = 'https://api.openalex.org';
 const CROSSREF = 'https://api.crossref.org';
 const CONTACT = process.env.ACADEMIC_API_CONTACT || 'curriculum@learnerseducation.com';
+/**
+ * Free OpenAlex API key (openalex.org/settings/api), sent as `api_key`. The anonymous
+ * allowance is $0.10 a day per IP, about 100 searches; a key is the supported way to raise it
+ * and costs nothing. `mailto` only identifies the caller and does not change the allowance.
+ */
+const OPENALEX_API_KEY = process.env.OPENALEX_API_KEY || '';
 
 /** OpenAlex asks for <10 req/s on the polite pool; stay well inside it. */
 const REQUEST_SPACING_MS = 150;
@@ -101,7 +108,14 @@ export class SourceLookupUnavailable extends Error {
   }
 }
 
-async function getJson(url: string, timeoutMs = 20000): Promise<any | null> {
+async function getJson(rawUrl: string, timeoutMs = 20000): Promise<any | null> {
+  // Answered from the cache when the same request was made in the last 30 days.
+  const cached = await readLookupCache(rawUrl);
+  if (cached) return cached;
+  const url =
+    OPENALEX_API_KEY && rawUrl.startsWith(OPENALEX)
+      ? `${rawUrl}&api_key=${encodeURIComponent(OPENALEX_API_KEY)}`
+      : rawUrl;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -118,7 +132,9 @@ async function getJson(url: string, timeoutMs = 20000): Promise<any | null> {
       );
     }
     if (!res.ok) return null;
-    return await res.json();
+    const body = await res.json();
+    await writeLookupCache(rawUrl, body);
+    return body;
   } catch (error) {
     if (error instanceof SourceLookupUnavailable) throw error;
     return null;
