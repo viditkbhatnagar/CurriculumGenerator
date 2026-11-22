@@ -639,17 +639,24 @@ export function useStep11Status(id: string, shouldPoll: boolean = true) {
 // STEP 12: ASSIGNMENT PACKS (module-by-module generation)
 // =============================================================================
 
+/**
+ * Generate Step 12. Pass `{ id, regenerate: true }` to replace every module's packs (the
+ * current packs are snapshotted first); a bare id generates only modules without packs.
+ */
 export function useSubmitStep12() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (arg: string | { id: string; regenerate?: boolean }) => {
+      const { id, regenerate } = typeof arg === 'string' ? { id: arg, regenerate: false } : arg;
       const response: WorkflowResponse = await fetchAPI(`${WORKFLOW_BASE}/${id}/step12`, {
         method: 'POST',
+        ...(regenerate ? { body: JSON.stringify({ regenerate: true }) } : {}),
       });
       return response;
     },
-    onSuccess: (_, id) => {
+    onSuccess: (_, arg) => {
+      const id = typeof arg === 'string' ? arg : arg.id;
       queryClient.invalidateQueries({ queryKey: ['workflow', id] });
       queryClient.invalidateQueries({ queryKey: ['workflow', id, 'step12-status'] });
     },

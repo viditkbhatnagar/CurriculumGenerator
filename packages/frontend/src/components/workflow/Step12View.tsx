@@ -45,6 +45,8 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [activeVariant, setActiveVariant] = useState<AssignmentDeliveryVariant>('in_person');
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+  // Replacing every module's packs is asked twice: the first press only arms the button.
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   // The pack detail renders below the 46-module list, so choosing a module changed nothing
   // the reviewer could see. "View Packs" now brings the detail into view.
@@ -142,8 +144,9 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
       return;
     }
 
-    // All done
-    if (allComplete) {
+    // All done. Not in the first seconds of a run: the status poll can still report the
+    // packs a full regeneration has just cleared, which would end the run as it starts.
+    if (allComplete && Date.now() - generationStartedAtRef.current > 20000) {
       setIsAutoGenerating(false);
       completeGeneration(workflow._id, 12);
       prevCompletedRef.current = completedModules;
@@ -230,6 +233,30 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to generate assignment packs';
       console.error('Failed to generate assignment packs:', err);
+      setIsAutoGenerating(false);
+      failGeneration(workflow._id, 12, errorMessage);
+      setError(errorMessage);
+    }
+  };
+
+  /**
+   * Replace every module's packs. Once all modules had packs the page offered only View Packs
+   * and Approve, so packs written before later fixes could not be renewed (Logan Pacey, AGU,
+   * 21 November 2026). The server snapshots the current packs before clearing them.
+   */
+  const handleRegenerateAll = async () => {
+    if (isAutoGenerating || submitStep12.isPending) return;
+    setConfirmRegenerate(false);
+    setError(null);
+    setIsAutoGenerating(true);
+    generationStartedAtRef.current = Date.now();
+    startGeneration(workflow._id, 12, _totalMods * 600);
+    try {
+      await submitStep12.mutateAsync({ id: workflow._id, regenerate: true });
+      onRefresh();
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to regenerate assignment packs';
       setIsAutoGenerating(false);
       failGeneration(workflow._id, 12, errorMessage);
       setError(errorMessage);
@@ -1188,6 +1215,39 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                   ? 'Generating...'
                   : `Generate All Remaining (${totalModules - completedModules} modules)`}
             </button>
+
+            {isAllModulesComplete && !isCurrentlyGenerating && (
+              <div className="flex items-center gap-2">
+                {confirmRegenerate ? (
+                  <>
+                    <span className="text-sm text-amber-700">
+                      Replace all {totalModules} modules&apos; packs? The current ones are saved as
+                      a version you can restore.
+                    </span>
+                    <button
+                      onClick={handleRegenerateAll}
+                      disabled={submitStep12.isPending}
+                      className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                    >
+                      Yes, regenerate
+                    </button>
+                    <button
+                      onClick={() => setConfirmRegenerate(false)}
+                      className="px-3 py-2 text-sm text-teal-600 hover:text-teal-800"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setConfirmRegenerate(true)}
+                    className="px-4 py-2 border border-amber-400 text-amber-700 hover:bg-amber-50 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Regenerate all packs
+                  </button>
+                )}
+              </div>
+            )}
 
             {isAllModulesComplete && !isApproved && (
               <button
