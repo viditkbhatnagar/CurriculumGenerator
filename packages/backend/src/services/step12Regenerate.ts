@@ -40,7 +40,8 @@ export function step12ResetUpdate(now: Date) {
   return {
     update: {
       $set: {
-        step12: { moduleAssignmentPacks: [], regenerationStartedAt: now },
+        // generatedAt is set here: module generation only sets it when Step 12 is absent.
+        step12: { moduleAssignmentPacks: [], generatedAt: now, regenerationStartedAt: now },
         'stepProgress.$[p].status': 'in_progress',
         'stepProgress.$[p].startedAt': now,
       },

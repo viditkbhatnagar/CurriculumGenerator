@@ -20,7 +20,11 @@ describe('Step 12 full regeneration', () => {
   it('empties the packs and marks only Step 12 in progress', () => {
     const now = new Date('2026-11-22T10:00:00Z');
     const { update, options } = step12ResetUpdate(now);
-    expect(update.$set.step12).toEqual({ moduleAssignmentPacks: [], regenerationStartedAt: now });
+    expect(update.$set.step12).toEqual({
+      moduleAssignmentPacks: [],
+      generatedAt: now,
+      regenerationStartedAt: now,
+    });
     expect(update.$set['stepProgress.$[p].status']).toBe('in_progress');
     expect(update.$unset).toHaveProperty(['stepProgress.$[p].completedAt']);
     expect(options.arrayFilters).toEqual([{ 'p.step': 12 }]);
