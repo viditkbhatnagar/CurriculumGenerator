@@ -6276,6 +6276,27 @@ router.post('/:id/step12', validateJWT, loadUser, async (req: Request, res: Resp
       });
     }
 
+    // { regenerate: true } rebuilds every module's packs (services/step12Regenerate). Without
+    // it, only modules that have no complete packs are generated, as before.
+    if (req.body?.regenerate === true) {
+      const { getAllStep12Jobs } = await import('../queues/step12Queue');
+      const { resetStep12ForRegeneration } = await import('../services/step12Regenerate');
+      const jobs = await Promise.all(
+        (await getAllStep12Jobs(id)).map(async (job) => ({
+          state: await job.getState(),
+          moduleIndex: job.data?.moduleIndex,
+        }))
+      );
+      try {
+        await resetStep12ForRegeneration(id, jobs);
+      } catch (resetError: any) {
+        if (resetError?.status === 409) {
+          return res.status(409).json({ success: false, error: resetError.message });
+        }
+        throw resetError;
+      }
+    }
+
     // Try background queue first
     try {
       const { queueAllRemainingStep12Modules } = await import('../queues/step12Queue');
