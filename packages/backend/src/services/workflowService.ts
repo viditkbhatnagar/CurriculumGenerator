@@ -101,6 +101,7 @@ import {
 import { deckSourcesFromWorkflow } from './deckRequiredSlides';
 import { isFastMovingModule, moduleRecencyProblems, withRecencyNotes } from './sourceRecency';
 import { step5ProgressAt } from './step5Progress';
+import { moduleVerdict } from './moduleCompliance';
 import {
   step11ValidationFromDecks,
   step12SummaryFromPacks,
@@ -2756,6 +2757,18 @@ CRITICAL:
       const modMLOs = mod.mlos?.map((mlo: any) => mlo.id) || [];
       const supportedMLOs = new Set(modSources.flatMap((s: any) => s.linkedMLOs || []));
 
+      // Recency included, so a fast-moving module cannot read Compliant on the five-year rule
+      // it has not met (moduleCompliance).
+      const verdict = moduleVerdict({
+        module: mod,
+        sources: modSources,
+        currentYear,
+        mixOk:
+          modPeerReviewed.length / (modSources.length || 1) >= 0.5 &&
+          modAcademic.length > 0 &&
+          modApplied.length > 0,
+      });
+
       return {
         moduleId: mod.id,
         moduleTitle: mod.title,
@@ -2789,10 +2802,9 @@ CRITICAL:
         mlosWithoutAcademicSource: modMLOs.filter(
           (mloId: string) => !modAcademic.some((s: any) => (s.linkedMLOs || []).includes(mloId))
         ),
-        agiCompliant:
-          modPeerReviewed.length / (modSources.length || 1) >= 0.5 &&
-          modAcademic.length > 0 &&
-          modApplied.length > 0,
+        agiCompliant: verdict.agiCompliant,
+        fastMovingRuleMet: verdict.fastMovingRuleMet,
+        recencyIssues: verdict.recencyIssues,
       };
     });
 
@@ -6055,6 +6067,19 @@ CRITICAL:
     }
 
     const verifiedCount = output.filter((s) => s.complianceBadges?.verifiedVia).length;
+
+    // The allowance ran out part-way, so some modules have no journal sources. Saving that as
+    // a normal result is what produced Logan Pacey's 22 sources at 0% peer-reviewed on 21
+    // November 2026, with nothing on the page saying why. Fail the run instead: the previous
+    // version stays, the page shows the message, and a retry costs little because every
+    // lookup already answered is cached (academicLookupCache).
+    if (lookupUnavailable) {
+      throw new Error(
+        `${lookupUnavailable} Step 5 stopped part-way so that an incomplete set of sources is ` +
+          'not saved; the previous version is unchanged. Run it again after the allowance resets ' +
+          '(lookups already made are remembered, so the re-run needs far fewer).'
+      );
+    }
 
     // Not one module could be served. That is an outage or an exhausted
     // allowance, not a curriculum problem, so fail loudly and leave the author's

@@ -1048,6 +1048,10 @@ function SourceCard({
             <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded">
               ✓ {source.recencyNote.charAt(0).toUpperCase() + source.recencyNote.slice(1)}
             </span>
+          ) : source.recencyWarning ? (
+            <span className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-500 rounded">
+              ⚠ {source.recencyWarning}
+            </span>
           ) : source.isSeminal ? (
             <span className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded">
               ⚠ Seminal (&gt;5 years)
@@ -1265,9 +1269,20 @@ function ModuleSummaryCard({ summary }: { summary: ModuleSourceSummary }) {
         <span
           className={`text-xs px-2 py-1 rounded ${summary.agiCompliant ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}
         >
-          {summary.agiCompliant ? '✓ Compliant' : '⚠ Review'}
+          {summary.agiCompliant
+            ? summary.fastMovingRuleMet
+              ? '✓ Compliant (5-year rule for fast-moving topics)'
+              : '✓ Compliant'
+            : '⚠ Review'}
         </span>
       </div>
+      {summary.recencyIssues && summary.recencyIssues.length > 0 && (
+        <ul className="mb-3 text-xs text-amber-600 list-disc pl-4">
+          {summary.recencyIssues.map((issue) => (
+            <li key={issue}>{issue}</li>
+          ))}
+        </ul>
+      )}
 
       <div className="grid grid-cols-4 gap-2 text-center text-xs">
         <div>
@@ -1596,13 +1611,20 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Show generating state even when navigating back */}
-      {isCurrentlyGenerating && !hasStep5Data && (
+      {/*
+        Shown whenever a run is outstanding, with or without earlier results. It used to be
+        hidden once Step 5 had results, so a regeneration (or a reload during one) showed the
+        old sources and no progress until it finished (Logan Pacey, 21 November 2026).
+      */}
+      {isCurrentlyGenerating && (
         <div className="mb-6 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin" />
             <div>
               <h3 className="text-lg font-semibold text-teal-800">
-                Generating Topic-Level Sources...
+                {hasStep5Data
+                  ? 'Regenerating Topic-Level Sources...'
+                  : 'Generating Topic-Level Sources...'}
               </h3>
               <p className="text-sm text-teal-600">
                 {`This may take ${formatStepEstimate(5)}.`} You can navigate away and come back.
@@ -1621,6 +1643,21 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
               queueStatus={stepStatus?.status}
             />
           )}
+        </div>
+      )}
+
+      {/*
+        A failed regeneration leaves the previous sources on screen, so say that it failed and
+        why. Every Step 5 run on 21 November 2026 hit the OpenAlex daily allowance and the page
+        showed nothing (Logan Pacey).
+      */}
+      {!isCurrentlyGenerating && hasStep5Data && workflow.step5?.lastError?.message && (
+        <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+          <p className="text-red-500 font-medium">The last regeneration did not finish</p>
+          <p className="text-sm text-red-400 mt-1">{workflow.step5.lastError.message}</p>
+          <p className="text-xs text-teal-600 mt-2">
+            The sources below are the previous version and have not been changed.
+          </p>
         </div>
       )}
 

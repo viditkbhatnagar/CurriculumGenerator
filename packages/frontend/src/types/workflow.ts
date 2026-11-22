@@ -504,6 +504,8 @@ export interface Source {
   isSeminal?: boolean;
   /** Why an older source counts as current, e.g. "latest edition (2019)". */
   recencyNote?: string;
+  /** Set on a source that needs a reason to stay, e.g. a textbook over ten years old. */
+  recencyWarning?: string;
   seminalJustification?: string;
   pairedRecentSourceId?: string; // Required for seminal works
 
@@ -557,6 +559,10 @@ export interface ModuleSourceSummary {
   allocatedIndependentHours: number;
   allMLOsSupported: boolean;
   agiCompliant: boolean;
+  /** A fast-moving module held to the five-year rule and meeting it. */
+  fastMovingRuleMet?: boolean;
+  /** Why the module is not Compliant on recency grounds. */
+  recencyIssues?: string[];
 }
 
 export interface Step5Sources {
@@ -593,6 +599,9 @@ export interface Step5Sources {
   adminOverrideRequired?: boolean;
   adminOverrideApprovedBy?: string;
   adminOverrideJustification?: string;
+
+  /** The last run failed (queue records it), e.g. the OpenAlex daily allowance ran out. */
+  lastError?: { message: string; failedAt?: string; attempts?: number };
 
   validatedAt?: string;
   approvedAt?: string;
@@ -1768,7 +1777,9 @@ export interface Step12AssignmentPacks {
 
 export interface ExamOverview {
   examTitle: string;
-  duration: string;
+  /** Older exams store `duration`; current ones store `totalDuration` ("3 hours"). */
+  duration?: string;
+  totalDuration?: string;
   totalMarks: number;
   sectionBreakdown:
     | string

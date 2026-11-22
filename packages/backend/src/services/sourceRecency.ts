@@ -49,6 +49,11 @@ export interface CurrencyVerdict {
   current: boolean;
   /** Why a source older than five years still counts, e.g. "latest edition (2019)". */
   note?: string;
+  /**
+   * Set on a source that does not count and needs a reason to stay, e.g. a latest-edition
+   * textbook over ten years old. Shown on the source itself, not only in a general issue.
+   */
+  warning?: string;
 }
 
 /**
@@ -127,6 +132,15 @@ export function sourceCurrency(
   ) {
     return { current: true, note: `latest edition (${s.year})` };
   }
+  // A textbook that is the latest edition but over ten years old: Logan Pacey (21 November
+  // 2026) found Exploring Business (2012) marked as latest edition with nothing on the source
+  // saying it was too old and needed a reason.
+  if (s.year && isTextbook(s) && age > LATEST_EDITION_LIMIT_YEARS && isLatestEdition(s)) {
+    return {
+      current: false,
+      warning: `Over ${LATEST_EDITION_LIMIT_YEARS} years old (${s.year}): give a reason to keep it`,
+    };
+  }
   return { current: false };
 }
 
@@ -184,15 +198,21 @@ export function withRecencyNotes<T extends RecencySource>(
   sources: T[],
   modules: RecencyModule[],
   currentYear: number
-): (T & { recencyNote?: string })[] {
+): (T & { recencyNote?: string; recencyWarning?: string })[] {
   const fastById = new Map((modules || []).map((m) => [String(m.id), isFastMovingModule(m)]));
   return (sources || []).map((s) => {
-    const { recencyNote: _previous, ...rest } = s as T & { recencyNote?: string };
+    const {
+      recencyNote: _previous,
+      recencyWarning: _previousWarning,
+      ...rest
+    } = s as T & { recencyNote?: string; recencyWarning?: string };
     const verdict = sourceCurrency(s, currentYear, {
       fastMoving: fastById.get(String(s.moduleId)) === true,
     });
-    return (verdict.note ? { ...rest, recencyNote: verdict.note } : rest) as T & {
-      recencyNote?: string;
-    };
+    return {
+      ...rest,
+      ...(verdict.note ? { recencyNote: verdict.note } : {}),
+      ...(verdict.warning ? { recencyWarning: verdict.warning } : {}),
+    } as T & { recencyNote?: string; recencyWarning?: string };
   });
 }
