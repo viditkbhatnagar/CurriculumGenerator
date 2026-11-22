@@ -121,7 +121,7 @@ export function checkCourseSyllabus(course: CourseSyllabus, mod: any): CourseCom
     },
     {
       key: 'packsCurrent',
-      label: 'The graded work agrees with the module summative that was approved',
+      label: 'The graded work matches the current Step 7 assessment',
       ok: !course.packMismatch,
       detail: course.packMismatch || undefined,
     },
