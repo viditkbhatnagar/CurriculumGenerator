@@ -14,6 +14,7 @@ import StepDownloadButton from './StepDownloadButton';
 import { isStepDone } from '@/lib/stepGating';
 import { validationFrame } from '@/lib/validationFrame';
 import { ValidationChecks } from './ValidationChecks';
+import { examDuration, sectionBCountLabel } from '@/lib/examDisplay';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -504,7 +505,9 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
                   <span className="text-teal-500">Duration:</span>
-                  <p className="text-teal-800 font-medium">{exam.overview.duration}</p>
+                  <p className="text-teal-800 font-medium">
+                    {examDuration(exam.overview) || 'Not stated'}
+                  </p>
                 </div>
                 <div>
                   <span className="text-teal-500">Total Marks:</span>
@@ -696,7 +699,7 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
                     B
                   </span>
                   <h4 className="font-semibold text-teal-800">
-                    Section B: Scenario Analysis ({exam?.sectionB?.length || 0} scenarios)
+                    Section B: Scenario Analysis ({sectionBCountLabel(exam?.sectionB)})
                   </h4>
                 </div>
                 <svg
