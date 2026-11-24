@@ -46,3 +46,32 @@ export function sectionBCountLabel(sectionB: unknown): string {
   );
   return `${plural(scenarios.length, 'scenario')}, ${plural(questions, 'question')}`;
 }
+
+const MODE_LABELS: Record<string, string> = {
+  online_self_study: 'online self-study',
+  online_facilitated: 'online, facilitated',
+  hybrid_blended: 'hybrid / blended',
+  in_person: 'in person',
+  face_to_face: 'in person',
+};
+
+/**
+ * The exam's conditions: what may be used and how it is sat.
+ *
+ * Logan Pacey, 23 November 2026: "the 'Conditions:' line on the overview is still blank". The page
+ * read `overview.conditions`, which the generator has never written; it writes
+ * `permittedMaterials` and `deliveryModes`. A stored `conditions` (older exams, edits) still wins.
+ */
+export function examConditions(overview: unknown): string {
+  const o = (overview || {}) as Record<string, unknown>;
+  const stated = [o.conditions, o.examConditions].find(
+    (v): v is string => typeof v === 'string' && v.trim().length > 0
+  );
+  if (stated) return stated.trim();
+  const materials = typeof o.permittedMaterials === 'string' ? o.permittedMaterials.trim() : '';
+  const modes = (Array.isArray(o.deliveryModes) ? o.deliveryModes : [])
+    .filter((m): m is string => typeof m === 'string' && m.trim().length > 0)
+    .map((m) => MODE_LABELS[m] || m.replace(/_/g, ' '));
+  const sat = modes.length ? `Sat ${modes.join(' or ')}.` : '';
+  return [sat, materials].filter(Boolean).join(' ');
+}

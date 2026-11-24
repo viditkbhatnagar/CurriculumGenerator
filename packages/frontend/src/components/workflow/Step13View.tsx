@@ -14,7 +14,7 @@ import StepDownloadButton from './StepDownloadButton';
 import { isStepDone } from '@/lib/stepGating';
 import { validationFrame } from '@/lib/validationFrame';
 import { ValidationChecks } from './ValidationChecks';
-import { examDuration, sectionBCountLabel } from '@/lib/examDisplay';
+import { examConditions, examDuration, sectionBCountLabel } from '@/lib/examDisplay';
 
 interface Props {
   workflow: CurriculumWorkflow;
@@ -525,7 +525,9 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
                 </div>
                 <div>
                   <span className="text-teal-500">Conditions:</span>
-                  <p className="text-teal-800 font-medium">{exam.overview.conditions}</p>
+                  <p className="text-teal-800 font-medium">
+                    {examConditions(exam.overview) || 'Not stated'}
+                  </p>
                 </div>
               </div>
             </div>

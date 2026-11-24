@@ -1,4 +1,8 @@
-import { examDuration, sectionBCountLabel } from '../../../frontend/src/lib/examDisplay';
+import {
+  examConditions,
+  examDuration,
+  sectionBCountLabel,
+} from '../../../frontend/src/lib/examDisplay';
 
 describe('examDuration', () => {
   it('reads the stored totalDuration text', () => {
@@ -27,5 +31,25 @@ describe('sectionBCountLabel', () => {
     expect(sectionBCountLabel([{ questions: [1] }])).toBe('1 scenario, 1 question');
     expect(sectionBCountLabel([{}])).toBe('1 scenario, 0 questions');
     expect(sectionBCountLabel(undefined)).toBe('0 scenarios, 0 questions');
+  });
+});
+
+describe('examConditions', () => {
+  it('builds the line from the delivery mode and permitted materials the generator stores', () => {
+    expect(
+      examConditions({
+        deliveryModes: ['hybrid_blended'],
+        permittedMaterials: 'Restricted open book: approved course notes are permitted.',
+      })
+    ).toBe('Sat hybrid / blended. Restricted open book: approved course notes are permitted.');
+  });
+  it('prefers a stated conditions field', () => {
+    expect(
+      examConditions({ conditions: 'Closed book, invigilated', permittedMaterials: 'x' })
+    ).toBe('Closed book, invigilated');
+  });
+  it('is empty when nothing is stored', () => {
+    expect(examConditions({})).toBe('');
+    expect(examConditions(undefined)).toBe('');
   });
 });
