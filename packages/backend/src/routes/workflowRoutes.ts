@@ -99,6 +99,7 @@ import { sanitizeActivityArray } from '../services/activitySanitizer';
 import { isStepDone, recordStepApproved } from '../services/stepGating';
 import { stepRunStatus } from '../services/stepRunStatus';
 import { retryNotice } from '../services/stepRetry';
+import { requirePreviousApproval } from '../middleware/approvalGate';
 import { sanitizeReadingPayload } from '../services/readingValidator';
 import { sanitizeSourcePayload } from '../services/sourceValidator';
 import crypto from 'crypto';
@@ -158,6 +159,13 @@ import {
 } from '../services/facultyGuide/condenseRunner';
 
 const router = Router();
+
+// A step's first generation waits for the previous step's approval (middleware/approvalGate).
+// Registered ahead of the step routes so it runs first and passes on with next().
+for (let step = 2; step <= 13; step += 1) {
+  router.post(`/:id/step${step}`, validateJWT, loadUser, requirePreviousApproval(step));
+}
+router.put('/:id/step14', validateJWT, loadUser, requirePreviousApproval(14));
 
 /**
  * Ensure every Step 3 PLO carries a sequential "PLO{n}" code. SME-added PLOs

@@ -9,8 +9,12 @@ import { workflowService } from '../services/workflowService';
 import { withUsageContext } from '../services/usageContext';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import { AssessmentUserPreferences } from '../types/assessmentGenerator';
+import { requirePreviousApproval } from '../middleware/approvalGate';
 
 const router = Router();
+
+// The stream is a Step 7 generation too (middleware/approvalGate).
+router.post('/:id/step7/stream', validateJWT, loadUser, requirePreviousApproval(7));
 
 /**
  * POST /api/v3/workflow/:id/step7/stream

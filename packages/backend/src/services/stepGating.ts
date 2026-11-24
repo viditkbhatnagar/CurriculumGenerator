@@ -125,3 +125,42 @@ export function refuseEmpty(count: number, step: number, what: string): void {
     `Step ${step} produced no ${what}. Nothing was saved; generate the step again, and if it keeps failing, report it.`
   );
 }
+
+/** The step was approved, not merely generated. */
+export function isStepApproved(workflow: Workflowish, step: number): boolean {
+  if (!workflow) return false;
+  if (progressOf(workflow, step)?.status === 'approved') return true;
+  return !!workflow[`step${step}`]?.approvedAt;
+}
+
+/** Fields on a step document that are bookkeeping, not generated content. */
+const BOOKKEEPING = new Set(['lastError', 'approvedAt', 'approvedBy', 'regenerationStartedAt']);
+
+/** The step has been generated before: it has content, or its progress says it finished. */
+export function hasBeenGenerated(workflow: Workflowish, step: number): boolean {
+  const status = progressOf(workflow, step)?.status;
+  if (status === 'completed' || status === 'approved') return true;
+  const doc = workflow?.[`step${step}`];
+  if (!doc || typeof doc !== 'object') return false;
+  const plain = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  return Object.keys(plain).some((k) => !BOOKKEEPING.has(k) && plain[k] != null);
+}
+
+/**
+ * Why a step may not be generated yet, or null when it may.
+ *
+ * Logan Pacey (November 2026 re-tests): "steps moving on without approval". A generated step
+ * counted as done, so the next one opened before anyone approved it; her logistics pilot ran
+ * all 14 steps with only Step 11 approved. A step's first generation now needs the previous
+ * step approved. Regenerating a step that already has content is still allowed, so programmes
+ * already further on (the BBA, Athira's) are not locked out of their own steps.
+ */
+export function generationBlocker(workflow: Workflowish, step: number): string | null {
+  if (step <= 1 || step > LAST_STEP) return null;
+  if (isStepApproved(workflow, step - 1)) return null;
+  if (hasBeenGenerated(workflow, step)) return null;
+  return (
+    `Step ${step - 1} has not been approved yet. Review and approve Step ${step - 1} ` +
+    `before generating Step ${step}.`
+  );
+}
