@@ -35,7 +35,7 @@ import StepVersionHistory from '@/components/workflow/StepVersionHistory';
 import CanvasChatbot from '@/components/workflow/CanvasChatbot';
 import { EditTarget } from '@/components/workflow/EditWithAIButton';
 import UserMenu from '@/components/auth/UserMenu';
-import { isStepDone } from '@/lib/stepGating';
+import { generationBlocker, isStepDone } from '@/lib/stepGating';
 
 // Step icons
 const STEP_ICONS: Record<WorkflowStep, React.ReactNode> = {
@@ -654,6 +654,28 @@ export default function WorkflowDetailPage() {
                   Nothing from that attempt was saved. Generate the step again; if it keeps failing,
                   report it.
                 </p>
+              </div>
+            ) : null;
+          })()}
+
+          {/* A step's first generation waits for the previous step's approval (Logan Pacey,
+              November 2026: steps moved on without approval). */}
+          {(() => {
+            const blocker = generationBlocker(workflow, currentStep);
+            return blocker ? (
+              <div
+                role="status"
+                className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+              >
+                <p className="font-semibold">Approval needed first</p>
+                <p className="mt-1">{blocker}</p>
+                <button
+                  type="button"
+                  onClick={() => setActiveStep((currentStep - 1) as WorkflowStep)}
+                  className="mt-2 font-medium text-teal-700 underline underline-offset-2 hover:text-teal-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600"
+                >
+                  Go to Step {currentStep - 1}
+                </button>
               </div>
             ) : null;
           })()}

@@ -39,3 +39,39 @@ export function isStepDone(
 
   return false;
 }
+
+/** The step was approved, not merely generated. Mirrors the backend services/stepGating. */
+export function isStepApproved(
+  workflow: CurriculumWorkflow | undefined | null,
+  stepNumber: number
+): boolean {
+  if (!workflow) return false;
+  const sp = workflow.stepProgress?.find((p) => p.step === stepNumber);
+  if (sp?.status === 'approved') return true;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return !!(workflow as any)[`step${stepNumber}`]?.approvedAt;
+}
+
+const BOOKKEEPING = new Set(['lastError', 'approvedAt', 'approvedBy', 'regenerationStartedAt']);
+
+/**
+ * Why a step may not be generated yet, or null. Mirrors the backend generationBlocker: a step's
+ * first generation needs the previous step approved; a step with content can be regenerated.
+ */
+export function generationBlocker(
+  workflow: CurriculumWorkflow | undefined | null,
+  stepNumber: number
+): string | null {
+  if (!workflow || stepNumber <= 1) return null;
+  if (isStepApproved(workflow, stepNumber - 1)) return null;
+  const status = workflow.stepProgress?.find((p) => p.step === stepNumber)?.status;
+  if (status === 'completed' || status === 'approved') return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const doc = (workflow as any)[`step${stepNumber}`];
+  if (doc && typeof doc === 'object' && Object.keys(doc).some((k) => !BOOKKEEPING.has(k))) {
+    return null;
+  }
+  return `Step ${stepNumber - 1} has not been approved yet. Review and approve Step ${
+    stepNumber - 1
+  } before generating Step ${stepNumber}.`;
+}
