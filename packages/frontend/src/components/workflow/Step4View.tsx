@@ -1903,9 +1903,13 @@ export default function Step4View({ workflow, onComplete, onRefresh, onOpenCanva
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <p className="text-2xl font-bold text-teal-800">
-                  {(workflow.step1 as any)?.creditCalculation?.totalHours ||
-                    (workflow.step1 as any)?.totalHours ||
-                    120}
+                  {/* Step 1 keeps the hours in creditFramework. The two fields read here before
+                      never exist, so every programme showed the 120 fallback (Logan Pacey: 120
+                      hours for a 600-hour programme). */}
+                  {workflow.step1?.creditFramework?.totalHours ||
+                    workflow.step4?.totalProgramHours ||
+                    totalModuleHours ||
+                    '—'}
                   h
                 </p>
                 <p className="text-xs text-teal-500">Total Program Hours</p>
