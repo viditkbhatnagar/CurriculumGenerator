@@ -9,7 +9,11 @@ import {
   SectionBScenario,
   SectionCTask,
 } from '@/types/workflow';
-import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import {
+  useGeneration,
+  GenerationProgressBar,
+  stepEstimateRange,
+} from '@/contexts/GenerationContext';
 import StepDownloadButton from './StepDownloadButton';
 import { isStepDone } from '@/lib/stepGating';
 import { validationFrame } from '@/lib/validationFrame';
@@ -104,7 +108,7 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
   const handleGenerate = async () => {
     if (isCurrentlyGenerating) return;
     setError(null);
-    startGeneration(workflow._id, 13, 900);
+    startGeneration(workflow._id, 13);
 
     try {
       await submitStep13.mutateAsync({
@@ -379,7 +383,7 @@ export default function Step13View({ workflow, onComplete, onRefresh }: Props) {
             </div>
             <h3 className="text-xl font-bold text-amber-400 mb-2">Generating Summative Exam...</h3>
             <p className="text-teal-700 mb-4">
-              This generates the exam in multiple phases. Please wait 1-2 minutes.
+              This generates the exam in multiple phases. It usually takes {stepEstimateRange(13)}.
             </p>
             <GenerationProgressBar workflowId={workflow._id} step={13} queueStatus={queueStatus} />
           </div>

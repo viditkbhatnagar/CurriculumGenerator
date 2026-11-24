@@ -38,47 +38,56 @@ interface GenerationContextType {
 }
 
 /**
- * Estimated generation time per step, in seconds.
+ * How long each step usually takes, as a range in minutes, for a programme of a few modules
+ * (larger programmes take longer in the module-by-module steps).
  *
- * These are median observed durations from production, not guesses. The previous
- * values were 3-5x optimistic — Step 4 was set to 90s against a real median of
- * 285s, so the bar hit its 95% cap after ~107s and sat there for four more
- * minutes while the copy still promised 90 seconds. That reads as a hung job.
+ * One table for every place that states a time. Logan Pacey, 23 November 2026: during Step 5
+ * the page said "around 15 minutes" and "usually takes about 2m" at once, because the view
+ * started its timer with its own hard-coded 120 seconds; Steps 6, 8, 9 and 13 had their own
+ * figures too. Views no longer pass a duration.
  *
- * To re-measure: for each step take completedAt - startedAt from
- * stepProgress across workflows, discard spans over 30 minutes (those are the
- * author leaving the step rather than the model working), and take the median.
+ * Measured from stepProgress runStartedAt/runEndedAt and analyticsmetrics, October-November
+ * 2026 (four-module programmes): Step 5 6-18 min, Step 7 17-23, Step 8 3-4, Step 13 4.
+ * Steps 10-12 run module by module, so their figures are per module and the view multiplies them
+ * by the modules still to do.
  */
-export const STEP_ESTIMATED_DURATIONS: Record<number, number> = {
-  1: 180, // Program Foundation
-  2: 420, // KSC Framework
-  3: 240, // PLOs
-  4: 300, // Course Framework & MLOs — one large structured call
-  // Topic-Level Sources: runs took 11-18 minutes in November 2026 (Logan Pacey, 17 November),
-  // so the estimate says 15 rather than the 6 it used to promise.
-  5: 900,
-  6: 450, // Reading Lists
-  7: 1800, // Assessments — streams, many questions
-  // Case studies are two model calls per module, each producing a full narrative plus
-  // exhibits, key facts, misconceptions, terminology and a teaching note. 360s was the
-  // figure from when the step covered four modules regardless of programme size; a
-  // 46-module programme took ninety minutes and the author watched a six-minute estimate
-  // the whole time. ~20 minutes reflects the step now covering every module, ten at a time.
-  8: 1200, // Case Studies
-  9: 210, // Glossary
-  10: 240, // Lesson Plans — per module, chains across modules
-  11: 120, // PPT Decks — per module
-  12: 1200, // Assignment Packs — 3 variants per module
-  13: 480, // Summative Exam
-  14: 30, // Syllabus — lightweight aggregation + LLM polish
+export const PER_MODULE_STEPS = new Set([10, 11, 12]);
+export const STEP_ESTIMATE_MINUTES: Record<number, [number, number]> = {
+  1: [1, 3], // Program Foundation
+  2: [3, 7], // KSC Framework
+  3: [1, 4], // PLOs
+  4: [2, 5], // Course Framework & MLOs
+  5: [6, 18], // Topic-Level Sources: per-module calls plus the journal lookups
+  6: [1, 8], // Reading Lists
+  7: [15, 40], // Assessments
+  8: [3, 20], // Case Studies: two calls per module, ten modules at a time
+  9: [1, 4], // Glossary
+  10: [10, 13], // Lesson Plans, per module (45-49 min for four modules)
+  11: [8, 11], // PPT Decks, per module (35-40 min for four modules)
+  12: [2, 5], // Assignment Packs, per module (5-18 min for four modules)
+  13: [4, 10], // Summative Exam
+  14: [1, 1], // Syllabus
 };
+
+/**
+ * A step's usual upper bound in seconds (per module for Steps 10-12): the point after which the
+ * page says it is running long.
+ */
+export const STEP_ESTIMATED_DURATIONS: Record<number, number> = Object.fromEntries(
+  Object.entries(STEP_ESTIMATE_MINUTES).map(([step, [, high]]) => [step, high * 60])
+);
+
+/** The usual range as words: "6–18 minutes", or "about a minute". */
+export function stepEstimateRange(step: number): string {
+  const [low, high] = STEP_ESTIMATE_MINUTES[step] || [1, 2];
+  const range = high <= 1 ? 'about a minute' : `${low}–${high} minutes`;
+  return PER_MODULE_STEPS.has(step) ? `${range} per module` : range;
+}
 
 /** Human-readable form of a step's estimate, for the "this may take …" copy. */
 export function formatStepEstimate(step: number): string {
-  const seconds = STEP_ESTIMATED_DURATIONS[step] || 60;
-  if (seconds < 90) return `about ${seconds} seconds`;
-  const minutes = Math.round(seconds / 60);
-  return `around ${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const range = stepEstimateRange(step);
+  return range.startsWith('about') ? range : `about ${range}`;
 }
 
 const GenerationContext = createContext<GenerationContextType | null>(null);
@@ -298,7 +307,11 @@ export function GenerationProgressBar({
 
   const elapsed = getElapsedTime(workflowId, step);
   const state = getGenerationState(workflowId, step);
-  const estimated = state?.estimatedDuration || 60;
+  // The table, not the stored figure: entries saved before 24 November 2026 carry old per-view numbers.
+  // Steps 10-12 store the per-module figure times the modules still to do.
+  const estimated = PER_MODULE_STEPS.has(step)
+    ? state?.estimatedDuration || STEP_ESTIMATED_DURATIONS[step] || 60
+    : STEP_ESTIMATED_DURATIONS[step] || state?.estimatedDuration || 60;
   const statusInfo = getQueueStatusLabel(queueStatus);
 
   const formatTime = (seconds: number) => {
@@ -345,10 +358,10 @@ export function GenerationProgressBar({
         <div className="flex justify-between text-xs text-slate-400">
           <span>Running for {formatTime(elapsed)}</span>
           {elapsed < estimated ? (
-            <span>This step usually takes about {formatTime(estimated)}</span>
+            <span>This step usually takes {stepEstimateRange(step)}</span>
           ) : (
             <span className="text-amber-400">
-              Longer than the usual {formatTime(estimated)} — still running
+              Longer than the usual {stepEstimateRange(step)} — still running
             </span>
           )}
         </div>

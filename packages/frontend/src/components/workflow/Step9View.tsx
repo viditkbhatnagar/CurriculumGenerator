@@ -730,7 +730,7 @@ export default function Step9View({ workflow, onComplete: _onComplete, onRefresh
       return;
     }
     setError(null);
-    startGeneration(workflow._id, 9, 45);
+    startGeneration(workflow._id, 9);
     try {
       const response = await submitStep9.mutateAsync(workflow._id);
       // Check if async (202 with jobId) or sync (200 with data)

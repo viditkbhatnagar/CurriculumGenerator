@@ -844,7 +844,7 @@ export default function Step8View({ workflow, onComplete, onRefresh }: Props) {
       return;
     }
     setError(null);
-    startGeneration(workflow._id, 8, 180);
+    startGeneration(workflow._id, 8);
     try {
       const response = await submitStep8.mutateAsync(workflow._id);
       if ((response as any)?.data?.jobId) {

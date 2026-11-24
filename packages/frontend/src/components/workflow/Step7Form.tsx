@@ -14,7 +14,11 @@ import {
   EssaySample,
   PracticalSample,
 } from '@/types/workflow';
-import { useGeneration, GenerationProgressBar } from '@/contexts/GenerationContext';
+import {
+  useGeneration,
+  GenerationProgressBar,
+  stepEstimateRange,
+} from '@/contexts/GenerationContext';
 import ApprovalOverridePanel from './ApprovalOverridePanel';
 import StepDownloadButton from './StepDownloadButton';
 import { validationFrame } from '@/lib/validationFrame';
@@ -649,7 +653,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
       practicalTasks: [],
     });
 
-    startGeneration(workflow._id, 7, 2400); // ~40 minutes for a full programme
+    startGeneration(workflow._id, 7);
 
     try {
       // Queue the work, then poll — do not stream it.
@@ -854,7 +858,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
       console.log('[Step7Form] Clearing existing Step 7 data...');
 
       // Set generating state BEFORE clearing to keep UI in generating mode
-      startGeneration(workflow._id, 7, 2400);
+      startGeneration(workflow._id, 7);
 
       // Clear existing Step 7 data from backend
       await clearStep7.mutateAsync(workflow._id);
@@ -2028,7 +2032,7 @@ export default function Step7FormNew({ workflow, onComplete, onRefresh }: Props)
               generation.
             </p>
             <p className="text-sm text-teal-600 mb-6">
-              This action cannot be undone. The generation will take 30-40 minutes.
+              This action cannot be undone. The generation usually takes {stepEstimateRange(7)}.
             </p>
             <div className="flex gap-3 justify-end">
               <button

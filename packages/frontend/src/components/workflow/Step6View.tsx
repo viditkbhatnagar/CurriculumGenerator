@@ -1250,7 +1250,7 @@ export default function Step6View({ workflow, onComplete, onRefresh }: Props) {
       return;
     }
     setError(null);
-    startGeneration(workflow._id, 6, 60);
+    startGeneration(workflow._id, 6);
     try {
       const response = await submitStep6.mutateAsync(workflow._id);
       if ((response as any)?.data?.jobId) {

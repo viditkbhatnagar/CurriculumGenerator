@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import { CurriculumWorkflow, LessonPlan } from '@/types/workflow';
 import { isStepDone } from '@/lib/stepGating';
 import { orderByStep4 } from '@/lib/moduleOrder';
+import { stepEstimateRange } from '@/contexts/GenerationContext';
 import { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
 import FacultyGuideDownloadButton from './FacultyGuideDownloadButton';
@@ -646,7 +647,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
 
         toast.info(
           'Generation Started',
-          `Module ${moduleIndex + 1} generation has started. This may take 10-20 minutes.`
+          `Module ${moduleIndex + 1} generation has started. This usually takes ${stepEstimateRange(10).replace(' per module', '')}.`
         );
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to start generation';
@@ -805,7 +806,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
   const handleRegenerateModule = async (moduleId: string, moduleTitle: string) => {
     if (
       !confirm(
-        `Regenerate lesson plans for "${moduleTitle}"?\n\nThis will replace the existing lesson plans for this module with fresh AI-generated ones. The current version is saved to Version history (clock icon at the top of this step) so you can restore it any time. It takes 2–5 minutes.\n\nContinue?`
+        `Regenerate lesson plans for "${moduleTitle}"?\n\nThis will replace the existing lesson plans for this module with fresh AI-generated ones. The current version is saved to Version history (clock icon at the top of this step) so you can restore it any time. It usually takes ${stepEstimateRange(10).replace(' per module', '')}.\n\nContinue?`
       )
     ) {
       return;
@@ -824,7 +825,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
 
       toast.info(
         'Regeneration Started',
-        'The module lesson plans are being regenerated. This will take 2–5 minutes.'
+        `The module lesson plans are being regenerated. This usually takes ${stepEstimateRange(10).replace(' per module', '')}.`
       );
 
       // Reflect the in-progress state immediately and start polling
@@ -1107,7 +1108,7 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
           <div className="bg-teal-50/50 rounded-lg p-6 border border-teal-200">
             <h3 className="text-xl font-bold text-teal-800 mb-4">Module Generation Progress</h3>
             <p className="text-sm text-teal-600 mb-4">
-              Generate lesson plans for each module. Each module takes 10-20 minutes.
+              Generate lesson plans for each module. Usually {stepEstimateRange(10)}.
             </p>
 
             {/* Generate All Button */}
@@ -1404,8 +1405,9 @@ export default function Step10View({ workflow, onComplete, onRefresh }: Props) {
                                   </p>
                                 ) : (
                                   <p className="text-xs text-teal-500">
-                                    Each module takes 10-20 minutes. You can leave this page and
-                                    come back later.
+                                    Each module usually takes{' '}
+                                    {stepEstimateRange(10).replace(' per module', '')}. You can
+                                    leave this page and come back later.
                                   </p>
                                 )}
                               </div>

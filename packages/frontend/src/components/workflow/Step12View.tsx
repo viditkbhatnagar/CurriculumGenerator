@@ -13,7 +13,11 @@ import {
   AssignmentPack,
   AssignmentDeliveryVariant,
 } from '@/types/workflow';
-import { useGeneration } from '@/contexts/GenerationContext';
+import {
+  useGeneration,
+  STEP_ESTIMATED_DURATIONS,
+  stepEstimateRange,
+} from '@/contexts/GenerationContext';
 import StepDownloadButton from './StepDownloadButton';
 import { isStepDone } from '@/lib/stepGating';
 import { orderByStep4 } from '@/lib/moduleOrder';
@@ -116,7 +120,11 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
       (statusData as any)?.queueStatus?.state === 'waiting';
     if (backendBusy && _completedMods < _totalMods) {
       setIsAutoGenerating(true);
-      startGeneration(workflow._id, 12, (_totalMods - _completedMods) * 600);
+      startGeneration(
+        workflow._id,
+        12,
+        (_totalMods - _completedMods) * STEP_ESTIMATED_DURATIONS[12]
+      );
     }
   }, [statusData]); // eslint-disable-line
 
@@ -219,7 +227,7 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
     setIsAutoGenerating(true);
     generationStartedAtRef.current = Date.now();
     const remaining = _totalMods - _completedMods;
-    startGeneration(workflow._id, 12, remaining * 600);
+    startGeneration(workflow._id, 12, remaining * STEP_ESTIMATED_DURATIONS[12]);
 
     try {
       // The full-run route snapshots Step 12 first; it is only for a step with no packs at
@@ -250,7 +258,7 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
     setError(null);
     setIsAutoGenerating(true);
     generationStartedAtRef.current = Date.now();
-    startGeneration(workflow._id, 12, _totalMods * 600);
+    startGeneration(workflow._id, 12, _totalMods * STEP_ESTIMATED_DURATIONS[12]);
     try {
       await submitStep12.mutateAsync({ id: workflow._id, regenerate: true });
       onRefresh();
@@ -432,7 +440,7 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
             </h3>
             <p className="text-sm text-teal-600 mb-4">
               Each module generates 3 assignment pack variants (In-Person, Self-Study, Hybrid).
-              Takes 10-20 minutes per module.
+              Usually {stepEstimateRange(12)}.
             </p>
 
             {lastError?.message && !isCurrentlyGenerating && !isAllModulesComplete && (
@@ -638,8 +646,9 @@ export default function Step12View({ workflow, onComplete, onRefresh }: Props) {
                                   </p>
                                 ) : (
                                   <p className="text-xs text-teal-500">
-                                    Each module takes 10-20 minutes. You can leave this page and
-                                    come back later.
+                                    Each module usually takes{' '}
+                                    {stepEstimateRange(12).replace(' per module', '')}. You can
+                                    leave this page and come back later.
                                   </p>
                                 )}
                               </div>

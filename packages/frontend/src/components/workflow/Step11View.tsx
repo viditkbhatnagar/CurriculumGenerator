@@ -5,7 +5,11 @@ import { useSubmitStep11, useApproveStep11, useStep11Status } from '@/hooks/useW
 import { CurriculumWorkflow } from '@/types/workflow';
 import { isStepDone } from '@/lib/stepGating';
 import { orderByStep4 } from '@/lib/moduleOrder';
-import { useGeneration } from '@/contexts/GenerationContext';
+import {
+  useGeneration,
+  STEP_ESTIMATED_DURATIONS,
+  stepEstimateRange,
+} from '@/contexts/GenerationContext';
 import { api } from '@/lib/api';
 import StepDownloadButton from './StepDownloadButton';
 import { validationFrame } from '@/lib/validationFrame';
@@ -105,7 +109,11 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
     const backendBusy = (statusData.jobs?.active ?? 0) > 0;
     if (backendBusy && _completedMods < _totalMods) {
       setIsAutoGenerating(true);
-      startGeneration(workflow._id, 11, (_totalMods - _completedMods) * 900);
+      startGeneration(
+        workflow._id,
+        11,
+        (_totalMods - _completedMods) * STEP_ESTIMATED_DURATIONS[11]
+      );
     }
   }, [statusData]); // eslint-disable-line
 
@@ -225,7 +233,7 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
     generationStartedAtRef.current = Date.now();
     // Estimate based on remaining modules — a force regenerate redoes them all.
     const remaining = force ? _totalMods : _totalMods - _completedMods;
-    startGeneration(workflow._id, 11, remaining * 900);
+    startGeneration(workflow._id, 11, remaining * STEP_ESTIMATED_DURATIONS[11]);
 
     try {
       await submitStep11.mutateAsync({ id: workflow._id, force });
@@ -527,8 +535,8 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
           <div className="bg-teal-50/50 rounded-lg p-6 border border-teal-200">
             <h3 className="text-xl font-bold text-teal-800 mb-4">PPT Generation Progress</h3>
             <p className="text-sm text-teal-600 mb-4">
-              Generate PowerPoint slide decks for each module. Each module takes 15-30 minutes to
-              generate depending on the number of lessons.
+              Generate PowerPoint slide decks for each module. Usually {stepEstimateRange(11)},
+              depending on the number of lessons.
             </p>
 
             {/* Generate All Button */}
@@ -758,8 +766,9 @@ export default function Step11View({ workflow, onComplete, onRefresh }: Props) {
                                   </p>
                                 ) : (
                                   <p className="text-xs text-teal-500">
-                                    Each lesson takes 10-20 minutes. You can leave this page and
-                                    come back later.
+                                    Each module usually takes{' '}
+                                    {stepEstimateRange(11).replace(' per module', '')}. You can
+                                    leave this page and come back later.
                                   </p>
                                 )}
                               </div>
