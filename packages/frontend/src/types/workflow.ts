@@ -50,7 +50,13 @@ export type WorkflowStatus =
 
 // Credit system types
 export type CreditSystem = 'uk' | 'ects' | 'us_semester' | 'non_credit';
-export type AcademicLevel = 'certificate' | 'micro-credential' | 'diploma';
+export type AcademicLevel =
+  | 'certificate'
+  | 'micro-credential'
+  | 'diploma'
+  | 'bachelor'
+  | 'postgraduate-diploma'
+  | 'master';
 export type DeliveryMode =
   | 'online_self_study'
   | 'online_facilitated'
@@ -2352,6 +2358,21 @@ export const ACADEMIC_LEVELS: { value: AcademicLevel; label: string; description
     description: 'Focused skill (10-30 credits)',
   },
   { value: 'diploma', label: 'Diploma', description: 'Comprehensive program (60-120 credits)' },
+  {
+    value: 'bachelor',
+    label: "Bachelor's Degree",
+    description: 'Undergraduate degree, e.g. BBA (180-240 ECTS / 360 UK credits)',
+  },
+  {
+    value: 'postgraduate-diploma',
+    label: 'PG / Executive Diploma',
+    description: 'Postgraduate or executive diploma (60 ECTS / 120 UK credits)',
+  },
+  {
+    value: 'master',
+    label: "Master's / MBA",
+    description: "Master's degree or MBA (60-120 ECTS / 180 UK credits)",
+  },
 ];
 
 export const CREDIT_SYSTEMS: {

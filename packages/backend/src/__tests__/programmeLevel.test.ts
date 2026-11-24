@@ -81,3 +81,11 @@ describe('module levels honour the Step 1 level', () => {
     expect(dflt.level).toBeNull();
   });
 });
+
+describe('degree-level forms (Logan Pacey, 12 November 2026)', () => {
+  it('defaults Bachelor to 6 and PG/Executive Diploma and Master/MBA to 7', () => {
+    expect(defaultLevelFor('bachelor', 'Business Administration')).toBe(6);
+    expect(defaultLevelFor('postgraduate-diploma', 'Strategic Management')).toBe(7);
+    expect(defaultLevelFor('master', 'AI Strategy')).toBe(7);
+  });
+});

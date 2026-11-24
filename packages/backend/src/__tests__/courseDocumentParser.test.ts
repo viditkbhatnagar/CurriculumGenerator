@@ -161,8 +161,13 @@ describe('mapping', () => {
     ).not.toHaveProperty('credits');
   });
 
-  it('leaves the credential unset for a degree', () => {
-    expect(academicLevelFrom('Master of Business')).toBeNull();
+  it('maps degree credentials to their own options and leaves a doctorate unset', () => {
+    expect(academicLevelFrom('Master of Business')).toBe('master');
+    expect(academicLevelFrom('MBA in AI Strategy')).toBe('master');
+    expect(academicLevelFrom('Executive Diploma in Leadership')).toBe('postgraduate-diploma');
+    expect(academicLevelFrom('Bachelor in Business Administration')).toBe('bachelor');
+    expect(academicLevelFrom('Diploma in Logistics')).toBe('diploma');
+    expect(academicLevelFrom('Doctorate of Business')).toBeNull();
     expect(academicLevelFrom('Micro-credential')).toBe('micro-credential');
   });
 

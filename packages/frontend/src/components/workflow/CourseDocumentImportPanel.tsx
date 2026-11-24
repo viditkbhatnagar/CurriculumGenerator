@@ -17,7 +17,13 @@ export interface Step1Prefill {
   programTitle?: string;
   programDescription?: string;
   programPurpose?: string;
-  academicLevel?: 'certificate' | 'micro-credential' | 'diploma';
+  academicLevel?:
+    | 'certificate'
+    | 'micro-credential'
+    | 'diploma'
+    | 'bachelor'
+    | 'postgraduate-diploma'
+    | 'master';
   programmeLevel?: number;
   programmeLevelOrigin?: 'stated';
   credits?: number;

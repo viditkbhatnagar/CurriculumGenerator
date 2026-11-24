@@ -35,6 +35,10 @@ const FORM_LEVELS: Record<string, number> = {
   certificate: 4,
   'micro-credential': 4,
   diploma: 5,
+  // Logan Pacey, 12 November 2026: Bachelor 6, Postgraduate/Executive Diploma 7, MBA 7.
+  bachelor: 6,
+  'postgraduate-diploma': 7,
+  master: 7,
 };
 
 export const isProgrammeLevel = (v: unknown): v is number =>

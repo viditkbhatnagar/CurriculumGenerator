@@ -43,7 +43,13 @@ export type WorkflowStatus =
   | 'review_pending'
   | 'published';
 
-export type AcademicLevel = 'certificate' | 'micro-credential' | 'diploma';
+export type AcademicLevel =
+  | 'certificate'
+  | 'micro-credential'
+  | 'diploma'
+  | 'bachelor'
+  | 'postgraduate-diploma'
+  | 'master';
 
 export type CreditSystem = 'uk_credits' | 'ects' | 'us_semester' | 'non_credit';
 

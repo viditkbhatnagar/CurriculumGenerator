@@ -11,7 +11,13 @@ import type { ExtractedCourse, ExtractedModule } from './courseDocumentParser';
 import { statedLevel } from './courseDocumentParser';
 import type { BlueprintModule } from './moduleBlueprintService';
 
-export type AcademicLevel = 'certificate' | 'micro-credential' | 'diploma';
+export type AcademicLevel =
+  | 'certificate'
+  | 'micro-credential'
+  | 'diploma'
+  | 'bachelor'
+  | 'postgraduate-diploma'
+  | 'master';
 
 /** The Step 1 form fields the document can fill. Absent keys are left as the form has them. */
 export interface Step1Prefill {
@@ -33,11 +39,17 @@ export interface BlueprintModuleWithOutline extends BlueprintModule {
   sourceOutcomes: string[];
 }
 
-/** Credential wording to the form's three options; a degree or master's has no option, so none. */
+/** Credential wording to the form's options, most specific first; a doctorate has no option. */
 export function academicLevelFrom(...texts: string[]): AcademicLevel | null {
   const joined = texts.join(' ').toLowerCase();
   if (/micro[-\s]?credential/.test(joined)) return 'micro-credential';
-  if (/\b(bachelor|master|degree|mba|phd|doctorate)\b/.test(joined)) return null;
+  if (/\b(phd|doctorate|doctor of)\b/.test(joined)) return null;
+  if (/\b(master|mba|m\.?sc)\b/.test(joined)) return 'master';
+  if (/\b(post\s*-?\s*graduate|pg|executive)\s+(diploma|cert(ificate)?)\b/.test(joined)) {
+    return 'postgraduate-diploma';
+  }
+  if (/\b(bachelor|bba|undergraduate degree|honours degree)\b/.test(joined)) return 'bachelor';
+  if (/\bdegree\b/.test(joined)) return null;
   if (/diploma/.test(joined)) return 'diploma';
   if (/certificate/.test(joined)) return 'certificate';
   return null;

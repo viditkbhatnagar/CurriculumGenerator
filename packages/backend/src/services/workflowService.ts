@@ -314,7 +314,13 @@ class WorkflowService {
       // Program Identity
       programTitle: string;
       programDescription: string;
-      academicLevel: 'certificate' | 'micro-credential' | 'diploma';
+      academicLevel:
+        | 'certificate'
+        | 'micro-credential'
+        | 'diploma'
+        | 'bachelor'
+        | 'postgraduate-diploma'
+        | 'master';
       qualificationType?: string;
       frameworkLevel?: string;
       governingFramework?: string;

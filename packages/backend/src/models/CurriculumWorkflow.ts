@@ -776,7 +776,13 @@ export interface ICurriculumWorkflow extends Document {
   step1?: {
     programTitle: string;
     programDescription: string;
-    academicLevel: 'certificate' | 'micro-credential' | 'diploma';
+    academicLevel:
+      | 'certificate'
+      | 'micro-credential'
+      | 'diploma'
+      | 'bachelor'
+      | 'postgraduate-diploma'
+      | 'master';
 
     creditFramework: {
       system: 'uk_credits' | 'ects' | 'us_semester' | 'non_credit';

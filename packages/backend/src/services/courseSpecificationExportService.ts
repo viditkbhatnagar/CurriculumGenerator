@@ -291,6 +291,11 @@ class CourseSpecificationExportService {
         return 4;
       case 'diploma':
         return 4;
+      case 'bachelor':
+        return 6;
+      case 'postgraduate-diploma':
+      case 'master':
+        return 7;
       default:
         return 4;
     }

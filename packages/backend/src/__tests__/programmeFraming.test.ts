@@ -111,3 +111,17 @@ describe('programmeContextBlock', () => {
     expect(PROGRAMME_STATUS).toMatch(/not accredited/);
   });
 });
+
+describe('degree-level forms', () => {
+  it('frames a form-chosen bachelor, PG diploma or master without relying on the title', () => {
+    expect(programmeFraming({ academicLevel: 'bachelor', programTitle: 'Business' }).type).toBe(
+      'bachelor'
+    );
+    expect(
+      programmeFraming({ academicLevel: 'postgraduate-diploma', programTitle: 'Leadership' }).level
+    ).toBe(7);
+    expect(
+      programmeFraming({ academicLevel: 'master', programTitle: 'AI Strategy' }).typeLabel
+    ).toBe("master's degree");
+  });
+});

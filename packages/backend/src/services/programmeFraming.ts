@@ -5,7 +5,7 @@
  * Rejin's audit of 17 October 2026 found every prompt calling the programme a "vocational
  * education program", several calling it "accredited", and the level reaching the model as a
  * bare label. The label was worse than he could see from the prompts: the setup form offers
- * only "certificate", "micro-credential" and "diploma", so the 180-ECTS BBA and both MBAs
+ * only "certificate", "micro-credential" and "diploma" until 24 November 2026, so the 180-ECTS BBA and both MBAs
  * reached every step as "ACADEMIC LEVEL: diploma … vocational education program".
  *
  * The type and level now come from, in order: fields the institution states (qualificationType,
@@ -83,6 +83,9 @@ const FORM_TYPES: Record<string, QualificationType> = {
   'micro-credential': 'micro-credential',
   certificate: 'certificate',
   diploma: 'diploma',
+  bachelor: 'bachelor',
+  'postgraduate-diploma': 'postgraduate-diploma',
+  master: 'master',
 };
 
 const CREDIT_SYSTEMS: Record<string, string> = {

@@ -569,7 +569,7 @@ export default function Step1Form({ workflow, onComplete, onRefresh }: Props) {
             <label className="block text-sm font-medium text-teal-700 mb-2">
               Academic Level <span className="text-red-400">*</span>
             </label>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {ACADEMIC_LEVELS.map((level) => (
                 <button
                   key={level.value}
