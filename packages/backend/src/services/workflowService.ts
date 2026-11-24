@@ -5875,8 +5875,10 @@ CRITICAL:
     }
 
     // Once the lookup service is out of allowance every further call fails, so
-    // stop asking and record honestly which modules went unverified.
+    // stop asking and record honestly which modules went unverified. A throttle that did not
+    // clear (lookupDaily false) only costs that module; the next one asks again.
     let lookupUnavailable: string | null = null;
+    let lookupDaily = false;
 
     // Chapters taken from each textbook so far, so one book does not supply most of the programme.
     const chapterBookUse = new Map<string, number>();
@@ -5910,7 +5912,9 @@ CRITICAL:
 
       let verified: any[] = [];
       try {
-        if (lookupUnavailable) throw new SourceLookupUnavailable(lookupUnavailable);
+        if (lookupUnavailable && lookupDaily) {
+          throw new SourceLookupUnavailable(lookupUnavailable, true);
+        }
         const topics = [
           ...(module.topics || []),
           ...(module.mlos || []).map((m: any) => m.statement),
@@ -5998,6 +6002,7 @@ CRITICAL:
       } catch (error) {
         if (error instanceof SourceLookupUnavailable) {
           lookupUnavailable = error.message;
+          lookupDaily = lookupDaily || error.daily;
         } else {
           loggingService.warn('Academic source lookup failed for module', {
             moduleId: module.id,
@@ -6073,11 +6078,16 @@ CRITICAL:
     // November 2026, with nothing on the page saying why. Fail the run instead: the previous
     // version stays, the page shows the message, and a retry costs little because every
     // lookup already answered is cached (academicLookupCache).
+    // A spent daily allowance is not retried by the queue (isDailyLookupLimit); a throttle is.
     if (lookupUnavailable) {
-      throw new Error(
+      throw new SourceLookupUnavailable(
         `${lookupUnavailable} Step 5 stopped part-way so that an incomplete set of sources is ` +
-          'not saved; the previous version is unchanged. Run it again after the allowance resets ' +
-          '(lookups already made are remembered, so the re-run needs far fewer).'
+          'not saved; the previous version is unchanged. ' +
+          (lookupDaily
+            ? 'Run it again after the allowance resets (lookups already made are remembered, so ' +
+              'the re-run needs far fewer).'
+            : 'Lookups already made are remembered, so another run needs far fewer.'),
+        lookupDaily
       );
     }
 

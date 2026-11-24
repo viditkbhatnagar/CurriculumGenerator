@@ -19,6 +19,13 @@
 import { loggingService } from './loggingService';
 import { topicTitle } from '../utils/topicShape';
 import { readLookupCache, writeLookupCache } from './academicLookupCache';
+import {
+  budgetMessage,
+  classifyLimit,
+  THROTTLE_MESSAGE,
+  THROTTLE_RETRIES,
+  throttleDelayMs,
+} from './openAlexLimits';
 
 const OPENALEX = 'https://api.openalex.org';
 const CROSSREF = 'https://api.crossref.org';
@@ -91,22 +98,33 @@ async function paced<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Raised when the lookup service will not answer any more requests today.
+ * Raised when the lookup service will not answer: its daily budget is spent (`daily`), or it
+ * kept throttling after several waits.
  *
- * OpenAlex meters its API: a works search costs $0.001 against a small daily
- * allowance, and a 46-module programme spends roughly one allowance per full
- * Step 5 run. Once it is gone every subsequent call returns 429 until midnight
- * UTC, so there is no point retrying the remaining modules — and, more
- * importantly, this must not be mistaken for "no sources exist". Falling back to
- * model-written citations here would quietly reintroduce the fabrications this
- * service exists to prevent.
+ * OpenAlex meters its API against a small daily allowance. Once it is gone every call returns
+ * 429 until midnight UTC, so there is no point retrying the remaining modules, nor the whole
+ * run — and, more importantly, this must not be mistaken for "no sources exist". Falling back
+ * to model-written citations here would quietly reintroduce the fabrications this service
+ * exists to prevent. A throttle is different: it clears in seconds and is waited out in
+ * getJson (services/openAlexLimits).
  */
 export class SourceLookupUnavailable extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly daily = true
+  ) {
     super(message);
     this.name = 'SourceLookupUnavailable';
   }
 }
+
+/** A spent daily allowance: retrying before midnight UTC cannot succeed. */
+export const isDailyLookupLimit = (error: unknown): boolean =>
+  error instanceof Error &&
+  error.name === 'SourceLookupUnavailable' &&
+  (error as SourceLookupUnavailable).daily !== false;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function getJson(rawUrl: string, timeoutMs = 20000): Promise<any | null> {
   // Answered from the cache when the same request was made in the last 30 days.
@@ -116,30 +134,43 @@ async function getJson(rawUrl: string, timeoutMs = 20000): Promise<any | null> {
     OPENALEX_API_KEY && rawUrl.startsWith(OPENALEX)
       ? `${rawUrl}&api_key=${encodeURIComponent(OPENALEX_API_KEY)}`
       : rawUrl;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': `curriculum-generator/1.0 (mailto:${CONTACT})` },
-    });
-    if (res.status === 429) {
-      const resetSeconds = Number(res.headers.get('x-ratelimit-reset') || 0);
-      const hours = resetSeconds ? Math.ceil(resetSeconds / 3600) : null;
-      throw new SourceLookupUnavailable(
-        'The academic source database (OpenAlex) has reached its daily request allowance' +
-          (hours ? `, which resets in about ${hours}h.` : '.')
-      );
+  for (let attempt = 0; ; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: { 'User-Agent': `curriculum-generator/1.0 (mailto:${CONTACT})` },
+      });
+      if (res.status === 429) {
+        const body = await res.json().catch(() => null);
+        const header = (name: string) => res.headers?.get?.(name) ?? null;
+        if (classifyLimit(body, header('x-ratelimit-remaining')) === 'budget') {
+          throw new SourceLookupUnavailable(
+            budgetMessage(Number(header('x-ratelimit-reset') || 0)),
+            true
+          );
+        }
+        if (attempt >= THROTTLE_RETRIES) {
+          throw new SourceLookupUnavailable(THROTTLE_MESSAGE, false);
+        }
+        loggingService.warn('OpenAlex throttled a request; waiting before asking again', {
+          attempt: attempt + 1,
+        });
+        clearTimeout(timer);
+        await sleep(throttleDelayMs(attempt, header('retry-after')));
+        continue;
+      }
+      if (!res.ok) return null;
+      const body = await res.json();
+      await writeLookupCache(rawUrl, body);
+      return body;
+    } catch (error) {
+      if (error instanceof SourceLookupUnavailable) throw error;
+      return null;
+    } finally {
+      clearTimeout(timer);
     }
-    if (!res.ok) return null;
-    const body = await res.json();
-    await writeLookupCache(rawUrl, body);
-    return body;
-  } catch (error) {
-    if (error instanceof SourceLookupUnavailable) throw error;
-    return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 

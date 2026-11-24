@@ -12,12 +12,18 @@
 
 import { recordStepFailed } from '../services/stepGating';
 import { isStepStopped } from '../services/stepStop';
+import { isDailyLookupLimit } from '../services/academicSourceService';
+import { RETRY_BACKOFF_MS } from '../services/stepRetry';
 import Bull, { Queue, Job } from 'bull';
 import { loggingService } from '../services/loggingService';
 import { withUsageContext } from '../services/usageContext';
 import { workflowService } from '../services/workflowService';
 import { CurriculumWorkflow } from '../models/CurriculumWorkflow';
 import config from '../config';
+
+/** Runs the queue must not try again: stopped by the author, or the source allowance is spent. */
+const isRetryPointless = (error: unknown): boolean =>
+  isStepStopped(error) || isDailyLookupLimit(error);
 
 // Job data interface - generic for all steps
 export interface StepJobData {
@@ -49,7 +55,7 @@ if (redisUrl && redisUrl.length > 0) {
         attempts: 3,
         backoff: {
           type: 'exponential',
-          delay: 60000, // Start with 1 minute delay
+          delay: RETRY_BACKOFF_MS, // Start with 1 minute delay (services/stepRetry)
         },
         removeOnComplete: 100,
         removeOnFail: 200,
@@ -168,8 +174,9 @@ if (stepQueue) {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
-      // A stopped run is final: retrying would start again the run that was just stopped.
-      if (isStepStopped(error)) await job.discard();
+      // A stopped run is final: retrying would start again the run that was just stopped. So is
+      // a spent OpenAlex allowance: nothing will answer before midnight UTC.
+      if (isRetryPointless(error)) await job.discard();
       throw error;
     }
   });
@@ -197,7 +204,7 @@ if (stepQueue) {
     // Only act once retries are exhausted, otherwise an intermediate failure
     // would prematurely reset progress mid-retry.
     const maxAttempts = job.opts.attempts || 1;
-    if (job.attemptsMade < maxAttempts && !isStepStopped(error)) return;
+    if (job.attemptsMade < maxAttempts && !isRetryPointless(error)) return;
 
     // A terminally-failed job (e.g. an LLM error, or the worker being restarted
     // mid-run) otherwise leaves stepProgress stuck on "in_progress" forever, so
@@ -353,6 +360,7 @@ export async function getStepJobStatus(stepNumber: number, workflowId: string) {
     state,
     progress,
     attemptsMade: job.attemptsMade,
+    maxAttempts: job.opts?.attempts || 1,
     data: job.data,
     returnvalue: job.returnvalue,
     finishedOn: job.finishedOn,

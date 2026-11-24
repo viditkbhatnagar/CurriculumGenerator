@@ -98,6 +98,7 @@ import { createAuditLog } from '../services/auditService';
 import { sanitizeActivityArray } from '../services/activitySanitizer';
 import { isStepDone, recordStepApproved } from '../services/stepGating';
 import { stepRunStatus } from '../services/stepRunStatus';
+import { retryNotice } from '../services/stepRetry';
 import { sanitizeReadingPayload } from '../services/readingValidator';
 import { sanitizeSourcePayload } from '../services/sourceValidator';
 import crypto from 'crypto';
@@ -10116,6 +10117,9 @@ router.get(
           // Set when the step was left marked in-progress by a run that is no longer
           // running. The work has to be started again; nothing will advance it on its own.
           stalled,
+          // An earlier attempt of this run stopped and the queue is trying again: its reason, so
+          // the page does not just say "Regenerating…" (services/stepRetry).
+          retry: retryNotice(jobStatus),
           stalledReason: stalled
             ? `Step ${step} was left mid-run — its generation stopped without finishing, which usually means the service restarted. ${hasData ? 'Some output was saved.' : 'No output was saved.'} Run the step again to continue.`
             : undefined,
