@@ -18,6 +18,7 @@ import {
   formatStepEstimate,
 } from '@/contexts/GenerationContext';
 import { useStepStatus } from '@/hooks/useStepStatus';
+import { StepRetryNotice } from './StepRetryNotice';
 import EditWithAIButton, { EditTarget } from './EditWithAIButton';
 import StepDownloadButton from './StepDownloadButton';
 import FilePreviewModal from './FilePreviewModal';
@@ -1562,7 +1563,7 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
       return;
     }
     setError(null);
-    startGeneration(workflow._id, 5, 120);
+    startGeneration(workflow._id, 5);
     try {
       const response = await submitStep5.mutateAsync(workflow._id);
       if ((response as any)?.data?.jobId) {
@@ -1631,11 +1632,21 @@ export default function Step5View({ workflow, onComplete, onRefresh, onOpenCanva
               </p>
             </div>
           </div>
+          <StepRetryNotice retry={stepStatus?.retry} />
           {typeof stepStatus?.job?.progress === 'number' && stepStatus.job.progress > 0 ? (
-            <DeterminateProgressBar
-              percent={stepStatus.job.progress}
-              label="Generating topic-level sources"
-            />
+            <>
+              <DeterminateProgressBar
+                percent={stepStatus.job.progress}
+                label="Generating topic-level sources"
+              />
+              {/* The bar moves when a module's sources are finished, and the modules run side
+                  by side, so it can hold still while the slowest one is written (Logan Pacey,
+                  23 November 2026: 48% for about ten minutes). */}
+              <p className="mt-2 text-xs text-teal-600">
+                The bar moves each time a module&apos;s sources are finished, so it can stay still
+                for several minutes while the slowest module is written.
+              </p>
+            </>
           ) : (
             <GenerationProgressBar
               workflowId={workflow._id}

@@ -19,12 +19,22 @@ export interface StepJobDetail {
   finishedOn?: number;
 }
 
+/** An earlier attempt of the run stopped and the queue is trying again (backend services/stepRetry). */
+export interface StepRetryNotice {
+  failedAttempt: number;
+  maxAttempts: number;
+  reason: string;
+  phase: 'waiting' | 'running';
+  nextAttemptAt: string | null;
+}
+
 export interface StepGenerationStatus {
   workflowId: string;
   stepNumber: number;
   status: 'pending' | 'queued' | 'processing' | 'completed' | 'failed';
   hasData: boolean;
   job: StepJobDetail | null;
+  retry?: StepRetryNotice | null;
   stepData?: {
     currentStep: number;
     workflowStatus: string;
