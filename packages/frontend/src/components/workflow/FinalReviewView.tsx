@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { CurriculumWorkflow } from '@/types/workflow';
 import PublicationPanel from './PublicationPanel';
 import OthmDocumentsPanel from './OthmDocumentsPanel';
+import { SpecialisationPicker, useSpecialisationExport } from './SpecialisationPicker';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -18,17 +19,20 @@ export default function FinalReviewView({ workflow, onChanged }: Props) {
   const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [downloadingPPT, setDownloadingPPT] = useState(false);
   const [downloadingSCORM, setDownloadingSCORM] = useState(false);
+  const pathway = useSpecialisationExport(workflow._id, workflow.projectName);
 
   const handleDownloadWord = async () => {
     setDownloadingWord(true);
     try {
-      const response = await fetch(`${API_BASE}/api/v3/workflow/${workflow._id}/export/word`);
+      const response = await fetch(
+        `${API_BASE}/api/v3/workflow/${workflow._id}/export/word${pathway.query}`
+      );
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${workflow.projectName}_Curriculum.docx`;
+        a.download = `${pathway.fileName}_Curriculum.docx`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -47,13 +51,15 @@ export default function FinalReviewView({ workflow, onChanged }: Props) {
   const handleDownloadPDF = async () => {
     setDownloadingPDF(true);
     try {
-      const response = await fetch(`${API_BASE}/api/v3/workflow/${workflow._id}/export/pdf`);
+      const response = await fetch(
+        `${API_BASE}/api/v3/workflow/${workflow._id}/export/pdf${pathway.query}`
+      );
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${workflow.projectName}_Curriculum.pdf`;
+        a.download = `${pathway.fileName}_Curriculum.pdf`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -221,6 +227,12 @@ export default function FinalReviewView({ workflow, onChanged }: Props) {
           Download your complete curriculum package (Steps 1-13), with lesson plans, PPT files,
           assignment packs and summative exam. Course syllabi download from Step 14.
         </p>
+
+        <SpecialisationPicker
+          options={pathway.options}
+          selected={pathway.selected}
+          onChange={pathway.setSelected}
+        />
 
         {/* Download Buttons */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

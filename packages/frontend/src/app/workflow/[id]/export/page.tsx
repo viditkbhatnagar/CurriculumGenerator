@@ -6,6 +6,10 @@ import { useWorkflow, useExportWorkflow } from '@/hooks/useWorkflow';
 import { STEP_NAMES, WorkflowStep } from '@/types/workflow';
 import StepDownloadButton from '@/components/workflow/StepDownloadButton';
 import OthmDocumentsPanel from '@/components/workflow/OthmDocumentsPanel';
+import {
+  SpecialisationPicker,
+  useSpecialisationExport,
+} from '@/components/workflow/SpecialisationPicker';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -19,14 +23,18 @@ export default function ExportPage() {
 
   const [isDownloadingWord, setIsDownloadingWord] = useState(false);
   const [isDownloadingJson, setIsDownloadingJson] = useState(false);
+  const pathway = useSpecialisationExport(id, workflow?.projectName);
 
   const handleDownloadWord = async () => {
     setIsDownloadingWord(true);
     try {
-      const response = await fetch(`${API_BASE}/api/v3/workflow/${id}/export/word`, {
-        method: 'GET',
-        credentials: 'include',
-      });
+      const response = await fetch(
+        `${API_BASE}/api/v3/workflow/${id}/export/word${pathway.query}`,
+        {
+          method: 'GET',
+          credentials: 'include',
+        }
+      );
 
       if (!response.ok) {
         throw new Error('Failed to download');
@@ -36,7 +44,7 @@ export default function ExportPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${workflow?.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}-${new Date().toISOString().split('T')[0]}.docx`;
+      a.download = `${pathway.fileName.replace(/[^a-zA-Z0-9]+/g, '-')}-${new Date().toISOString().split('T')[0]}.docx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -164,6 +172,12 @@ export default function ExportPage() {
               Export your complete curriculum as a professionally formatted Word document
             </p>
           </div>
+
+          <SpecialisationPicker
+            options={pathway.options}
+            selected={pathway.selected}
+            onChange={pathway.setSelected}
+          />
 
           <button
             onClick={handleDownloadWord}
