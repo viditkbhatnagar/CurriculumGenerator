@@ -100,6 +100,12 @@ import { isStepDone, recordStepApproved } from '../services/stepGating';
 import { stepRunStatus } from '../services/stepRunStatus';
 import { retryNotice } from '../services/stepRetry';
 import { requirePreviousApproval } from '../middleware/approvalGate';
+import {
+  findSpecialisation,
+  forSpecialisation,
+  specialisationsOf,
+  type Specialisation,
+} from '../services/specialisations';
 import { sanitizeReadingPayload } from '../services/readingValidator';
 import { sanitizeSourcePayload } from '../services/sourceValidator';
 import crypto from 'crypto';
@@ -7599,6 +7605,62 @@ async function loadWorkflowForExport(id: string): Promise<any | null> {
 }
 
 /**
+ * The export's content and render data, cut to one specialisation when `?specialisation=` names
+ * one (services/specialisations). `error` when it names none of the programme's tracks.
+ */
+function exportDataFor(
+  workflow: any,
+  requested: unknown
+): { content: any; render: any; spec: Specialisation | null; error?: string } {
+  if (!requested) {
+    return { content: exportContentOf(workflow), render: exportRenderDataOf(workflow), spec: null };
+  }
+  const spec = findSpecialisation(workflow.step4, requested);
+  if (!spec) {
+    const known = specialisationsOf(workflow.step4).map((s) => s.id);
+    return {
+      content: null,
+      render: null,
+      spec: null,
+      error: known.length
+        ? `Unknown specialisation. This programme has: ${known.join(', ')}`
+        : 'This programme has no specialisations.',
+    };
+  }
+  return {
+    content: forSpecialisation(exportContentOf(workflow), spec),
+    render: forSpecialisation(exportRenderDataOf(workflow), spec),
+    spec,
+  };
+}
+
+/**
+ * GET /api/v3/workflow/:id/specialisations
+ * The programme's specialisations (elective tracks), for the export menu.
+ */
+router.get('/:id/specialisations', async (req: Request, res: Response) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Workflow not found' });
+    }
+    const workflow: any = await CurriculumWorkflow.findById(req.params.id)
+      .select({ 'step4.modules': 1 })
+      .lean();
+    if (!workflow) return res.status(404).json({ success: false, error: 'Workflow not found' });
+    const data = specialisationsOf(workflow.step4).map(({ id, name, credits, moduleCodes }) => ({
+      id,
+      name,
+      credits,
+      moduleCodes,
+    }));
+    res.json({ success: true, data });
+  } catch (error) {
+    loggingService.error('Error listing specialisations', { error });
+    res.status(500).json({ success: false, error: 'Failed to list specialisations' });
+  }
+});
+
+/**
  * GET /api/v3/workflow/:id/export
  * Export complete curriculum package
  */
@@ -7671,18 +7733,22 @@ router.get('/:id/export/word', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Workflow not found' });
     }
 
-    // Allow export even if not fully complete (for preview purposes)
-    const workflowData = exportRenderDataOf(workflow);
+    // Allow export even if not fully complete (for preview purposes). One specialisation's
+    // pathway when ?specialisation= names one.
+    const data = exportDataFor(workflow, req.query.specialisation);
+    if (data.error) return res.status(400).json({ success: false, error: data.error });
+    const workflowData = data.render;
+    const pathway = data.spec ? `-${data.spec.id}` : '';
 
     // Generate filename
-    const filename = `${workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}-${new Date().toISOString().split('T')[0]}.docx`;
+    const filename = `${workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}${pathway}-${new Date().toISOString().split('T')[0]}.docx`;
 
     // Served through the S3 export cache — a re-download of an unchanged
     // curriculum skips generation (and its per-section OpenAI calls).
     await serveCachedExport(res, {
       workflowId: String(workflow._id),
-      artifact: 'full-word.docx',
-      contentHash: hashExportInput(exportContentOf(workflow)),
+      artifact: `full-word${pathway}.docx`,
+      contentHash: hashExportInput(data.content),
       contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       filename,
       generate: () => wordExportService.generateDocument(workflowData),
@@ -8088,21 +8154,24 @@ router.get('/:id/export/pdf', async (req: Request, res: Response) => {
       projectName: workflow.projectName,
     });
 
-    // First generate Word document
-    const workflowData = exportRenderDataOf(workflow);
+    // First generate Word document (one specialisation's pathway when ?specialisation= names one)
+    const data = exportDataFor(workflow, req.query.specialisation);
+    if (data.error) return res.status(400).json({ success: false, error: data.error });
+    const workflowData = data.render;
+    const pathway = data.spec ? `-${data.spec.id}` : '';
 
     // Generate filename
-    const filename = `${workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}-${new Date().toISOString().split('T')[0]}.pdf`;
+    const filename = `${workflow.projectName?.replace(/[^a-zA-Z0-9]/g, '-') || 'curriculum'}${pathway}-${new Date().toISOString().split('T')[0]}.pdf`;
 
     // The PDF and the Word export render from identical workflow data, so
     // they share one content hash — letting the PDF reuse a cached .docx.
-    const exportContentHash = hashExportInput(exportContentOf(workflow));
+    const exportContentHash = hashExportInput(data.content);
 
     // Cached in S3 — a re-download skips both the Word render (per-section
     // OpenAI calls) and the docx→PDF conversion.
     await serveCachedExport(res, {
       workflowId: String(workflow._id),
-      artifact: 'curriculum.pdf',
+      artifact: `curriculum${pathway}.pdf`,
       contentHash: exportContentHash,
       contentType: 'application/pdf',
       filename,
@@ -8112,7 +8181,7 @@ router.get('/:id/export/pdf', async (req: Request, res: Response) => {
         // leaves only the fast docx→PDF conversion.
         const cachedDocx = await getCachedExport(
           String(workflow._id),
-          'full-word.docx',
+          `full-word${pathway}.docx`,
           exportContentHash
         );
         const wordBuffer = cachedDocx || (await wordExportService.generateDocument(workflowData));

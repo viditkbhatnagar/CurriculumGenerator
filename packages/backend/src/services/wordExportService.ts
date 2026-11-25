@@ -37,6 +37,8 @@ import { programmeSyllabusBody } from './syllabusDocx';
 
 interface WorkflowData {
   projectName: string;
+  /** Set when the export is one pathway: core modules plus this specialisation (services/specialisations). */
+  specialisation?: { name: string; group: string; credits: number; coreCredits: number };
   step1?: any;
   step2?: any;
   step3?: any;
@@ -4405,6 +4407,39 @@ export class WordExportService {
           alignment: AlignmentType.CENTER,
           spacing: { after: 1000 },
         }),
+        // One pathway of a programme with specialisations: say which, and what it contains.
+        ...(workflow.specialisation
+          ? [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `Specialisation: ${workflow.specialisation.name}`,
+                    bold: true,
+                    size: 32,
+                    font: FONT_FAMILY,
+                    color: '1a365d',
+                  }),
+                ],
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 200 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text:
+                      `Core modules (${workflow.specialisation.coreCredits} credits) and the ` +
+                      `${workflow.specialisation.name} modules (${workflow.specialisation.credits} credits). ` +
+                      'The other specialisations are left out.',
+                    size: 22,
+                    font: FONT_FAMILY,
+                    color: '4a5568',
+                  }),
+                ],
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 600 },
+              }),
+            ]
+          : []),
         new Paragraph({
           children: [
             new TextRun({
